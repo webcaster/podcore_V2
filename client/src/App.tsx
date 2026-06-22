@@ -18,6 +18,7 @@ const AdminPage = lazy(() => import('./pages/AdminPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const PodigeePage = lazy(() => import('./pages/PodigeePage'));
 const BrandingPage = lazy(() => import('./pages/BrandingPage'));
+const ImpressumPage = lazy(() => import('./pages/ImpressumPage'));
 
 function LoadingSpinner() {
   return (
@@ -77,6 +78,7 @@ function AppRoutes() {
         <Route path="branding" element={<Suspense fallback={<LoadingSpinner />}><BrandingPage /></Suspense>} />
         <Route path="admin" element={<Suspense fallback={<LoadingSpinner />}><AdminPage /></Suspense>} />
         <Route path="settings" element={<Suspense fallback={<LoadingSpinner />}><SettingsPage /></Suspense>} />
+        <Route path="impressum" element={<Suspense fallback={<LoadingSpinner />}><ImpressumPage /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

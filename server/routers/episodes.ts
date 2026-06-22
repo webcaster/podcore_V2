@@ -15,6 +15,8 @@ function parseEpisode(row: any) {
     tags: JSON.parse(row.tags || '[]'),
     blocks: JSON.parse(row.blocks || '[]'),
     sponsors: JSON.parse(row.sponsors || '[]'),
+    technicalData: JSON.parse(row.technical_data || '{}'),
+    productionInfo: row.production_info || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by,
@@ -126,7 +128,7 @@ router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthReques
   const {
     number, title, subtitle, description, status,
     recordingDate, publishDate, duration, hosts, guests,
-    tags, blocks, sponsors, notes,
+    tags, blocks, sponsors, notes, productionInfo, technicalData,
   } = req.body;
 
   db.run(`
@@ -145,6 +147,8 @@ router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthReques
       blocks = COALESCE(?, blocks),
       sponsors = COALESCE(?, sponsors),
       notes = ?,
+      production_info = ?,
+      technical_data = COALESCE(?, technical_data),
       updated_at = datetime('now')
     WHERE id = ?
   `, [
@@ -156,6 +160,8 @@ router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthReques
     blocks ? JSON.stringify(blocks) : null,
     sponsors ? JSON.stringify(sponsors) : null,
     notes ?? null,
+    productionInfo ?? null,
+    technicalData ? JSON.stringify(technicalData) : null,
     req.params.id
   ]);
 
@@ -198,6 +204,125 @@ router.post('/:id/duplicate', requirePermission('canCreateEpisodes') as any, (re
 
   const episode = db.get('SELECT * FROM episodes WHERE id = ?', [newId]);
   return res.status(201).json({ success: true, data: parseEpisode(episode) });
+});
+
+// POST /api/episodes/:id/export-pdf
+router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const row = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+
+  if (!row) {
+    return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
+  }
+
+  const ep = parseEpisode(row);
+  const PDFDocument = require('pdfkit');
+  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="episode-${ep.number || ep.id}.pdf"`);
+  doc.pipe(res);
+
+  // ── Header ──────────────────────────────────────────────────
+  doc.fontSize(20).font('Helvetica-Bold').text('PodCore — Episoden-Dokument', { align: 'center' });
+  doc.moveDown(0.5);
+  doc.fontSize(16).font('Helvetica-Bold').text(
+    `${ep.number ? `#${ep.number} — ` : ''}${ep.title}`,
+    { align: 'center' }
+  );
+  if (ep.subtitle) {
+    doc.fontSize(11).font('Helvetica').fillColor('#666').text(ep.subtitle, { align: 'center' });
+  }
+  doc.fillColor('#000');
+  doc.moveDown();
+
+  // ── Meta ────────────────────────────────────────────────────
+  doc.fontSize(9).font('Helvetica').fillColor('#888');
+  const metaLine = [
+    ep.status && `Status: ${ep.status}`,
+    ep.recordingDate && `Aufnahme: ${new Date(ep.recordingDate).toLocaleDateString('de-DE')}`,
+    ep.publishDate && `Veröffentlichung: ${new Date(ep.publishDate).toLocaleDateString('de-DE')}`,
+    ep.hosts?.length && `Hosts: ${ep.hosts.join(', ')}`,
+    ep.guests?.length && `Gäste: ${ep.guests.join(', ')}`,
+  ].filter(Boolean).join('   |   ');
+  if (metaLine) doc.text(metaLine);
+  doc.fillColor('#000');
+  doc.moveDown();
+
+  // Divider
+  doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#cccccc').stroke();
+  doc.moveDown(0.5);
+
+  // ── Description ─────────────────────────────────────────────
+  if (ep.description) {
+    doc.fontSize(12).font('Helvetica-Bold').text('Beschreibung');
+    doc.fontSize(10).font('Helvetica').text(ep.description, { paragraphGap: 4 });
+    doc.moveDown();
+  }
+
+  // ── Blocks / Script ─────────────────────────────────────────
+  if (ep.blocks?.length > 0) {
+    doc.fontSize(12).font('Helvetica-Bold').text('Script & Blöcke');
+    doc.moveDown(0.3);
+    const blockColors: Record<string, string> = {
+      intro: '#0891b2', segment: '#2563eb', interview: '#7c3aed',
+      ad: '#d97706', jingle: '#059669', outro: '#dc2626', custom: '#6b7280',
+    };
+    for (const block of ep.blocks) {
+      const color = blockColors[block.type] || '#6b7280';
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(color)
+        .text(`[${(block.type || 'block').toUpperCase()}] ${block.title || ''}${block.duration ? ` (${block.duration}s)` : ''}`);
+      doc.fillColor('#000');
+      if (block.content) {
+        doc.fontSize(10).font('Helvetica').text(block.content, { indent: 15, paragraphGap: 3 });
+      }
+      doc.moveDown(0.5);
+    }
+    doc.moveDown(0.5);
+  }
+
+  // ── Production Info ─────────────────────────────────────────
+  if (ep.productionInfo) {
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#cccccc').stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(12).font('Helvetica-Bold').text('Produktions-Informationen');
+    doc.fontSize(10).font('Helvetica').text(ep.productionInfo, { paragraphGap: 4 });
+    doc.moveDown();
+  }
+
+  // ── Technical Data ──────────────────────────────────────────
+  const td = ep.technicalData || {};
+  const tdFields = Object.entries(td).filter(([, v]) => v);
+  if (tdFields.length > 0) {
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#cccccc').stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(12).font('Helvetica-Bold').text('Technische Daten');
+    doc.moveDown(0.3);
+    for (const [key, value] of tdFields) {
+      doc.fontSize(10);
+      doc.font('Helvetica-Bold').text(`${key}: `, { continued: true });
+      doc.font('Helvetica').text(String(value));
+    }
+    doc.moveDown();
+  }
+
+  // ── Notes ───────────────────────────────────────────────────
+  if (ep.notes) {
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#cccccc').stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(12).font('Helvetica-Bold').text('Interne Notizen');
+    doc.fontSize(10).font('Helvetica').fillColor('#555').text(ep.notes, { paragraphGap: 4 });
+    doc.fillColor('#000');
+    doc.moveDown();
+  }
+
+  // ── Footer ──────────────────────────────────────────────────
+  doc.fontSize(8).fillColor('#aaa').text(
+    `Erstellt mit PodCore — ${new Date().toLocaleDateString('de-DE')}`,
+    50, 780, { align: 'center' }
+  );
+
+  doc.end();
 });
 
 export default router;

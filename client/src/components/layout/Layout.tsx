@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
-  Shield, Menu, X, Headphones, TrendingUp, Image
+  Shield, Menu, X, Headphones, TrendingUp, Image, FileText
 } from 'lucide-react';
 import { useApp, usePermissions } from '../../contexts/AppContext';
 
@@ -132,6 +132,19 @@ export default function Layout() {
           <LogOut size={16} />
           {(!collapsed || mobile) && <span>Abmelden</span>}
         </button>
+        {(!collapsed || mobile) && (
+          <NavLink
+            to="/impressum"
+            className={({ isActive }) =>
+              `flex items-center gap-2 text-xs px-2 py-1 rounded transition-colors mt-1 ${
+                isActive ? 'text-accent-purple' : 'text-text-muted hover:text-text-secondary'
+              }`
+            }
+          >
+            <FileText size={12} />
+            <span>Impressum</span>
+          </NavLink>
+        )}
       </div>
     </aside>
   );

@@ -263,4 +263,159 @@ router.delete('/notes/:id', requirePermission('canEditNotes') as any, (req: Auth
   return res.json({ success: true, message: 'Notiz gelöscht' });
 });
 
+// ============================================================
+// INTERVIEW QUESTIONS — SEND SUMMARY TO GUEST
+// ============================================================
+
+// GET /api/editorial/interviews/partners/:partnerId/send-summary
+// Returns an HTML page with the interview summary for the guest
+router.get('/interviews/partners/:partnerId/send-summary', requirePermission('canViewInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const partner = db.get('SELECT * FROM interview_partners WHERE id = ?', [req.params.partnerId]) as any;
+  if (!partner) return res.status(404).json({ success: false, error: 'Interview-Partner nicht gefunden' });
+
+  const { episodeId } = req.query;
+  let questionsQuery = 'SELECT * FROM interview_questions WHERE partner_id = ?';
+  const qParams: any[] = [req.params.partnerId];
+  if (episodeId) { questionsQuery += ' AND episode_id = ?'; qParams.push(episodeId); }
+  questionsQuery += ' ORDER BY sort_order ASC';
+  const questions = db.all(questionsQuery, qParams) as any[];
+
+  let episodeInfo = '';
+  if (episodeId) {
+    const ep = db.get('SELECT title, number, description, recording_date from episodes WHERE id = ?', [episodeId]) as any;
+    if (ep) {
+      episodeInfo = `<div class="episode-box"><h2>Folge: ${ep.number ? `#${ep.number} — ` : ''}${ep.title}</h2>${ep.description ? `<p>${ep.description}</p>` : ''}${ep.recording_date ? `<p><strong>Aufnahmedatum:</strong> ${new Date(ep.recording_date).toLocaleDateString('de-DE')}</p>` : ''}</div>`;
+    }
+  }
+
+  // Group questions by category
+  const grouped: Record<string, any[]> = {};
+  for (const q of questions) {
+    const cat = q.category || 'Allgemein';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(q);
+  }
+
+  const questionsHtml = Object.entries(grouped).map(([cat, qs]) => `
+    <div class="category">
+      <h3>${cat}</h3>
+      <ol>${qs.map((q, i) => `<li class="question">${q.question}${q.notes ? `<span class="note">${q.notes}</span>` : ''}</li>`).join('')}</ol>
+    </div>
+  `).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interview-Fragen — ${partner.name}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #1a1a2e; padding: 40px 20px; }
+    .container { max-width: 700px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #7c3aed, #2563eb); color: white; padding: 40px; }
+    .header h1 { font-size: 1.6rem; margin-bottom: 8px; }
+    .header .subtitle { opacity: 0.85; font-size: 0.95rem; }
+    .body { padding: 40px; }
+    .partner-info { background: #f0f4ff; border-radius: 8px; padding: 20px; margin-bottom: 28px; }
+    .partner-info h2 { font-size: 1.1rem; color: #7c3aed; margin-bottom: 8px; }
+    .partner-info p { font-size: 0.9rem; color: #555; margin-top: 4px; }
+    .episode-box { background: #fff8f0; border-left: 4px solid #d97706; border-radius: 4px; padding: 16px 20px; margin-bottom: 28px; }
+    .episode-box h2 { font-size: 1rem; color: #d97706; margin-bottom: 6px; }
+    .episode-box p { font-size: 0.9rem; color: #555; margin-top: 4px; }
+    .category { margin-bottom: 28px; }
+    .category h3 { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #7c3aed; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 14px; }
+    ol { padding-left: 22px; }
+    .question { font-size: 0.95rem; color: #1a1a2e; padding: 8px 0; line-height: 1.5; }
+    .note { display: block; font-size: 0.82rem; color: #888; font-style: italic; margin-top: 2px; }
+    .footer { background: #f8f9fa; padding: 20px 40px; text-align: center; font-size: 0.8rem; color: #aaa; border-top: 1px solid #e5e7eb; }
+    @media print { body { background: white; padding: 0; } .container { box-shadow: none; } }
+    .print-btn { display: inline-block; margin-top: 20px; padding: 10px 24px; background: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+    @media print { .print-btn { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Interview-Fragen</h1>
+      <div class="subtitle">Vorbereitung für Ihr Podcast-Interview</div>
+    </div>
+    <div class="body">
+      <div class="partner-info">
+        <h2>Liebe/r ${partner.name},</h2>
+        ${partner.company ? `<p><strong>Unternehmen:</strong> ${partner.company}</p>` : ''}
+        ${partner.role ? `<p><strong>Rolle:</strong> ${partner.role}</p>` : ''}
+        <p style="margin-top:12px;">vielen Dank, dass Sie sich die Zeit nehmen, bei unserem Podcast als Gast dabei zu sein. Im Folgenden finden Sie die Interview-Fragen zur Vorbereitung.</p>
+      </div>
+      ${episodeInfo}
+      ${questionsHtml || '<p style="color:#888;">Keine Fragen hinterlegt.</p>'}
+      <div style="text-align:center;">
+        <button class="print-btn" onclick="window.print()">Seite drucken / als PDF speichern</button>
+      </div>
+    </div>
+    <div class="footer">Erstellt mit PodCore &mdash; ${new Date().toLocaleDateString('de-DE')}</div>
+  </div>
+</body>
+</html>`;
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.send(html);
+});
+
+// POST /api/editorial/interviews/partners/:partnerId/send-email
+// Sends interview questions via configured SMTP
+router.post('/interviews/partners/:partnerId/send-email', requirePermission('canEditInterviews') as any, async (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const partner = db.get('SELECT * FROM interview_partners WHERE id = ?', [req.params.partnerId]) as any;
+  if (!partner) return res.status(404).json({ success: false, error: 'Interview-Partner nicht gefunden' });
+  if (!partner.email) return res.status(400).json({ success: false, error: 'Keine E-Mail-Adresse für diesen Gast hinterlegt' });
+
+  const { episodeId, customMessage, subject } = req.body;
+
+  // Get SMTP settings
+  const smtpHostRow = db.get("SELECT value FROM settings WHERE key = 'smtp_host'") as any;
+  const smtpPortRow = db.get("SELECT value FROM settings WHERE key = 'smtp_port'") as any;
+  const smtpUserRow = db.get("SELECT value FROM settings WHERE key = 'smtp_user'") as any;
+  const smtpPassRow = db.get("SELECT value FROM settings WHERE key = 'smtp_pass'") as any;
+  const smtpFromRow = db.get("SELECT value FROM settings WHERE key = 'smtp_from'") as any;
+
+  if (!smtpHostRow?.value || !smtpUserRow?.value) {
+    return res.status(400).json({ success: false, error: 'SMTP nicht konfiguriert. Bitte in den Einstellungen konfigurieren.' });
+  }
+
+  // Build questions list
+  let questionsQuery = 'SELECT * FROM interview_questions WHERE partner_id = ?';
+  const qParams: any[] = [req.params.partnerId];
+  if (episodeId) { questionsQuery += ' AND episode_id = ?'; qParams.push(episodeId); }
+  questionsQuery += ' ORDER BY sort_order ASC';
+  const questions = db.all(questionsQuery, qParams) as any[];
+
+  const questionsList = questions.map((q, i) => `${i + 1}. ${q.question}`).join('\n');
+
+  const nodemailer = require('nodemailer');
+  const transporter = nodemailer.createTransport({
+    host: smtpHostRow.value,
+    port: parseInt(smtpPortRow?.value || '587'),
+    secure: parseInt(smtpPortRow?.value || '587') === 465,
+    auth: { user: smtpUserRow.value, pass: smtpPassRow?.value || '' },
+  });
+
+  const emailSubject = subject || `Interview-Fragen für Ihren Podcast-Auftritt`;
+  const emailText = `Liebe/r ${partner.name},\n\n${customMessage || 'vielen Dank, dass Sie sich die Zeit nehmen, bei unserem Podcast als Gast dabei zu sein. Hier sind die Interview-Fragen zur Vorbereitung:'}\n\n${questionsList}\n\nMit freundlichen Grüßen`;
+
+  try {
+    await transporter.sendMail({
+      from: smtpFromRow?.value || smtpUserRow.value,
+      to: partner.email,
+      subject: emailSubject,
+      text: emailText,
+    });
+    return res.json({ success: true, message: `E-Mail an ${partner.email} gesendet` });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: `E-Mail-Versand fehlgeschlagen: ${err.message}` });
+  }
+});
+
 export default router;
+

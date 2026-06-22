@@ -133,7 +133,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 app.listen(PORT, HOST, () => {
   console.log('');
   console.log('╔════════════════════════════════════════╗');
-  console.log('║         PodCore v2.0.0 Server          ║');
+  console.log('║         PodCore v2.0.2 Server          ║');
   console.log('╠════════════════════════════════════════╣');
   console.log(`║  URL:  http://localhost:${PORT}           ║`);
   console.log(`║  Mode: ${NODE_ENV.padEnd(32)}║`);

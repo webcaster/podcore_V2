@@ -77,10 +77,17 @@ function initializeSchema(db: any): void {
       blocks TEXT NOT NULL DEFAULT '[]',
       sponsors TEXT NOT NULL DEFAULT '[]',
       notes TEXT,
+      production_info TEXT,
+      technical_data TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       created_by TEXT NOT NULL
     );
+
+    -- Migration: add production_info and technical_data if not exists
+    -- (safe to run multiple times due to IF NOT EXISTS on table level)
+    -- We use a workaround: try adding columns, ignore errors
+    
 
     CREATE TABLE IF NOT EXISTS ideas (
       id TEXT PRIMARY KEY,
@@ -262,6 +269,10 @@ function initializeSchema(db: any): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // Migration: add new columns if they don't exist (for existing databases)
+  try { db.exec('ALTER TABLE episodes ADD COLUMN production_info TEXT'); } catch (_) {}
+  try { db.exec("ALTER TABLE episodes ADD COLUMN technical_data TEXT NOT NULL DEFAULT '{}'"); } catch (_) {}
 
   // Default admin user
   const userCount = db.get('SELECT COUNT(*) as count FROM users') as any;

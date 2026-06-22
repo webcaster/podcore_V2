@@ -468,30 +468,57 @@ export default function AdminPage() {
       {/* ── LOGS TAB ───────────────────────────────────────── */}
       {activeTab === 'logs' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-text-secondary text-sm">Systemereignisse und Fehler</p>
-            <button onClick={loadLogs} className="btn-ghost p-2"><RefreshCw size={16} /></button>
+          <div className="flex justify-between items-center flex-wrap gap-3">
+            <div>
+              <p className="text-text-secondary text-sm">Systemereignisse und Fehler</p>
+              <p className="text-text-muted text-xs mt-0.5">{logs.length} Einträge geladen</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch('/api/admin/logs', {
+                      method: 'POST', credentials: 'include',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ level: 'info', category: 'test', message: 'Test-Log-Eintrag vom Admin-Panel', details: { timestamp: new Date().toISOString() } }),
+                    });
+                    loadLogs();
+                    showSuccess('Test-Log erstellt');
+                  } catch (err: any) { showError(err.message); }
+                }}
+                className="btn-ghost text-xs"
+              >
+                Test-Log erstellen
+              </button>
+              <button onClick={loadLogs} className="btn-ghost p-2" title="Aktualisieren"><RefreshCw size={16} /></button>
+            </div>
           </div>
+
           {logs.length === 0 ? (
             <div className="card text-center py-12">
               <Activity size={32} className="text-text-muted mx-auto mb-3" />
-              <p className="text-text-secondary">Keine Logs verfügbar</p>
+              <p className="text-text-secondary font-medium">Keine Logs vorhanden</p>
+              <p className="text-text-muted text-sm mt-1">Logs werden automatisch bei Systemereignissen erstellt.</p>
+              <p className="text-text-muted text-xs mt-2">Klicke auf "Test-Log erstellen" um einen Eintrag zu generieren.</p>
             </div>
           ) : (
             <div className="space-y-1 font-mono text-xs">
-              {logs.map((log, idx) => (
-                <div key={idx} className={`flex items-start gap-3 p-3 rounded-lg ${
-                  log.level === 'error' ? 'bg-accent-red/10 text-accent-red' :
-                  log.level === 'warn' ? 'bg-accent-orange/10 text-accent-orange' :
-                  'bg-obsidian-800 text-text-secondary'
+              {logs.map((log: any, idx: number) => (
+                <div key={log.id || idx} className={`flex items-start gap-3 p-3 rounded-lg ${
+                  log.level === 'error' ? 'bg-accent-red/10' :
+                  log.level === 'warn' ? 'bg-accent-orange/10' :
+                  'bg-obsidian-800'
                 }`}>
-                  <span className="text-text-muted flex-shrink-0">{new Date(log.timestamp).toLocaleString('de-DE')}</span>
+                  <span className="text-text-muted flex-shrink-0 w-36">
+                    {log.timestamp ? new Date(log.timestamp).toLocaleString('de-DE') : '—'}
+                  </span>
                   <span className={`uppercase font-bold flex-shrink-0 w-12 ${
                     log.level === 'error' ? 'text-accent-red' :
                     log.level === 'warn' ? 'text-accent-orange' :
                     'text-accent-blue'
-                  }`}>{log.level}</span>
-                  <span className="flex-1">{log.message}</span>
+                  }`}>{log.level || 'info'}</span>
+                  <span className="text-text-muted flex-shrink-0 w-20">{log.category || '—'}</span>
+                  <span className="flex-1 text-text-secondary">{log.message}</span>
                 </div>
               ))}
             </div>

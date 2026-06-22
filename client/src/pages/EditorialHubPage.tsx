@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Lightbulb, Calendar, Users, FileText, Plus, Search, Trash2,
   Edit2, Check, X, ArrowRight, Tag, Star, Clock, ChevronDown,
-  Mic2, BookOpen, StickyNote, MessageSquare, Filter, Pin, PinOff
+  Mic2, BookOpen, StickyNote, MessageSquare, Filter, Pin, PinOff, Loader2
 } from 'lucide-react';
 import { editorialApi, episodesApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
@@ -582,9 +582,12 @@ function InterviewsTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [editingPartner, setEditingPartner] = useState<any>(null);
   const [partnerForm, setPartnerForm] = useState({ name: '', company: '', role: '', email: '', phone: '', bio: '', notes: '' });
   const [questionForm, setQuestionForm] = useState({ question: '', category: '', notes: '' });
+  const [sendForm, setSendForm] = useState({ subject: '', customMessage: '', episodeId: '' });
 
   const loadPartners = async () => {
     setIsLoading(true);
@@ -656,6 +659,31 @@ function InterviewsTab() {
     } catch (err: any) { showError(err.message); }
   };
 
+  const handleOpenSummary = () => {
+    if (!selectedPartner) return;
+    const url = `/api/editorial/interviews/partners/${selectedPartner.id}/send-summary`;
+    window.open(url, '_blank');
+  };
+
+  const handleSendEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPartner) return;
+    setIsSending(true);
+    try {
+      const res = await fetch(`/api/editorial/interviews/partners/${selectedPartner.id}/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(sendForm),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      showSuccess(data.message || 'E-Mail gesendet');
+      setShowSendModal(false);
+    } catch (err: any) { showError(err.message); }
+    finally { setIsSending(false); }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Partners List */}
@@ -713,9 +741,29 @@ function InterviewsTab() {
                 <h3 className="font-semibold text-text-primary">Fragen für {selectedPartner.name}</h3>
                 <p className="text-text-muted text-xs">{questions.filter(q => q.answered).length}/{questions.length} beantwortet</p>
               </div>
-              {can('canEditInterviews') && (
-                <button onClick={() => setShowQuestionModal(true)} className="btn-primary"><Plus size={16} /><span>Frage hinzufügen</span></button>
-              )}
+              <div className="flex items-center gap-2">
+                {can('canViewInterviews') && (
+                  <button
+                    onClick={handleOpenSummary}
+                    className="btn-ghost text-xs flex items-center gap-1.5"
+                    title="Zusammenfassung für Gast öffnen (druckbar/PDF)"
+                  >
+                    <FileText size={14} /><span>Zusammenfassung</span>
+                  </button>
+                )}
+                {can('canEditInterviews') && selectedPartner?.email && (
+                  <button
+                    onClick={() => { setSendForm({ subject: `Interview-Fragen für Ihren Podcast-Auftritt`, customMessage: '', episodeId: '' }); setShowSendModal(true); }}
+                    className="btn-ghost text-xs flex items-center gap-1.5 text-accent-blue"
+                    title="Fragen per E-Mail senden"
+                  >
+                    <MessageSquare size={14} /><span>Per E-Mail senden</span>
+                  </button>
+                )}
+                {can('canEditInterviews') && (
+                  <button onClick={() => setShowQuestionModal(true)} className="btn-primary"><Plus size={16} /><span>Frage hinzufügen</span></button>
+                )}
+              </div>
             </div>
 
             {questions.length === 0 ? (
@@ -779,6 +827,41 @@ function InterviewsTab() {
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowPartnerModal(false)} className="btn-secondary">Abbrechen</button>
             <button type="submit" disabled={!partnerForm.name} className="btn-primary">Speichern</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Send Summary Modal */}
+      <Modal isOpen={showSendModal} onClose={() => setShowSendModal(false)} title={`Fragen senden an ${selectedPartner?.name}`}>
+        <form onSubmit={handleSendEmail} className="space-y-4">
+          <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-lg p-3 text-sm text-text-secondary">
+            <p className="font-medium text-accent-blue mb-1">E-Mail an: {selectedPartner?.email}</p>
+            <p>Die Interview-Fragen werden als formatierte E-Mail an den Gast gesendet. SMTP muss in den Einstellungen konfiguriert sein.</p>
+          </div>
+          <div>
+            <label className="label">Betreff</label>
+            <input type="text" value={sendForm.subject} onChange={e => setSendForm(p => ({ ...p, subject: e.target.value }))} className="input" required />
+          </div>
+          <div>
+            <label className="label">Persönliche Nachricht (optional)</label>
+            <textarea
+              value={sendForm.customMessage}
+              onChange={e => setSendForm(p => ({ ...p, customMessage: e.target.value }))}
+              className="textarea"
+              rows={3}
+              placeholder="Individuelle Einleitung für den Gast..."
+            />
+          </div>
+          <div className="bg-obsidian-800 rounded-lg p-3 text-xs text-text-muted">
+            <p className="font-medium text-text-secondary mb-1">Tipp: Zusammenfassung ohne SMTP</p>
+            <p>Klicke auf "Zusammenfassung" um eine druckbare HTML-Seite zu öffnen, die du als PDF speichern oder per E-Mail-Client weiterleiten kannst — ohne SMTP-Konfiguration.</p>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setShowSendModal(false)} className="btn-secondary">Abbrechen</button>
+            <button type="submit" disabled={isSending} className="btn-primary">
+              {isSending ? <Loader2 size={16} className="animate-spin" /> : <MessageSquare size={16} />}
+              <span>{isSending ? 'Senden...' : 'E-Mail senden'}</span>
+            </button>
           </div>
         </form>
       </Modal>
