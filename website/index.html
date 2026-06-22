@@ -11,14 +11,1420 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <style>
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #08080f;
+  --bg-s:      #10101a;
+  --bg-c:      #14141e;
+  --bg-ch:     #1a1a28;
+  --border:    rgba(255,255,255,0.07);
+  --border-h:  rgba(255,255,255,0.14);
+  --text:      #eeeef5;
+  --text-2:    #8888a8;
+  --text-3:    #55557a;
+  --accent:    #7c3aed;
+  --accent-l:  #a855f7;
+  --accent-g:  rgba(124,58,237,0.25);
+  --cyan:      #06b6d4;
+  --cyan-g:    rgba(6,182,212,0.18);
+  --green:     #10b981;
+  --yellow:    #f59e0b;
+  --red:       #ef4444;
+  --r:         12px;
+  --r-lg:      18px;
+  --shadow:    0 4px 24px rgba(0,0,0,0.45);
+  --shadow-lg: 0 8px 48px rgba(0,0,0,0.65);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.65;
+  overflow-x: hidden;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+.nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  background: rgba(8,8,15,0.88);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--text);
+}
+
+.nav-logo-icon { font-size: 1.3rem; }
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-links a {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-2);
+  transition: color 0.2s, background 0.2s;
+}
+
+.nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+
+.nav-links .nav-cta {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #000;
+  font-weight: 600;
+  padding: 7px 16px;
+}
+
+.nav-links .nav-cta:hover { opacity: 0.9; background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; }
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--r);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--accent-l); transform: translateY(-1px); box-shadow: 0 8px 24px var(--accent-g); }
+
+.btn-secondary {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  border: 1px solid var(--border-h);
+}
+.btn-secondary:hover { background: rgba(255,255,255,0.12); transform: translateY(-1px); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-h);
+}
+.btn-ghost:hover { background: rgba(255,255,255,0.06); }
+
+.btn-coffee {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #000;
+  font-weight: 700;
+}
+.btn-coffee:hover { opacity: 0.9; transform: translateY(-1px); }
+
+.btn-paypal {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  background: #0070ba;
+  color: #fff;
+  border-radius: var(--r);
+  font-weight: 700;
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+.btn-paypal:hover { background: #005ea6; transform: translateY(-1px); }
+
+.btn-large { padding: 16px 32px; font-size: 1.05rem; }
+
+/* ============================================================
+   SECTION LABELS & TITLES
+   ============================================================ */
+.section-label {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--accent-l);
+  background: rgba(124,58,237,0.12);
+  border: 1px solid rgba(124,58,237,0.25);
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+}
+
+.section-title {
+  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.section-title span {
+  background: linear-gradient(135deg, var(--accent-l), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.section-desc {
+  font-size: 1.05rem;
+  color: var(--text-2);
+  max-width: 620px;
+  margin-bottom: 56px;
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: 120px 0 80px;
+  overflow: hidden;
+}
+
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hero-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.35;
+}
+
+.hero-glow-1 {
+  width: 600px; height: 600px;
+  background: var(--accent);
+  top: -200px; left: -150px;
+}
+
+.hero-glow-2 {
+  width: 500px; height: 500px;
+  background: var(--cyan);
+  bottom: -100px; right: -100px;
+  opacity: 0.2;
+}
+
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+}
+
+.hero .container { position: relative; z-index: 1; }
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(124,58,237,0.15);
+  border: 1px solid rgba(124,58,237,0.35);
+  color: var(--accent-l);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 28px;
+}
+
+.badge-dot {
+  width: 7px; height: 7px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.85); }
+}
+
+.hero-title {
+  font-size: clamp(2.4rem, 6vw, 4.5rem);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+}
+
+.hero-title em {
+  font-style: normal;
+  background: linear-gradient(135deg, var(--accent-l) 0%, var(--cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-desc {
+  font-size: 1.15rem;
+  color: var(--text-2);
+  max-width: 600px;
+  line-height: 1.7;
+  margin-bottom: 28px;
+}
+
+.hero-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 36px;
+}
+
+.hero-tags span {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border-h);
+  color: var(--text-2);
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 48px;
+}
+
+.hero-scroll {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-3);
+  font-size: 0.85rem;
+  transition: color 0.2s;
+}
+
+.hero-scroll:hover { color: var(--text-2); }
+
+.hero-scroll svg {
+  animation: bounce 2s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+}
+
+/* ============================================================
+   STATS
+   ============================================================ */
+.stats {
+  padding: 48px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-s);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+}
+
+.stat-card {
+  padding: 24px;
+  text-align: center;
+  border-right: 1px solid var(--border);
+}
+
+.stat-card:last-child { border-right: none; }
+
+.stat-number {
+  font-size: 2.4rem;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--accent-l), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.stat-label {
+  font-size: 0.82rem;
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+/* ============================================================
+   FEATURES
+   ============================================================ */
+.features {
+  padding: 100px 0;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.feature-card {
+  background: var(--bg-c);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 28px;
+  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+}
+
+.feature-card:hover {
+  border-color: var(--border-h);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+
+.feature-card-highlight {
+  border-color: rgba(124,58,237,0.35);
+  background: linear-gradient(135deg, rgba(124,58,237,0.08) 0%, var(--bg-c) 100%);
+}
+
+.feature-card-highlight:hover {
+  border-color: rgba(124,58,237,0.55);
+}
+
+.feature-icon {
+  font-size: 2rem;
+  margin-bottom: 14px;
+  line-height: 1;
+}
+
+.feature-card h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--text);
+}
+
+.feature-card p {
+  font-size: 0.88rem;
+  color: var(--text-2);
+  line-height: 1.65;
+}
+
+.feature-new-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 20px;
+  vertical-align: middle;
+  margin-left: 6px;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   SCREENSHOTS — CSS-ONLY TABS via :target
+   ============================================================ */
+.screenshots {
+  padding: 100px 0;
+  background: var(--bg-s);
+}
+
+.screen-anchor {
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+/* Default: show dashboard, hide others */
+.mock-screen { display: none; }
+.mock-screen:first-child { display: flex; }
+
+/* :target logic — anchors are siblings of .screenshot-tabs and .screenshot-display inside .screenshot-tabs-wrapper */
+#screen-dashboard:target ~ .screenshot-tabs .tab-dashboard,
+#screen-episodes:target  ~ .screenshot-tabs .tab-episodes,
+#screen-editorial:target ~ .screenshot-tabs .tab-editorial,
+#screen-ideas:target     ~ .screenshot-tabs .tab-ideas,
+#screen-sponsors:target  ~ .screenshot-tabs .tab-sponsors,
+#screen-admin:target     ~ .screenshot-tabs .tab-admin,
+#screen-settings:target  ~ .screenshot-tabs .tab-settings {
+  color: var(--text);
+  background: rgba(124,58,237,0.15);
+  border-color: rgba(124,58,237,0.3);
+}
+
+/* Reset dashboard default when another target is active */
+#screen-episodes:target  ~ .screenshot-tabs .tab-dashboard,
+#screen-editorial:target ~ .screenshot-tabs .tab-dashboard,
+#screen-ideas:target     ~ .screenshot-tabs .tab-dashboard,
+#screen-sponsors:target  ~ .screenshot-tabs .tab-dashboard,
+#screen-admin:target     ~ .screenshot-tabs .tab-dashboard,
+#screen-settings:target  ~ .screenshot-tabs .tab-dashboard {
+  color: var(--text-2);
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Show correct mock screen */
+#screen-dashboard:target ~ .screenshot-display .mock-screen,
+#screen-episodes:target  ~ .screenshot-display .mock-screen,
+#screen-editorial:target ~ .screenshot-display .mock-screen,
+#screen-ideas:target     ~ .screenshot-display .mock-screen,
+#screen-sponsors:target  ~ .screenshot-display .mock-screen,
+#screen-admin:target     ~ .screenshot-display .mock-screen,
+#screen-settings:target  ~ .screenshot-display .mock-screen {
+  display: none;
+}
+
+#screen-dashboard:target ~ .screenshot-display #tab-dashboard { display: flex; }
+#screen-episodes:target  ~ .screenshot-display #tab-episodes  { display: flex; }
+#screen-editorial:target ~ .screenshot-display #tab-editorial { display: flex; }
+#screen-ideas:target     ~ .screenshot-display #tab-ideas     { display: flex; }
+#screen-sponsors:target  ~ .screenshot-display #tab-sponsors  { display: flex; }
+#screen-admin:target     ~ .screenshot-display #tab-admin     { display: flex; }
+#screen-settings:target  ~ .screenshot-display #tab-settings  { display: flex; }
+
+/* Tab button base styles */
+.tab-link { 
+  display: inline-block;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.tab-link:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+}
+
+/* Default active = dashboard */
+.tab-dashboard {
+  color: var(--text);
+  background: rgba(124,58,237,0.15);
+  border-color: rgba(124,58,237,0.3);
+}
+
+.screenshot-tabs-wrapper {
+  position: relative;
+}
+
+.screenshot-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 28px;
+}
+
+.screenshot-display {
+  background: var(--bg-c);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Browser chrome bar */
+.browser-bar {
+  background: #1a1a26;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.browser-dots { display: flex; gap: 6px; }
+
+.dot {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+}
+
+.dot-red    { background: #ff5f57; }
+.dot-yellow { background: #febc2e; }
+.dot-green  { background: #28c840; }
+
+.browser-url {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text-2);
+  max-width: 340px;
+}
+
+/* Mock App Layout */
+.mock-screen {
+  display: flex;
+  min-height: 400px;
+}
+
+.mock-sidebar {
+  width: 200px;
+  min-width: 200px;
+  background: rgba(0,0,0,0.3);
+  border-right: 1px solid var(--border);
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mock-logo {
+  font-weight: 800;
+  font-size: 1rem;
+  padding: 8px 10px 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.mock-version {
+  font-size: 0.68rem;
+  color: var(--text-3);
+  padding: 0 10px 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.mock-nav-item {
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  cursor: default;
+}
+
+.mock-nav-item.active {
+  background: rgba(124,58,237,0.18);
+  color: var(--accent-l);
+  font-weight: 600;
+}
+
+.mock-main {
+  flex: 1;
+  padding: 20px 24px;
+  overflow: hidden;
+}
+
+.mock-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mock-header h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.mock-header p {
+  font-size: 0.78rem;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+.mock-actions { display: flex; gap: 6px; }
+
+.mock-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--border-h);
+  color: var(--text-2);
+  cursor: default;
+}
+
+.mock-btn.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* Stats row */
+.mock-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mock-stat {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+
+.mock-stat-num {
+  font-size: 1.3rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent-l), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.mock-stat-lbl {
+  font-size: 0.68rem;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+/* Cards row */
+.mock-cards-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mock-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.mock-card-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--text-2);
+}
+
+.mock-plan-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.75rem;
+}
+
+.mock-plan-item:last-child { border-bottom: none; }
+
+.mock-plan-date { color: var(--text-3); min-width: 48px; font-family: 'JetBrains Mono', monospace; }
+.mock-plan-title { flex: 1; color: var(--text); }
+
+.mock-ep-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.75rem;
+}
+
+.mock-ep-item:last-child { border-bottom: none; }
+
+/* Episode table */
+.mock-ep-table { display: flex; flex-direction: column; gap: 6px; }
+
+.mock-ep-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.78rem;
+}
+
+.mock-ep-num {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-3);
+  min-width: 28px;
+}
+
+.mock-ep-info { flex: 1; }
+.mock-ep-info strong { display: block; color: var(--text); font-size: 0.8rem; }
+.mock-ep-info small { color: var(--text-3); font-size: 0.7rem; }
+
+.mock-ep-actions { color: var(--text-3); font-size: 0.78rem; }
+
+/* Status badges */
+.mock-ep-status, .mock-plan-status {
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.veroeffentlicht { background: rgba(16,185,129,0.15); color: #10b981; }
+.schnitt         { background: rgba(6,182,212,0.15);  color: #06b6d4; }
+.freigabe        { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.entwurf         { background: rgba(99,102,241,0.15); color: #818cf8; }
+.idee            { background: rgba(255,255,255,0.08); color: var(--text-2); }
+
+/* Tabs row in mock */
+.mock-tabs-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.mock-tab {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-2);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid transparent;
+  cursor: default;
+}
+
+.mock-tab.active {
+  background: rgba(124,58,237,0.18);
+  color: var(--accent-l);
+  border-color: rgba(124,58,237,0.3);
+}
+
+/* Interview mock */
+.mock-partner-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.mock-partner-name { font-weight: 700; font-size: 0.88rem; margin-bottom: 2px; }
+.mock-partner-role { font-size: 0.72rem; color: var(--text-2); margin-bottom: 10px; }
+
+.mock-question-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+
+.mock-question {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  background: rgba(255,255,255,0.03);
+}
+
+.mock-question.approved { color: var(--text); }
+.mock-question.pending  { color: var(--text-2); }
+
+.mock-actions-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Idea mock */
+.mock-badge-new {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.mock-idea-content { display: flex; flex-direction: column; gap: 12px; }
+
+.mock-idea-meta { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.mock-meta-row { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; }
+.mock-meta-label { color: var(--text-3); font-size: 0.72rem; }
+
+.mock-idea-progress {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.mock-progress-label { font-size: 0.72rem; color: var(--text-3); margin-bottom: 6px; }
+
+.mock-progress-bar {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.mock-progress-fill {
+  height: 100%;
+  width: 60%;
+  background: linear-gradient(90deg, var(--accent), var(--cyan));
+  border-radius: 3px;
+}
+
+.mock-progress-counters { display: flex; gap: 12px; font-size: 0.72rem; color: var(--text-2); }
+
+/* Sponsor mock */
+.mock-sponsor-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+
+.mock-sponsor-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.mock-sponsor-logo { font-size: 1.3rem; }
+.mock-sponsor-info { flex: 1; }
+.mock-sponsor-info strong { display: block; font-size: 0.82rem; }
+.mock-sponsor-info small  { color: var(--text-3); font-size: 0.7rem; }
+
+.mock-billing-summary {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.mock-billing-title { font-size: 0.78rem; font-weight: 700; margin-bottom: 8px; }
+
+.mock-billing-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.mock-billing-row:last-child { border-bottom: none; }
+
+.mock-billing-amount.open { color: var(--yellow); font-weight: 700; }
+.mock-billing-amount.paid { color: var(--green);  font-weight: 700; }
+
+/* Admin mock */
+.mock-user-list { display: flex; flex-direction: column; gap: 6px; }
+
+.mock-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.mock-user-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.mock-user-avatar.admin { background: rgba(124,58,237,0.3); color: var(--accent-l); }
+.mock-user-avatar.mod   { background: rgba(6,182,212,0.3);  color: var(--cyan); }
+.mock-user-avatar.red   { background: rgba(16,185,129,0.3); color: var(--green); }
+.mock-user-avatar.view  { background: rgba(255,255,255,0.1); color: var(--text-2); }
+
+.mock-user-info { flex: 1; }
+.mock-user-info strong { display: block; font-size: 0.82rem; }
+.mock-user-info small  { color: var(--text-3); font-size: 0.7rem; }
+
+.mock-role-badge {
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.mock-role-badge.admin { background: rgba(124,58,237,0.2); color: var(--accent-l); }
+.mock-role-badge.mod   { background: rgba(6,182,212,0.2);  color: var(--cyan); }
+.mock-role-badge.red   { background: rgba(16,185,129,0.2); color: var(--green); }
+.mock-role-badge.view  { background: rgba(255,255,255,0.08); color: var(--text-2); }
+
+/* Settings mock */
+.mock-settings-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+.mock-settings-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.mock-settings-title { font-size: 0.78rem; font-weight: 700; margin-bottom: 10px; }
+
+.mock-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}
+
+.mock-color-swatch {
+  width: 20px; height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+.mock-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}
+
+.mock-toggle {
+  width: 30px; height: 16px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.1);
+  position: relative;
+}
+
+.mock-toggle.on { background: var(--green); }
+
+.mock-toggle::after {
+  content: '';
+  position: absolute;
+  width: 12px; height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  top: 2px; left: 2px;
+  transition: left 0.2s;
+}
+
+.mock-toggle.on::after { left: 16px; }
+
+.mock-field { margin-bottom: 8px; }
+.mock-field label { display: block; font-size: 0.68rem; color: var(--text-3); margin-bottom: 3px; }
+.mock-input {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  color: var(--text-2);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ============================================================
+   TECH STACK
+   ============================================================ */
+.tech {
+  padding: 100px 0;
+}
+
+.tech-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.tech-card {
+  background: var(--bg-c);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.tech-card:hover {
+  border-color: var(--border-h);
+  transform: translateY(-2px);
+}
+
+.tech-icon { font-size: 1.8rem; flex-shrink: 0; }
+
+.tech-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 2px;
+}
+
+.tech-role {
+  font-size: 0.78rem;
+  color: var(--text-2);
+}
+
+/* ============================================================
+   QUICKSTART
+   ============================================================ */
+.quickstart {
+  padding: 100px 0;
+  background: var(--bg-s);
+}
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 56px;
+}
+
+.step-card {
+  background: var(--bg-c);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 32px;
+  position: relative;
+}
+
+.step-number {
+  font-size: 3.5rem;
+  font-weight: 900;
+  background: linear-gradient(135deg, rgba(124,58,237,0.3), rgba(6,182,212,0.3));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  margin-bottom: 16px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.step-card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.step-card p {
+  font-size: 0.88rem;
+  color: var(--text-2);
+  margin-bottom: 20px;
+  line-height: 1.65;
+}
+
+.code-block {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text-2);
+  line-height: 1.8;
+}
+
+.code-comment { color: var(--text-3); }
+
+.download-cta {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   SPONSOR
+   ============================================================ */
+.sponsor {
+  padding: 100px 0;
+}
+
+.sponsor-card {
+  background: var(--bg-c);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 56px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 48px;
+  align-items: center;
+}
+
+.sponsor-icon { font-size: 3rem; margin-bottom: 12px; }
+
+.sponsor-title {
+  font-size: 2rem;
+  font-weight: 800;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.sponsor-desc {
+  font-size: 1rem;
+  color: var(--text-2);
+  max-width: 520px;
+  line-height: 1.7;
+  margin-bottom: 24px;
+}
+
+.sponsor-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.sponsor-feature {
+  font-size: 0.88rem;
+  color: var(--text-2);
+}
+
+.sponsor-actions { display: flex; flex-direction: column; gap: 10px; }
+
+.sponsor-paypal-info { font-size: 0.78rem; color: var(--text-3); }
+
+/* Coffee cup animation */
+.coffee-cup {
+  width: 120px;
+  text-align: center;
+  position: relative;
+}
+
+.coffee-steam {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  height: 32px;
+  align-items: flex-end;
+}
+
+.coffee-steam span {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(to top, rgba(255,255,255,0.3), transparent);
+  animation: steam 2s ease-in-out infinite;
+}
+
+.coffee-steam span:nth-child(1) { height: 18px; animation-delay: 0s; }
+.coffee-steam span:nth-child(2) { height: 24px; animation-delay: 0.3s; }
+.coffee-steam span:nth-child(3) { height: 16px; animation-delay: 0.6s; }
+
+@keyframes steam {
+  0%, 100% { transform: scaleY(0.8) translateY(2px); opacity: 0.5; }
+  50% { transform: scaleY(1.1) translateY(-2px); opacity: 1; }
+}
+
+.coffee-body { font-size: 4rem; line-height: 1; }
+
+.coffee-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-3);
+  margin-top: 6px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.footer {
+  background: var(--bg-s);
+  border-top: 1px solid var(--border);
+  padding: 64px 0 32px;
+}
+
+.footer-inner {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 48px;
+  margin-bottom: 48px;
+}
+
+.footer-logo {
+  font-size: 1.2rem;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.footer-brand p {
+  font-size: 0.85rem;
+  color: var(--text-2);
+  line-height: 1.65;
+  margin-bottom: 16px;
+}
+
+.footer-links-inline {
+  display: flex;
+  gap: 16px;
+}
+
+.footer-links-inline a {
+  font-size: 0.82rem;
+  color: var(--text-3);
+  transition: color 0.2s;
+}
+
+.footer-links-inline a:hover { color: var(--text); }
+
+.footer-col h4 {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.footer-col a {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-2);
+  margin-bottom: 8px;
+  transition: color 0.2s;
+}
+
+.footer-col a:hover { color: var(--text); }
+
+.footer-bottom {
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.footer-bottom p {
+  font-size: 0.82rem;
+  color: var(--text-3);
+}
+
+/* ============================================================
+   BACK TO TOP
+   ============================================================ */
+.back-to-top {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  width: 44px;
+  height: 44px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 4px 16px var(--accent-g);
+  transition: all 0.2s;
+  z-index: 50;
+  opacity: 0.85;
+}
+
+.back-to-top:hover { opacity: 1; transform: translateY(-2px); }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 1024px) {
+  .features-grid { grid-template-columns: repeat(2, 1fr); }
+  .tech-grid { grid-template-columns: repeat(2, 1fr); }
+  .footer-inner { grid-template-columns: 1fr 1fr; gap: 32px; }
+  .mock-settings-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .stats-grid { grid-template-columns: repeat(3, 1fr); }
+  .stat-card:nth-child(4), .stat-card:nth-child(5) { border-top: 1px solid var(--border); }
+  .features-grid { grid-template-columns: 1fr; }
+  .steps-grid { grid-template-columns: 1fr; }
+  .screenshot-tabs { gap: 4px; }
+  .tab-link { padding: 6px 10px; font-size: 0.78rem; }
+  .mock-sidebar { display: none; }
+  .mock-settings-grid { grid-template-columns: 1fr; }
+  .sponsor-card { grid-template-columns: 1fr; padding: 32px; }
+  .sponsor-visual { display: none; }
+  .footer-inner { grid-template-columns: 1fr; gap: 24px; }
+  .footer-bottom { flex-direction: column; text-align: center; }
+  .tech-grid { grid-template-columns: 1fr 1fr; }
+  .hero-title { font-size: 2.4rem; }
+  .download-cta { flex-direction: column; align-items: center; }
+}
+
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-card:nth-child(5) { grid-column: span 2; border-right: none; }
+  .tech-grid { grid-template-columns: 1fr; }
+  .hero-actions { flex-direction: column; }
+  .hero-actions .btn { justify-content: center; }
+  .mock-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .mock-cards-row { grid-template-columns: 1fr; }
+}
+
+  </style>
 </head>
 <body>
 
   <!-- Navigation -->
-  <nav class="nav" id="nav">
+  <nav class="nav" id="top">
     <div class="nav-inner">
-      <a href="#" class="nav-logo">
+      <a href="#top" class="nav-logo">
         <span class="nav-logo-icon">🎙</span>
         <span class="nav-logo-text">PodCore</span>
       </a>
@@ -29,21 +1435,11 @@
         <a href="#quickstart">Schnellstart</a>
         <a href="#sponsor" class="nav-cta">☕ Unterstützen</a>
       </div>
-      <button class="nav-mobile-toggle" id="navToggle" aria-label="Menü öffnen">
-        <span></span><span></span><span></span>
-      </button>
-    </div>
-    <div class="nav-mobile-menu" id="navMobile">
-      <a href="#features">Features</a>
-      <a href="#screenshots">Screenshots</a>
-      <a href="#tech">Technologie</a>
-      <a href="#quickstart">Schnellstart</a>
-      <a href="#sponsor">☕ Unterstützen</a>
     </div>
   </nav>
 
   <!-- Hero -->
-  <section class="hero" id="top">
+  <section class="hero">
     <div class="hero-bg">
       <div class="hero-glow hero-glow-1"></div>
       <div class="hero-glow hero-glow-2"></div>
@@ -52,7 +1448,7 @@
     <div class="container">
       <div class="hero-badge">
         <span class="badge-dot"></span>
-        v2.1.2 — Aktuelle Version
+        v2.1.3 — Aktuelle Version
       </div>
       <h1 class="hero-title">
         Professionelles<br />
@@ -79,9 +1475,7 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Download
         </a>
-        <a href="#sponsor" class="btn btn-coffee">
-          ☕ Buy me a Coffee
-        </a>
+        <a href="#sponsor" class="btn btn-coffee">☕ Buy me a Coffee</a>
       </div>
       <a href="#features" class="hero-scroll">
         <span>Mehr entdecken</span>
@@ -94,26 +1488,11 @@
   <section class="stats">
     <div class="container">
       <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-number">12+</div>
-          <div class="stat-label">Haupt-Module</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number">3</div>
-          <div class="stat-label">PDF Export-Typen</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number">6</div>
-          <div class="stat-label">Ideen-Tabs</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number">4</div>
-          <div class="stat-label">Benutzer-Rollen</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number">0</div>
-          <div class="stat-label">Cloud-Abhängigkeit</div>
-        </div>
+        <div class="stat-card"><div class="stat-number">12+</div><div class="stat-label">Haupt-Module</div></div>
+        <div class="stat-card"><div class="stat-number">3</div><div class="stat-label">PDF Export-Typen</div></div>
+        <div class="stat-card"><div class="stat-number">6</div><div class="stat-label">Ideen-Tabs</div></div>
+        <div class="stat-card"><div class="stat-number">4</div><div class="stat-label">Benutzer-Rollen</div></div>
+        <div class="stat-card"><div class="stat-number">0</div><div class="stat-label">Cloud-Abhängigkeit</div></div>
       </div>
     </div>
   </section>
@@ -202,289 +1581,292 @@
     </div>
   </section>
 
-  <!-- Screenshots -->
+  <!-- Screenshots — CSS-only tabs via :target anchors -->
   <section class="screenshots" id="screenshots">
     <div class="container">
       <div class="section-label">SCREENSHOTS</div>
       <h2 class="section-title">Alle Module<br /><span>im Überblick</span></h2>
-      <p class="section-desc">Wähle ein Modul, um den zugehörigen Screen zu sehen.</p>
+      <p class="section-desc">Klicke ein Modul an, um den zugehörigen Screen zu sehen.</p>
 
-      <div class="screenshot-tabs">
-        <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-        <button class="tab-btn" data-tab="episodes">Episoden</button>
-        <button class="tab-btn" data-tab="editorial">Redaktions-Hub</button>
-        <button class="tab-btn" data-tab="ideas">Ideen-Arbeitsmappe</button>
-        <button class="tab-btn" data-tab="sponsors">Sponsoring</button>
-        <button class="tab-btn" data-tab="admin">Administration</button>
-        <button class="tab-btn" data-tab="settings">Einstellungen</button>
-      </div>
+      <div class="screenshot-tabs-wrapper">
+        <!-- Invisible anchor targets as first children -->
+        <span id="screen-dashboard" class="screen-anchor"></span>
+        <span id="screen-episodes" class="screen-anchor"></span>
+        <span id="screen-editorial" class="screen-anchor"></span>
+        <span id="screen-ideas" class="screen-anchor"></span>
+        <span id="screen-sponsors" class="screen-anchor"></span>
+        <span id="screen-admin" class="screen-anchor"></span>
+        <span id="screen-settings" class="screen-anchor"></span>
 
-      <div class="screenshot-display">
-        <div class="screenshot-browser">
+        <div class="screenshot-tabs">
+          <a href="#screen-dashboard" class="tab-link tab-dashboard">📊 Dashboard</a>
+          <a href="#screen-episodes"  class="tab-link tab-episodes">🎙 Episoden</a>
+          <a href="#screen-editorial" class="tab-link tab-editorial">📋 Redaktions-Hub</a>
+          <a href="#screen-ideas"     class="tab-link tab-ideas">💡 Ideen-Arbeitsmappe</a>
+          <a href="#screen-sponsors"  class="tab-link tab-sponsors">💰 Sponsoring</a>
+          <a href="#screen-admin"     class="tab-link tab-admin">👥 Administration</a>
+          <a href="#screen-settings"  class="tab-link tab-settings">⚙️ Einstellungen</a>
+        </div>
+
+        <div class="screenshot-display">
+          <!-- Browser chrome -->
           <div class="browser-bar">
             <div class="browser-dots">
               <span class="dot dot-red"></span>
               <span class="dot dot-yellow"></span>
               <span class="dot dot-green"></span>
             </div>
-            <div class="browser-url" id="browserUrl">localhost:3001/</div>
+            <div class="browser-url">localhost:3001/</div>
           </div>
-          <div class="screenshot-content" id="screenshotContent">
-            <!-- Dashboard Mock -->
-            <div class="mock-screen active" id="tab-dashboard">
-              <div class="mock-sidebar">
-                <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.1.2</div>
-                <div class="mock-nav-item active">📊 Dashboard</div>
-                <div class="mock-nav-item">🎙 Episoden</div>
-                <div class="mock-nav-item">📋 Redaktions-Hub</div>
-                <div class="mock-nav-item">🎵 Media Library</div>
-                <div class="mock-nav-item">💰 Sponsoring</div>
-                <div class="mock-nav-item">⚙️ Einstellungen</div>
-              </div>
-              <div class="mock-main">
-                <div class="mock-header">
-                  <h2>Guten Morgen, Administrator! 👋</h2>
-                  <p>Willkommen zurück bei Mein Podcast</p>
-                </div>
-                <div class="mock-stats-row">
-                  <div class="mock-stat"><div class="mock-stat-num">12</div><div class="mock-stat-lbl">Episoden</div></div>
-                  <div class="mock-stat"><div class="mock-stat-num">3</div><div class="mock-stat-lbl">Ideen</div></div>
-                  <div class="mock-stat"><div class="mock-stat-num">24</div><div class="mock-stat-lbl">Assets</div></div>
-                  <div class="mock-stat"><div class="mock-stat-num">5</div><div class="mock-stat-lbl">Sponsoren</div></div>
-                </div>
-                <div class="mock-cards-row">
-                  <div class="mock-card">
-                    <div class="mock-card-title">📅 Redaktionsplan – Juni 2026</div>
-                    <div class="mock-plan-item"><span class="mock-plan-date">15. Jun</span><span class="mock-plan-title">Episode 13: Interview</span><span class="mock-plan-status entwurf">Entwurf</span></div>
-                    <div class="mock-plan-item"><span class="mock-plan-date">22. Jun</span><span class="mock-plan-title">Episode 14: Deep Dive</span><span class="mock-plan-status idee">Idee</span></div>
-                    <div class="mock-plan-item"><span class="mock-plan-date">29. Jun</span><span class="mock-plan-title">Episode 15: Recap</span><span class="mock-plan-status idee">Idee</span></div>
-                  </div>
-                  <div class="mock-card">
-                    <div class="mock-card-title">🎙 Aktuelle Episoden</div>
-                    <div class="mock-ep-item"><span class="mock-ep-num">#12</span><span class="mock-ep-title">Die Zukunft des Podcasting</span><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span></div>
-                    <div class="mock-ep-item"><span class="mock-ep-num">#11</span><span class="mock-ep-title">Interview: Max Mustermann</span><span class="mock-ep-status schnitt">Im Schnitt</span></div>
-                    <div class="mock-ep-item"><span class="mock-ep-num">#10</span><span class="mock-ep-title">Technik-Special 2026</span><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span></div>
-                  </div>
-                </div>
+
+        <!-- Dashboard -->
+        <div class="mock-screen" id="tab-dashboard">
+          <div class="mock-sidebar">
+            <div class="mock-logo">🎙 PodCore</div>
+            <div class="mock-version">v2.1.3</div>
+            <div class="mock-nav-item active">📊 Dashboard</div>
+            <div class="mock-nav-item">🎙 Episoden</div>
+            <div class="mock-nav-item">📋 Redaktions-Hub</div>
+            <div class="mock-nav-item">🎵 Media Library</div>
+            <div class="mock-nav-item">💰 Sponsoring</div>
+            <div class="mock-nav-item">⚙️ Einstellungen</div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-header">
+              <div>
+                <h2>Guten Morgen, Administrator! 👋</h2>
+                <p>Willkommen zurück bei Mein Podcast</p>
               </div>
             </div>
-
-            <!-- Episodes Mock -->
-            <div class="mock-screen" id="tab-episodes">
-              <div class="mock-sidebar">
-                <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.1.2</div>
-                <div class="mock-nav-item">📊 Dashboard</div>
-                <div class="mock-nav-item active">🎙 Episoden</div>
-                <div class="mock-nav-item">📋 Redaktions-Hub</div>
-                <div class="mock-nav-item">🎵 Media Library</div>
-                <div class="mock-nav-item">💰 Sponsoring</div>
-                <div class="mock-nav-item">⚙️ Einstellungen</div>
+            <div class="mock-stats-row">
+              <div class="mock-stat"><div class="mock-stat-num">12</div><div class="mock-stat-lbl">Episoden</div></div>
+              <div class="mock-stat"><div class="mock-stat-num">3</div><div class="mock-stat-lbl">Ideen</div></div>
+              <div class="mock-stat"><div class="mock-stat-num">24</div><div class="mock-stat-lbl">Assets</div></div>
+              <div class="mock-stat"><div class="mock-stat-num">5</div><div class="mock-stat-lbl">Sponsoren</div></div>
+            </div>
+            <div class="mock-cards-row">
+              <div class="mock-card">
+                <div class="mock-card-title">📅 Redaktionsplan – Juni 2026</div>
+                <div class="mock-plan-item"><span class="mock-plan-date">15. Jun</span><span class="mock-plan-title">Episode 13: Interview</span><span class="mock-plan-status entwurf">Entwurf</span></div>
+                <div class="mock-plan-item"><span class="mock-plan-date">22. Jun</span><span class="mock-plan-title">Episode 14: Deep Dive</span><span class="mock-plan-status idee">Idee</span></div>
+                <div class="mock-plan-item"><span class="mock-plan-date">29. Jun</span><span class="mock-plan-title">Episode 15: Recap</span><span class="mock-plan-status idee">Idee</span></div>
               </div>
-              <div class="mock-main">
-                <div class="mock-header">
-                  <h2>Episoden</h2>
-                  <div class="mock-actions">
-                    <button class="mock-btn">Filter</button>
-                    <button class="mock-btn primary">+ Neue Episode</button>
-                  </div>
-                </div>
-                <div class="mock-ep-table">
-                  <div class="mock-ep-row"><span class="mock-ep-num">#12</span><div class="mock-ep-info"><strong>Die Zukunft des Podcasting</strong><small>22. Jun 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
-                  <div class="mock-ep-row"><span class="mock-ep-num">#11</span><div class="mock-ep-info"><strong>Interview: Max Mustermann</strong><small>15. Jun 2026</small></div><span class="mock-ep-status schnitt">Im Schnitt</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
-                  <div class="mock-ep-row"><span class="mock-ep-num">#10</span><div class="mock-ep-info"><strong>Technik-Special 2026</strong><small>08. Jun 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
-                  <div class="mock-ep-row"><span class="mock-ep-num">#9</span><div class="mock-ep-info"><strong>Deep Dive: KI im Podcast</strong><small>01. Jun 2026</small></div><span class="mock-ep-status freigabe">Freigabe ausstehend</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
-                  <div class="mock-ep-row"><span class="mock-ep-num">#8</span><div class="mock-ep-info"><strong>Gast: Sarah Schmidt</strong><small>25. Mai 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
-                </div>
+              <div class="mock-card">
+                <div class="mock-card-title">🎙 Aktuelle Episoden</div>
+                <div class="mock-ep-item"><span class="mock-ep-num">#12</span><span class="mock-ep-title">Die Zukunft des Podcasting</span><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span></div>
+                <div class="mock-ep-item"><span class="mock-ep-num">#11</span><span class="mock-ep-title">Interview: Max Mustermann</span><span class="mock-ep-status schnitt">Im Schnitt</span></div>
+                <div class="mock-ep-item"><span class="mock-ep-num">#10</span><span class="mock-ep-title">Technik-Special 2026</span><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span></div>
               </div>
             </div>
-
-            <!-- Editorial Mock -->
-            <div class="mock-screen" id="tab-editorial">
-              <div class="mock-sidebar">
-                <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.1.2</div>
-                <div class="mock-nav-item">📊 Dashboard</div>
-                <div class="mock-nav-item">🎙 Episoden</div>
-                <div class="mock-nav-item active">📋 Redaktions-Hub</div>
-                <div class="mock-nav-item">🎵 Media Library</div>
-                <div class="mock-nav-item">💰 Sponsoring</div>
-                <div class="mock-nav-item">⚙️ Einstellungen</div>
-              </div>
-              <div class="mock-main">
-                <div class="mock-header"><h2>Redaktions-Hub</h2></div>
-                <div class="mock-tabs-row">
-                  <span class="mock-tab active">Interview-Fragen</span>
-                  <span class="mock-tab">Ideen</span>
-                  <span class="mock-tab">Notizen</span>
-                  <span class="mock-tab">Recherche</span>
-                </div>
-                <div class="mock-interview">
-                  <div class="mock-partner-card">
-                    <div class="mock-partner-name">👤 Max Mustermann</div>
-                    <div class="mock-partner-role">Podcast-Gast, Episode #11</div>
-                    <div class="mock-question-list">
-                      <div class="mock-question approved"><span class="mock-q-status">✅</span> Wie bist du zum Podcasting gekommen?</div>
-                      <div class="mock-question approved"><span class="mock-q-status">✅</span> Was sind deine drei wichtigsten Tipps?</div>
-                      <div class="mock-question pending"><span class="mock-q-status">⏳</span> Welche Tools nutzt du täglich?</div>
-                      <div class="mock-question pending"><span class="mock-q-status">⏳</span> Was planst du für 2027?</div>
-                    </div>
-                    <div class="mock-actions-row">
-                      <button class="mock-btn">✉️ Fragen senden</button>
-                      <button class="mock-btn primary">+ Frage hinzufügen</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Ideas Arbeitsmappe Mock (NEU) -->
-            <div class="mock-screen" id="tab-ideas">
-              <div class="mock-sidebar">
-                <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.1.2</div>
-                <div class="mock-nav-item">📊 Dashboard</div>
-                <div class="mock-nav-item">🎙 Episoden</div>
-                <div class="mock-nav-item active">📋 Redaktions-Hub</div>
-                <div class="mock-nav-item">🎵 Media Library</div>
-                <div class="mock-nav-item">💰 Sponsoring</div>
-                <div class="mock-nav-item">⚙️ Einstellungen</div>
-              </div>
-              <div class="mock-main">
-                <div class="mock-header">
-                  <h2>💡 KI im Podcast – Ideen-Arbeitsmappe</h2>
-                  <span class="mock-badge-new">NEU in v2.1.1</span>
-                </div>
-                <div class="mock-tabs-row">
-                  <span class="mock-tab active">📋 Übersicht</span>
-                  <span class="mock-tab">🔍 Recherche</span>
-                  <span class="mock-tab">📁 Uploads</span>
-                  <span class="mock-tab">🎤 Interview</span>
-                  <span class="mock-tab">📝 Notizen</span>
-                  <span class="mock-tab">✅ Checkliste</span>
-                </div>
-                <div class="mock-idea-content">
-                  <div class="mock-idea-meta">
-                    <div class="mock-meta-row"><span class="mock-meta-label">Status</span><span class="mock-ep-status idee">Idee</span></div>
-                    <div class="mock-meta-row"><span class="mock-meta-label">Priorität</span><span class="mock-ep-status schnitt">Hoch</span></div>
-                    <div class="mock-meta-row"><span class="mock-meta-label">Zieldatum</span><span>01. Juli 2026</span></div>
-                  </div>
-                  <div class="mock-idea-progress">
-                    <div class="mock-progress-label">Fortschritt</div>
-                    <div class="mock-progress-bar"><div class="mock-progress-fill" style="width:60%"></div></div>
-                    <div class="mock-progress-counters">
-                      <span>🔍 3 Quellen</span>
-                      <span>🎤 2 Fragen</span>
-                      <span>✅ 4/6 Aufgaben</span>
-                    </div>
-                  </div>
-                  <div class="mock-actions-row" style="margin-top:12px">
-                    <button class="mock-btn primary">🎙 Episode erstellen</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Sponsors Mock -->
-            <div class="mock-screen" id="tab-sponsors">
-              <div class="mock-sidebar">
-                <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.1.2</div>
-                <div class="mock-nav-item">📊 Dashboard</div>
-                <div class="mock-nav-item">🎙 Episoden</div>
-                <div class="mock-nav-item">📋 Redaktions-Hub</div>
-                <div class="mock-nav-item">🎵 Media Library</div>
-                <div class="mock-nav-item active">💰 Sponsoring</div>
-                <div class="mock-nav-item">⚙️ Einstellungen</div>
-              </div>
-              <div class="mock-main">
-                <div class="mock-header"><h2>Sponsoring</h2><button class="mock-btn primary">+ Neuer Sponsor</button></div>
-                <div class="mock-sponsor-list">
-                  <div class="mock-sponsor-row">
-                    <div class="mock-sponsor-logo">🏢</div>
-                    <div class="mock-sponsor-info"><strong>TechCorp GmbH</strong><small>3 aktive Buchungen · 1.250 € offen</small></div>
-                    <span class="mock-ep-status veroeffentlicht">Aktiv</span>
-                  </div>
-                  <div class="mock-sponsor-row">
-                    <div class="mock-sponsor-logo">🎧</div>
-                    <div class="mock-sponsor-info"><strong>AudioGear Pro</strong><small>1 aktive Buchung · 450 € bezahlt</small></div>
-                    <span class="mock-ep-status veroeffentlicht">Aktiv</span>
-                  </div>
-                  <div class="mock-sponsor-row">
-                    <div class="mock-sponsor-logo">📱</div>
-                    <div class="mock-sponsor-info"><strong>AppStudio Berlin</strong><small>Kampagne abgeschlossen · 800 € bezahlt</small></div>
-                    <span class="mock-ep-status schnitt">Abgeschlossen</span>
-                  </div>
-                </div>
-                <div class="mock-billing-summary">
-                  <div class="mock-billing-title">💳 Abrechnung Übersicht</div>
-                  <div class="mock-billing-row"><span>Offen</span><span class="mock-billing-amount open">1.250,00 €</span></div>
-                  <div class="mock-billing-row"><span>Bezahlt (gesamt)</span><span class="mock-billing-amount paid">1.250,00 €</span></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Admin Mock -->
-            <div class="mock-screen" id="tab-admin">
-              <div class="mock-sidebar">
-                <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.1.2</div>
-                <div class="mock-nav-item">📊 Dashboard</div>
-                <div class="mock-nav-item">🎙 Episoden</div>
-                <div class="mock-nav-item">📋 Redaktions-Hub</div>
-                <div class="mock-nav-item">🎵 Media Library</div>
-                <div class="mock-nav-item">💰 Sponsoring</div>
-                <div class="mock-nav-item active">👥 Administration</div>
-              </div>
-              <div class="mock-main">
-                <div class="mock-header"><h2>Benutzerverwaltung</h2><button class="mock-btn primary">+ Neuer Benutzer</button></div>
-                <div class="mock-user-list">
-                  <div class="mock-user-row"><div class="mock-user-avatar admin">A</div><div class="mock-user-info"><strong>Administrator</strong><small>admin@podcast.de</small></div><span class="mock-role-badge admin">Admin</span><span class="mock-ep-actions">✏️ 🗑</span></div>
-                  <div class="mock-user-row"><div class="mock-user-avatar mod">M</div><div class="mock-user-info"><strong>Max Moderator</strong><small>max@podcast.de</small></div><span class="mock-role-badge mod">Moderator</span><span class="mock-ep-actions">✏️ 🗑</span></div>
-                  <div class="mock-user-row"><div class="mock-user-avatar red">R</div><div class="mock-user-info"><strong>Sarah Redakteur</strong><small>sarah@podcast.de</small></div><span class="mock-role-badge red">Redakteur</span><span class="mock-ep-actions">✏️ 🗑</span></div>
-                  <div class="mock-user-row"><div class="mock-user-avatar view">V</div><div class="mock-user-info"><strong>Tom Viewer</strong><small>tom@podcast.de</small></div><span class="mock-role-badge view">Viewer</span><span class="mock-ep-actions">✏️ 🗑</span></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Settings Mock -->
-            <div class="mock-screen" id="tab-settings">
-              <div class="mock-sidebar">
-                <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.1.2</div>
-                <div class="mock-nav-item">📊 Dashboard</div>
-                <div class="mock-nav-item">🎙 Episoden</div>
-                <div class="mock-nav-item">📋 Redaktions-Hub</div>
-                <div class="mock-nav-item">🎵 Media Library</div>
-                <div class="mock-nav-item">💰 Sponsoring</div>
-                <div class="mock-nav-item active">⚙️ Einstellungen</div>
-              </div>
-              <div class="mock-main">
-                <div class="mock-header"><h2>Einstellungen</h2></div>
-                <div class="mock-settings-grid">
-                  <div class="mock-settings-card">
-                    <div class="mock-settings-title">🎨 PDF & CI-Farben</div>
-                    <div class="mock-color-row"><span>Primärfarbe</span><div class="mock-color-swatch" style="background:#7c3aed"></div></div>
-                    <div class="mock-color-row"><span>Akzentfarbe</span><div class="mock-color-swatch" style="background:#06b6d4"></div></div>
-                  </div>
-                  <div class="mock-settings-card">
-                    <div class="mock-settings-title">🔄 Workflow</div>
-                    <div class="mock-toggle-row"><span>Episoden-Freigabe</span><div class="mock-toggle on"></div></div>
-                    <div class="mock-toggle-row"><span>Interview-Freigabe</span><div class="mock-toggle on"></div></div>
-                  </div>
-                  <div class="mock-settings-card">
-                    <div class="mock-settings-title">📧 E-Mail</div>
-                    <div class="mock-field"><label>SMTP Server</label><div class="mock-input">smtp.gmail.com</div></div>
-                    <div class="mock-field"><label>Port</label><div class="mock-input">587</div></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
           </div>
         </div>
-      </div>
+
+        <!-- Episodes -->
+        <div class="mock-screen" id="tab-episodes">
+          <div class="mock-sidebar">
+            <div class="mock-logo">🎙 PodCore</div>
+            <div class="mock-version">v2.1.3</div>
+            <div class="mock-nav-item">📊 Dashboard</div>
+            <div class="mock-nav-item active">🎙 Episoden</div>
+            <div class="mock-nav-item">📋 Redaktions-Hub</div>
+            <div class="mock-nav-item">🎵 Media Library</div>
+            <div class="mock-nav-item">💰 Sponsoring</div>
+            <div class="mock-nav-item">⚙️ Einstellungen</div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-header">
+              <h2>Episoden</h2>
+              <div class="mock-actions">
+                <button class="mock-btn">Filter</button>
+                <button class="mock-btn primary">+ Neue Episode</button>
+              </div>
+            </div>
+            <div class="mock-ep-table">
+              <div class="mock-ep-row"><span class="mock-ep-num">#12</span><div class="mock-ep-info"><strong>Die Zukunft des Podcasting</strong><small>22. Jun 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
+              <div class="mock-ep-row"><span class="mock-ep-num">#11</span><div class="mock-ep-info"><strong>Interview: Max Mustermann</strong><small>15. Jun 2026</small></div><span class="mock-ep-status schnitt">Im Schnitt</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
+              <div class="mock-ep-row"><span class="mock-ep-num">#10</span><div class="mock-ep-info"><strong>Technik-Special 2026</strong><small>08. Jun 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
+              <div class="mock-ep-row"><span class="mock-ep-num">#9</span><div class="mock-ep-info"><strong>Deep Dive: KI im Podcast</strong><small>01. Jun 2026</small></div><span class="mock-ep-status freigabe">Freigabe ausstehend</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
+              <div class="mock-ep-row"><span class="mock-ep-num">#8</span><div class="mock-ep-info"><strong>Gast: Sarah Schmidt</strong><small>25. Mai 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editorial Hub -->
+        <div class="mock-screen" id="tab-editorial">
+          <div class="mock-sidebar">
+            <div class="mock-logo">🎙 PodCore</div>
+            <div class="mock-version">v2.1.3</div>
+            <div class="mock-nav-item">📊 Dashboard</div>
+            <div class="mock-nav-item">🎙 Episoden</div>
+            <div class="mock-nav-item active">📋 Redaktions-Hub</div>
+            <div class="mock-nav-item">🎵 Media Library</div>
+            <div class="mock-nav-item">💰 Sponsoring</div>
+            <div class="mock-nav-item">⚙️ Einstellungen</div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-header"><h2>Redaktions-Hub</h2></div>
+            <div class="mock-tabs-row">
+              <span class="mock-tab active">Interview-Fragen</span>
+              <span class="mock-tab">Ideen</span>
+              <span class="mock-tab">Notizen</span>
+              <span class="mock-tab">Recherche</span>
+            </div>
+            <div class="mock-partner-card">
+              <div class="mock-partner-name">👤 Max Mustermann</div>
+              <div class="mock-partner-role">Podcast-Gast, Episode #11</div>
+              <div class="mock-question-list">
+                <div class="mock-question approved"><span class="mock-q-status">✅</span> Wie bist du zum Podcasting gekommen?</div>
+                <div class="mock-question approved"><span class="mock-q-status">✅</span> Was sind deine drei wichtigsten Tipps?</div>
+                <div class="mock-question pending"><span class="mock-q-status">⏳</span> Welche Tools nutzt du täglich?</div>
+                <div class="mock-question pending"><span class="mock-q-status">⏳</span> Was planst du für 2027?</div>
+              </div>
+              <div class="mock-actions-row">
+                <button class="mock-btn">✉️ Fragen senden</button>
+                <button class="mock-btn primary">+ Frage hinzufügen</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ideas Arbeitsmappe -->
+        <div class="mock-screen" id="tab-ideas">
+          <div class="mock-sidebar">
+            <div class="mock-logo">🎙 PodCore</div>
+            <div class="mock-version">v2.1.3</div>
+            <div class="mock-nav-item">📊 Dashboard</div>
+            <div class="mock-nav-item">🎙 Episoden</div>
+            <div class="mock-nav-item active">📋 Redaktions-Hub</div>
+            <div class="mock-nav-item">🎵 Media Library</div>
+            <div class="mock-nav-item">💰 Sponsoring</div>
+            <div class="mock-nav-item">⚙️ Einstellungen</div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-header">
+              <h2>💡 KI im Podcast – Ideen-Arbeitsmappe</h2>
+              <span class="mock-badge-new">NEU in v2.1.1</span>
+            </div>
+            <div class="mock-tabs-row">
+              <span class="mock-tab active">📋 Übersicht</span>
+              <span class="mock-tab">🔍 Recherche</span>
+              <span class="mock-tab">📁 Uploads</span>
+              <span class="mock-tab">🎤 Interview</span>
+              <span class="mock-tab">📝 Notizen</span>
+              <span class="mock-tab">✅ Checkliste</span>
+            </div>
+            <div class="mock-idea-content">
+              <div class="mock-idea-meta">
+                <div class="mock-meta-row"><span class="mock-meta-label">Status</span><span class="mock-ep-status idee">Idee</span></div>
+                <div class="mock-meta-row"><span class="mock-meta-label">Priorität</span><span class="mock-ep-status schnitt">Hoch</span></div>
+                <div class="mock-meta-row"><span class="mock-meta-label">Zieldatum</span><span style="font-size:0.78rem;color:var(--text-2)">01. Juli 2026</span></div>
+              </div>
+              <div class="mock-idea-progress">
+                <div class="mock-progress-label">Fortschritt</div>
+                <div class="mock-progress-bar"><div class="mock-progress-fill"></div></div>
+                <div class="mock-progress-counters">
+                  <span>🔍 3 Quellen</span>
+                  <span>🎤 2 Fragen</span>
+                  <span>✅ 4/6 Aufgaben</span>
+                </div>
+              </div>
+              <div class="mock-actions-row">
+                <button class="mock-btn primary">🎙 Episode erstellen</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sponsors -->
+        <div class="mock-screen" id="tab-sponsors">
+          <div class="mock-sidebar">
+            <div class="mock-logo">🎙 PodCore</div>
+            <div class="mock-version">v2.1.3</div>
+            <div class="mock-nav-item">📊 Dashboard</div>
+            <div class="mock-nav-item">🎙 Episoden</div>
+            <div class="mock-nav-item">📋 Redaktions-Hub</div>
+            <div class="mock-nav-item">🎵 Media Library</div>
+            <div class="mock-nav-item active">💰 Sponsoring</div>
+            <div class="mock-nav-item">⚙️ Einstellungen</div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-header">
+              <h2>Sponsoring</h2>
+              <button class="mock-btn primary">+ Neuer Sponsor</button>
+            </div>
+            <div class="mock-sponsor-list">
+              <div class="mock-sponsor-row"><div class="mock-sponsor-logo">🏢</div><div class="mock-sponsor-info"><strong>TechCorp GmbH</strong><small>3 aktive Buchungen · 1.250 € offen</small></div><span class="mock-ep-status veroeffentlicht">Aktiv</span></div>
+              <div class="mock-sponsor-row"><div class="mock-sponsor-logo">🎧</div><div class="mock-sponsor-info"><strong>AudioGear Pro</strong><small>1 aktive Buchung · 450 € bezahlt</small></div><span class="mock-ep-status veroeffentlicht">Aktiv</span></div>
+              <div class="mock-sponsor-row"><div class="mock-sponsor-logo">📱</div><div class="mock-sponsor-info"><strong>AppStudio Berlin</strong><small>Kampagne abgeschlossen · 800 € bezahlt</small></div><span class="mock-ep-status schnitt">Abgeschlossen</span></div>
+            </div>
+            <div class="mock-billing-summary">
+              <div class="mock-billing-title">💳 Abrechnung Übersicht</div>
+              <div class="mock-billing-row"><span>Offen</span><span class="mock-billing-amount open">1.250,00 €</span></div>
+              <div class="mock-billing-row"><span>Bezahlt (gesamt)</span><span class="mock-billing-amount paid">1.250,00 €</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin -->
+        <div class="mock-screen" id="tab-admin">
+          <div class="mock-sidebar">
+            <div class="mock-logo">🎙 PodCore</div>
+            <div class="mock-version">v2.1.3</div>
+            <div class="mock-nav-item">📊 Dashboard</div>
+            <div class="mock-nav-item">🎙 Episoden</div>
+            <div class="mock-nav-item">📋 Redaktions-Hub</div>
+            <div class="mock-nav-item">🎵 Media Library</div>
+            <div class="mock-nav-item">💰 Sponsoring</div>
+            <div class="mock-nav-item active">👥 Administration</div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-header">
+              <h2>Benutzerverwaltung</h2>
+              <button class="mock-btn primary">+ Neuer Benutzer</button>
+            </div>
+            <div class="mock-user-list">
+              <div class="mock-user-row"><div class="mock-user-avatar admin">A</div><div class="mock-user-info"><strong>Administrator</strong><small>admin@podcast.de</small></div><span class="mock-role-badge admin">Admin</span><span class="mock-ep-actions">✏️ 🗑</span></div>
+              <div class="mock-user-row"><div class="mock-user-avatar mod">M</div><div class="mock-user-info"><strong>Max Moderator</strong><small>max@podcast.de</small></div><span class="mock-role-badge mod">Moderator</span><span class="mock-ep-actions">✏️ 🗑</span></div>
+              <div class="mock-user-row"><div class="mock-user-avatar red">R</div><div class="mock-user-info"><strong>Sarah Redakteur</strong><small>sarah@podcast.de</small></div><span class="mock-role-badge red">Redakteur</span><span class="mock-ep-actions">✏️ 🗑</span></div>
+              <div class="mock-user-row"><div class="mock-user-avatar view">V</div><div class="mock-user-info"><strong>Tom Viewer</strong><small>tom@podcast.de</small></div><span class="mock-role-badge view">Viewer</span><span class="mock-ep-actions">✏️ 🗑</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="mock-screen" id="tab-settings">
+          <div class="mock-sidebar">
+            <div class="mock-logo">🎙 PodCore</div>
+            <div class="mock-version">v2.1.3</div>
+            <div class="mock-nav-item">📊 Dashboard</div>
+            <div class="mock-nav-item">🎙 Episoden</div>
+            <div class="mock-nav-item">📋 Redaktions-Hub</div>
+            <div class="mock-nav-item">🎵 Media Library</div>
+            <div class="mock-nav-item">💰 Sponsoring</div>
+            <div class="mock-nav-item active">⚙️ Einstellungen</div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-header"><h2>Einstellungen</h2></div>
+            <div class="mock-settings-grid">
+              <div class="mock-settings-card">
+                <div class="mock-settings-title">🎨 PDF & CI-Farben</div>
+                <div class="mock-color-row"><span>Primärfarbe</span><div class="mock-color-swatch" style="background:#7c3aed"></div></div>
+                <div class="mock-color-row"><span>Akzentfarbe</span><div class="mock-color-swatch" style="background:#06b6d4"></div></div>
+              </div>
+              <div class="mock-settings-card">
+                <div class="mock-settings-title">🔄 Workflow</div>
+                <div class="mock-toggle-row"><span>Episoden-Freigabe</span><div class="mock-toggle on"></div></div>
+                <div class="mock-toggle-row"><span>Interview-Freigabe</span><div class="mock-toggle on"></div></div>
+              </div>
+              <div class="mock-settings-card">
+                <div class="mock-settings-title">📧 E-Mail</div>
+                <div class="mock-field"><label>SMTP Server</label><div class="mock-input">smtp.gmail.com</div></div>
+                <div class="mock-field"><label>Port</label><div class="mock-input">587</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+          </div><!-- end screenshot-display -->
+        </div><!-- end screenshot-tabs-wrapper -->
     </div>
   </section>
 
@@ -495,15 +1877,15 @@
       <h2 class="section-title">Moderner Stack,<br /><span>stabile Basis</span></h2>
       <p class="section-desc">PodCore basiert auf bewährten Open-Source-Technologien. Kein Legacy-Code, kein proprietäres Lock-in.</p>
       <div class="tech-grid">
-        <div class="tech-card"><div class="tech-icon">⚛️</div><div class="tech-name">React 18</div><div class="tech-role">Frontend Framework</div></div>
-        <div class="tech-card"><div class="tech-icon">🎨</div><div class="tech-name">Tailwind CSS</div><div class="tech-role">CSS Framework</div></div>
-        <div class="tech-card"><div class="tech-icon">🟩</div><div class="tech-name">Node.js</div><div class="tech-role">Runtime (v18+)</div></div>
-        <div class="tech-card"><div class="tech-icon">🚂</div><div class="tech-name">Express.js</div><div class="tech-role">Backend API</div></div>
-        <div class="tech-card"><div class="tech-icon">🔷</div><div class="tech-name">TypeScript</div><div class="tech-role">Typsicherheit</div></div>
-        <div class="tech-card"><div class="tech-icon">⚡</div><div class="tech-name">Vite</div><div class="tech-role">Build-Tool</div></div>
-        <div class="tech-card"><div class="tech-icon">🗄️</div><div class="tech-name">SQLite WASM</div><div class="tech-role">Datenbank (kein Compiler)</div></div>
-        <div class="tech-card"><div class="tech-icon">📦</div><div class="tech-name">npm</div><div class="tech-role">Paket-Manager</div></div>
-        <div class="tech-card"><div class="tech-icon">📄</div><div class="tech-name">PDFKit</div><div class="tech-role">PDF-Generierung</div></div>
+        <div class="tech-card"><div class="tech-icon">⚛️</div><div><div class="tech-name">React 18</div><div class="tech-role">Frontend Framework</div></div></div>
+        <div class="tech-card"><div class="tech-icon">🎨</div><div><div class="tech-name">Tailwind CSS</div><div class="tech-role">CSS Framework</div></div></div>
+        <div class="tech-card"><div class="tech-icon">🟩</div><div><div class="tech-name">Node.js</div><div class="tech-role">Runtime (v18+)</div></div></div>
+        <div class="tech-card"><div class="tech-icon">🚂</div><div><div class="tech-name">Express.js</div><div class="tech-role">Backend API</div></div></div>
+        <div class="tech-card"><div class="tech-icon">🔷</div><div><div class="tech-name">TypeScript</div><div class="tech-role">Typsicherheit</div></div></div>
+        <div class="tech-card"><div class="tech-icon">⚡</div><div><div class="tech-name">Vite</div><div class="tech-role">Build-Tool</div></div></div>
+        <div class="tech-card"><div class="tech-icon">🗄️</div><div><div class="tech-name">SQLite WASM</div><div class="tech-role">Datenbank (kein Compiler)</div></div></div>
+        <div class="tech-card"><div class="tech-icon">📦</div><div><div class="tech-name">npm</div><div class="tech-role">Paket-Manager</div></div></div>
+        <div class="tech-card"><div class="tech-icon">📄</div><div><div class="tech-name">PDFKit</div><div class="tech-role">PDF-Generierung</div></div></div>
       </div>
     </div>
   </section>
@@ -520,7 +1902,7 @@
           <p>ZIP-Archiv von GitHub herunterladen und entpacken. Node.js v18+ muss installiert sein.</p>
           <div class="code-block">
             <span class="code-comment"># ZIP entpacken</span><br />
-            unzip PodCore_v2.1.2.zip
+            unzip PodCore_v2.1.3.zip
           </div>
         </div>
         <div class="step-card">
@@ -549,7 +1931,7 @@
       <div class="download-cta">
         <a href="https://github.com/webcaster/podcore_V2/releases" target="_blank" rel="noopener" class="btn btn-primary btn-large">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          PodCore v2.1.2 herunterladen
+          PodCore v2.1.3 herunterladen
         </a>
         <a href="https://github.com/webcaster/podcore_V2" target="_blank" rel="noopener" class="btn btn-ghost btn-large">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -559,13 +1941,13 @@
     </div>
   </section>
 
-  <!-- Sponsor / Buy me a Coffee -->
+  <!-- Sponsor -->
   <section class="sponsor" id="sponsor">
     <div class="container">
       <div class="sponsor-card">
-        <div class="sponsor-icon">☕</div>
         <div class="sponsor-content">
-          <div class="section-label" style="margin-bottom: 0.5rem;">OPEN SOURCE · KOSTENLOS</div>
+          <div class="sponsor-icon">☕</div>
+          <div class="section-label">OPEN SOURCE · KOSTENLOS</div>
           <h2 class="sponsor-title">PodCore unterstützen</h2>
           <p class="sponsor-desc">
             PodCore ist kostenlos und Open Source. Wenn dir die App hilft und du die Weiterentwicklung unterstützen möchtest, freue ich mich über einen Kaffee. Jede Unterstützung hilft, neue Features zu entwickeln und Bugs schneller zu beheben.
@@ -577,13 +1959,11 @@
             <div class="sponsor-feature">✅ Aktive Weiterentwicklung</div>
           </div>
           <div class="sponsor-actions">
-            <a href="https://www.paypal.com/donate/?business=webmaster%40medien-der-sinne.com&no_recurring=0&item_name=PodCore+Unterst%C3%BCtzung+%E2%98%95&currency_code=EUR" target="_blank" rel="noopener" class="btn btn-paypal">
+            <a href="https://www.paypal.com/donate/?business=webmaster%40medien-der-sinne.com&no_recurring=0&item_name=PodCore+Unterst%C3%BCtzung+%E2%98%95&currency_code=EUR" target="_blank" rel="noopener" class="btn-paypal">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.93 4.778-4.005 7.201-9.138 7.201h-2.19a.563.563 0 0 0-.556.479l-1.187 7.527h-.506l-.24 1.516a.56.56 0 0 0 .554.647h3.882c.46 0 .85-.334.922-.788.06-.26.76-4.852.816-5.09a.932.932 0 0 1 .923-.788h.58c3.76 0 6.705-1.528 7.565-5.946.36-1.847.174-3.388-.777-4.471z"/></svg>
               ☕ Buy me a Coffee via PayPal
             </a>
-            <div class="sponsor-paypal-info">
-              <small>Zahlung über PayPal · webmaster@medien-der-sinne.com</small>
-            </div>
+            <div class="sponsor-paypal-info">Zahlung über PayPal · webmaster@medien-der-sinne.com</div>
           </div>
         </div>
         <div class="sponsor-visual">
@@ -633,17 +2013,16 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <p><strong>PodCore v2.1.2</strong> · Podcast Management System · MIT Lizenz</p>
+        <p><strong>PodCore v2.1.3</strong> · Podcast Management System · MIT Lizenz</p>
         <p>© 2026 <strong>Maximilian Hartwich</strong> – Medien der Sinne</p>
       </div>
     </div>
   </footer>
 
   <!-- Back to top -->
-  <a href="#top" class="back-to-top" id="backToTop" aria-label="Nach oben">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+  <a href="#top" class="back-to-top" aria-label="Nach oben">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
   </a>
 
-  <script src="script.js"></script>
 </body>
 </html>
