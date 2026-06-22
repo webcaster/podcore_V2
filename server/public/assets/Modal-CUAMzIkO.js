@@ -1,6 +1,0 @@
-import{d as c,r as m,j as e,X as i}from"./index-7QOjInKH.js";/**
- * @license lucide-react v0.316.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */const u=c("Plus",[["path",{d:"M5 12h14",key:"1ays0h"}],["path",{d:"M12 5v14",key:"s699le"}]]);function h({isOpen:a,onClose:s,title:d,children:r,size:l="md"}){if(m.useEffect(()=>{const t=n=>{n.key==="Escape"&&s()};return a&&(document.addEventListener("keydown",t),document.body.style.overflow="hidden"),()=>{document.removeEventListener("keydown",t),document.body.style.overflow=""}},[a,s]),!a)return null;const o={sm:"max-w-sm",md:"max-w-lg",lg:"max-w-2xl",xl:"max-w-4xl"};return e.jsx("div",{className:"modal-overlay",onClick:t=>t.target===t.currentTarget&&s(),children:e.jsxs("div",{className:`modal w-full ${o[l]} animate-slide-in`,children:[e.jsxs("div",{className:"modal-header",children:[e.jsx("h2",{className:"text-lg font-semibold text-text-primary",children:d}),e.jsx("button",{onClick:s,className:"text-text-muted hover:text-text-primary transition-colors p-1 rounded-lg hover:bg-surface-raised",children:e.jsx(i,{size:18})})]}),e.jsx("div",{className:"modal-body",children:r})]})})}export{h as M,u as P};

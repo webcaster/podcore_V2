@@ -20,10 +20,16 @@ function getStorageConfig() {
 function resolveUploadDir(): string {
   const config = getStorageConfig();
   if (config.type === 'local' && config.localPath) {
-    const dir = path.resolve(config.localPath);
+    // If the configured path IS the data dir itself, use the assets subdirectory
+    // to avoid dumping files in the root data directory
+    const configured = path.resolve(config.localPath);
+    const dataDir = path.resolve(ASSETS_DIR, '..');
+    const dir = configured === dataDir ? ASSETS_DIR : path.join(configured, 'assets');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     return dir;
   }
+  // Ensure ASSETS_DIR exists
+  if (!fs.existsSync(ASSETS_DIR)) fs.mkdirSync(ASSETS_DIR, { recursive: true });
   return ASSETS_DIR;
 }
 
@@ -191,10 +197,22 @@ router.get('/', requirePermission('canViewMedia') as any, (req: AuthRequest, res
 
 router.get('/stream/:filename', (req: AuthRequest, res: Response) => {
   const uploadDir = resolveUploadDir();
-  const filePath = path.join(uploadDir, req.params.filename);
+  let filePath = path.join(uploadDir, req.params.filename);
 
+  // Fallback: also check ASSETS_DIR and filepath stored in DB
   if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ success: false, error: 'Datei nicht gefunden' });
+    const db = getDb();
+    const asset = db.get('SELECT filepath FROM assets WHERE filename = ?', [req.params.filename]) as any;
+    if (asset?.filepath && fs.existsSync(asset.filepath)) {
+      filePath = asset.filepath;
+    } else {
+      const fallback = path.join(ASSETS_DIR, req.params.filename);
+      if (fs.existsSync(fallback)) {
+        filePath = fallback;
+      } else {
+        return res.status(404).json({ success: false, error: 'Datei nicht gefunden' });
+      }
+    }
   }
 
   const stat = fs.statSync(filePath);

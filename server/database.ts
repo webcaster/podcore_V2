@@ -261,6 +261,22 @@ function initializeSchema(db: any): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS research_sources (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      url TEXT,
+      type TEXT NOT NULL DEFAULT 'link',
+      description TEXT,
+      content TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
+      related_idea_id TEXT,
+      related_episode_id TEXT,
+      status TEXT NOT NULL DEFAULT 'unread',
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -275,6 +291,14 @@ function initializeSchema(db: any): void {
   try { db.exec("ALTER TABLE episodes ADD COLUMN technical_data TEXT NOT NULL DEFAULT '{}'"); } catch (_) {}
   try { db.exec('ALTER TABLE users ADD COLUMN theme TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE episodes ADD COLUMN block_notes TEXT DEFAULT NULL'); } catch (_) {}
+  // research_sources table migration for existing DBs
+  try { db.exec(`CREATE TABLE IF NOT EXISTS research_sources (
+    id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT, type TEXT NOT NULL DEFAULT 'link',
+    description TEXT, content TEXT, tags TEXT NOT NULL DEFAULT '[]',
+    related_idea_id TEXT, related_episode_id TEXT, status TEXT NOT NULL DEFAULT 'unread',
+    created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
 
   // Default admin user
   const userCount = db.get('SELECT COUNT(*) as count FROM users') as any;

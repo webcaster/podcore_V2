@@ -417,5 +417,70 @@ router.post('/interviews/partners/:partnerId/send-email', requirePermission('can
   }
 });
 
+// ============================================================
+// RECHERCHE / RESEARCH SOURCES
+// ============================================================
+
+router.get('/research', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { ideaId, episodeId, status, type, search } = req.query;
+  let query = 'SELECT * FROM research_sources WHERE 1=1';
+  const params: any[] = [];
+
+  if (ideaId) { query += ' AND related_idea_id = ?'; params.push(ideaId); }
+  if (episodeId) { query += ' AND related_episode_id = ?'; params.push(episodeId); }
+  if (status) { query += ' AND status = ?'; params.push(status); }
+  if (type) { query += ' AND type = ?'; params.push(type); }
+  if (search) { query += ' AND (title LIKE ? OR description LIKE ? OR url LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+  query += ' ORDER BY created_at DESC';
+
+  const sources = db.all(query, params).map((r: any) => ({ ...r, tags: JSON.parse(r.tags || '[]') }));
+  return res.json({ success: true, data: sources });
+});
+
+router.post('/research', requirePermission('canCreateIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { v4: uuidv4 } = require('uuid');
+  const { title, url, type = 'link', description, content, tags = [], relatedIdeaId, relatedEpisodeId, status = 'unread' } = req.body;
+  if (!title) return res.status(400).json({ success: false, error: 'Titel ist erforderlich' });
+
+  const id = uuidv4();
+  db.run(
+    'INSERT INTO research_sources (id, title, url, type, description, content, tags, related_idea_id, related_episode_id, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, title, url || null, type, description || null, content || null, JSON.stringify(tags), relatedIdeaId || null, relatedEpisodeId || null, status, req.user!.id]
+  );
+  const source = db.get('SELECT * FROM research_sources WHERE id = ?', [id]) as any;
+  return res.status(201).json({ success: true, data: { ...source, tags: JSON.parse(source.tags || '[]') } });
+});
+
+router.put('/research/:id', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { title, url, type, description, content, tags, relatedIdeaId, relatedEpisodeId, status } = req.body;
+  const existing = db.get('SELECT * FROM research_sources WHERE id = ?', [req.params.id]) as any;
+  if (!existing) return res.status(404).json({ success: false, error: 'Quelle nicht gefunden' });
+
+  db.run(
+    `UPDATE research_sources SET title = COALESCE(?, title), url = ?, type = COALESCE(?, type),
+     description = ?, content = ?, tags = COALESCE(?, tags),
+     related_idea_id = ?, related_episode_id = ?, status = COALESCE(?, status),
+     updated_at = datetime('now') WHERE id = ?`,
+    [title ?? null, url !== undefined ? url : existing.url, type ?? null, description !== undefined ? description : existing.description,
+     content !== undefined ? content : existing.content, tags ? JSON.stringify(tags) : null,
+     relatedIdeaId !== undefined ? relatedIdeaId : existing.related_idea_id,
+     relatedEpisodeId !== undefined ? relatedEpisodeId : existing.related_episode_id,
+     status ?? null, req.params.id]
+  );
+  const updated = db.get('SELECT * FROM research_sources WHERE id = ?', [req.params.id]) as any;
+  return res.json({ success: true, data: { ...updated, tags: JSON.parse(updated.tags || '[]') } });
+});
+
+router.delete('/research/:id', requirePermission('canDeleteIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const existing = db.get('SELECT * FROM research_sources WHERE id = ?', [req.params.id]) as any;
+  if (!existing) return res.status(404).json({ success: false, error: 'Quelle nicht gefunden' });
+  db.run('DELETE FROM research_sources WHERE id = ?', [req.params.id]);
+  return res.json({ success: true, message: 'Quelle gelöscht' });
+});
+
 export default router;
 

@@ -7,7 +7,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Quote, Code,
   Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info
 } from 'lucide-react';
-import { episodesApi } from '../lib/api';
+import { episodesApi, adminApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
 
 const BLOCK_TYPES = [
@@ -157,8 +157,11 @@ export default function EpisodeDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    episodesApi.get(id)
-      .then(ep => {
+    // Load global technical defaults first, then override with episode-specific data
+    Promise.all([
+      episodesApi.get(id),
+      adminApi.getSettings().catch(() => null),
+    ]).then(([ep, settings]) => {
         setEpisode(ep);
         setForm({
           title: ep.title || '',
@@ -175,9 +178,10 @@ export default function EpisodeDetailPage() {
         });
         setBlocks(ep.blocks || []);
         setProductionInfo(ep.productionInfo || '');
-        if (ep.technicalData && typeof ep.technicalData === 'object') {
-          setTechnicalData(prev => ({ ...prev, ...ep.technicalData }));
-        }
+        // Merge: global defaults first, then episode-specific values override
+        const globalTech = settings?.technicalDefaults || {};
+        const episodeTech = (ep.technicalData && typeof ep.technicalData === 'object') ? ep.technicalData : {};
+        setTechnicalData(prev => ({ ...prev, ...globalTech, ...episodeTech }));
       })
       .catch(err => showError(err.message))
       .finally(() => setIsLoading(false));

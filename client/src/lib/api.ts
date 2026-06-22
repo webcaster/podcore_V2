@@ -150,6 +150,15 @@ export const editorialApi = {
   createNote: (data: any) => api.post<any>('/editorial/notes', data),
   updateNote: (id: string, data: any) => api.put<any>(`/editorial/notes/${id}`, data),
   deleteNote: (id: string) => api.delete(`/editorial/notes/${id}`),
+
+  // Research Sources
+  listResearch: (params?: any) => {
+    const qs = new URLSearchParams(params || {});
+    return api.get<any[]>(`/editorial/research?${qs}`);
+  },
+  createResearch: (data: any) => api.post<any>('/editorial/research', data),
+  updateResearch: (id: string, data: any) => api.put<any>(`/editorial/research/${id}`, data),
+  deleteResearch: (id: string) => api.delete(`/editorial/research/${id}`),
 };
 
 // ============================================================

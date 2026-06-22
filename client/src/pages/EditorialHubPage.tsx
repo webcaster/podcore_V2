@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import {
   Lightbulb, Calendar, Users, FileText, Plus, Search, Trash2,
   Edit2, Check, X, ArrowRight, Tag, Star, Clock, ChevronDown,
-  Mic2, BookOpen, StickyNote, MessageSquare, Filter, Pin, PinOff, Loader2
+  Mic2, BookOpen, StickyNote, MessageSquare, Filter, Pin, PinOff, Loader2,
+  Globe, BookMarked, Video, FileImage, Newspaper, ExternalLink, Link2, Save
 } from 'lucide-react';
 import { editorialApi, episodesApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
 
-type HubTab = 'ideas' | 'plan' | 'interviews' | 'notes';
+type HubTab = 'ideas' | 'plan' | 'interviews' | 'notes' | 'research';
 
 const IDEA_STATUS = [
   { value: 'neu', label: 'Neu', color: 'bg-accent-cyan/20 text-accent-cyan' },
@@ -31,6 +32,7 @@ export default function EditorialHubPage() {
 
   const tabs = [
     { key: 'ideas' as HubTab, label: 'Ideenpool', icon: <Lightbulb size={16} />, permission: 'canViewIdeas' },
+    { key: 'research' as HubTab, label: 'Recherche', icon: <Globe size={16} />, permission: 'canViewIdeas' },
     { key: 'plan' as HubTab, label: 'Redaktionsplan', icon: <Calendar size={16} />, permission: 'canViewEditorialPlan' },
     { key: 'interviews' as HubTab, label: 'Interviews', icon: <Users size={16} />, permission: 'canViewInterviews' },
     { key: 'notes' as HubTab, label: 'Notizen', icon: <StickyNote size={16} />, permission: 'canViewNotes' },
@@ -69,6 +71,7 @@ export default function EditorialHubPage() {
 
       {/* Tab Content */}
       {activeTab === 'ideas' && <IdeasTab />}
+      {activeTab === 'research' && <ResearchTab />}
       {activeTab === 'plan' && <PlanTab />}
       {activeTab === 'interviews' && <InterviewsTab />}
       {activeTab === 'notes' && <NotesTab />}
@@ -1080,6 +1083,377 @@ function NoteCard({ note, can, onEdit, onDelete, onTogglePin }: any) {
         </div>
       )}
       <p className="text-text-muted text-xs mt-3">{new Date(note.updatedAt).toLocaleDateString('de-DE')}</p>
+    </div>
+  );
+}
+
+// ============================================================
+// RECHERCHE TAB
+// ============================================================
+
+const RESEARCH_TYPES = [
+  { value: 'link', label: 'Website / Link', icon: <Globe size={14} />, color: 'text-accent-blue' },
+  { value: 'artikel', label: 'Artikel', icon: <Newspaper size={14} />, color: 'text-accent-cyan' },
+  { value: 'buch', label: 'Buch', icon: <BookMarked size={14} />, color: 'text-accent-purple' },
+  { value: 'video', label: 'Video', icon: <Video size={14} />, color: 'text-accent-red' },
+  { value: 'pdf', label: 'PDF / Dokument', icon: <FileImage size={14} />, color: 'text-accent-orange' },
+  { value: 'notiz', label: 'Notiz / Idee', icon: <StickyNote size={14} />, color: 'text-accent-green' },
+];
+
+const RESEARCH_STATUS = [
+  { value: 'unread', label: 'Ungelesen', color: 'bg-surface-overlay text-text-muted' },
+  { value: 'reading', label: 'In Bearbeitung', color: 'bg-accent-blue/20 text-accent-blue' },
+  { value: 'done', label: 'Gelesen', color: 'bg-accent-green/20 text-accent-green' },
+  { value: 'important', label: 'Wichtig', color: 'bg-accent-orange/20 text-accent-orange' },
+  { value: 'archived', label: 'Archiviert', color: 'bg-surface-raised text-text-muted' },
+];
+
+function ResearchTab() {
+  const { can, showSuccess, showError } = useApp();
+  const [sources, setSources] = useState<any[]>([]);
+  const [ideas, setIdeas] = useState<any[]>([]);
+  const [episodes, setEpisodes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterIdea, setFilterIdea] = useState('');
+  const [filterEpisode, setFilterEpisode] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editSource, setEditSource] = useState<any>(null);
+  const [viewSource, setViewSource] = useState<any>(null);
+
+  const [form, setForm] = useState({
+    title: '', url: '', type: 'link', description: '', content: '',
+    tags: '', relatedIdeaId: '', relatedEpisodeId: '', status: 'unread',
+  });
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const params: any = {};
+      if (search) params.search = search;
+      if (filterType) params.type = filterType;
+      if (filterStatus) params.status = filterStatus;
+      if (filterIdea) params.ideaId = filterIdea;
+      if (filterEpisode) params.episodeId = filterEpisode;
+      const [srcRes, ideaRes, epRes] = await Promise.all([
+        editorialApi.listResearch(params),
+        editorialApi.listIdeas({}),
+        episodesApi.list({}),
+      ]);
+      setSources(srcRes || []);
+      setIdeas(ideaRes || []);
+      setEpisodes(epRes || []);
+    } catch (e) { showError('Fehler beim Laden der Recherche-Quellen'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [search, filterType, filterStatus, filterIdea, filterEpisode]);
+
+  const openCreate = () => {
+    setEditSource(null);
+    setForm({ title: '', url: '', type: 'link', description: '', content: '', tags: '', relatedIdeaId: '', relatedEpisodeId: '', status: 'unread' });
+    setShowModal(true);
+  };
+
+  const openEdit = (src: any) => {
+    setEditSource(src);
+    setForm({
+      title: src.title, url: src.url || '', type: src.type, description: src.description || '',
+      content: src.content || '', tags: (src.tags || []).join(', '),
+      relatedIdeaId: src.related_idea_id || '', relatedEpisodeId: src.related_episode_id || '',
+      status: src.status,
+    });
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim()) { showError('Titel ist erforderlich'); return; }
+    try {
+      const data = {
+        title: form.title, url: form.url || null, type: form.type,
+        description: form.description || null, content: form.content || null,
+        tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        relatedIdeaId: form.relatedIdeaId || null, relatedEpisodeId: form.relatedEpisodeId || null,
+        status: form.status,
+      };
+      if (editSource) {
+        await editorialApi.updateResearch(editSource.id, data);
+        showSuccess('Quelle aktualisiert');
+      } else {
+        await editorialApi.createResearch(data);
+        showSuccess('Quelle hinzugefügt');
+      }
+      setShowModal(false);
+      load();
+    } catch (e) { showError('Fehler beim Speichern'); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Quelle wirklich löschen?')) return;
+    try {
+      await editorialApi.deleteResearch(id);
+      showSuccess('Quelle gelöscht');
+      load();
+    } catch (e) { showError('Fehler beim Löschen'); }
+  };
+
+  const handleStatusChange = async (src: any, newStatus: string) => {
+    try {
+      await editorialApi.updateResearch(src.id, { status: newStatus });
+      load();
+    } catch (e) { showError('Fehler beim Aktualisieren'); }
+  };
+
+  const getTypeInfo = (type: string) => RESEARCH_TYPES.find(t => t.value === type) || RESEARCH_TYPES[0];
+  const getStatusInfo = (status: string) => RESEARCH_STATUS.find(s => s.value === status) || RESEARCH_STATUS[0];
+
+  const stats = {
+    total: sources.length,
+    unread: sources.filter(s => s.status === 'unread').length,
+    important: sources.filter(s => s.status === 'important').length,
+    done: sources.filter(s => s.status === 'done').length,
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Gesamt', value: stats.total, color: 'text-text-primary' },
+          { label: 'Ungelesen', value: stats.unread, color: 'text-accent-blue' },
+          { label: 'Wichtig', value: stats.important, color: 'text-accent-orange' },
+          { label: 'Gelesen', value: stats.done, color: 'text-accent-green' },
+        ].map(stat => (
+          <div key={stat.label} className="card text-center">
+            <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+            <p className="text-text-muted text-xs mt-1">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-48">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            className="input pl-9 w-full text-sm"
+            placeholder="Quellen durchsuchen..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <select className="input text-sm" value={filterType} onChange={e => setFilterType(e.target.value)}>
+          <option value="">Alle Typen</option>
+          {RESEARCH_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+        <select className="input text-sm" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <option value="">Alle Status</option>
+          {RESEARCH_STATUS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        <select className="input text-sm" value={filterIdea} onChange={e => setFilterIdea(e.target.value)}>
+          <option value="">Alle Ideen</option>
+          {ideas.map((i: any) => <option key={i.id} value={i.id}>{i.title}</option>)}
+        </select>
+        <select className="input text-sm" value={filterEpisode} onChange={e => setFilterEpisode(e.target.value)}>
+          <option value="">Alle Folgen</option>
+          {episodes.map((e: any) => <option key={e.id} value={e.id}>#{e.number} {e.title}</option>)}
+        </select>
+        {can('canCreateIdeas') && (
+          <button className="btn-primary flex items-center gap-2 text-sm" onClick={openCreate}>
+            <Plus size={15} /> Quelle hinzufügen
+          </button>
+        )}
+      </div>
+
+      {/* Sources List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-accent-purple" />
+        </div>
+      ) : sources.length === 0 ? (
+        <div className="card text-center py-12">
+          <Globe size={40} className="mx-auto text-text-muted mb-3" />
+          <p className="text-text-secondary">Noch keine Recherche-Quellen vorhanden</p>
+          <p className="text-text-muted text-sm mt-1">Füge Links, Bücher, Videos und andere Quellen für deine Folgen hinzu</p>
+          {can('canCreateIdeas') && (
+            <button className="btn-primary mt-4 text-sm" onClick={openCreate}>Erste Quelle hinzufügen</button>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {sources.map((src: any) => {
+            const typeInfo = getTypeInfo(src.type);
+            const statusInfo = getStatusInfo(src.status);
+            const relatedIdea = ideas.find((i: any) => i.id === src.related_idea_id);
+            const relatedEp = episodes.find((e: any) => e.id === src.related_episode_id);
+            return (
+              <div key={src.id} className="card hover:border-accent-purple/30 transition-all group">
+                <div className="flex items-start gap-4">
+                  <div className={`mt-1 flex-shrink-0 ${typeInfo.color}`}>{typeInfo.icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-text-primary truncate">{src.title}</h3>
+                        {src.url && (
+                          <a href={src.url} target="_blank" rel="noopener noreferrer"
+                            className="text-accent-blue text-xs hover:underline flex items-center gap-1 mt-0.5 truncate">
+                            <Link2 size={11} /> {src.url}
+                          </a>
+                        )}
+                        {src.description && <p className="text-text-secondary text-sm mt-1 line-clamp-2">{src.description}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <select
+                          value={src.status}
+                          onChange={e => handleStatusChange(src, e.target.value)}
+                          className={`text-xs px-2 py-1 rounded-lg border-0 cursor-pointer ${statusInfo.color}`}
+                          style={{ background: 'transparent' }}
+                        >
+                          {RESEARCH_STATUS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => setViewSource(src)} className="p-1.5 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg" title="Details">
+                            <FileText size={13} />
+                          </button>
+                          {can('canEditIdeas') && (
+                            <button onClick={() => openEdit(src)} className="p-1.5 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg">
+                              <Edit2 size={13} />
+                            </button>
+                          )}
+                          {can('canDeleteIdeas') && (
+                            <button onClick={() => handleDelete(src.id)} className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg">
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <span className={`text-xs px-2 py-0.5 rounded-full bg-surface-overlay ${typeInfo.color}`}>{typeInfo.label}</span>
+                      {relatedIdea && <span className="text-xs px-2 py-0.5 rounded-full bg-accent-purple/10 text-accent-purple">Idee: {relatedIdea.title}</span>}
+                      {relatedEp && <span className="text-xs px-2 py-0.5 rounded-full bg-accent-blue/10 text-accent-blue">Folge #{relatedEp.number}: {relatedEp.title}</span>}
+                      {(src.tags || []).map((tag: string) => <span key={tag} className="badge text-xs">{tag}</span>)}
+                      <span className="text-text-muted text-xs ml-auto">{new Date(src.created_at).toLocaleDateString('de-DE')}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Create / Edit Modal */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editSource ? 'Quelle bearbeiten' : 'Neue Quelle hinzufügen'} size="lg">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="label">Titel *</label>
+              <input className="input w-full" placeholder="Titel der Quelle" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Typ</label>
+              <select className="input w-full" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                {RESEARCH_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Status</label>
+              <select className="input w-full" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                {RESEARCH_STATUS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="label">URL / Link</label>
+              <input className="input w-full" placeholder="https://..." value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} />
+            </div>
+            <div className="col-span-2">
+              <label className="label">Kurzbeschreibung</label>
+              <input className="input w-full" placeholder="Worum geht es?" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="col-span-2">
+              <label className="label">Notizen / Inhalt</label>
+              <textarea className="input w-full resize-none" rows={4} placeholder="Wichtige Erkenntnisse, Zitate, Zusammenfassung..." value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Verknüpfte Idee</label>
+              <select className="input w-full" value={form.relatedIdeaId} onChange={e => setForm(f => ({ ...f, relatedIdeaId: e.target.value }))}>
+                <option value="">Keine</option>
+                {ideas.map((i: any) => <option key={i.id} value={i.id}>{i.title}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Verknüpfte Folge</label>
+              <select className="input w-full" value={form.relatedEpisodeId} onChange={e => setForm(f => ({ ...f, relatedEpisodeId: e.target.value }))}>
+                <option value="">Keine</option>
+                {episodes.map((e: any) => <option key={e.id} value={e.id}>#{e.number} {e.title}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="label">Tags (kommagetrennt)</label>
+              <input className="input w-full" placeholder="tag1, tag2, tag3" value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button className="btn-ghost" onClick={() => setShowModal(false)}>Abbrechen</button>
+            <button className="btn-primary flex items-center gap-2" onClick={handleSave}>
+              <Save size={15} /> {editSource ? 'Aktualisieren' : 'Hinzufügen'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Detail View Modal */}
+      {viewSource && (
+        <Modal isOpen={!!viewSource} onClose={() => setViewSource(null)} title={viewSource.title} size="lg">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <span className={`text-sm px-3 py-1 rounded-full bg-surface-overlay ${getTypeInfo(viewSource.type).color}`}>
+                {getTypeInfo(viewSource.type).label}
+              </span>
+              <span className={`text-sm px-3 py-1 rounded-full ${getStatusInfo(viewSource.status).color}`}>
+                {getStatusInfo(viewSource.status).label}
+              </span>
+            </div>
+            {viewSource.url && (
+              <a href={viewSource.url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 text-accent-blue hover:underline text-sm">
+                <ExternalLink size={14} /> {viewSource.url}
+              </a>
+            )}
+            {viewSource.description && (
+              <div>
+                <p className="text-text-muted text-xs mb-1">Beschreibung</p>
+                <p className="text-text-secondary text-sm">{viewSource.description}</p>
+              </div>
+            )}
+            {viewSource.content && (
+              <div>
+                <p className="text-text-muted text-xs mb-1">Notizen</p>
+                <div className="bg-surface-raised rounded-xl p-4 text-text-secondary text-sm whitespace-pre-wrap">{viewSource.content}</div>
+              </div>
+            )}
+            {(viewSource.tags || []).length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {viewSource.tags.map((tag: string) => <span key={tag} className="badge">{tag}</span>)}
+              </div>
+            )}
+            <div className="flex justify-between items-center pt-2 border-t border-border-subtle">
+              <span className="text-text-muted text-xs">Hinzugefügt: {new Date(viewSource.created_at).toLocaleDateString('de-DE')}</span>
+              <div className="flex gap-2">
+                {can('canEditIdeas') && (
+                  <button className="btn-ghost text-sm" onClick={() => { setViewSource(null); openEdit(viewSource); }}>
+                    <Edit2 size={13} className="mr-1" /> Bearbeiten
+                  </button>
+                )}
+                <button className="btn-ghost text-sm" onClick={() => setViewSource(null)}>Schließen</button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
