@@ -126,7 +126,7 @@ app.get('/api/health', (req, res) => {
   const ips = getLocalNetworkIPs();
   res.json({
     status: 'ok',
-    version: '2.1.2',
+    version: '2.1.3',
     timestamp: new Date().toISOString(),
     dataDir: DATA_DIR,
     networkIPs: ips,

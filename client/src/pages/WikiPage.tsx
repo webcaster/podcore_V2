@@ -810,6 +810,27 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-1-3',
+        title: 'v2.1.3 — Bugfix: Episode erstellen aus Ideen-Arbeitsmappe',
+        summary: 'Kritischer Bug behoben: "Episode erstellen" im Tab der Ideen-Arbeitsmappe führte zu einem internen Serverfehler (500). Ursache war ein falscher Spaltenname im SQL-INSERT.',
+        icon: <Package size={18} />,
+        tags: ['update', 'bugfix', 'ideen', 'episode', 'sql'],
+        content: [
+          {
+            heading: 'Bug-Fix',
+            list: [
+              'Episode erstellen aus Ideen-Arbeitsmappe: Interner Serverfehler (500) behoben',
+              'Ursache: SQL-INSERT verwendete Spaltenname show_notes, die episodes-Tabelle hat jedoch notes',
+              'Fix: INSERT INTO episodes (..., show_notes, ...) → (..., notes, ...) korrigiert',
+              'Notizen und Recherche-Quellen der Idee werden jetzt korrekt in die neue Episode übernommen',
+            ],
+          },
+          {
+            tip: 'Beim Erstellen einer Episode aus einer Idee werden Notizen und Recherche-Quellen automatisch in das Notizen-Feld der neuen Episode übertragen.',
+          },
+        ],
+      },
+      {
         id: 'v2-1-2',
         title: 'v2.1.2 — Bugfix: Branding-Route & vollständiger App-Test',
         summary: 'Branding & Backup Seite war durch einen Route-Konflikt nicht erreichbar. Vollständiger systematischer App-Test durchgeführt.',

@@ -242,7 +242,7 @@ router.post('/ideas/:id/create-episode', requirePermission('canCreateEpisodes') 
   const episodeId = uuidv4();
   const { title, description } = req.body;
 
-  db.run(`INSERT INTO episodes (id, title, description, show_notes, status, created_by) VALUES (?, ?, ?, ?, 'entwurf', ?)`,
+  db.run(`INSERT INTO episodes (id, title, description, notes, status, created_by) VALUES (?, ?, ?, ?, 'entwurf', ?)`,
     [episodeId, title || idea.title, description || idea.description || '',
      (notesText + sourcesText).trim() || null, req.user!.id]);
 
