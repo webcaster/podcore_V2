@@ -113,6 +113,113 @@ router.get('/roles/:role/permissions', requirePermission('canManageUsers') as an
 });
 
 // ============================================================
+// ROLES MANAGEMENT
+// ============================================================
+
+// GET all roles
+router.get('/roles', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const rows = db.all('SELECT * FROM roles ORDER BY is_system DESC, label ASC', []);
+  const roles = rows.map((r: any) => ({
+    id: r.id,
+    name: r.name,
+    label: r.label,
+    description: r.description,
+    color: r.color,
+    permissions: JSON.parse(r.permissions || '{}'),
+    isSystem: r.is_system === 1,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+  return res.json({ success: true, data: roles });
+});
+
+// PUT update a role's label, description, color and permissions
+router.put('/roles/:id', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { label, description, color, permissions } = req.body;
+
+  const existing = db.get('SELECT * FROM roles WHERE id = ?', [req.params.id]) as any;
+  if (!existing) return res.status(404).json({ success: false, error: 'Rolle nicht gefunden' });
+
+  db.run(
+    `UPDATE roles SET
+      label = COALESCE(?, label),
+      description = COALESCE(?, description),
+      color = COALESCE(?, color),
+      permissions = COALESCE(?, permissions),
+      updated_at = datetime('now')
+    WHERE id = ?`,
+    [
+      label ?? null,
+      description ?? null,
+      color ?? null,
+      permissions ? JSON.stringify(permissions) : null,
+      req.params.id,
+    ]
+  );
+
+  const updated = db.get('SELECT * FROM roles WHERE id = ?', [req.params.id]) as any;
+  return res.json({
+    success: true,
+    data: {
+      id: updated.id,
+      name: updated.name,
+      label: updated.label,
+      description: updated.description,
+      color: updated.color,
+      permissions: JSON.parse(updated.permissions || '{}'),
+      isSystem: updated.is_system === 1,
+    },
+  });
+});
+
+// POST create a custom role
+router.post('/roles', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { name, label, description, color = '#7c3aed', permissions = {} } = req.body;
+
+  if (!name || !label) {
+    return res.status(400).json({ success: false, error: 'Name und Bezeichnung erforderlich' });
+  }
+
+  const existing = db.get('SELECT id FROM roles WHERE name = ?', [name]);
+  if (existing) return res.status(409).json({ success: false, error: 'Rollenname bereits vergeben' });
+
+  const id = uuidv4();
+  db.run(
+    'INSERT INTO roles (id, name, label, description, color, permissions, is_system) VALUES (?, ?, ?, ?, ?, ?, 0)',
+    [id, name, label, description || null, color, JSON.stringify(permissions)]
+  );
+
+  const created = db.get('SELECT * FROM roles WHERE id = ?', [id]) as any;
+  return res.status(201).json({
+    success: true,
+    data: {
+      id: created.id,
+      name: created.name,
+      label: created.label,
+      description: created.description,
+      color: created.color,
+      permissions: JSON.parse(created.permissions || '{}'),
+      isSystem: false,
+    },
+  });
+});
+
+// DELETE a custom role (system roles cannot be deleted)
+router.delete('/roles/:id', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const role = db.get('SELECT * FROM roles WHERE id = ?', [req.params.id]) as any;
+
+  if (!role) return res.status(404).json({ success: false, error: 'Rolle nicht gefunden' });
+  if (role.is_system === 1) return res.status(403).json({ success: false, error: 'System-Rollen können nicht gelöscht werden' });
+
+  db.run('DELETE FROM roles WHERE id = ?', [req.params.id]);
+  return res.json({ success: true, message: 'Rolle gelöscht' });
+});
+
+// ============================================================
 // ERROR LOGS
 // ============================================================
 

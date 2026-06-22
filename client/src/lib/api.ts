@@ -259,6 +259,12 @@ export const adminApi = {
   deleteUser: (id: string) => api.delete(`/admin/users/${id}`),
   getRolePermissions: (role: string) => api.get<any>(`/admin/roles/${role}/permissions`),
 
+  // Roles
+  listRoles: () => api.get<any[]>('/admin/roles'),
+  createRole: (data: any) => api.post<any>('/admin/roles', data),
+  updateRole: (id: string, data: any) => api.put<any>(`/admin/roles/${id}`, data),
+  deleteRole: (id: string) => api.delete(`/admin/roles/${id}`),
+
   // Logs
   listLogs: (params?: any) => {
     const qs = new URLSearchParams(params || {});

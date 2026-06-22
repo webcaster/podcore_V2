@@ -242,6 +242,18 @@ function initializeSchema(db: any): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS roles (
+      id TEXT PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      label TEXT NOT NULL,
+      description TEXT,
+      color TEXT NOT NULL DEFAULT '#7c3aed',
+      permissions TEXT NOT NULL DEFAULT '{}',
+      is_system INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -286,6 +298,27 @@ function initializeSchema(db: any): void {
       branding: { podcastName: '', podcastDescription: '' },
     };
     db.run('INSERT INTO settings (key, value) VALUES (?, ?)', ['app', JSON.stringify(defaultSettings)]);
+  }
+
+  // Default roles
+  const rolesCount = db.get('SELECT COUNT(*) as count FROM roles') as any;
+  if (!rolesCount || rolesCount.count === 0) {
+    const { v4: uuidv4 } = require('uuid');
+    const defaultRoles = [
+      { name: 'admin', label: 'Administrator', description: 'Vollzugriff auf alle Bereiche', color: '#dc2626', is_system: 1 },
+      { name: 'produktion', label: 'Produktion', description: 'Episoden, Media Library, Sponsoring', color: '#7c3aed', is_system: 1 },
+      { name: 'redakteur', label: 'Redakteur', description: 'Redaktions-Hub, Episoden bearbeiten', color: '#2563eb', is_system: 1 },
+      { name: 'moderator', label: 'Moderator', description: 'Episoden ansehen und bearbeiten', color: '#059669', is_system: 1 },
+      { name: 'leser', label: 'Leser', description: 'Nur Lesezugriff', color: '#6b7280', is_system: 1 },
+    ];
+    for (const role of defaultRoles) {
+      const perms = getDefaultPermissions(role.name);
+      db.run(
+        'INSERT INTO roles (id, name, label, description, color, permissions, is_system) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [uuidv4(), role.name, role.label, role.description, role.color, JSON.stringify(perms), role.is_system]
+      );
+    }
+    console.log('[DB] Default roles created');
   }
 
   console.log('[DB] Database initialized at:', DB_PATH);

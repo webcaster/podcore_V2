@@ -1,19 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Shield, Users, Plus, Edit2, Trash2, Key, Check, X, Eye, EyeOff,
-  Server, Database, HardDrive, Activity, RefreshCw, Loader2, Lock
+  Server, Database, HardDrive, Activity, RefreshCw, Loader2, Lock, Tag, Save
 } from 'lucide-react';
 import { adminApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
-
-const ROLES = [
-  { value: 'admin', label: 'Administrator', color: 'text-accent-red', desc: 'Vollzugriff auf alle Bereiche' },
-  { value: 'produktion', label: 'Produktion', color: 'text-accent-purple', desc: 'Episoden, Media Library, Sponsoring' },
-  { value: 'redakteur', label: 'Redakteur', color: 'text-accent-blue', desc: 'Redaktions-Hub, Episoden bearbeiten' },
-  { value: 'moderator', label: 'Moderator', color: 'text-accent-green', desc: 'Episoden ansehen und bearbeiten' },
-  { value: 'leser', label: 'Leser', color: 'text-text-muted', desc: 'Nur Lesezugriff' },
-];
 
 const ALL_PERMISSIONS = [
   { key: 'canViewEpisodes', label: 'Episoden ansehen', group: 'Episoden' },
@@ -39,48 +31,56 @@ const ALL_PERMISSIONS = [
   { key: 'canCreateSponsors', label: 'Sponsoren erstellen', group: 'Sponsoring' },
   { key: 'canEditSponsors', label: 'Sponsoren bearbeiten', group: 'Sponsoring' },
   { key: 'canDeleteSponsors', label: 'Sponsoren löschen', group: 'Sponsoring' },
-  { key: 'canManageSponsors', label: 'Kategorien verwalten', group: 'Sponsoring' },
   { key: 'canViewSponsorReports', label: 'Auswertungen ansehen', group: 'Sponsoring' },
   { key: 'canManageUsers', label: 'Benutzer verwalten', group: 'Administration' },
   { key: 'canManageSettings', label: 'Einstellungen verwalten', group: 'Administration' },
-  { key: 'canViewLogs', label: 'Logs ansehen', group: 'Administration' },
+  { key: 'canViewErrorLogs', label: 'Logs ansehen', group: 'Administration' },
+  { key: 'canExport', label: 'Daten exportieren', group: 'Administration' },
 ];
 
 const PERMISSION_GROUPS = [...new Set(ALL_PERMISSIONS.map(p => p.group))];
 
-const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-  admin: ALL_PERMISSIONS.map(p => p.key),
-  produktion: ['canViewEpisodes', 'canCreateEpisodes', 'canEditEpisodes', 'canEditScript', 'canViewMedia', 'canUploadMedia', 'canDeleteMedia', 'canCommentMedia', 'canViewSponsors', 'canEditSponsors', 'canViewSponsorReports', 'canViewIdeas', 'canViewNotes'],
-  redakteur: ['canViewEpisodes', 'canCreateEpisodes', 'canEditEpisodes', 'canEditScript', 'canViewIdeas', 'canCreateIdeas', 'canEditIdeas', 'canDeleteIdeas', 'canViewEditorialPlan', 'canEditEditorialPlan', 'canViewInterviews', 'canEditInterviews', 'canViewNotes', 'canEditNotes', 'canViewMedia', 'canCommentMedia'],
-  moderator: ['canViewEpisodes', 'canEditEpisodes', 'canEditScript', 'canViewIdeas', 'canViewEditorialPlan', 'canViewInterviews', 'canViewNotes', 'canViewMedia', 'canCommentMedia'],
-  leser: ['canViewEpisodes', 'canViewIdeas', 'canViewMedia'],
-};
+const emptyPermissions = () => Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, false]));
 
 export default function AdminPage() {
   const { can, user: currentUser, showSuccess, showError } = useApp();
   const [users, setUsers] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'system' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'system' | 'logs'>('users');
+
+  // User modal
   const [showUserModal, setShowUserModal] = useState(false);
-  const [showPermModal, setShowPermModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
-  const [permUser, setPermUser] = useState<any>(null);
-  const [logs, setLogs] = useState<any[]>([]);
   const [userForm, setUserForm] = useState({ username: '', displayName: '', email: '', password: '', role: 'redakteur', avatarColor: '#7c3aed' });
   const [showPassword, setShowPassword] = useState(false);
-  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+
+  // Permissions modal
+  const [showPermModal, setShowPermModal] = useState(false);
+  const [permUser, setPermUser] = useState<any>(null);
+  const [permissions, setPermissions] = useState<Record<string, boolean>>(emptyPermissions());
+
+  // Role editor modal
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [editingRole, setEditingRole] = useState<any>(null);
+  const [roleForm, setRoleForm] = useState({ name: '', label: '', description: '', color: '#7c3aed' });
+  const [rolePermissions, setRolePermissions] = useState<Record<string, boolean>>(emptyPermissions());
+
+  const [logs, setLogs] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   const load = async () => {
     setIsLoading(true);
     try {
-      const [userData, sysData] = await Promise.all([
+      const [userData, sysData, rolesData] = await Promise.all([
         adminApi.getUsers(),
         adminApi.getSystem(),
+        adminApi.listRoles(),
       ]);
       setUsers(userData);
       setSystemInfo(sysData);
+      setRoles(rolesData);
     } catch (err: any) { showError(err.message); }
     finally { setIsLoading(false); }
   };
@@ -88,13 +88,14 @@ export default function AdminPage() {
   const loadLogs = async () => {
     try {
       const data = await adminApi.getLogs();
-      setLogs(data);
+      setLogs(data?.items || data || []);
     } catch (err: any) { showError(err.message); }
   };
 
   useEffect(() => { load(); }, []);
   useEffect(() => { if (activeTab === 'logs') loadLogs(); }, [activeTab]);
 
+  // ── User CRUD ──────────────────────────────────────────────
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -135,18 +136,18 @@ export default function AdminPage() {
     setShowUserModal(true);
   };
 
+  // ── Permissions ───────────────────────────────────────────
   const openPermissions = (u: any) => {
     setPermUser(u);
-    const perms: Record<string, boolean> = {};
+    const perms: Record<string, boolean> = emptyPermissions();
     ALL_PERMISSIONS.forEach(p => { perms[p.key] = u.permissions?.[p.key] === true; });
     setPermissions(perms);
     setShowPermModal(true);
   };
 
-  const applyRoleDefaults = (role: string) => {
-    const defaults = DEFAULT_PERMISSIONS[role] || [];
-    const perms: Record<string, boolean> = {};
-    ALL_PERMISSIONS.forEach(p => { perms[p.key] = defaults.includes(p.key); });
+  const applyRoleDefaults = (rolePerms: Record<string, boolean>) => {
+    const perms: Record<string, boolean> = emptyPermissions();
+    Object.keys(rolePerms).forEach(k => { perms[k] = rolePerms[k] === true; });
     setPermissions(perms);
   };
 
@@ -162,7 +163,76 @@ export default function AdminPage() {
     finally { setIsSaving(false); }
   };
 
-  const roleInfo = (role: string) => ROLES.find(r => r.value === role) || ROLES[4];
+  // ── Roles CRUD ────────────────────────────────────────────
+  const openCreateRole = () => {
+    setEditingRole(null);
+    setRoleForm({ name: '', label: '', description: '', color: '#7c3aed' });
+    setRolePermissions(emptyPermissions());
+    setShowRoleModal(true);
+  };
+
+  const openEditRole = (role: any) => {
+    setEditingRole(role);
+    setRoleForm({ name: role.name, label: role.label, description: role.description || '', color: role.color || '#7c3aed' });
+    const perms: Record<string, boolean> = emptyPermissions();
+    ALL_PERMISSIONS.forEach(p => { perms[p.key] = role.permissions?.[p.key] === true; });
+    setRolePermissions(perms);
+    setShowRoleModal(true);
+  };
+
+  const handleSaveRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      if (editingRole) {
+        await adminApi.updateRole(editingRole.id, {
+          label: roleForm.label,
+          description: roleForm.description,
+          color: roleForm.color,
+          permissions: rolePermissions,
+        });
+        showSuccess('Rolle gespeichert');
+      } else {
+        await adminApi.createRole({
+          name: roleForm.name,
+          label: roleForm.label,
+          description: roleForm.description,
+          color: roleForm.color,
+          permissions: rolePermissions,
+        });
+        showSuccess('Rolle erstellt');
+      }
+      setShowRoleModal(false);
+      load();
+    } catch (err: any) { showError(err.message); }
+    finally { setIsSaving(false); }
+  };
+
+  const handleDeleteRole = async (id: string, label: string) => {
+    if (!confirm(`Rolle "${label}" löschen?`)) return;
+    try {
+      await adminApi.deleteRole(id);
+      showSuccess('Rolle gelöscht');
+      load();
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const toggleAllRolePerms = (group: string, value: boolean) => {
+    const groupPerms = ALL_PERMISSIONS.filter(p => p.group === group).map(p => p.key);
+    setRolePermissions(prev => { const n = { ...prev }; groupPerms.forEach(k => { n[k] = value; }); return n; });
+  };
+
+  const roleInfo = (roleName: string) => roles.find(r => r.name === roleName) || { label: roleName, color: '#6b7280' };
+
+  const roleBadgeClass = (color: string) => {
+    const map: Record<string, string> = {
+      '#dc2626': 'bg-accent-red/20 text-accent-red',
+      '#7c3aed': 'bg-accent-purple/20 text-accent-purple',
+      '#2563eb': 'bg-accent-blue/20 text-accent-blue',
+      '#059669': 'bg-accent-green/20 text-accent-green',
+    };
+    return map[color] || 'bg-surface-overlay text-text-muted';
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -172,24 +242,25 @@ export default function AdminPage() {
           <Shield size={24} className="text-accent-red" />
           Administration
         </h1>
-        <p className="text-text-secondary text-sm mt-1">Benutzerverwaltung, Berechtigungen und Systemstatus</p>
+        <p className="text-text-secondary text-sm mt-1">Benutzerverwaltung, Rollen, Berechtigungen und Systemstatus</p>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit">
         {[
-          { key: 'users', label: 'Benutzer' },
-          { key: 'system', label: 'System' },
-          { key: 'logs', label: 'Logs' },
+          { key: 'users', label: 'Benutzer', icon: <Users size={14} /> },
+          { key: 'roles', label: 'Rollen', icon: <Tag size={14} /> },
+          { key: 'system', label: 'System', icon: <Server size={14} /> },
+          { key: 'logs', label: 'Logs', icon: <Activity size={14} /> },
         ].map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}>
-            {tab.label}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}>
+            {tab.icon}{tab.label}
           </button>
         ))}
       </div>
 
-      {/* USERS TAB */}
+      {/* ── USERS TAB ──────────────────────────────────────── */}
       {activeTab === 'users' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
@@ -214,28 +285,23 @@ export default function AdminPage() {
                       <div className="flex items-center gap-2">
                         <p className="text-text-primary font-medium">{u.displayName}</p>
                         {isCurrentUser && <span className="badge bg-accent-purple/20 text-accent-purple text-xs">Du</span>}
+                        {!u.isActive && <span className="badge bg-accent-red/20 text-accent-red text-xs">Inaktiv</span>}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-text-muted mt-0.5">
                         <span className="font-mono">@{u.username}</span>
                         {u.email && <span>{u.email}</span>}
                       </div>
                     </div>
-                    <span className={`badge text-xs ${
-                      u.role === 'admin' ? 'bg-accent-red/20 text-accent-red' :
-                      u.role === 'produktion' ? 'bg-accent-purple/20 text-accent-purple' :
-                      u.role === 'redakteur' ? 'bg-accent-blue/20 text-accent-blue' :
-                      u.role === 'moderator' ? 'bg-accent-green/20 text-accent-green' :
-                      'bg-surface-overlay text-text-muted'
-                    }`}>{ri.label}</span>
+                    <span className={`badge text-xs ${roleBadgeClass(ri.color)}`}>{ri.label}</span>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openPermissions(u)} className="p-2 text-text-muted hover:text-accent-orange hover:bg-accent-orange/10 rounded-lg transition-colors" title="Berechtigungen">
+                      <button onClick={() => openPermissions(u)} className="p-2 text-text-muted hover:text-accent-orange hover:bg-accent-orange/10 rounded-lg transition-colors" title="Berechtigungen bearbeiten">
                         <Key size={14} />
                       </button>
-                      <button onClick={() => openEditUser(u)} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
+                      <button onClick={() => openEditUser(u)} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors" title="Benutzer bearbeiten">
                         <Edit2 size={14} />
                       </button>
                       {!isCurrentUser && (
-                        <button onClick={() => handleDeleteUser(u.id, u.displayName)} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors">
+                        <button onClick={() => handleDeleteUser(u.id, u.displayName)} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors" title="Benutzer löschen">
                           <Trash2 size={14} />
                         </button>
                       )}
@@ -245,27 +311,87 @@ export default function AdminPage() {
               })}
             </div>
           )}
-
-          {/* Role Overview */}
-          <div className="card">
-            <h3 className="font-semibold text-text-primary mb-4">Rollen-Übersicht</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {ROLES.map(role => (
-                <div key={role.value} className="bg-obsidian-800 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Lock size={14} className={role.color} />
-                    <h4 className={`font-medium text-sm ${role.color}`}>{role.label}</h4>
-                  </div>
-                  <p className="text-text-muted text-xs">{role.desc}</p>
-                  <p className="text-text-secondary text-xs mt-2">{users.filter(u => u.role === role.value).length} Benutzer</p>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
-      {/* SYSTEM TAB */}
+      {/* ── ROLES TAB ──────────────────────────────────────── */}
+      {activeTab === 'roles' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-text-secondary text-sm">{roles.length} Rollen — System-Rollen können nicht gelöscht, aber bearbeitet werden</p>
+            </div>
+            <button onClick={openCreateRole} className="btn-primary"><Plus size={16} /><span>Neue Rolle</span></button>
+          </div>
+
+          {isLoading ? (
+            <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" /></div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {roles.map(role => {
+                const userCount = users.filter(u => u.role === role.name).length;
+                const permCount = Object.values(role.permissions || {}).filter(Boolean).length;
+                return (
+                  <div key={role.id} className="card group relative">
+                    {/* Color stripe */}
+                    <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ backgroundColor: role.color }} />
+                    <div className="pt-2">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: role.color + '22' }}>
+                            <Shield size={16} style={{ color: role.color }} />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-text-primary text-sm">{role.label}</h3>
+                            <span className="text-xs font-mono text-text-muted">{role.name}</span>
+                          </div>
+                        </div>
+                        {role.isSystem && (
+                          <span className="badge bg-surface-overlay text-text-muted text-xs">System</span>
+                        )}
+                      </div>
+
+                      {role.description && (
+                        <p className="text-text-secondary text-xs mb-3">{role.description}</p>
+                      )}
+
+                      <div className="flex items-center gap-4 text-xs text-text-muted mb-4">
+                        <span className="flex items-center gap-1"><Users size={12} /> {userCount} Benutzer</span>
+                        <span className="flex items-center gap-1"><Key size={12} /> {permCount} Rechte</span>
+                      </div>
+
+                      {/* Permission preview */}
+                      <div className="flex flex-wrap gap-1 mb-4">
+                        {ALL_PERMISSIONS.filter(p => role.permissions?.[p.key]).slice(0, 6).map(p => (
+                          <span key={p.key} className="text-xs px-1.5 py-0.5 rounded bg-surface-overlay text-text-muted">{p.label}</span>
+                        ))}
+                        {Object.values(role.permissions || {}).filter(Boolean).length > 6 && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-surface-overlay text-text-muted">
+                            +{Object.values(role.permissions || {}).filter(Boolean).length - 6} weitere
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button onClick={() => openEditRole(role)} className="btn-secondary flex-1 text-xs py-1.5">
+                          <Edit2 size={13} /><span>Bearbeiten</span>
+                        </button>
+                        {!role.isSystem && (
+                          <button onClick={() => handleDeleteRole(role.id, role.label)} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── SYSTEM TAB ─────────────────────────────────────── */}
       {activeTab === 'system' && (
         <div className="space-y-4">
           {isLoading ? (
@@ -289,17 +415,17 @@ export default function AdminPage() {
 
               <div className="card">
                 <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
-                  <Server size={16} className="text-accent-blue" />
+                  <Server size={16} className="text-accent-purple" />
                   System-Informationen
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   {[
-                    { label: 'Version', value: systemInfo.version || '2.0.0' },
+                    { label: 'Version', value: systemInfo.version || '2.0.1' },
                     { label: 'Node.js', value: systemInfo.nodeVersion },
                     { label: 'Plattform', value: systemInfo.platform },
                     { label: 'Architektur', value: systemInfo.arch },
                     { label: 'Datenbankgröße', value: systemInfo.dbSize },
-                    { label: 'Upload-Ordner', value: systemInfo.uploadDir || './uploads' },
+                    { label: 'Upload-Ordner', value: systemInfo.uploadDir || '~/.podcore' },
                     { label: 'Server-Port', value: systemInfo.port || '3001' },
                     { label: 'Uptime', value: systemInfo.uptime },
                   ].map(item => (
@@ -339,7 +465,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* LOGS TAB */}
+      {/* ── LOGS TAB ───────────────────────────────────────── */}
       {activeTab === 'logs' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
@@ -373,7 +499,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* User Modal */}
+      {/* ── User Modal ─────────────────────────────────────── */}
       <Modal isOpen={showUserModal} onClose={() => setShowUserModal(false)} title={editingUser ? 'Benutzer bearbeiten' : 'Neuer Benutzer'}>
         <form onSubmit={handleSaveUser} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -403,7 +529,7 @@ export default function AdminPage() {
             <div>
               <label className="label">Rolle</label>
               <select value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value }))} className="select">
-                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                {roles.map(r => <option key={r.name} value={r.name}>{r.label}</option>)}
               </select>
             </div>
             <div>
@@ -426,16 +552,17 @@ export default function AdminPage() {
         </form>
       </Modal>
 
-      {/* Permissions Modal */}
+      {/* ── Permissions Modal ──────────────────────────────── */}
       <Modal isOpen={showPermModal} onClose={() => setShowPermModal(false)} title={`Berechtigungen: ${permUser?.displayName}`} size="xl">
         <div className="space-y-4">
           {/* Role presets */}
           <div>
             <label className="label">Schnellauswahl nach Rolle</label>
             <div className="flex gap-2 flex-wrap">
-              {ROLES.map(r => (
-                <button key={r.value} type="button" onClick={() => applyRoleDefaults(r.value)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${r.color} border-current/30 hover:bg-current/10`}>
+              {roles.map(r => (
+                <button key={r.name} type="button" onClick={() => applyRoleDefaults(r.permissions)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-current/30 hover:bg-current/10 transition-all"
+                  style={{ color: r.color }}>
                   {r.label}
                 </button>
               ))}
@@ -443,7 +570,7 @@ export default function AdminPage() {
           </div>
 
           {/* Permission groups */}
-          <div className="space-y-4 max-h-[50vh] overflow-y-auto">
+          <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
             {PERMISSION_GROUPS.map(group => (
               <div key={group}>
                 <div className="flex items-center justify-between mb-2">
@@ -484,6 +611,116 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* ── Role Editor Modal ──────────────────────────────── */}
+      <Modal isOpen={showRoleModal} onClose={() => setShowRoleModal(false)} title={editingRole ? `Rolle bearbeiten: ${editingRole.label}` : 'Neue Rolle erstellen'} size="xl">
+        <form onSubmit={handleSaveRole} className="space-y-5">
+          {/* Basic info */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Rollenname (intern) *</label>
+              <input
+                type="text"
+                value={roleForm.name}
+                onChange={e => setRoleForm(p => ({ ...p, name: e.target.value.toLowerCase().replace(/\s+/g, '_') }))}
+                className="input font-mono"
+                required
+                disabled={!!editingRole}
+                placeholder="z.B. cutter"
+              />
+              {!editingRole && <p className="text-text-muted text-xs mt-1">Nur Kleinbuchstaben, keine Leerzeichen</p>}
+            </div>
+            <div>
+              <label className="label">Bezeichnung *</label>
+              <input
+                type="text"
+                value={roleForm.label}
+                onChange={e => setRoleForm(p => ({ ...p, label: e.target.value }))}
+                className="input"
+                required
+                placeholder="z.B. Cutter"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label className="label">Beschreibung</label>
+              <input
+                type="text"
+                value={roleForm.description}
+                onChange={e => setRoleForm(p => ({ ...p, description: e.target.value }))}
+                className="input"
+                placeholder="Kurze Beschreibung der Rolle"
+              />
+            </div>
+            <div>
+              <label className="label">Farbe</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={roleForm.color}
+                  onChange={e => setRoleForm(p => ({ ...p, color: e.target.value }))}
+                  className="w-10 h-10 rounded-lg border border-surface-border cursor-pointer bg-transparent"
+                />
+                <div className="flex-1 h-10 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: roleForm.color }}>
+                  {roleForm.label || 'Vorschau'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Permissions */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="label mb-0">Berechtigungen</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setRolePermissions(Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, true])))} className="text-xs text-accent-green hover:underline">Alle aktivieren</button>
+                <button type="button" onClick={() => setRolePermissions(emptyPermissions())} className="text-xs text-accent-red hover:underline">Alle deaktivieren</button>
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-1 border border-surface-border rounded-xl p-4 bg-obsidian-900">
+              {PERMISSION_GROUPS.map(group => (
+                <div key={group}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-text-primary font-medium text-sm">{group}</h4>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => toggleAllRolePerms(group, true)} className="text-xs text-accent-green hover:underline">Alle</button>
+                      <button type="button" onClick={() => toggleAllRolePerms(group, false)} className="text-xs text-accent-red hover:underline">Keine</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {ALL_PERMISSIONS.filter(p => p.group === group).map(perm => (
+                      <label key={perm.key} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-surface-raised transition-colors">
+                        <div
+                          onClick={() => setRolePermissions(prev => ({ ...prev, [perm.key]: !prev[perm.key] }))}
+                          className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 transition-all cursor-pointer ${rolePermissions[perm.key] ? 'bg-accent-purple border-accent-purple' : 'border-surface-border-light'}`}
+                        >
+                          {rolePermissions[perm.key] && <Check size={12} className="text-white" />}
+                        </div>
+                        <span className="text-text-secondary text-sm">{perm.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-text-muted text-xs mt-2">
+              {Object.values(rolePermissions).filter(Boolean).length} von {ALL_PERMISSIONS.length} Berechtigungen aktiviert
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2 border-t border-surface-border">
+            <button type="button" onClick={() => setShowRoleModal(false)} className="btn-secondary">Abbrechen</button>
+            <button type="submit" disabled={isSaving} className="btn-primary">
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              <span>{editingRole ? 'Rolle speichern' : 'Rolle erstellen'}</span>
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   );
