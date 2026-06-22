@@ -20,6 +20,9 @@ const PodigeePage = lazy(() => import('./pages/PodigeePage'));
 const BrandingPage = lazy(() => import('./pages/BrandingPage'));
 const ImpressumPage = lazy(() => import('./pages/ImpressumPage'));
 const WikiPage = lazy(() => import('./pages/WikiPage'));
+const SeasonsPage = lazy(() => import('./pages/SeasonsPage'));
+const ArchivePage = lazy(() => import('./pages/ArchivePage'));
+const StatsPage = lazy(() => import('./pages/StatsPage'));
 
 function LoadingSpinner() {
   return (
@@ -81,6 +84,9 @@ function AppRoutes() {
         <Route path="settings" element={<Suspense fallback={<LoadingSpinner />}><SettingsPage /></Suspense>} />
         <Route path="impressum" element={<Suspense fallback={<LoadingSpinner />}><ImpressumPage /></Suspense>} />
         <Route path="wiki" element={<Suspense fallback={<LoadingSpinner />}><WikiPage /></Suspense>} />
+        <Route path="seasons" element={<Suspense fallback={<LoadingSpinner />}><SeasonsPage /></Suspense>} />
+        <Route path="archive" element={<Suspense fallback={<LoadingSpinner />}><ArchivePage /></Suspense>} />
+        <Route path="stats" element={<Suspense fallback={<LoadingSpinner />}><StatsPage /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

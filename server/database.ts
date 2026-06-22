@@ -277,6 +277,32 @@ function initializeSchema(db: any): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS seasons (
+      id TEXT PRIMARY KEY,
+      number INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      cover_url TEXT,
+      start_date TEXT,
+      end_date TEXT,
+      status TEXT NOT NULL DEFAULT 'aktiv',
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS podcast_stats (
+      id TEXT PRIMARY KEY,
+      episode_id TEXT,
+      date TEXT NOT NULL,
+      downloads INTEGER DEFAULT 0,
+      plays INTEGER DEFAULT 0,
+      unique_listeners INTEGER DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'manual',
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -292,6 +318,23 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE users ADD COLUMN theme TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE episodes ADD COLUMN block_notes TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec("ALTER TABLE users ADD COLUMN dashboard_layout TEXT DEFAULT NULL"); } catch (_) {}
+  // Seasons and archive migrations
+  try { db.exec('ALTER TABLE episodes ADD COLUMN season_id TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN archive_date TEXT DEFAULT NULL'); } catch (_) {}
+  // Create seasons and podcast_stats tables if they don't exist (for existing DBs)
+  try { db.exec(`CREATE TABLE IF NOT EXISTS seasons (
+    id TEXT PRIMARY KEY, number INTEGER NOT NULL, title TEXT NOT NULL, description TEXT,
+    cover_url TEXT, start_date TEXT, end_date TEXT, status TEXT NOT NULL DEFAULT 'aktiv',
+    created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
+  try { db.exec(`CREATE TABLE IF NOT EXISTS podcast_stats (
+    id TEXT PRIMARY KEY, episode_id TEXT, date TEXT NOT NULL,
+    downloads INTEGER DEFAULT 0, plays INTEGER DEFAULT 0, unique_listeners INTEGER DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'manual', notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
   // research_sources table migration for existing DBs
   try { db.exec(`CREATE TABLE IF NOT EXISTS research_sources (
     id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT, type TEXT NOT NULL DEFAULT 'link',

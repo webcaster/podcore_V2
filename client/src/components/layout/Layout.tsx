@@ -3,7 +3,8 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
-  Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle
+  Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle,
+  Layers, Archive, BarChart2
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding } from '../../contexts/AppContext';
 
@@ -36,7 +37,10 @@ export default function Layout() {
     { to: '/media', icon: <Library size={18} />, label: 'Media Library', permission: 'canViewMedia' },
     { to: '/sponsors', icon: <Megaphone size={18} />, label: 'Sponsoring', permission: 'canViewSponsors', dividerBefore: true },
     { to: '/sponsors/reports', icon: <BarChart3 size={18} />, label: 'Sponsor-Auswertungen', permission: 'canViewSponsorReports' },
-    { to: '/analytics', icon: <TrendingUp size={18} />, label: 'Podcast-Statistiken', permission: 'canViewEpisodes', dividerBefore: true },
+    { to: '/seasons', icon: <Layers size={18} />, label: 'Staffeln', permission: 'canViewEpisodes' },
+    { to: '/archive', icon: <Archive size={18} />, label: 'Archiv', permission: 'canViewEpisodes' },
+    { to: '/analytics', icon: <TrendingUp size={18} />, label: 'Podigee Analytics', permission: 'canViewEpisodes', dividerBefore: true },
+    { to: '/stats', icon: <BarChart2 size={18} />, label: 'Podcast-Statistiken', permission: 'canViewEpisodes' },
     { to: '/branding', icon: <Image size={18} />, label: 'Branding & Backup', permission: 'canManageSettings' },
     { to: '/admin', icon: <Shield size={18} />, label: 'Administration', permission: 'canManageUsers', dividerBefore: true },
     { to: '/settings', icon: <Settings size={18} />, label: 'Einstellungen', permission: 'canManageSettings' },

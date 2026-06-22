@@ -1140,11 +1140,11 @@ function ResearchTab() {
       const [srcRes, ideaRes, epRes] = await Promise.all([
         editorialApi.listResearch(params),
         editorialApi.listIdeas({}),
-        episodesApi.list({}),
+        episodesApi.list({ pageSize: 500 }),
       ]);
       setSources(srcRes || []);
       setIdeas(ideaRes || []);
-      setEpisodes(epRes || []);
+      setEpisodes(epRes?.items || epRes || []);
     } catch (e) { showError('Fehler beim Laden der Recherche-Quellen'); }
     finally { setLoading(false); }
   };

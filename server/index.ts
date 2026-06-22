@@ -19,6 +19,8 @@ import adminRouter from './routers/admin';
 import podigeeRouter from './routers/podigee';
 import backupRouter from './routers/backup';
 import storageRouter from './routers/storage';
+import seasonsRouter from './routers/seasons';
+import statsRouter from './routers/stats';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -67,6 +69,8 @@ app.use('/api/admin', adminRouter);
 app.use('/api/podigee', podigeeRouter);
 app.use('/api/backup', backupRouter);
 app.use('/api/storage', storageRouter);
+app.use('/api/seasons', seasonsRouter);
+app.use('/api/stats', statsRouter);
 
 // Serve branding assets publicly (no auth needed for display)
 const brandingDir = path.join(DATA_DIR, 'branding');
