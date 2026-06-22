@@ -173,7 +173,7 @@ if (fs.existsSync(publicDir)) {
 } else {
   app.get('/', (req, res) => {
     res.json({
-      message: 'PodCore API Server v2.1.1',
+      message: 'PodCore API Server v2.1.3',
       note: 'Frontend build not found. Run: npm run build:client',
       api: '/api',
     });
@@ -213,7 +213,7 @@ app.listen(PORT, HOST, () => {
 
   console.log('');
   console.log('╔══════════════════════════════════════════════╗');
-  console.log('║           PodCore v2.1.1 Server              ║');
+  console.log('║           PodCore v2.1.3 Server              ║');
   console.log('╠══════════════════════════════════════════════╣');
   console.log(`║  Lokal:   http://localhost:${PORT}               ║`);
   if (ips.length > 0) {
