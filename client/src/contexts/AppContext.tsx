@@ -115,6 +115,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshBranding();
   }, [refreshBranding]);
 
+  // Poll for permission/role changes every 30 seconds
+  // This ensures that when an admin changes a user's role or permissions,
+  // the affected user sees the changes without needing to re-login.
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (!user) return;
+      try {
+        const fresh = await authApi.me();
+        if (!fresh) return;
+        // Only update if permissions or role actually changed
+        const oldPerms = JSON.stringify(user.permissions);
+        const newPerms = JSON.stringify(fresh.permissions);
+        if (oldPerms !== newPerms || user.role !== fresh.role) {
+          setUser(fresh);
+          if (fresh.theme) applyUserTheme(fresh.theme);
+        }
+      } catch {
+        // Silently ignore polling errors
+      }
+    }, 30_000); // every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user]);
+
   const login = useCallback(async (username: string, password: string) => {
     const result = await authApi.login(username, password);
     setUser(result.user);

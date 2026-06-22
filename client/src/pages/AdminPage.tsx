@@ -43,7 +43,7 @@ const PERMISSION_GROUPS = [...new Set(ALL_PERMISSIONS.map(p => p.group))];
 const emptyPermissions = () => Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, false]));
 
 export default function AdminPage() {
-  const { can, user: currentUser, showSuccess, showError } = useApp();
+  const { can, user: currentUser, showSuccess, showError, refreshUser } = useApp();
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [systemInfo, setSystemInfo] = useState<any>(null);
@@ -159,6 +159,8 @@ export default function AdminPage() {
       showSuccess('Berechtigungen gespeichert');
       setShowPermModal(false);
       load();
+      // If the admin changed their own permissions, refresh immediately
+      if (permUser.id === currentUser?.id) await refreshUser();
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
   };
@@ -191,7 +193,7 @@ export default function AdminPage() {
           color: roleForm.color,
           permissions: rolePermissions,
         });
-        showSuccess('Rolle gespeichert');
+        showSuccess('Rolle gespeichert — aktive Benutzer werden innerhalb von 30 Sek. aktualisiert');
       } else {
         await adminApi.createRole({
           name: roleForm.name,
@@ -204,6 +206,8 @@ export default function AdminPage() {
       }
       setShowRoleModal(false);
       load();
+      // Refresh own session in case the admin's own role was changed
+      await refreshUser();
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
   };

@@ -159,6 +159,34 @@ router.put('/roles/:id', requirePermission('canManageUsers') as any, (req: AuthR
     ]
   );
 
+  // Propagate new permissions to all users that have this role assigned
+  // (only updates users whose permissions were not individually customized,
+  //  i.e. their permissions match the old role permissions exactly)
+  if (permissions) {
+    const roleName = existing.name;
+    const usersWithRole = db.all(
+      `SELECT id, permissions FROM users WHERE role = ? AND is_active = 1`,
+      [roleName]
+    ) as any[];
+
+    const oldRolePerms = JSON.parse(existing.permissions || '{}');
+    const newPermsStr = JSON.stringify(permissions);
+
+    for (const u of usersWithRole) {
+      const userPerms = JSON.parse(u.permissions || '{}');
+      // Check if user's permissions match the old role defaults (not individually customized)
+      const userPermsStr = JSON.stringify(userPerms);
+      const oldRolePermsStr = JSON.stringify(oldRolePerms);
+      if (userPermsStr === oldRolePermsStr || userPermsStr === '{}') {
+        // User has default role permissions — propagate the new role permissions
+        db.run(
+          `UPDATE users SET permissions = ?, updated_at = datetime('now') WHERE id = ?`,
+          [newPermsStr, u.id]
+        );
+      }
+    }
+  }
+
   const updated = db.get('SELECT * FROM roles WHERE id = ?', [req.params.id]) as any;
   return res.json({
     success: true,

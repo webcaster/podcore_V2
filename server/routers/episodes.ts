@@ -217,14 +217,46 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
 
   const ep = parseEpisode(row);
   const PDFDocument = require('pdfkit');
+  const fs = require('fs');
+  const path = require('path');
+  const { DATA_DIR } = require('../database');
   const doc = new PDFDocument({ margin: 50, size: 'A4' });
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="episode-${ep.number || ep.id}.pdf"`);
   doc.pipe(res);
 
-  // ── Header ──────────────────────────────────────────────────
-  doc.fontSize(20).font('Helvetica-Bold').text('PodCore — Episoden-Dokument', { align: 'center' });
+  // ── Branding: Logo + Podcast Name ────────────────────────────────
+  const brandingDir = path.join(DATA_DIR, 'branding');
+  let logoPath: string | null = null;
+  if (fs.existsSync(brandingDir)) {
+    const brandingFiles = fs.readdirSync(brandingDir);
+    const logoFile = brandingFiles.find((f: string) => f.startsWith('logo.'));
+    if (logoFile) logoPath = path.join(brandingDir, logoFile);
+  }
+
+  // Get podcast name from settings
+  const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+  const appSettings = settingsRow ? JSON.parse(settingsRow.value) : {};
+  const podcastName = appSettings?.branding?.podcastName || appSettings?.general?.podcastName || 'PodCore';
+
+  // Header row: logo on left, podcast name + title on right
+  const headerY = doc.y;
+  if (logoPath && fs.existsSync(logoPath)) {
+    try {
+      doc.image(logoPath, 50, headerY, { fit: [80, 50], align: 'left' });
+      doc.text('', 145, headerY); // Move cursor to right of logo
+    } catch (_) {
+      // If logo fails to load, continue without it
+    }
+  }
+
+  doc.fontSize(9).font('Helvetica').fillColor('#888').text(podcastName, { align: logoPath ? 'right' : 'center' });
+  doc.fontSize(20).font('Helvetica-Bold').fillColor('#000').text('Episoden-Dokument', { align: logoPath ? 'right' : 'center' });
+  doc.moveDown(0.5);
+
+  // Divider below header
+  doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#e0e0e0').lineWidth(1).stroke();
   doc.moveDown(0.5);
   doc.fontSize(16).font('Helvetica-Bold').text(
     `${ep.number ? `#${ep.number} — ` : ''}${ep.title}`,

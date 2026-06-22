@@ -84,6 +84,7 @@ export const authApi = {
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { currentPassword, newPassword }),
   updateProfile: (data: any) => api.put('/auth/me', data),
+  getSetupStatus: () => api.get<any>('/auth/setup-status'),
 };
 
 // ============================================================

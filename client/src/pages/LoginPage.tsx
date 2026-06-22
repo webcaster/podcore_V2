@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Headphones, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AppContext';
+import { authApi } from '../lib/api';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -9,6 +10,13 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isFirstSetup, setIsFirstSetup] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    authApi.getSetupStatus()
+      .then((data: any) => setIsFirstSetup(data?.isFirstSetup ?? true))
+      .catch(() => setIsFirstSetup(false)); // On error, hide hint (safer default)
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,11 +114,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-surface-border">
-            <p className="text-text-muted text-xs text-center">
-              Standard-Zugangsdaten: <span className="text-text-secondary font-mono">admin / admin123</span>
-            </p>
-          </div>
+          {isFirstSetup === true && (
+            <div className="mt-6 pt-6 border-t border-surface-border">
+              <p className="text-text-muted text-xs text-center">
+                Erstanmeldung — Standard-Zugangsdaten:{' '}
+                <span className="text-text-secondary font-mono">admin / admin123</span>
+              </p>
+              <p className="text-text-muted text-xs text-center mt-1">
+                Bitte Passwort nach der ersten Anmeldung ändern.
+              </p>
+            </div>
+          )}
         </div>
 
         <p className="text-center text-text-muted text-xs mt-6">

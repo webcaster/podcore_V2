@@ -291,6 +291,7 @@ function initializeSchema(db: any): void {
   try { db.exec("ALTER TABLE episodes ADD COLUMN technical_data TEXT NOT NULL DEFAULT '{}'"); } catch (_) {}
   try { db.exec('ALTER TABLE users ADD COLUMN theme TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE episodes ADD COLUMN block_notes TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN dashboard_layout TEXT DEFAULT NULL"); } catch (_) {}
   // research_sources table migration for existing DBs
   try { db.exec(`CREATE TABLE IF NOT EXISTS research_sources (
     id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT, type TEXT NOT NULL DEFAULT 'link',

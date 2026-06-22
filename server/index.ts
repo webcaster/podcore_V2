@@ -143,7 +143,7 @@ app.listen(PORT, HOST, () => {
 
   console.log('');
   console.log('╔══════════════════════════════════════════════╗');
-  console.log('║           PodCore v2.0.5 Server              ║');
+  console.log('║           PodCore v2.0.6 Server              ║');
   console.log('╠══════════════════════════════════════════════╣');
   console.log(`║  Lokal:   http://localhost:${PORT}               ║`);
   if (ips.length > 0) {

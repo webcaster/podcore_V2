@@ -16,6 +16,7 @@ function formatUser(user: any) {
     permissions: JSON.parse(user.permissions || '{}'),
     avatarColor: user.avatar_color,
     theme: user.theme ? JSON.parse(user.theme) : null,
+    dashboardLayout: user.dashboard_layout ? JSON.parse(user.dashboard_layout) : null,
   };
 }
 
@@ -96,7 +97,7 @@ router.get('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
 
 // PUT /api/auth/me — Update own profile (displayName, email, avatarColor, theme)
 router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
-  const { displayName, email, avatarColor, theme, currentPassword, newPassword } = req.body;
+  const { displayName, email, avatarColor, theme, dashboardLayout, currentPassword, newPassword } = req.body;
 
   const db = getDb();
   const user = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;
@@ -125,10 +126,11 @@ router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
   const newEmail = email !== undefined ? email : user.email;
   const newAvatarColor = avatarColor !== undefined ? avatarColor : user.avatar_color;
   const newTheme = theme !== undefined ? JSON.stringify(theme) : user.theme;
+  const newDashboardLayout = dashboardLayout !== undefined ? JSON.stringify(dashboardLayout) : user.dashboard_layout;
 
   db.run(
-    "UPDATE users SET display_name = ?, email = ?, avatar_color = ?, theme = ?, updated_at = datetime('now') WHERE id = ?",
-    [newDisplayName, newEmail, newAvatarColor, newTheme, req.user!.id]
+    "UPDATE users SET display_name = ?, email = ?, avatar_color = ?, theme = ?, dashboard_layout = ?, updated_at = datetime('now') WHERE id = ?",
+    [newDisplayName, newEmail, newAvatarColor, newTheme, newDashboardLayout, req.user!.id]
   );
 
   const updated = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;
@@ -137,6 +139,15 @@ router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
     success: true,
     data: formatUser(updated),
   });
+});
+
+// GET /api/auth/setup-status — Check if the system has been used before (hide default credentials hint)
+router.get('/setup-status', (req: Request, res: Response) => {
+  const db = getDb();
+  // Check if the admin user has ever logged in (last_login is set)
+  const admin = db.get("SELECT last_login FROM users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1") as any;
+  const isFirstSetup = !admin || !admin.last_login;
+  return res.json({ success: true, data: { isFirstSetup } });
 });
 
 // GET /api/auth/branding — Public branding info (no auth needed for logo display)
