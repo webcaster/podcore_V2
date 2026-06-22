@@ -5,7 +5,7 @@ import {
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
   Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle
 } from 'lucide-react';
-import { useApp, usePermissions } from '../../contexts/AppContext';
+import { useApp, usePermissions, useBranding } from '../../contexts/AppContext';
 
 interface NavItem {
   to: string;
@@ -19,6 +19,7 @@ interface NavItem {
 export default function Layout() {
   const { user, logout } = useApp();
   const { can } = usePermissions();
+  const { branding } = useBranding();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -47,27 +48,46 @@ export default function Layout() {
     ? user.displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
     : user?.username?.[0]?.toUpperCase() || '?';
 
+  // Sidebar logo area: show uploaded logo if available, else default icon
+  const SidebarLogo = ({ mobile = false }: { mobile?: boolean }) => {
+    if (branding.logoUrl) {
+      return (
+        <img
+          src={branding.logoUrl}
+          alt={branding.podcastName}
+          className={`object-contain rounded flex-shrink-0 ${collapsed && !mobile ? 'w-8 h-8' : 'h-8 max-w-[120px]'}`}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+      );
+    }
+    return (
+      <div className="w-8 h-8 bg-accent-purple rounded-lg flex items-center justify-center flex-shrink-0">
+        <Headphones size={16} className="text-white" />
+      </div>
+    );
+  };
+
   const Sidebar = ({ mobile = false }) => (
     <aside className={`
       flex flex-col h-full bg-obsidian-800 border-r border-surface-border
       ${mobile ? 'w-72' : collapsed ? 'w-16' : 'w-64'}
       transition-all duration-300
     `}>
-      {/* Logo */}
+      {/* Logo / Branding */}
       <div className={`flex items-center gap-3 p-4 border-b border-surface-border ${collapsed && !mobile ? 'justify-center' : ''}`}>
-        <div className="w-8 h-8 bg-accent-purple rounded-lg flex items-center justify-center flex-shrink-0">
-          <Headphones size={16} className="text-white" />
-        </div>
+        <SidebarLogo mobile={mobile} />
         {(!collapsed || mobile) && (
-          <div>
-            <h1 className="text-text-primary font-bold text-sm leading-tight">PodCore</h1>
-            <p className="text-text-muted text-xs">v2.0.0</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-text-primary font-bold text-sm leading-tight truncate">
+              {branding.podcastName || 'PodCore'}
+            </h1>
+            <p className="text-text-muted text-xs">v2.0.4</p>
           </div>
         )}
         {!mobile && (
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="ml-auto text-text-muted hover:text-text-primary transition-colors"
+            className="ml-auto text-text-muted hover:text-text-primary transition-colors flex-shrink-0"
           >
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
@@ -76,7 +96,7 @@ export default function Layout() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {visibleItems.map((item, idx) => (
+        {visibleItems.map((item) => (
           <React.Fragment key={item.to}>
             {item.dividerBefore && !collapsed && (
               <div className="my-2 border-t border-surface-border/50" />
@@ -202,10 +222,21 @@ export default function Layout() {
             <Menu size={20} />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-accent-purple rounded flex items-center justify-center">
-              <Headphones size={12} className="text-white" />
-            </div>
-            <span className="font-bold text-text-primary">PodCore</span>
+            {branding.logoUrl ? (
+              <img
+                src={branding.logoUrl}
+                alt={branding.podcastName}
+                className="h-6 object-contain"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : (
+              <div className="w-6 h-6 bg-accent-purple rounded flex items-center justify-center">
+                <Headphones size={12} className="text-white" />
+              </div>
+            )}
+            <span className="font-bold text-text-primary truncate max-w-[160px]">
+              {branding.podcastName || 'PodCore'}
+            </span>
           </div>
         </div>
 

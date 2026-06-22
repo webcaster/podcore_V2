@@ -5,11 +5,12 @@ import {
   FileJson, Plus, X, ExternalLink, BarChart3
 } from 'lucide-react';
 import { mediaApi, adminApi, backupApi, podigeeApi } from '../lib/api';
-import { useApp } from '../contexts/AppContext';
+import { useApp, useBranding } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
 
 export default function BrandingPage() {
   const { can, showSuccess, showError } = useApp();
+  const { refreshBranding } = useBranding();
   const [branding, setBranding] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,6 +103,8 @@ export default function BrandingPage() {
       await mediaApi.uploadBranding(type, formData);
       showSuccess(`${type === 'logo' ? 'Logo' : 'Podcast-Cover'} hochgeladen`);
       load();
+      // Update global branding state so Layout shows new logo immediately
+      await refreshBranding();
     } catch (err: any) { showError(err.message); }
   };
 
@@ -111,6 +114,8 @@ export default function BrandingPage() {
       await mediaApi.deleteBranding(type);
       showSuccess('Gelöscht');
       load();
+      // Update global branding state so Layout removes logo immediately
+      await refreshBranding();
     } catch (err: any) { showError(err.message); }
   };
 
@@ -232,6 +237,52 @@ export default function BrandingPage() {
 
       {/* BRANDING TAB */}
       {activeTab === 'branding' && (
+        <div className="space-y-6">
+        {/* Podcast Name & Description */}
+        <div className="card space-y-4">
+          <h3 className="font-semibold text-text-primary flex items-center gap-2">
+            <Image size={16} />
+            Podcast-Informationen
+          </h3>
+          <p className="text-text-secondary text-sm">Der Podcast-Name wird in der Navigation und in allen Berichten angezeigt.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Podcast-Name</label>
+              <input
+                type="text"
+                value={settings?.branding?.podcastName || settings?.general?.podcastName || ''}
+                onChange={e => setSettings((s: any) => ({ ...s, branding: { ...(s?.branding || {}), podcastName: e.target.value } }))}
+                className="input w-full"
+                placeholder="Mein Podcast"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Kurzbeschreibung</label>
+              <input
+                type="text"
+                value={settings?.branding?.podcastDescription || ''}
+                onChange={e => setSettings((s: any) => ({ ...s, branding: { ...(s?.branding || {}), podcastDescription: e.target.value } }))}
+                className="input w-full"
+                placeholder="Kurze Beschreibung des Podcasts"
+              />
+            </div>
+          </div>
+          {can('canManageSettings') && (
+            <button
+              onClick={async () => {
+                try {
+                  await adminApi.updateSettings({ branding: settings?.branding || {} });
+                  showSuccess('Podcast-Informationen gespeichert');
+                  await refreshBranding();
+                } catch (err: any) { showError(err.message); }
+              }}
+              className="btn-primary text-sm"
+            >
+              <Save size={14} className="mr-1.5" />
+              Speichern
+            </button>
+          )}
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Logo */}
           <div className="card space-y-4">
@@ -310,6 +361,7 @@ export default function BrandingPage() {
               </div>
             )}
           </div>
+        </div>
         </div>
       )}
 

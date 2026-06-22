@@ -293,6 +293,17 @@ export const adminApi = {
 };
 
 // ============================================================
+// Storage API
+// ============================================================
+export const storageApi = {
+  getConfig: () => api.get<any>('/storage/config'),
+  saveConfig: (data: any) => api.put<any>('/storage/config', data),
+  testConnection: (config: any) => api.post<any>('/storage/test', config),
+  getNetwork: () => api.get<any>('/storage/network'),
+  getNetworkQR: () => api.get<any>('/storage/network/qr'),
+};
+
+// ============================================================
 // Podigee API
 // ============================================================
 export const podigeeApi = {
@@ -324,6 +335,8 @@ export const podigeeApi = {
   },
   testConnection: (apiToken: string, podcastSubdomain?: string) =>
     api.post<any>('/podigee/test', { apiToken, podcastSubdomain }),
+  getConfig: () => api.get<any>('/podigee/config'),
+  saveConfig: (data: any) => api.put<any>('/podigee/config', data),
 };
 
 

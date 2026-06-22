@@ -6,6 +6,19 @@ import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+function formatUser(user: any) {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.display_name,
+    email: user.email,
+    role: user.role,
+    permissions: JSON.parse(user.permissions || '{}'),
+    avatarColor: user.avatar_color,
+    theme: user.theme ? JSON.parse(user.theme) : null,
+  };
+}
+
 // POST /api/auth/login
 router.post('/login', (req: Request, res: Response) => {
   const { username, password } = req.body;
@@ -36,7 +49,7 @@ router.post('/login', (req: Request, res: Response) => {
 
   res.cookie('podcore_session', sessionToken, {
     httpOnly: true,
-    secure: false, // Allow HTTP for local/self-hosted
+    secure: false,
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
@@ -45,15 +58,7 @@ router.post('/login', (req: Request, res: Response) => {
     success: true,
     data: {
       token: sessionToken,
-      user: {
-        id: user.id,
-        username: user.username,
-        displayName: user.display_name,
-        email: user.email,
-        role: user.role,
-        permissions: JSON.parse(user.permissions || '{}'),
-        avatarColor: user.avatar_color,
-      },
+      user: formatUser(user),
     },
   });
 });
@@ -83,21 +88,15 @@ router.get('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
   return res.json({
     success: true,
     data: {
-      id: user.id,
-      username: user.username,
-      displayName: user.display_name,
-      email: user.email,
-      role: user.role,
-      permissions: JSON.parse(user.permissions || '{}'),
-      avatarColor: user.avatar_color,
+      ...formatUser(user),
       lastLogin: user.last_login,
     },
   });
 });
 
-// PUT /api/auth/me — Update own profile (displayName, email, avatarColor)
+// PUT /api/auth/me — Update own profile (displayName, email, avatarColor, theme)
 router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
-  const { displayName, email, avatarColor } = req.body;
+  const { displayName, email, avatarColor, theme, currentPassword, newPassword } = req.body;
 
   const db = getDb();
   const user = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;
@@ -106,55 +105,57 @@ router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
     return res.status(404).json({ success: false, error: 'Benutzer nicht gefunden' });
   }
 
+  // Handle password change if requested
+  if (newPassword) {
+    if (!currentPassword) {
+      return res.status(400).json({ success: false, error: 'Aktuelles Passwort erforderlich' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, error: 'Neues Passwort muss mindestens 6 Zeichen haben' });
+    }
+    const passwordValid = bcrypt.compareSync(currentPassword, user.password_hash);
+    if (!passwordValid) {
+      return res.status(401).json({ success: false, error: 'Aktuelles Passwort falsch' });
+    }
+    const newHash = bcrypt.hashSync(newPassword, 10);
+    db.run("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?", [newHash, req.user!.id]);
+  }
+
   const newDisplayName = displayName !== undefined ? displayName : user.display_name;
   const newEmail = email !== undefined ? email : user.email;
   const newAvatarColor = avatarColor !== undefined ? avatarColor : user.avatar_color;
+  const newTheme = theme !== undefined ? JSON.stringify(theme) : user.theme;
 
   db.run(
-    "UPDATE users SET display_name = ?, email = ?, avatar_color = ?, updated_at = datetime('now') WHERE id = ?",
-    [newDisplayName, newEmail, newAvatarColor, req.user!.id]
+    "UPDATE users SET display_name = ?, email = ?, avatar_color = ?, theme = ?, updated_at = datetime('now') WHERE id = ?",
+    [newDisplayName, newEmail, newAvatarColor, newTheme, req.user!.id]
   );
 
   const updated = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;
 
   return res.json({
     success: true,
-    data: {
-      id: updated.id,
-      username: updated.username,
-      displayName: updated.display_name,
-      email: updated.email,
-      role: updated.role,
-      permissions: JSON.parse(updated.permissions || '{}'),
-      avatarColor: updated.avatar_color,
-    },
+    data: formatUser(updated),
   });
 });
 
-// POST /api/auth/change-password
-router.post('/change-password', requireAuth as any, (req: AuthRequest, res: Response) => {
-  const { currentPassword, newPassword } = req.body;
-
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ success: false, error: 'Aktuelles und neues Passwort erforderlich' });
-  }
-
-  if (newPassword.length < 6) {
-    return res.status(400).json({ success: false, error: 'Neues Passwort muss mindestens 6 Zeichen haben' });
-  }
-
+// GET /api/auth/branding — Public branding info (no auth needed for logo display)
+router.get('/branding', (req: Request, res: Response) => {
   const db = getDb();
-  const user = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;
-
-  const passwordValid = bcrypt.compareSync(currentPassword, user.password_hash);
-  if (!passwordValid) {
-    return res.status(401).json({ success: false, error: 'Aktuelles Passwort falsch' });
-  }
-
-  const newHash = bcrypt.hashSync(newPassword, 10);
-  db.run("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?", [newHash, req.user!.id]);
-
-  return res.json({ success: true, message: 'Passwort erfolgreich geändert' });
+  const row = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+  const settings = row ? JSON.parse(row.value) : {};
+  const branding = settings?.branding || {};
+  return res.json({
+    success: true,
+    data: {
+      podcastName: branding.podcastName || settings?.general?.podcastName || 'PodCore',
+      podcastDescription: branding.podcastDescription || '',
+      logoUrl: branding.logoUrl || null,
+      coverUrl: branding.coverUrl || null,
+      primaryColor: branding.primaryColor || '#7c3aed',
+      accentColor: branding.accentColor || '#06b6d4',
+    },
+  });
 });
 
 export default router;

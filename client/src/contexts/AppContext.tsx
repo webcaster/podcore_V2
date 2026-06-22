@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { authApi, adminApi } from '../lib/api';
+import { authApi, mediaApi } from '../lib/api';
 
 // ============================================================
 // Types
@@ -13,6 +13,20 @@ export interface CurrentUser {
   role: string;
   permissions: Record<string, boolean>;
   avatarColor?: string;
+  theme?: UserTheme | null;
+}
+
+export interface UserTheme {
+  accentColor?: string;
+  sidebarColor?: string;
+  fontScale?: number;
+}
+
+export interface BrandingState {
+  podcastName: string;
+  podcastDescription: string;
+  logoUrl: string | null;
+  coverUrl: string | null;
 }
 
 export interface Toast {
@@ -34,6 +48,10 @@ interface AppContextValue {
   // Permissions
   can: (permission: string) => boolean;
 
+  // Branding
+  branding: BrandingState;
+  refreshBranding: () => Promise<void>;
+
   // Toast notifications
   toasts: Toast[];
   addToast: (type: Toast['type'], message: string, duration?: number) => void;
@@ -42,6 +60,17 @@ interface AppContextValue {
   showError: (message: string) => void;
   showInfo: (message: string) => void;
 }
+
+// ============================================================
+// Defaults
+// ============================================================
+
+const DEFAULT_BRANDING: BrandingState = {
+  podcastName: 'PodCore',
+  podcastDescription: '',
+  logoUrl: null,
+  coverUrl: null,
+};
 
 // ============================================================
 // Context
@@ -53,19 +82,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [branding, setBranding] = useState<BrandingState>(DEFAULT_BRANDING);
 
-  // Check auth on mount
+  // Load branding from server
+  const refreshBranding = useCallback(async () => {
+    try {
+      const data = await mediaApi.getBranding();
+      setBranding({
+        podcastName: data.podcastName || 'PodCore',
+        podcastDescription: data.podcastDescription || '',
+        // Add cache-busting timestamp so the browser reloads the image after upload
+        logoUrl: data.logo ? `${data.logo}?t=${Date.now()}` : null,
+        coverUrl: data.cover ? `${data.cover}?t=${Date.now()}` : null,
+      });
+    } catch {
+      // Keep defaults on error
+    }
+  }, []);
+
+  // Check auth on mount, then load branding
   useEffect(() => {
     authApi.me()
-      .then(setUser)
+      .then(u => {
+        setUser(u);
+        // Apply user theme if set
+        if (u?.theme) applyUserTheme(u.theme);
+      })
       .catch(() => setUser(null))
       .finally(() => setIsLoading(false));
-  }, []);
+
+    // Load branding independently (doesn't require auth)
+    refreshBranding();
+  }, [refreshBranding]);
 
   const login = useCallback(async (username: string, password: string) => {
     const result = await authApi.login(username, password);
     setUser(result.user);
-  }, []);
+    if (result.user?.theme) applyUserTheme(result.user.theme);
+    // Refresh branding after login in case it changed
+    refreshBranding();
+  }, [refreshBranding]);
 
   const logout = useCallback(async () => {
     try {
@@ -74,12 +130,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // ignore
     }
     setUser(null);
+    // Reset theme on logout
+    applyUserTheme(null);
   }, []);
 
   const refreshUser = useCallback(async () => {
     try {
       const u = await authApi.me();
       setUser(u);
+      if (u?.theme) applyUserTheme(u.theme);
     } catch {
       setUser(null);
     }
@@ -118,6 +177,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     logout,
     refreshUser,
     can,
+    branding,
+    refreshBranding,
     toasts,
     addToast,
     removeToast,
@@ -128,6 +189,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
+
+// ============================================================
+// Apply user theme via CSS custom properties
+// ============================================================
+
+function applyUserTheme(theme: UserTheme | null | undefined) {
+  const root = document.documentElement;
+  if (!theme) {
+    root.style.removeProperty('--color-accent-primary');
+    root.style.removeProperty('--color-sidebar-bg');
+    root.style.removeProperty('--font-scale');
+    return;
+  }
+  if (theme.accentColor) root.style.setProperty('--color-accent-primary', theme.accentColor);
+  if (theme.sidebarColor) root.style.setProperty('--color-sidebar-bg', theme.sidebarColor);
+  if (theme.fontScale) root.style.setProperty('--font-scale', String(theme.fontScale));
+}
+
+// ============================================================
+// Hooks
+// ============================================================
 
 export function useApp() {
   const ctx = useContext(AppContext);
@@ -148,4 +230,9 @@ export function usePermissions() {
 export function useToast() {
   const { addToast, removeToast, showSuccess, showError, showInfo } = useApp();
   return { addToast, removeToast, showSuccess, showError, showInfo };
+}
+
+export function useBranding() {
+  const { branding, refreshBranding } = useApp();
+  return { branding, refreshBranding };
 }

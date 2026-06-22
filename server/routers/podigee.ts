@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { getDb } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
@@ -33,6 +33,42 @@ function getPodigeeConfig() {
   const settings = JSON.parse(row.value);
   return settings?.podigee || null;
 }
+
+// GET /api/podigee/config — Get current Podigee configuration (masked)
+router.get('/config', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+  const config = getPodigeeConfig();
+  if (!config) {
+    return res.json({ success: true, data: { apiToken: '', podcastSubdomain: '', podcastId: '', podcastName: '' } });
+  }
+  const masked = {
+    ...config,
+    apiToken: config.apiToken ? config.apiToken.substring(0, 6) + '••••••••' : '',
+  };
+  return res.json({ success: true, data: masked });
+});
+
+// PUT /api/podigee/config — Save Podigee configuration
+router.put('/config', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+  const { apiToken, podcastSubdomain, podcastId, podcastName } = req.body;
+  const db = getDb();
+  const current = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
+  const currentSettings = current ? JSON.parse(current.value) : {};
+  const currentPodigee = currentSettings?.podigee || {};
+  const newToken = (apiToken && !apiToken.endsWith('\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022')) ? apiToken : currentPodigee.apiToken;
+  const newPodigee = {
+    ...currentPodigee,
+    apiToken: newToken || '',
+    podcastSubdomain: podcastSubdomain !== undefined ? podcastSubdomain : (currentPodigee.podcastSubdomain || ''),
+    podcastId: podcastId !== undefined ? podcastId : (currentPodigee.podcastId || ''),
+    podcastName: podcastName !== undefined ? podcastName : (currentPodigee.podcastName || ''),
+  };
+  const newSettings = { ...currentSettings, podigee: newPodigee };
+  db.run(
+    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    ['app', JSON.stringify(newSettings)]
+  );
+  return res.json({ success: true, data: { podcastSubdomain: newPodigee.podcastSubdomain, podcastId: newPodigee.podcastId, podcastName: newPodigee.podcastName } });
+});
 
 // GET /api/podigee/status — Check connection status
 router.get('/status', (req: AuthRequest, res: Response) => {
@@ -212,12 +248,19 @@ router.get('/stats/geo', requirePermission('canViewEpisodes') as any, async (req
 router.post('/test', requirePermission('canManageSettings') as any, async (req: AuthRequest, res: Response) => {
   const { apiToken, podcastSubdomain } = req.body;
 
-  if (!apiToken) {
+  // Use stored token if masked value sent
+  let token = apiToken;
+  if (!token || token.endsWith('\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022')) {
+    const config = getPodigeeConfig();
+    token = config?.apiToken;
+  }
+
+  if (!token) {
     return res.status(400).json({ success: false, error: 'API-Token erforderlich' });
   }
 
   try {
-    const podcasts = await fetchPodigee('/podcasts', apiToken);
+    const podcasts = await fetchPodigee('/podcasts', token);
     const list = Array.isArray(podcasts) ? podcasts : [podcasts];
 
     let podcastId: string | null = null;

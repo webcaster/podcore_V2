@@ -273,6 +273,8 @@ function initializeSchema(db: any): void {
   // Migration: add new columns if they don't exist (for existing databases)
   try { db.exec('ALTER TABLE episodes ADD COLUMN production_info TEXT'); } catch (_) {}
   try { db.exec("ALTER TABLE episodes ADD COLUMN technical_data TEXT NOT NULL DEFAULT '{}'"); } catch (_) {}
+  try { db.exec('ALTER TABLE users ADD COLUMN theme TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN block_notes TEXT DEFAULT NULL'); } catch (_) {}
 
   // Default admin user
   const userCount = db.get('SELECT COUNT(*) as count FROM users') as any;

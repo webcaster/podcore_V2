@@ -6,8 +6,10 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 
 import { getDb, DATA_DIR } from './database';
+import { getLocalNetworkIPs } from './storage';
 import authRouter from './routers/auth';
 import episodesRouter from './routers/episodes';
 import editorialRouter from './routers/editorial';
@@ -16,9 +18,11 @@ import mediaRouter from './routers/media';
 import adminRouter from './routers/admin';
 import podigeeRouter from './routers/podigee';
 import backupRouter from './routers/backup';
+import storageRouter from './routers/storage';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
+// Always bind to 0.0.0.0 so the app is reachable in LAN
 const HOST = process.env.HOST || '0.0.0.0';
 const NODE_ENV = process.env.NODE_ENV || 'production';
 
@@ -32,9 +36,7 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: NODE_ENV === 'development'
-    ? ['http://localhost:5173', 'http://localhost:3001', 'http://127.0.0.1:5173']
-    : true,
+  origin: true, // Allow all origins — user controls network access via firewall
   credentials: true,
 }));
 
@@ -64,6 +66,7 @@ app.use('/api/media', mediaRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/podigee', podigeeRouter);
 app.use('/api/backup', backupRouter);
+app.use('/api/storage', storageRouter);
 
 // Serve branding assets publicly (no auth needed for display)
 const brandingDir = path.join(DATA_DIR, 'branding');
@@ -71,11 +74,14 @@ app.use('/branding', express.static(brandingDir));
 
 // Health check
 app.get('/api/health', (req, res) => {
+  const ips = getLocalNetworkIPs();
   res.json({
     status: 'ok',
-    version: '2.0.0',
+    version: '2.0.4',
     timestamp: new Date().toISOString(),
     dataDir: DATA_DIR,
+    networkIPs: ips,
+    port: PORT,
   });
 });
 
@@ -97,7 +103,7 @@ if (fs.existsSync(publicDir)) {
 } else {
   app.get('/', (req, res) => {
     res.json({
-      message: 'PodCore API Server v2.0.0',
+      message: 'PodCore API Server v2.0.4',
       note: 'Frontend build not found. Run: npm run build:client',
       api: '/api',
     });
@@ -114,8 +120,10 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   try {
     const db = getDb();
     const { v4: uuidv4 } = require('uuid');
-    db.prepare(`INSERT INTO error_logs (id, level, category, message, details, stack, url) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .run(uuidv4(), 'error', 'backend', err.message || 'Unknown error', JSON.stringify({ name: err.name }), err.stack || null, req.path);
+    db.run(
+      `INSERT INTO error_logs (id, level, category, message, details, stack, url) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [uuidv4(), 'error', 'backend', err.message || 'Unknown error', JSON.stringify({ name: err.name }), err.stack || null, req.path]
+    );
   } catch (logErr) {
     console.error('[ERROR] Could not log error to database:', logErr);
   }
@@ -131,14 +139,22 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // ============================================================
 
 app.listen(PORT, HOST, () => {
+  const ips = getLocalNetworkIPs();
+
   console.log('');
-  console.log('╔════════════════════════════════════════╗');
-  console.log('║         PodCore v2.0.3 Server          ║');
-  console.log('╠════════════════════════════════════════╣');
-  console.log(`║  URL:  http://localhost:${PORT}           ║`);
-  console.log(`║  Mode: ${NODE_ENV.padEnd(32)}║`);
-  console.log(`║  Data: ${DATA_DIR.substring(0, 32).padEnd(32)}║`);
-  console.log('╚════════════════════════════════════════╝');
+  console.log('╔══════════════════════════════════════════════╗');
+  console.log('║           PodCore v2.0.4 Server              ║');
+  console.log('╠══════════════════════════════════════════════╣');
+  console.log(`║  Lokal:   http://localhost:${PORT}               ║`);
+  if (ips.length > 0) {
+    ips.forEach(ip => {
+      const url = `http://${ip}:${PORT}`;
+      console.log(`║  Netzwerk: ${url.padEnd(34)}║`);
+    });
+  }
+  console.log(`║  Modus:   ${NODE_ENV.padEnd(35)}║`);
+  console.log(`║  Daten:   ${DATA_DIR.substring(0, 35).padEnd(35)}║`);
+  console.log('╚══════════════════════════════════════════════╝');
   console.log('');
   console.log('  Standard-Login: admin / admin123');
   console.log('');
