@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Lightbulb, Calendar, Users, FileText, Plus, Search, Trash2,
   Edit2, Check, X, ArrowRight, Tag, Star, Clock, ChevronDown,
   Mic2, BookOpen, StickyNote, MessageSquare, Filter, Pin, PinOff, Loader2,
-  Globe, BookMarked, Video, FileImage, Newspaper, ExternalLink, Link2, Save
+  Globe, BookMarked, Video, FileImage, Newspaper, ExternalLink, Link2, Save, Eye
 } from 'lucide-react';
 import { editorialApi, episodesApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
@@ -248,6 +249,9 @@ function IdeasTab() {
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <h3 className="text-text-primary font-semibold leading-tight flex-1">{idea.title}</h3>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <Link to={`/editorial/ideas/${idea.id}`} className="p-1.5 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10 rounded-lg transition-colors" title="Detailansicht öffnen">
+                      <Eye size={13} />
+                    </Link>
                     {can('canEditIdeas') && (
                       <button onClick={() => openEdit(idea)} className="p-1.5 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
                         <Edit2 size={13} />

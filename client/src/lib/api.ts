@@ -55,6 +55,7 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),
+  patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
 
   // File upload
   upload: async <T>(path: string, formData: FormData): Promise<T> => {
@@ -121,9 +122,27 @@ export const editorialApi = {
     const qs = new URLSearchParams(params || {});
     return api.get<any[]>(`/editorial/ideas?${qs}`);
   },
+  getIdea: (id: string) => api.get<any>(`/editorial/ideas/${id}`),
   createIdea: (data: any) => api.post<any>('/editorial/ideas', data),
   updateIdea: (id: string, data: any) => api.put<any>(`/editorial/ideas/${id}`, data),
+  patchIdea: (id: string, data: any) => api.patch<any>(`/editorial/ideas/${id}`, data),
   deleteIdea: (id: string) => api.delete(`/editorial/ideas/${id}`),
+  // Idea sub-resources
+  listIdeaUploads: (ideaId: string) => api.get<any[]>(`/editorial/ideas/${ideaId}/uploads`),
+  uploadIdeaFile: (ideaId: string, file: File, description?: string) => {
+    const fd = new FormData(); fd.append('file', file); if (description) fd.append('description', description);
+    return api.upload<any>(`/editorial/ideas/${ideaId}/uploads`, fd);
+  },
+  deleteIdeaUpload: (ideaId: string, uploadId: string) => api.delete(`/editorial/ideas/${ideaId}/uploads/${uploadId}`),
+  listIdeaNotes: (ideaId: string) => api.get<any[]>(`/editorial/ideas/${ideaId}/notes`),
+  createIdeaNote: (ideaId: string, content: string) => api.post<any>(`/editorial/ideas/${ideaId}/notes`, { content }),
+  updateIdeaNote: (ideaId: string, noteId: string, content: string) => api.put<any>(`/editorial/ideas/${ideaId}/notes/${noteId}`, { content }),
+  deleteIdeaNote: (ideaId: string, noteId: string) => api.delete(`/editorial/ideas/${ideaId}/notes/${noteId}`),
+  listIdeaChecklist: (ideaId: string) => api.get<any[]>(`/editorial/ideas/${ideaId}/checklists`),
+  createChecklistItem: (ideaId: string, title: string) => api.post<any>(`/editorial/ideas/${ideaId}/checklists`, { title }),
+  updateChecklistItem: (ideaId: string, itemId: string, data: any) => api.put<any>(`/editorial/ideas/${ideaId}/checklists/${itemId}`, data),
+  deleteChecklistItem: (ideaId: string, itemId: string) => api.delete(`/editorial/ideas/${ideaId}/checklists/${itemId}`),
+  createEpisodeFromIdea: (ideaId: string, data: any) => api.post<any>(`/editorial/ideas/${ideaId}/create-episode`, data),
 
   // Plan
   listPlan: (params?: any) => {
@@ -135,7 +154,10 @@ export const editorialApi = {
   deletePlanEntry: (id: string) => api.delete(`/editorial/plan/${id}`),
 
   // Interview Partners
-  listPartners: () => api.get<any[]>('/editorial/interviews/partners'),
+  listPartners: (params?: any) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    return api.get<any[]>(`/editorial/interviews/partners${qs}`);
+  },
   createPartner: (data: any) => api.post<any>('/editorial/interviews/partners', data),
   updatePartner: (id: string, data: any) => api.put<any>(`/editorial/interviews/partners/${id}`, data),
   deletePartner: (id: string) => api.delete(`/editorial/interviews/partners/${id}`),

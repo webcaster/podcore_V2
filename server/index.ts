@@ -126,7 +126,7 @@ app.get('/api/health', (req, res) => {
   const ips = getLocalNetworkIPs();
   res.json({
     status: 'ok',
-    version: '2.0.9',
+    version: '2.1.0',
     timestamp: new Date().toISOString(),
     dataDir: DATA_DIR,
     networkIPs: ips,
@@ -173,7 +173,7 @@ if (fs.existsSync(publicDir)) {
 } else {
   app.get('/', (req, res) => {
     res.json({
-      message: 'PodCore API Server v2.0.8',
+      message: 'PodCore API Server v2.1.0',
       note: 'Frontend build not found. Run: npm run build:client',
       api: '/api',
     });
@@ -213,7 +213,7 @@ app.listen(PORT, HOST, () => {
 
   console.log('');
   console.log('╔══════════════════════════════════════════════╗');
-  console.log('║           PodCore v2.0.8 Server              ║');
+  console.log('║           PodCore v2.1.0 Server              ║');
   console.log('╠══════════════════════════════════════════════╣');
   console.log(`║  Lokal:   http://localhost:${PORT}               ║`);
   if (ips.length > 0) {

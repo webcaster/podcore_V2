@@ -810,6 +810,40 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-1-0',
+        title: 'v2.1.0 — Ideen-Arbeitsmappe & Deployment-Fix',
+        summary: 'Ideen sind jetzt vollständige Episoden-Vorbereitungsmappen mit Recherche, Uploads, Interview, Notizen, Checklisten und Episode-Erstellung. Deployment-Bug behoben.',
+        icon: <Package size={18} />,
+        tags: ['update', 'ideen', 'recherche', 'interview', 'checkliste', 'episode', 'deployment'],
+        content: [
+          {
+            heading: 'Neue Features',
+            list: [
+              'Ideen-Arbeitsmappe: Jede Idee hat eine eigene Detail-Seite mit 6 Tabs',
+              'Tab Übersicht: Titel, Beschreibung, Status, Priorität, Tags und verknüpfte Episode',
+              'Tab Recherche: Recherche-Quellen mit Links, Typ (Web, Buch, Video, etc.) und Notizen',
+              'Tab Uploads: Dateien direkt zur Idee hochladen (PDF, Bilder, Audio, etc.)',
+              'Tab Interview: Interview-Partner und Fragen direkt in der Idee verwalten',
+              'Tab Notizen: Ideen-spezifische Notizen unabhängig von globalen Notizen',
+              'Tab Checkliste: Aufgaben anlegen und abhaken (z.B. Recherche, Kontakt, Skript)',
+              'Episode erstellen: Alle gesammelten Infos werden in eine neue Episode übertragen',
+              'Ideenpool: Auge-Icon öffnet die Detailansicht einer Idee direkt',
+            ],
+          },
+          {
+            heading: 'Bug-Fixes',
+            list: [
+              'Deployment-Fix: index.html wurde nicht korrekt aktualisiert (alter Bundle wurde geladen)',
+              'Assets: Asset-Anzeige nach Upload funktioniert jetzt korrekt',
+              'Notizen: Notizen werden korrekt gespeichert und geladen',
+            ],
+          },
+          {
+            tip: 'Öffne eine Idee im Ideenpool über das Auge-Icon um die vollständige Arbeitsmappe zu nutzen. Am Ende kannst du direkt eine Episode aus allen gesammelten Infos erstellen.',
+          },
+        ],
+      },
+      {
         id: 'v2-0-9',
         title: 'v2.0.9 — Notizen-Fix, Redaktionsplan-Dashboard, Cover-Sidebar',
         summary: 'Notizen-Bug behoben, Redaktionsplan-Monatsübersicht im Dashboard, Podcast-Cover in der Seitenleiste.',

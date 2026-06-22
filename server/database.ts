@@ -360,6 +360,52 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE ad_slots ADD COLUMN invoice_notes TEXT DEFAULT NULL'); } catch (_) {}
   // research_sources table migration for existing DBs
   try { db.exec("CREATE TABLE IF NOT EXISTS research_sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT, type TEXT NOT NULL DEFAULT 'link', description TEXT, content TEXT, tags TEXT NOT NULL DEFAULT '[]', related_idea_id TEXT, related_episode_id TEXT, status TEXT NOT NULL DEFAULT 'unread', created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))"); } catch (_) {}
+  // Ideas: add extended fields for episode preparation workspace
+  try { db.exec('ALTER TABLE ideas ADD COLUMN target_audience TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ideas ADD COLUMN episode_format TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ideas ADD COLUMN target_duration INTEGER DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ideas ADD COLUMN target_date TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ideas ADD COLUMN cover_image TEXT DEFAULT NULL'); } catch (_) {}
+  // Idea checklists table
+  try { db.exec(`CREATE TABLE IF NOT EXISTS idea_checklists (
+    id TEXT PRIMARY KEY,
+    idea_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    is_done INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
+  // Idea notes table (idea-specific notes)
+  try { db.exec(`CREATE TABLE IF NOT EXISTS idea_notes (
+    id TEXT PRIMARY KEY,
+    idea_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
+  // Idea uploads table (files attached to ideas)
+  try { db.exec(`CREATE TABLE IF NOT EXISTS idea_uploads (
+    id TEXT PRIMARY KEY,
+    idea_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    filepath TEXT NOT NULL,
+    filesize INTEGER,
+    mime_type TEXT,
+    description TEXT,
+    uploaded_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
+  // Interview partners: add idea_id field
+  try { db.exec('ALTER TABLE interview_partners ADD COLUMN idea_id TEXT DEFAULT NULL'); } catch (_) {}
+  // Interview questions: add idea_id field
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN idea_id TEXT DEFAULT NULL'); } catch (_) {}
+  // Research sources: add idea_id field (already has related_idea_id)
+  // Ensure uploads directory for idea files
+  const ideaUploadsDir = path.join(DATA_DIR, 'idea-uploads');
+  if (!fs.existsSync(ideaUploadsDir)) fs.mkdirSync(ideaUploadsDir, { recursive: true });
 
   // Default admin user
   const userCount = db.get('SELECT COUNT(*) as count FROM users') as any;

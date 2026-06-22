@@ -23,6 +23,7 @@ const WikiPage = lazy(() => import('./pages/WikiPage'));
 const SeasonsPage = lazy(() => import('./pages/SeasonsPage'));
 const ArchivePage = lazy(() => import('./pages/ArchivePage'));
 const StatsPage = lazy(() => import('./pages/StatsPage'));
+const IdeaDetailPage = lazy(() => import('./pages/IdeaDetailPage'));
 
 function LoadingSpinner() {
   return (
@@ -74,6 +75,7 @@ function AppRoutes() {
         <Route path="episodes" element={<Suspense fallback={<LoadingSpinner />}><EpisodesPage /></Suspense>} />
         <Route path="episodes/:id" element={<Suspense fallback={<LoadingSpinner />}><EpisodeDetailPage /></Suspense>} />
         <Route path="editorial" element={<Suspense fallback={<LoadingSpinner />}><EditorialHubPage /></Suspense>} />
+        <Route path="editorial/ideas/:id" element={<Suspense fallback={<LoadingSpinner />}><IdeaDetailPage /></Suspense>} />
         <Route path="media" element={<Suspense fallback={<LoadingSpinner />}><MediaLibraryPage /></Suspense>} />
         <Route path="sponsors" element={<Suspense fallback={<LoadingSpinner />}><SponsorsPage /></Suspense>} />
         <Route path="sponsors/:id" element={<Suspense fallback={<LoadingSpinner />}><SponsorDetailPage /></Suspense>} />

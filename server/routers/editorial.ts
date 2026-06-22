@@ -1,6 +1,9 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { getDb } from '../database';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { getDb, DATA_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -60,6 +63,194 @@ router.delete('/ideas/:id', requirePermission('canDeleteIdeas') as any, (req: Au
   const db = getDb();
   db.run('DELETE FROM ideas WHERE id = ?', [req.params.id]);
   return res.json({ success: true, message: 'Idee gelöscht' });
+});
+
+// GET single idea with all sub-resources
+router.get('/ideas/:id', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const idea = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
+  if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+  const formatted = {
+    ...idea,
+    tags: JSON.parse(idea.tags || '[]'),
+    createdAt: idea.created_at, updatedAt: idea.updated_at, createdBy: idea.created_by,
+    assignedTo: idea.assigned_to, episodeId: idea.episode_id,
+    targetAudience: idea.target_audience, episodeFormat: idea.episode_format,
+    targetDuration: idea.target_duration, targetDate: idea.target_date, coverImage: idea.cover_image,
+  };
+  return res.json({ success: true, data: formatted });
+});
+
+// UPDATE idea with extended fields
+router.patch('/ideas/:id', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { title, description, status, priority, tags, assignedTo, episodeId,
+    targetAudience, episodeFormat, targetDuration, targetDate } = req.body;
+  db.run(`UPDATE ideas SET
+    title = COALESCE(?, title), description = ?, status = COALESCE(?, status),
+    priority = COALESCE(?, priority), tags = COALESCE(?, tags), assigned_to = ?,
+    episode_id = ?, target_audience = ?, episode_format = ?,
+    target_duration = ?, target_date = ?, updated_at = datetime('now') WHERE id = ?`,
+    [title ?? null, description ?? null, status ?? null, priority ?? null,
+     tags ? JSON.stringify(tags) : null, assignedTo ?? null, episodeId ?? null,
+     targetAudience ?? null, episodeFormat ?? null, targetDuration ?? null, targetDate ?? null,
+     req.params.id]);
+  const idea = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
+  if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+  return res.json({ success: true, data: { ...idea, tags: JSON.parse(idea.tags || '[]'), createdAt: idea.created_at, updatedAt: idea.updated_at } });
+});
+
+// ============================================================
+// IDEA CHECKLISTS
+// ============================================================
+
+router.get('/ideas/:id/checklists', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const items = db.all('SELECT * FROM idea_checklists WHERE idea_id = ? ORDER BY sort_order ASC, created_at ASC', [req.params.id]);
+  return res.json({ success: true, data: items.map((r: any) => ({ ...r, isDone: r.is_done === 1, ideaId: r.idea_id, createdAt: r.created_at, updatedAt: r.updated_at })) });
+});
+
+router.post('/ideas/:id/checklists', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { title, sortOrder = 0 } = req.body;
+  if (!title) return res.status(400).json({ success: false, error: 'Titel erforderlich' });
+  const itemId = uuidv4();
+  db.run('INSERT INTO idea_checklists (id, idea_id, title, sort_order) VALUES (?, ?, ?, ?)', [itemId, req.params.id, title, sortOrder]);
+  const item = db.get('SELECT * FROM idea_checklists WHERE id = ?', [itemId]) as any;
+  return res.status(201).json({ success: true, data: { ...item, isDone: item.is_done === 1, ideaId: item.idea_id } });
+});
+
+router.put('/ideas/:id/checklists/:itemId', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { title, isDone, sortOrder } = req.body;
+  db.run(`UPDATE idea_checklists SET title = COALESCE(?, title), is_done = COALESCE(?, is_done), sort_order = COALESCE(?, sort_order), updated_at = datetime('now') WHERE id = ? AND idea_id = ?`,
+    [title ?? null, isDone !== undefined ? (isDone ? 1 : 0) : null, sortOrder ?? null, req.params.itemId, req.params.id]);
+  const item = db.get('SELECT * FROM idea_checklists WHERE id = ?', [req.params.itemId]) as any;
+  return res.json({ success: true, data: { ...item, isDone: item.is_done === 1, ideaId: item.idea_id } });
+});
+
+router.delete('/ideas/:id/checklists/:itemId', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  db.run('DELETE FROM idea_checklists WHERE id = ? AND idea_id = ?', [req.params.itemId, req.params.id]);
+  return res.json({ success: true, message: 'Aufgabe gelöscht' });
+});
+
+// ============================================================
+// IDEA NOTES
+// ============================================================
+
+router.get('/ideas/:id/notes', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const notes = db.all('SELECT * FROM idea_notes WHERE idea_id = ? ORDER BY created_at DESC', [req.params.id]);
+  return res.json({ success: true, data: notes.map((r: any) => ({ ...r, ideaId: r.idea_id, createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at })) });
+});
+
+router.post('/ideas/:id/notes', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { content } = req.body;
+  if (!content) return res.status(400).json({ success: false, error: 'Inhalt erforderlich' });
+  const noteId = uuidv4();
+  db.run('INSERT INTO idea_notes (id, idea_id, content, created_by) VALUES (?, ?, ?, ?)', [noteId, req.params.id, content, req.user!.id]);
+  const note = db.get('SELECT * FROM idea_notes WHERE id = ?', [noteId]) as any;
+  return res.status(201).json({ success: true, data: { ...note, ideaId: note.idea_id, createdBy: note.created_by, createdAt: note.created_at } });
+});
+
+router.put('/ideas/:id/notes/:noteId', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { content } = req.body;
+  db.run(`UPDATE idea_notes SET content = COALESCE(?, content), updated_at = datetime('now') WHERE id = ? AND idea_id = ?`, [content ?? null, req.params.noteId, req.params.id]);
+  const note = db.get('SELECT * FROM idea_notes WHERE id = ?', [req.params.noteId]) as any;
+  return res.json({ success: true, data: { ...note, ideaId: note.idea_id, createdBy: note.created_by, createdAt: note.created_at } });
+});
+
+router.delete('/ideas/:id/notes/:noteId', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  db.run('DELETE FROM idea_notes WHERE id = ? AND idea_id = ?', [req.params.noteId, req.params.id]);
+  return res.json({ success: true, message: 'Notiz gelöscht' });
+});
+
+// ============================================================
+// IDEA UPLOADS
+// ============================================================
+
+const ideaUploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.join(DATA_DIR, 'idea-uploads');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${uuidv4()}${ext}`);
+  },
+});
+const ideaUpload = multer({ storage: ideaUploadStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+
+router.get('/ideas/:id/uploads', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const uploads = db.all('SELECT * FROM idea_uploads WHERE idea_id = ? ORDER BY created_at DESC', [req.params.id]);
+  return res.json({ success: true, data: uploads.map((r: any) => ({ ...r, ideaId: r.idea_id, uploadedBy: r.uploaded_by, originalName: r.original_name, mimeType: r.mime_type, createdAt: r.created_at })) });
+});
+
+router.post('/ideas/:id/uploads', requirePermission('canEditIdeas') as any, ideaUpload.single('file') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  if (!req.file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
+  const { description } = req.body;
+  const uploadId = uuidv4();
+  db.run('INSERT INTO idea_uploads (id, idea_id, filename, original_name, filepath, filesize, mime_type, description, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [uploadId, req.params.id, req.file.filename, req.file.originalname, req.file.path, req.file.size, req.file.mimetype, description || null, req.user!.id]);
+  const upload = db.get('SELECT * FROM idea_uploads WHERE id = ?', [uploadId]) as any;
+  return res.status(201).json({ success: true, data: { ...upload, ideaId: upload.idea_id, uploadedBy: upload.uploaded_by, originalName: upload.original_name, mimeType: upload.mime_type, createdAt: upload.created_at } });
+});
+
+router.delete('/ideas/:id/uploads/:uploadId', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const upload = db.get('SELECT * FROM idea_uploads WHERE id = ? AND idea_id = ?', [req.params.uploadId, req.params.id]) as any;
+  if (!upload) return res.status(404).json({ success: false, error: 'Datei nicht gefunden' });
+  try { if (fs.existsSync(upload.filepath)) fs.unlinkSync(upload.filepath); } catch (_) {}
+  db.run('DELETE FROM idea_uploads WHERE id = ?', [req.params.uploadId]);
+  return res.json({ success: true, message: 'Datei gelöscht' });
+});
+
+// Serve idea upload files
+router.get('/ideas/:id/uploads/:uploadId/download', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const upload = db.get('SELECT * FROM idea_uploads WHERE id = ? AND idea_id = ?', [req.params.uploadId, req.params.id]) as any;
+  if (!upload || !fs.existsSync(upload.filepath)) return res.status(404).json({ success: false, error: 'Datei nicht gefunden' });
+  res.download(upload.filepath, upload.original_name);
+});
+
+// ============================================================
+// CREATE EPISODE FROM IDEA
+// ============================================================
+
+router.post('/ideas/:id/create-episode', requirePermission('canCreateEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const idea = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
+  if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+
+  // Get idea notes to use as show notes
+  const ideaNotes = db.all('SELECT content FROM idea_notes WHERE idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
+  const notesText = ideaNotes.map((n: any) => n.content).join('\n\n');
+
+  // Get research sources
+  const sources = db.all('SELECT title, url, description FROM research_sources WHERE related_idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
+  const sourcesText = sources.length > 0
+    ? '\n\n## Quellen\n' + sources.map((s: any) => `- ${s.title}${s.url ? ` (${s.url})` : ''}${s.description ? `: ${s.description}` : ''}`).join('\n')
+    : '';
+
+  const episodeId = uuidv4();
+  const { title, description } = req.body;
+
+  db.run(`INSERT INTO episodes (id, title, description, show_notes, status, created_by) VALUES (?, ?, ?, ?, 'entwurf', ?)`,
+    [episodeId, title || idea.title, description || idea.description || '',
+     (notesText + sourcesText).trim() || null, req.user!.id]);
+
+  // Link idea to episode
+  db.run(`UPDATE ideas SET episode_id = ?, status = 'in_bearbeitung', updated_at = datetime('now') WHERE id = ?`, [episodeId, req.params.id]);
+
+  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [episodeId]) as any;
+  return res.status(201).json({ success: true, data: { ...episode, episodeId, ideaId: req.params.id } });
 });
 
 // ============================================================
