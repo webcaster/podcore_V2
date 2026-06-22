@@ -335,14 +335,31 @@ function initializeSchema(db: any): void {
     source TEXT NOT NULL DEFAULT 'manual', notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`); } catch (_) {}
+  // Episodes: add approval/release workflow fields
+  try { db.exec('ALTER TABLE episodes ADD COLUMN approval_status TEXT NOT NULL DEFAULT \'ausstehend\''); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN approved_by TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN approved_at TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN approval_notes TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN approval_requested_by TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN approval_requested_at TEXT DEFAULT NULL'); } catch (_) {}
+  // Interview questions: add approved/released workflow fields
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN approved INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN approved_by TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN approved_at TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime(\'now\'))'); } catch (_) {}
+  // Interview partners: add custom guest intro text
+  try { db.exec('ALTER TABLE interview_partners ADD COLUMN guest_intro TEXT DEFAULT NULL'); } catch (_) {}
+  // Ad placements: add price and invoice fields
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN price REAL DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN currency TEXT NOT NULL DEFAULT \'EUR\''); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN invoice_number TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN invoice_date TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN invoice_status TEXT NOT NULL DEFAULT \'offen\''); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN invoice_notes TEXT DEFAULT NULL'); } catch (_) {}
+  // Ad slots: add invoice_notes
+  try { db.exec('ALTER TABLE ad_slots ADD COLUMN invoice_notes TEXT DEFAULT NULL'); } catch (_) {}
   // research_sources table migration for existing DBs
-  try { db.exec(`CREATE TABLE IF NOT EXISTS research_sources (
-    id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT, type TEXT NOT NULL DEFAULT 'link',
-    description TEXT, content TEXT, tags TEXT NOT NULL DEFAULT '[]',
-    related_idea_id TEXT, related_episode_id TEXT, status TEXT NOT NULL DEFAULT 'unread',
-    created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )`); } catch (_) {}
+  try { db.exec("CREATE TABLE IF NOT EXISTS research_sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT, type TEXT NOT NULL DEFAULT 'link', description TEXT, content TEXT, tags TEXT NOT NULL DEFAULT '[]', related_idea_id TEXT, related_episode_id TEXT, status TEXT NOT NULL DEFAULT 'unread', created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))"); } catch (_) {}
 
   // Default admin user
   const userCount = db.get('SELECT COUNT(*) as count FROM users') as any;
@@ -377,6 +394,18 @@ function initializeSchema(db: any): void {
       notifications: { enabled: false, emailEnabled: false },
       podigee: { apiToken: '', podcastSubdomain: '', podcastId: '' },
       branding: { podcastName: '', podcastDescription: '' },
+      pdf: {
+        primaryColor: '#7c3aed',
+        accentColor: '#2563eb',
+        headerBg: '#1a1a2e',
+        showLogo: true,
+        footerText: '',
+      },
+      workflow: {
+        episodeApprovalRequired: false,
+        interviewApprovalRequired: false,
+        approvalRoles: ['moderator', 'admin'],
+      },
     };
     db.run('INSERT INTO settings (key, value) VALUES (?, ?)', ['app', JSON.stringify(defaultSettings)]);
   }
@@ -417,6 +446,8 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
     canViewSponsors: false, canCreateSponsors: false, canEditSponsors: false, canDeleteSponsors: false,
     canViewSponsorReports: false,
     canManageUsers: false, canViewErrorLogs: false, canExport: false, canManageSettings: false,
+    canApproveEpisodes: false, canRequestApproval: false,
+    canApproveInterviewQuestions: false,
   };
 
   switch (role) {
@@ -434,6 +465,7 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canViewMedia: true, canUploadMedia: true, canCommentMedia: true,
         canViewSponsors: true, canViewSponsorReports: true,
         canExport: true,
+        canRequestApproval: true,
       };
     case 'moderator':
       return {
@@ -443,6 +475,9 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canViewMedia: true, canCommentMedia: true,
         canViewSponsors: true, canViewSponsorReports: true,
         canExport: true,
+        canApproveEpisodes: true,
+        canRequestApproval: true,
+        canApproveInterviewQuestions: true,
       };
     case 'produktion':
       return {

@@ -31,7 +31,7 @@ export default function SponsorDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'placements' | 'contact'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'placements' | 'billing' | 'contact'>('overview');
   const [showPlacementModal, setShowPlacementModal] = useState(false);
   const [editingPlacement, setEditingPlacement] = useState<any>(null);
   const [form, setForm] = useState<any>({});
@@ -39,7 +39,10 @@ export default function SponsorDetailPage() {
     episodeId: '', categoryId: '', position: 'pre-roll', duration: 30,
     status: 'geplant', deliveryType: 'self', price: '', notes: '',
     adTitle: '', adScript: '', airDate: '',
+    invoiceNumber: '', invoiceDate: '', invoiceStatus: 'offen', invoiceNotes: '', currency: 'EUR',
   });
+  const [billingData, setBillingData] = useState<any>(null);
+  const [isExportingInvoice, setIsExportingInvoice] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -73,7 +76,7 @@ export default function SponsorDetailPage() {
     finally { setIsLoading(false); }
   };
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); loadBilling(); }, [id]);
 
   const handleSave = async () => {
     if (!id) return;
@@ -132,7 +135,7 @@ export default function SponsorDetailPage() {
 
   const openCreatePlacement = () => {
     setEditingPlacement(null);
-    setPlacementForm({ episodeId: '', categoryId: '', position: 'pre-roll', duration: 30, status: 'geplant', deliveryType: sponsor?.adDelivery || 'self', price: '', notes: '', adTitle: '', adScript: '', airDate: '' });
+    setPlacementForm({ episodeId: '', categoryId: '', position: 'pre-roll', duration: 30, status: 'geplant', deliveryType: sponsor?.adDelivery || 'self', price: '', notes: '', adTitle: '', adScript: '', airDate: '', invoiceNumber: '', invoiceDate: '', invoiceStatus: 'offen', invoiceNotes: '', currency: 'EUR' });
     setShowPlacementModal(true);
   };
 
@@ -150,8 +153,43 @@ export default function SponsorDetailPage() {
       adTitle: pl.adTitle || '',
       adScript: pl.adScript || '',
       airDate: pl.airDate?.slice(0, 10) || '',
+      invoiceNumber: pl.invoiceNumber || '',
+      invoiceDate: pl.invoiceDate?.slice(0, 10) || '',
+      invoiceStatus: pl.invoiceStatus || 'offen',
+      invoiceNotes: pl.invoiceNotes || '',
+      currency: pl.currency || 'EUR',
     });
     setShowPlacementModal(true);
+  };
+
+  const handleExportInvoice = async () => {
+    if (!id) return;
+    setIsExportingInvoice(true);
+    try {
+      const token = document.cookie.match(/token=([^;]+)/)?.[1] || localStorage.getItem('token') || '';
+      const res = await fetch(`/api/sponsors/${id}/invoice-pdf`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('PDF-Export fehlgeschlagen');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `abrechnung-${sponsor?.name?.replace(/\s+/g, '-').toLowerCase() || id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showSuccess('Abrechnung exportiert');
+    } catch (err: any) { showError(err.message); }
+    finally { setIsExportingInvoice(false); }
+  };
+
+  const loadBilling = async () => {
+    if (!id) return;
+    try {
+      const data = await sponsorsApi.getBilling(id);
+      setBillingData(data);
+    } catch {}
   };
 
   const adStatusInfo = (val: string) => AD_STATUS.find(s => s.value === val) || AD_STATUS[0];
@@ -219,6 +257,7 @@ export default function SponsorDetailPage() {
         {[
           { key: 'overview', label: 'Übersicht' },
           { key: 'placements', label: `Platzierungen (${placements.length})` },
+          { key: 'billing', label: 'Abrechnung' },
           { key: 'contact', label: 'Kontakt & Vertrag' },
         ].map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
@@ -430,6 +469,95 @@ export default function SponsorDetailPage() {
         </div>
       )}
 
+      {/* BILLING TAB */}
+      {activeTab === 'billing' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-text-secondary text-sm">Abrechnungsübersicht und Rechnungs-PDF für den Kunden</p>
+            {can('canEditSponsors') && (
+              <button onClick={handleExportInvoice} disabled={isExportingInvoice} className="btn-primary">
+                {isExportingInvoice ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                <span>Abrechnung als PDF</span>
+              </button>
+            )}
+          </div>
+
+          {/* Billing Summary */}
+          {billingData?.summary && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="card text-center py-3">
+                <p className="text-2xl font-bold text-text-primary">{billingData.summary.totalPlacements}</p>
+                <p className="text-text-muted text-xs">Platzierungen gesamt</p>
+              </div>
+              <div className="card text-center py-3">
+                <p className="text-2xl font-bold text-accent-green">{billingData.summary.confirmedPlacements}</p>
+                <p className="text-text-muted text-xs">Abgerechnet</p>
+              </div>
+              <div className="card text-center py-3">
+                <p className="text-2xl font-bold text-text-primary">{billingData.summary.totalRevenue?.toFixed(2)} €</p>
+                <p className="text-text-muted text-xs">Gesamtumsatz</p>
+              </div>
+              <div className="card text-center py-3">
+                <p className="text-2xl font-bold text-accent-orange">{billingData.summary.openRevenue?.toFixed(2)} €</p>
+                <p className="text-text-muted text-xs">Offen</p>
+              </div>
+            </div>
+          )}
+
+          {/* Placements with invoice info */}
+          <div className="space-y-3">
+            {placements.map(pl => {
+              const si = adStatusInfo(pl.status);
+              return (
+                <div key={pl.id} className="card">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h4 className="text-text-primary font-medium">{pl.adTitle || 'Unbenannte Werbung'}</h4>
+                        <span className={`badge text-xs ${si.color}`}>{si.label}</span>
+                        {pl.invoiceStatus && (
+                          <span className={`badge text-xs ${
+                            pl.invoiceStatus === 'bezahlt' ? 'bg-accent-green/20 text-accent-green' :
+                            pl.invoiceStatus === 'storniert' ? 'bg-accent-red/20 text-accent-red' :
+                            'bg-accent-orange/20 text-accent-orange'
+                          }`}>
+                            Rechnung: {pl.invoiceStatus === 'bezahlt' ? 'Bezahlt' : pl.invoiceStatus === 'storniert' ? 'Storniert' : 'Offen'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mt-2">
+                        <div>
+                          <p className="text-text-muted text-xs">Preis</p>
+                          <p className="text-text-primary font-medium">{pl.price ? `${pl.price.toFixed(2)} €` : '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-text-muted text-xs">Rechnungsnr.</p>
+                          <p className="text-text-primary">{pl.invoiceNumber || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-text-muted text-xs">Rechnungsdatum</p>
+                          <p className="text-text-primary">{pl.invoiceDate ? new Date(pl.invoiceDate).toLocaleDateString('de-DE') : '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-text-muted text-xs">Ausstrahlungsdatum</p>
+                          <p className="text-text-primary">{pl.airDate ? new Date(pl.airDate).toLocaleDateString('de-DE') : '—'}</p>
+                        </div>
+                      </div>
+                      {pl.invoiceNotes && <p className="text-text-muted text-xs mt-2 italic">{pl.invoiceNotes}</p>}
+                    </div>
+                    {can('canEditSponsors') && (
+                      <button onClick={() => openEditPlacement(pl)} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg flex-shrink-0">
+                        <Edit2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* CONTACT TAB */}
       {activeTab === 'contact' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -569,6 +697,42 @@ export default function SponsorDetailPage() {
           <div>
             <label className="label">Notizen</label>
             <textarea value={placementForm.notes} onChange={e => setPlacementForm(p => ({ ...p, notes: e.target.value }))} className="textarea" rows={2} />
+          </div>
+
+          {/* Invoice / Billing Section */}
+          <hr className="border-surface-border" />
+          <h4 className="font-medium text-text-primary text-sm flex items-center gap-2"><FileText size={14} /> Abrechnung / Rechnung</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Rechnungsnummer</label>
+              <input type="text" value={placementForm.invoiceNumber} onChange={e => setPlacementForm(p => ({ ...p, invoiceNumber: e.target.value }))} className="input" placeholder="z.B. RE-2025-001" />
+            </div>
+            <div>
+              <label className="label">Rechnungsdatum</label>
+              <input type="date" value={placementForm.invoiceDate} onChange={e => setPlacementForm(p => ({ ...p, invoiceDate: e.target.value }))} className="input" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Rechnungsstatus</label>
+              <select value={placementForm.invoiceStatus} onChange={e => setPlacementForm(p => ({ ...p, invoiceStatus: e.target.value }))} className="select">
+                <option value="offen">Offen</option>
+                <option value="bezahlt">Bezahlt</option>
+                <option value="storniert">Storniert</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Währung</label>
+              <select value={placementForm.currency} onChange={e => setPlacementForm(p => ({ ...p, currency: e.target.value }))} className="select">
+                <option value="EUR">EUR (€)</option>
+                <option value="USD">USD ($)</option>
+                <option value="CHF">CHF</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="label">Rechnungsnotiz</label>
+            <textarea value={placementForm.invoiceNotes} onChange={e => setPlacementForm(p => ({ ...p, invoiceNotes: e.target.value }))} className="textarea" rows={2} placeholder="Zahlungsbedingungen, Hinweise für den Kunden..." />
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

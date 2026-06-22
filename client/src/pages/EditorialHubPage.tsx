@@ -588,7 +588,8 @@ function InterviewsTab() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [editingPartner, setEditingPartner] = useState<any>(null);
-  const [partnerForm, setPartnerForm] = useState({ name: '', company: '', role: '', email: '', phone: '', bio: '', notes: '' });
+  const [editingQuestion, setEditingQuestion] = useState<any>(null);
+  const [partnerForm, setPartnerForm] = useState({ name: '', company: '', role: '', email: '', phone: '', bio: '', notes: '', guestIntro: '' });
   const [questionForm, setQuestionForm] = useState({ question: '', category: '', notes: '' });
   const [sendForm, setSendForm] = useState({ subject: '', customMessage: '', episodeId: '' });
 
@@ -636,21 +637,33 @@ function InterviewsTab() {
     } catch (err: any) { showError(err.message); }
   };
 
-  const handleAddQuestion = async (e: React.FormEvent) => {
+  const handleSaveQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPartner) return;
     try {
-      await editorialApi.createQuestion({ ...questionForm, partnerId: selectedPartner.id, order: questions.length });
-      showSuccess('Frage hinzugefügt');
+      if (editingQuestion) {
+        await editorialApi.updateQuestion(editingQuestion.id, questionForm);
+        showSuccess('Frage aktualisiert');
+      } else {
+        await editorialApi.createQuestion({ ...questionForm, partnerId: selectedPartner.id, order: questions.length });
+        showSuccess('Frage hinzugefügt');
+      }
       setShowQuestionModal(false);
+      setEditingQuestion(null);
       setQuestionForm({ question: '', category: '', notes: '' });
       loadQuestions(selectedPartner.id);
     } catch (err: any) { showError(err.message); }
   };
 
-  const handleToggleAnswered = async (q: any) => {
+  const handleApproveQuestion = async (q: any) => {
     try {
-      await editorialApi.updateQuestion(q.id, { answered: !q.answered });
+      if (q.approved) {
+        await editorialApi.revokeQuestion(q.id);
+        showSuccess('Freigabe zurückgezogen');
+      } else {
+        await editorialApi.approveQuestion(q.id);
+        showSuccess('Frage freigegeben');
+      }
       loadQuestions(selectedPartner.id);
     } catch (err: any) { showError(err.message); }
   };
@@ -664,7 +677,7 @@ function InterviewsTab() {
 
   const handleOpenSummary = () => {
     if (!selectedPartner) return;
-    const url = `/api/editorial/interviews/partners/${selectedPartner.id}/send-summary`;
+    const url = editorialApi.sendSummaryUrl(selectedPartner.id);
     window.open(url, '_blank');
   };
 
@@ -677,7 +690,7 @@ function InterviewsTab() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(sendForm),
+        body: JSON.stringify({ ...sendForm, customMessage: sendForm.customMessage || selectedPartner.guestIntro }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
@@ -694,7 +707,7 @@ function InterviewsTab() {
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-text-primary">Interview-Partner</h3>
           {can('canEditInterviews') && (
-            <button onClick={() => { setEditingPartner(null); setPartnerForm({ name: '', company: '', role: '', email: '', phone: '', bio: '', notes: '' }); setShowPartnerModal(true); }} className="btn-ghost p-2"><Plus size={16} /></button>
+            <button onClick={() => { setEditingPartner(null); setPartnerForm({ name: '', company: '', role: '', email: '', phone: '', bio: '', notes: '', guestIntro: '' }); setShowPartnerModal(true); }} className="btn-ghost p-2"><Plus size={16} /></button>
           )}
         </div>
 
@@ -719,7 +732,7 @@ function InterviewsTab() {
                 </div>
                 {can('canEditInterviews') && (
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={e => { e.stopPropagation(); setEditingPartner(partner); setPartnerForm({ name: partner.name, company: partner.company || '', role: partner.role || '', email: partner.email || '', phone: partner.phone || '', bio: partner.bio || '', notes: partner.notes || '' }); setShowPartnerModal(true); }} className="p-1 text-text-muted hover:text-accent-blue"><Edit2 size={12} /></button>
+                    <button onClick={e => { e.stopPropagation(); setEditingPartner(partner); setPartnerForm({ name: partner.name, company: partner.company || '', role: partner.role || '', email: partner.email || '', phone: partner.phone || '', bio: partner.bio || '', notes: partner.notes || '', guestIntro: partner.guestIntro || '' }); setShowPartnerModal(true); }} className="p-1 text-text-muted hover:text-accent-blue"><Edit2 size={12} /></button>
                     <button onClick={e => { e.stopPropagation(); handleDeletePartner(partner.id); }} className="p-1 text-text-muted hover:text-accent-red"><Trash2 size={12} /></button>
                   </div>
                 )}
@@ -742,7 +755,9 @@ function InterviewsTab() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-semibold text-text-primary">Fragen für {selectedPartner.name}</h3>
-                <p className="text-text-muted text-xs">{questions.filter(q => q.answered).length}/{questions.length} beantwortet</p>
+                <p className="text-text-muted text-xs">
+                  {questions.filter(q => q.approved).length}/{questions.length} freigegeben
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 {can('canViewInterviews') && (
@@ -775,18 +790,51 @@ function InterviewsTab() {
               </div>
             ) : (
               <div className="space-y-2">
-                {questions.map((q, idx) => (
-                  <div key={q.id} className={`card flex items-start gap-3 group ${q.answered ? 'opacity-60' : ''}`}>
-                    <button onClick={() => handleToggleAnswered(q)} className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${q.answered ? 'bg-accent-green border-accent-green' : 'border-surface-border-light hover:border-accent-green'}`}>
-                      {q.answered && <Check size={10} className="text-white" />}
-                    </button>
+                {questions.map((q) => (
+                  <div key={q.id} className={`card flex items-start gap-3 group ${q.approved ? 'border-accent-green/40 bg-accent-green/5' : ''}`}>
+                    {/* Approve toggle - only for users with canApproveInterviewQuestions */}
+                    {can('canApproveInterviewQuestions') ? (
+                      <button
+                        onClick={() => handleApproveQuestion(q)}
+                        title={q.approved ? 'Freigabe zurückziehen' : 'Frage freigeben'}
+                        className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                          q.approved ? 'bg-accent-green border-accent-green' : 'border-surface-border-light hover:border-accent-green'
+                        }`}
+                      >
+                        {q.approved && <Check size={10} className="text-white" />}
+                      </button>
+                    ) : (
+                      <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                        q.approved ? 'bg-accent-green border-accent-green' : 'border-surface-border-light'
+                      }`}>
+                        {q.approved && <Check size={10} className="text-white" />}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm ${q.answered ? 'line-through text-text-muted' : 'text-text-primary'}`}>{q.question}</p>
-                      {q.category && <span className="badge bg-surface-overlay text-text-muted text-xs mt-1">{q.category}</span>}
+                      <p className="text-sm text-text-primary">{q.question}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {q.category && <span className="badge bg-surface-overlay text-text-muted text-xs">{q.category}</span>}
+                        {q.approved && (
+                          <span className="badge bg-accent-green/20 text-accent-green text-xs">Freigegeben</span>
+                        )}
+                      </div>
                       {q.notes && <p className="text-text-muted text-xs mt-1">{q.notes}</p>}
                     </div>
                     {can('canEditInterviews') && (
-                      <button onClick={() => handleDeleteQuestion(q.id)} className="p-1 text-text-muted hover:text-accent-red opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"><Trash2 size={12} /></button>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            setEditingQuestion(q);
+                            setQuestionForm({ question: q.question, category: q.category || '', notes: q.notes || '' });
+                            setShowQuestionModal(true);
+                          }}
+                          className="p-1 text-text-muted hover:text-accent-blue"
+                          title="Frage bearbeiten"
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                        <button onClick={() => handleDeleteQuestion(q.id)} className="p-1 text-text-muted hover:text-accent-red" title="Frage löschen"><Trash2 size={12} /></button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -824,7 +872,17 @@ function InterviewsTab() {
             <textarea value={partnerForm.bio} onChange={e => setPartnerForm(p => ({ ...p, bio: e.target.value }))} className="textarea" rows={3} placeholder="Kurze Biografie, Expertise, Themen..." />
           </div>
           <div>
-            <label className="label">Notizen</label>
+            <label className="label">Persönlicher Begleittext für den Gast</label>
+            <textarea
+              value={partnerForm.guestIntro}
+              onChange={e => setPartnerForm(p => ({ ...p, guestIntro: e.target.value }))}
+              className="textarea"
+              rows={3}
+              placeholder="Individuelle Einleitung für den Gast, z.B. 'Liebe/r [Name], vielen Dank für Ihre Zeit...' — wird beim E-Mail-Versand als Standard-Nachricht vorausgefüllt."
+            />
+          </div>
+          <div>
+            <label className="label">Notizen (intern)</label>
             <textarea value={partnerForm.notes} onChange={e => setPartnerForm(p => ({ ...p, notes: e.target.value }))} className="textarea" rows={2} />
           </div>
           <div className="flex justify-end gap-3 pt-2">
@@ -839,21 +897,26 @@ function InterviewsTab() {
         <form onSubmit={handleSendEmail} className="space-y-4">
           <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-lg p-3 text-sm text-text-secondary">
             <p className="font-medium text-accent-blue mb-1">E-Mail an: {selectedPartner?.email}</p>
-            <p>Die Interview-Fragen werden als formatierte E-Mail an den Gast gesendet. SMTP muss in den Einstellungen konfiguriert sein.</p>
+            <p>Es werden nur <strong>freigegebene Fragen</strong> ({questions.filter(q => q.approved).length} von {questions.length}) versendet. SMTP muss in den Einstellungen konfiguriert sein.</p>
           </div>
           <div>
             <label className="label">Betreff</label>
             <input type="text" value={sendForm.subject} onChange={e => setSendForm(p => ({ ...p, subject: e.target.value }))} className="input" required />
           </div>
           <div>
-            <label className="label">Persönliche Nachricht (optional)</label>
+            <label className="label">Persönlicher Begleittext</label>
             <textarea
               value={sendForm.customMessage}
               onChange={e => setSendForm(p => ({ ...p, customMessage: e.target.value }))}
               className="textarea"
-              rows={3}
+              rows={4}
               placeholder="Individuelle Einleitung für den Gast..."
             />
+            {selectedPartner?.guestIntro && sendForm.customMessage === '' && (
+              <p className="text-xs text-text-muted mt-1">
+                Tipp: Gespeicherter Begleittext wird automatisch verwendet, wenn dieses Feld leer bleibt.
+              </p>
+            )}
           </div>
           <div className="bg-obsidian-800 rounded-lg p-3 text-xs text-text-muted">
             <p className="font-medium text-text-secondary mb-1">Tipp: Zusammenfassung ohne SMTP</p>
@@ -870,8 +933,8 @@ function InterviewsTab() {
       </Modal>
 
       {/* Question Modal */}
-      <Modal isOpen={showQuestionModal} onClose={() => setShowQuestionModal(false)} title="Frage hinzufügen">
-        <form onSubmit={handleAddQuestion} className="space-y-4">
+      <Modal isOpen={showQuestionModal} onClose={() => { setShowQuestionModal(false); setEditingQuestion(null); setQuestionForm({ question: '', category: '', notes: '' }); }} title={editingQuestion ? 'Frage bearbeiten' : 'Frage hinzufügen'}>
+        <form onSubmit={handleSaveQuestion} className="space-y-4">
           <div>
             <label className="label">Frage *</label>
             <textarea value={questionForm.question} onChange={e => setQuestionForm(p => ({ ...p, question: e.target.value }))} className="textarea" rows={3} required autoFocus placeholder="Interview-Frage..." />
@@ -881,12 +944,17 @@ function InterviewsTab() {
             <input type="text" value={questionForm.category} onChange={e => setQuestionForm(p => ({ ...p, category: e.target.value }))} className="input" placeholder="z.B. Einstieg, Fachthema, Abschluss..." />
           </div>
           <div>
-            <label className="label">Notizen</label>
+            <label className="label">Notizen (intern)</label>
             <textarea value={questionForm.notes} onChange={e => setQuestionForm(p => ({ ...p, notes: e.target.value }))} className="textarea" rows={2} placeholder="Hintergrundinformationen, Recherche..." />
           </div>
+          {editingQuestion?.approved && (
+            <div className="bg-accent-orange/10 border border-accent-orange/30 rounded-lg p-3 text-sm text-accent-orange">
+              ⚠️ Diese Frage ist bereits freigegeben. Nach dem Speichern bleibt die Freigabe erhalten.
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={() => setShowQuestionModal(false)} className="btn-secondary">Abbrechen</button>
-            <button type="submit" disabled={!questionForm.question} className="btn-primary">Frage hinzufügen</button>
+            <button type="button" onClick={() => { setShowQuestionModal(false); setEditingQuestion(null); setQuestionForm({ question: '', category: '', notes: '' }); }} className="btn-secondary">Abbrechen</button>
+            <button type="submit" disabled={!questionForm.question} className="btn-primary">{editingQuestion ? 'Speichern' : 'Frage hinzufügen'}</button>
           </div>
         </form>
       </Modal>

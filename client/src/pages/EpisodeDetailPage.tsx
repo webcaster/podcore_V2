@@ -8,6 +8,7 @@ import {
   Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info
 } from 'lucide-react';
 import { episodesApi, adminApi } from '../lib/api';
+import Modal from '../components/ui/Modal';
 import { useApp } from '../contexts/AppContext';
 
 const BLOCK_TYPES = [
@@ -129,6 +130,11 @@ export default function EpisodeDetailPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [activeTab, setActiveTab] = useState<'script' | 'meta' | 'production' | 'technical'>('script');
+  const [approvalNotes, setApprovalNotes] = useState('');
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [approvalAction, setApprovalAction] = useState<'request' | 'approve' | 'reject' | null>(null);
+  const [isApproving, setIsApproving] = useState(false);
+  const [workflowEnabled, setWorkflowEnabled] = useState(false);
 
   // Form state
   const [form, setForm] = useState<any>({});
@@ -155,6 +161,32 @@ export default function EpisodeDetailPage() {
     additionalNotes: '',
   });
 
+  const handleApprovalAction = async () => {
+    if (!id || !approvalAction) return;
+    setIsApproving(true);
+    try {
+      let updated: any;
+      if (approvalAction === 'request') updated = await episodesApi.requestApproval(id, approvalNotes);
+      else if (approvalAction === 'approve') updated = await episodesApi.approve(id, approvalNotes);
+      else if (approvalAction === 'reject') updated = await episodesApi.reject(id, approvalNotes);
+      if (updated) setEpisode(updated);
+      showSuccess(approvalAction === 'request' ? 'Freigabe angefordert' : approvalAction === 'approve' ? 'Episode freigegeben' : 'Episode abgelehnt');
+      setShowApprovalModal(false);
+      setApprovalNotes('');
+      setApprovalAction(null);
+    } catch (err: any) { showError(err.message); }
+    finally { setIsApproving(false); }
+  };
+
+  const handleResetApproval = async () => {
+    if (!id) return;
+    try {
+      const updated = await episodesApi.resetApproval(id);
+      setEpisode(updated);
+      showSuccess('Freigabe-Status zurückgesetzt');
+    } catch (err: any) { showError(err.message); }
+  };
+
   useEffect(() => {
     if (!id) return;
     // Load global technical defaults first, then override with episode-specific data
@@ -163,6 +195,7 @@ export default function EpisodeDetailPage() {
       adminApi.getSettings().catch(() => null),
     ]).then(([ep, settings]) => {
         setEpisode(ep);
+        setWorkflowEnabled(settings?.workflow?.episodeApprovalRequired ?? false);
         setForm({
           title: ep.title || '',
           subtitle: ep.subtitle || '',
@@ -355,10 +388,21 @@ export default function EpisodeDetailPage() {
             <h1 className="text-xl font-bold text-text-primary">
               {episode.number ? `#${episode.number} — ` : ''}{episode.title}
             </h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className={`badge ${statusInfo.color}`}>
                 {statusInfo.label}
               </span>
+              {(workflowEnabled || episode.approval_status) && episode.approval_status && episode.approval_status !== 'none' && (
+                <span className={`badge text-xs ${
+                  episode.approval_status === 'approved' ? 'bg-accent-green/20 text-accent-green' :
+                  episode.approval_status === 'rejected' ? 'bg-accent-red/20 text-accent-red' :
+                  episode.approval_status === 'pending' ? 'bg-accent-orange/20 text-accent-orange' : ''
+                }`}>
+                  {episode.approval_status === 'approved' ? '✓ Freigegeben' :
+                   episode.approval_status === 'rejected' ? '✕ Abgelehnt' :
+                   episode.approval_status === 'pending' ? '⏳ Freigabe ausstehend' : ''}
+                </span>
+              )}
               {isDirty && <span className="text-accent-orange text-xs">● Ungespeicherte Änderungen</span>}
             </div>
           </div>
@@ -723,6 +767,74 @@ export default function EpisodeDetailPage() {
             </div>
           </div>
 
+          {/* Approval Workflow Card */}
+          {(workflowEnabled || (episode.approval_status && episode.approval_status !== 'none')) && (
+            <div className={`card space-y-3 ${
+              episode.approval_status === 'approved' ? 'border-accent-green/40' :
+              episode.approval_status === 'rejected' ? 'border-accent-red/40' :
+              episode.approval_status === 'pending' ? 'border-accent-orange/40' : ''
+            }`}>
+              <h3 className="font-semibold text-text-primary text-sm">Freigabe-Workflow</h3>
+              {episode.approval_status === 'none' || !episode.approval_status ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-text-muted">Diese Episode benötigt eine Freigabe vor der Veröffentlichung.</p>
+                  {can('canRequestApproval') && (
+                    <button onClick={() => { setApprovalAction('request'); setShowApprovalModal(true); }} className="btn-secondary w-full justify-center text-xs">
+                      Freigabe anfordern
+                    </button>
+                  )}
+                </div>
+              ) : episode.approval_status === 'pending' ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-accent-orange font-medium">⏳ Freigabe ausstehend</p>
+                  {episode.approval_requested_by && <p className="text-xs text-text-muted">Angefordert von: {episode.approval_requested_by}</p>}
+                  {can('canApproveEpisodes') && (
+                    <div className="flex gap-2">
+                      <button onClick={() => { setApprovalAction('approve'); setShowApprovalModal(true); }} className="btn-primary flex-1 justify-center text-xs">
+                        Freigeben
+                      </button>
+                      <button onClick={() => { setApprovalAction('reject'); setShowApprovalModal(true); }} className="btn-secondary flex-1 justify-center text-xs text-accent-red">
+                        Ablehnen
+                      </button>
+                    </div>
+                  )}
+                  {can('canEditEpisodes') && (
+                    <button onClick={handleResetApproval} className="btn-ghost w-full justify-center text-xs text-text-muted">
+                      Anforderung zurückziehen
+                    </button>
+                  )}
+                </div>
+              ) : episode.approval_status === 'approved' ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-accent-green font-medium">✓ Freigegeben</p>
+                  {episode.approved_by && <p className="text-xs text-text-muted">Freigegeben von: {episode.approved_by}</p>}
+                  {episode.approved_at && <p className="text-xs text-text-muted">{new Date(episode.approved_at).toLocaleDateString('de-DE')}</p>}
+                  {episode.approval_notes && <p className="text-xs text-text-muted italic">"{episode.approval_notes}"</p>}
+                  {can('canApproveEpisodes') && (
+                    <button onClick={handleResetApproval} className="btn-ghost w-full justify-center text-xs text-text-muted">
+                      Freigabe zurücksetzen
+                    </button>
+                  )}
+                </div>
+              ) : episode.approval_status === 'rejected' ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-accent-red font-medium">✕ Abgelehnt</p>
+                  {episode.approval_notes && <p className="text-xs text-text-muted italic">"{episode.approval_notes}"</p>}
+                  {can('canRequestApproval') && (
+                    <button onClick={() => { setApprovalAction('request'); setShowApprovalModal(true); }} className="btn-secondary w-full justify-center text-xs">
+                      Erneut anfordern
+                    </button>
+                  )}
+                  {can('canApproveEpisodes') && (
+                    <button onClick={handleResetApproval} className="btn-ghost w-full justify-center text-xs text-text-muted">
+                      Status zurücksetzen
+                    </button>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          )}
+
           {/* Quick Actions */}
           <div className="card space-y-2">
             <h3 className="font-semibold text-text-primary mb-3">Aktionen</h3>
@@ -754,6 +866,62 @@ export default function EpisodeDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Approval Modal */}
+      <Modal
+        isOpen={showApprovalModal}
+        onClose={() => { setShowApprovalModal(false); setApprovalNotes(''); setApprovalAction(null); }}
+        title={
+          approvalAction === 'request' ? 'Freigabe anfordern' :
+          approvalAction === 'approve' ? 'Episode freigeben' :
+          approvalAction === 'reject' ? 'Episode ablehnen' : 'Freigabe'
+        }
+      >
+        <div className="space-y-4">
+          {approvalAction === 'approve' && (
+            <div className="bg-accent-green/10 border border-accent-green/30 rounded-lg p-3 text-sm text-accent-green">
+              Die Episode wird freigegeben und kann veröffentlicht werden.
+            </div>
+          )}
+          {approvalAction === 'reject' && (
+            <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg p-3 text-sm text-accent-red">
+              Die Episode wird abgelehnt. Bitte gib einen Grund an.
+            </div>
+          )}
+          {approvalAction === 'request' && (
+            <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-lg p-3 text-sm text-text-secondary">
+              Eine Freigabe-Anforderung wird an die zuständigen Moderatoren gesendet.
+            </div>
+          )}
+          <div>
+            <label className="label">Notiz / Kommentar (optional)</label>
+            <textarea
+              value={approvalNotes}
+              onChange={e => setApprovalNotes(e.target.value)}
+              className="textarea"
+              rows={3}
+              placeholder={approvalAction === 'reject' ? 'Bitte Ablehnungsgrund angeben...' : 'Optionale Notiz...'}
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => { setShowApprovalModal(false); setApprovalNotes(''); setApprovalAction(null); }} className="btn-secondary">Abbrechen</button>
+            <button
+              type="button"
+              onClick={handleApprovalAction}
+              disabled={isApproving}
+              className={approvalAction === 'reject' ? 'btn-secondary text-accent-red' : 'btn-primary'}
+            >
+              {isApproving ? <Loader2 size={16} className="animate-spin" /> : null}
+              <span>{
+                approvalAction === 'request' ? 'Freigabe anfordern' :
+                approvalAction === 'approve' ? 'Freigeben' :
+                approvalAction === 'reject' ? 'Ablehnen' : 'Bestätigen'
+              }</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Prose editor styles */}
       <style>{`

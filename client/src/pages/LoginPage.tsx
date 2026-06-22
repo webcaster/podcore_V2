@@ -3,6 +3,10 @@ import { Headphones, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AppContext';
 import { authApi } from '../lib/api';
 
+// Injected at build time by vite.config.ts
+declare const __APP_VERSION__: string;
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.0.9';
+
 export default function LoginPage() {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
@@ -48,7 +52,7 @@ export default function LoginPage() {
           </div>
           <h1 className="text-3xl font-bold text-text-primary">PodCore</h1>
           <p className="text-text-secondary mt-1">Podcast Management System</p>
-          <p className="text-text-muted text-xs mt-1">v2.0.0</p>
+          <p className="text-text-muted text-xs mt-1">v{APP_VERSION}</p>
         </div>
 
         {/* Login Form */}

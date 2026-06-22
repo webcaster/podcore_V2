@@ -125,7 +125,7 @@ router.get('/interviews/partners', requirePermission('canViewInterviews') as any
   const db = getDb();
   const partners = db.all('SELECT * FROM interview_partners ORDER BY name ASC', []).map((r: any) => ({
     ...r, tags: JSON.parse(r.tags || '[]'), episodes: JSON.parse(r.episodes || '[]'),
-    createdAt: r.created_at, updatedAt: r.updated_at,
+    createdAt: r.created_at, updatedAt: r.updated_at, guestIntro: r.guest_intro,
   }));
   return res.json({ success: true, data: partners });
 });
@@ -146,13 +146,13 @@ router.post('/interviews/partners', requirePermission('canEditInterviews') as an
 
 router.put('/interviews/partners/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { name, company, role, email, phone, bio, tags, episodes, notes } = req.body;
+  const { name, company, role, email, phone, bio, tags, episodes, notes, guestIntro } = req.body;
 
-  db.run(`UPDATE interview_partners SET name = COALESCE(?, name), company = ?, role = ?, email = ?, phone = ?, bio = ?, tags = COALESCE(?, tags), episodes = COALESCE(?, episodes), notes = ?, updated_at = datetime('now') WHERE id = ?`,
-    [name ?? null, company ?? null, role ?? null, email ?? null, phone ?? null, bio ?? null, tags ? JSON.stringify(tags) : null, episodes ? JSON.stringify(episodes) : null, notes ?? null, req.params.id]);
+  db.run(`UPDATE interview_partners SET name = COALESCE(?, name), company = ?, role = ?, email = ?, phone = ?, bio = ?, tags = COALESCE(?, tags), episodes = COALESCE(?, episodes), notes = ?, guest_intro = ?, updated_at = datetime('now') WHERE id = ?`,
+    [name ?? null, company ?? null, role ?? null, email ?? null, phone ?? null, bio ?? null, tags ? JSON.stringify(tags) : null, episodes ? JSON.stringify(episodes) : null, notes ?? null, guestIntro ?? null, req.params.id]);
 
   const partner = db.get('SELECT * FROM interview_partners WHERE id = ?', [req.params.id]) as any;
-  return res.json({ success: true, data: { ...partner, tags: JSON.parse(partner.tags), episodes: JSON.parse(partner.episodes), createdAt: partner.created_at } });
+  return res.json({ success: true, data: { ...partner, tags: JSON.parse(partner.tags), episodes: JSON.parse(partner.episodes), createdAt: partner.created_at, guestIntro: partner.guest_intro } });
 });
 
 router.delete('/interviews/partners/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
@@ -174,8 +174,10 @@ router.get('/interviews/questions', requirePermission('canViewInterviews') as an
   query += ' ORDER BY sort_order ASC';
 
   const questions = db.all(query, params).map((r: any) => ({
-    ...r, answered: r.answered === 1,
-    partnerId: r.partner_id, episodeId: r.episode_id, createdAt: r.created_at,
+    ...r, approved: r.approved === 1,
+    approvedBy: r.approved_by, approvedAt: r.approved_at,
+    partnerId: r.partner_id, episodeId: r.episode_id,
+    createdAt: r.created_at, updatedAt: r.updated_at,
   }));
   return res.json({ success: true, data: questions });
 });
@@ -196,13 +198,61 @@ router.post('/interviews/questions', requirePermission('canEditInterviews') as a
 
 router.put('/interviews/questions/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { question, category, order, answered, notes } = req.body;
+  const { question, category, order, notes } = req.body;
 
-  db.run(`UPDATE interview_questions SET question = COALESCE(?, question), category = ?, sort_order = COALESCE(?, sort_order), answered = COALESCE(?, answered), notes = ? WHERE id = ?`,
-    [question ?? null, category ?? null, order ?? null, answered !== undefined ? (answered ? 1 : 0) : null, notes ?? null, req.params.id]);
+  db.run(
+    `UPDATE interview_questions SET question = COALESCE(?, question), category = ?, sort_order = COALESCE(?, sort_order), notes = ?, updated_at = datetime('now') WHERE id = ?`,
+    [question ?? null, category ?? null, order ?? null, notes ?? null, req.params.id]
+  );
 
   const q = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
-  return res.json({ success: true, data: { ...q, answered: q.answered === 1, partnerId: q.partner_id, episodeId: q.episode_id, createdAt: q.created_at } });
+  if (!q) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
+  return res.json({ success: true, data: {
+    ...q, approved: q.approved === 1,
+    approvedBy: q.approved_by, approvedAt: q.approved_at,
+    partnerId: q.partner_id, episodeId: q.episode_id,
+    createdAt: q.created_at, updatedAt: q.updated_at,
+  }});
+});
+
+// POST /api/editorial/interviews/questions/:id/approve — Moderator gibt Frage frei
+router.post('/interviews/questions/:id/approve', requirePermission('canApproveInterviewQuestions') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const q = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
+  if (!q) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
+
+  db.run(
+    `UPDATE interview_questions SET approved = 1, approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+    [req.user!.id, req.params.id]
+  );
+
+  const updated = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
+  return res.json({ success: true, data: {
+    ...updated, approved: updated.approved === 1,
+    approvedBy: updated.approved_by, approvedAt: updated.approved_at,
+    partnerId: updated.partner_id, episodeId: updated.episode_id,
+    createdAt: updated.created_at, updatedAt: updated.updated_at,
+  }, message: 'Frage freigegeben' });
+});
+
+// POST /api/editorial/interviews/questions/:id/revoke — Freigabe zurückziehen
+router.post('/interviews/questions/:id/revoke', requirePermission('canApproveInterviewQuestions') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const q = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
+  if (!q) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
+
+  db.run(
+    `UPDATE interview_questions SET approved = 0, approved_by = NULL, approved_at = NULL, updated_at = datetime('now') WHERE id = ?`,
+    [req.params.id]
+  );
+
+  const updated = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
+  return res.json({ success: true, data: {
+    ...updated, approved: updated.approved === 1,
+    approvedBy: updated.approved_by, approvedAt: updated.approved_at,
+    partnerId: updated.partner_id, episodeId: updated.episode_id,
+    createdAt: updated.created_at, updatedAt: updated.updated_at,
+  }, message: 'Freigabe zurückgezogen' });
 });
 
 router.delete('/interviews/questions/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {

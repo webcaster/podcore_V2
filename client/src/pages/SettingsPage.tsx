@@ -105,6 +105,19 @@ export default function SettingsPage() {
     externalHintText: '',
   });
 
+  // ── PDF CI colors form ───────────────────────────────────────────────────────
+  const [pdfForm, setPdfForm] = useState({
+    primaryColor: '#7c3aed',
+    accentColor: '#2563eb',
+    headerBg: '#1a1a2e',
+  });
+
+  // ── Workflow settings form ───────────────────────────────────────────────────
+  const [workflowForm, setWorkflowForm] = useState({
+    episodeApprovalRequired: false,
+    interviewApprovalRequired: false,
+  });
+
   // ── Load settings ───────────────────────────────────────────────────────────
   const loadSettings = useCallback(async () => {
     if (!can('canManageSettings')) { setIsLoadingSettings(false); return; }
@@ -135,6 +148,19 @@ export default function SettingsPage() {
         explicit: p.explicit || false,
         feedUrl: p.feedUrl || '',
         podcastId: p.podcastId || '',
+      });
+      // PDF CI colors
+      const pdf = data.pdf || {};
+      setPdfForm({
+        primaryColor: pdf.primaryColor || '#7c3aed',
+        accentColor: pdf.accentColor || '#2563eb',
+        headerBg: pdf.headerBg || '#1a1a2e',
+      });
+      // Workflow settings
+      const wf = data.workflow || {};
+      setWorkflowForm({
+        episodeApprovalRequired: wf.episodeApprovalRequired ?? false,
+        interviewApprovalRequired: wf.interviewApprovalRequired ?? false,
       });
       // Technical defaults
       const t = data.technicalDefaults || {};
@@ -246,7 +272,7 @@ export default function SettingsPage() {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const payload: any = { ...appForm };
+      const payload: any = { ...appForm, pdf: pdfForm, workflow: workflowForm };
       if (!payload.sessionSecret) delete payload.sessionSecret;
       await adminApi.updateSettings(payload);
       showSuccess('Einstellungen gespeichert');
@@ -734,6 +760,113 @@ export default function SettingsPage() {
                   <label className="label">Session-Secret (leer lassen = unverändert)</label>
                   <input type="password" value={appForm.sessionSecret} onChange={e => setAppForm(p => ({ ...p, sessionSecret: e.target.value }))} className="input font-mono" placeholder="Neues Session-Secret eingeben..." />
                   <p className="text-text-muted text-xs mt-1">Alle aktiven Sitzungen werden nach Änderung ungültig.</p>
+                </div>
+              </div>
+
+              {/* PDF CI Colors */}
+              <div className="card">
+                <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
+                  <Palette size={16} /> PDF CI-Farben
+                </h3>
+                <p className="text-text-muted text-sm mb-4">Diese Farben werden in allen PDF-Exporten (Episoden, Sponsoring-Abrechnung) verwendet.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="label">Primärfarbe</label>
+                    <div className="flex items-center gap-3">
+                      <input type="color" value={pdfForm.primaryColor} onChange={e => setPdfForm(p => ({ ...p, primaryColor: e.target.value }))} className="w-10 h-10 rounded-lg border border-surface-border cursor-pointer bg-transparent" />
+                      <input type="text" value={pdfForm.primaryColor} onChange={e => setPdfForm(p => ({ ...p, primaryColor: e.target.value }))} className="input font-mono text-sm" placeholder="#7c3aed" />
+                    </div>
+                    <div className="flex gap-1 mt-2 flex-wrap">
+                      {ACCENT_PRESETS.map(c => (
+                        <button key={c.value} type="button" onClick={() => setPdfForm(p => ({ ...p, primaryColor: c.value }))} title={c.label}
+                          className={`w-6 h-6 rounded-full transition-all ${pdfForm.primaryColor === c.value ? 'ring-2 ring-white ring-offset-1 ring-offset-obsidian-900' : ''}`}
+                          style={{ backgroundColor: c.value }} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Akzentfarbe</label>
+                    <div className="flex items-center gap-3">
+                      <input type="color" value={pdfForm.accentColor} onChange={e => setPdfForm(p => ({ ...p, accentColor: e.target.value }))} className="w-10 h-10 rounded-lg border border-surface-border cursor-pointer bg-transparent" />
+                      <input type="text" value={pdfForm.accentColor} onChange={e => setPdfForm(p => ({ ...p, accentColor: e.target.value }))} className="input font-mono text-sm" placeholder="#2563eb" />
+                    </div>
+                    <div className="flex gap-1 mt-2 flex-wrap">
+                      {ACCENT_PRESETS.map(c => (
+                        <button key={c.value} type="button" onClick={() => setPdfForm(p => ({ ...p, accentColor: c.value }))} title={c.label}
+                          className={`w-6 h-6 rounded-full transition-all ${pdfForm.accentColor === c.value ? 'ring-2 ring-white ring-offset-1 ring-offset-obsidian-900' : ''}`}
+                          style={{ backgroundColor: c.value }} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Header-Hintergrund</label>
+                    <div className="flex items-center gap-3">
+                      <input type="color" value={pdfForm.headerBg} onChange={e => setPdfForm(p => ({ ...p, headerBg: e.target.value }))} className="w-10 h-10 rounded-lg border border-surface-border cursor-pointer bg-transparent" />
+                      <input type="text" value={pdfForm.headerBg} onChange={e => setPdfForm(p => ({ ...p, headerBg: e.target.value }))} className="input font-mono text-sm" placeholder="#1a1a2e" />
+                    </div>
+                    <div className="flex gap-1 mt-2 flex-wrap">
+                      {SIDEBAR_PRESETS.map(c => (
+                        <button key={c.value} type="button" onClick={() => setPdfForm(p => ({ ...p, headerBg: c.value }))} title={c.label}
+                          className={`w-6 h-6 rounded-full transition-all ${pdfForm.headerBg === c.value ? 'ring-2 ring-white ring-offset-1 ring-offset-obsidian-900' : ''}`}
+                          style={{ backgroundColor: c.value }} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                {/* Preview */}
+                <div className="mt-4 rounded-lg overflow-hidden border border-surface-border">
+                  <div className="h-12 flex items-center px-4" style={{ backgroundColor: pdfForm.headerBg }}>
+                    <span className="font-bold text-sm" style={{ color: pdfForm.primaryColor }}>Podcast-Name</span>
+                    <span className="ml-auto text-xs text-gray-400">PDF-Vorschau</span>
+                  </div>
+                  <div className="p-3 bg-white">
+                    <div className="h-1 rounded" style={{ backgroundColor: pdfForm.accentColor }} />
+                    <div className="mt-2 text-xs text-gray-500">Episode-Inhalt mit Akzentfarbe</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Workflow Settings */}
+              <div className="card">
+                <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
+                  <Settings size={16} /> Freigabe-Workflow
+                </h3>
+                <p className="text-text-muted text-sm mb-4">Steuere ob Episoden und Interview-Fragen eine Freigabe benötigen, bevor sie veröffentlicht werden können.</p>
+                <div className="space-y-4">
+                  <label className="flex items-center justify-between gap-4 cursor-pointer">
+                    <div>
+                      <p className="text-text-primary text-sm font-medium">Episoden-Freigabe erforderlich</p>
+                      <p className="text-text-muted text-xs">Episoden müssen von einem Moderator freigegeben werden, bevor sie veröffentlicht werden können.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setWorkflowForm(p => ({ ...p, episodeApprovalRequired: !p.episodeApprovalRequired }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        workflowForm.episodeApprovalRequired ? 'bg-accent-purple' : 'bg-surface-border'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        workflowForm.episodeApprovalRequired ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </label>
+                  <label className="flex items-center justify-between gap-4 cursor-pointer">
+                    <div>
+                      <p className="text-text-primary text-sm font-medium">Interview-Fragen-Freigabe erforderlich</p>
+                      <p className="text-text-muted text-xs">Interview-Fragen müssen freigegeben werden, bevor sie an den Gast gesendet werden können.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setWorkflowForm(p => ({ ...p, interviewApprovalRequired: !p.interviewApprovalRequired }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        workflowForm.interviewApprovalRequired ? 'bg-accent-purple' : 'bg-surface-border'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        workflowForm.interviewApprovalRequired ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </label>
                 </div>
               </div>
 

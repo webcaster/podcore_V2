@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
@@ -7,6 +7,11 @@ import {
   Layers, Archive, BarChart2
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding } from '../../contexts/AppContext';
+import { api } from '../../lib/api';
+
+// Injected at build time by vite.config.ts
+declare const __APP_VERSION__: string;
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.0.9';
 
 interface NavItem {
   to: string;
@@ -24,6 +29,25 @@ export default function Layout() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [serverVersion, setServerVersion] = useState<string | null>(null);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+
+  // Check server version periodically
+  useEffect(() => {
+    const checkVersion = async () => {
+      try {
+        const data = await api.get<{ version: string }>('/health');
+        setServerVersion(data.version || null);
+      } catch {
+        // ignore
+      }
+    };
+    checkVersion();
+    const interval = setInterval(checkVersion, 5 * 60 * 1000); // every 5 min
+    return () => clearInterval(interval);
+  }, []);
+
+  const hasUpdate = serverVersion && serverVersion !== APP_VERSION;
 
   const handleLogout = async () => {
     await logout();
@@ -54,12 +78,14 @@ export default function Layout() {
 
   // Sidebar logo area: show uploaded logo if available, else default icon
   const SidebarLogo = ({ mobile = false }: { mobile?: boolean }) => {
-    if (branding.logoUrl) {
+    // Prefer podcast cover, fallback to logo, then default icon
+    const imageUrl = branding.coverUrl || branding.logoUrl;
+    if (imageUrl) {
       return (
         <img
-          src={branding.logoUrl}
+          src={imageUrl}
           alt={branding.podcastName}
-          className={`object-contain rounded flex-shrink-0 ${collapsed && !mobile ? 'w-8 h-8' : 'h-8 max-w-[120px]'}`}
+          className={`object-cover rounded-lg flex-shrink-0 ${collapsed && !mobile ? 'w-8 h-8' : 'w-8 h-8'}`}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
       );
@@ -85,7 +111,7 @@ export default function Layout() {
             <h1 className="text-text-primary font-bold text-sm leading-tight truncate">
               {branding.podcastName || 'PodCore'}
             </h1>
-            <p className="text-text-muted text-xs">v2.0.4</p>
+            <p className="text-text-muted text-xs">v{APP_VERSION}</p>
           </div>
         )}
         {!mobile && (
@@ -199,7 +225,30 @@ export default function Layout() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-obsidian-900">
+    <div className="flex flex-col h-screen overflow-hidden bg-obsidian-900">
+      {/* Update available banner */}
+      {hasUpdate && !updateDismissed && (
+        <div className="bg-accent-purple/20 border-b border-accent-purple/30 px-4 py-2 flex items-center justify-between text-sm z-50">
+          <span className="text-accent-purple font-medium">
+            🔄 Neue Version verfügbar: v{serverVersion} — Bitte Seite neu laden (Strg+F5 / Cmd+Shift+R)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-accent-purple text-white px-3 py-1 rounded text-xs hover:bg-accent-purple/80 transition-colors"
+            >
+              Jetzt neu laden
+            </button>
+            <button
+              onClick={() => setUpdateDismissed(true)}
+              className="text-text-muted hover:text-text-primary transition-colors text-xs"
+            >
+              Schließen
+            </button>
+          </div>
+        </div>
+      )}
+    <div className="flex flex-1 overflow-hidden">
       {/* Desktop Sidebar */}
       <div className="hidden md:flex flex-shrink-0">
         <Sidebar />
@@ -249,6 +298,7 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+    </div>
     </div>
   );
 }

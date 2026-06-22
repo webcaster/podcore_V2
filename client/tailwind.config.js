@@ -8,6 +8,8 @@ export default {
     extend: {
       colors: {
         // Dark Obsidian Studio Theme
+        // Dynamic theming is applied via CSS custom properties directly on document.documentElement
+        // Tailwind uses hardcoded fallback values; CSS variables override at runtime via AppContext
         obsidian: {
           950: '#0a0a0f',
           900: '#0f0f1a',
@@ -39,11 +41,23 @@ export default {
           secondary: '#94a3b8',
           muted: '#64748b',
           accent: '#a78bfa',
+        },
+        sidebar: {
+          bg: '#141420',
+          border: '#2d2d4e',
         }
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+      },
+      fontSize: {
+        'xs': ['0.75rem', { lineHeight: '1rem' }],
+        'sm': ['0.875rem', { lineHeight: '1.25rem' }],
+        'base': ['1rem', { lineHeight: '1.5rem' }],
+        'lg': ['1.125rem', { lineHeight: '1.75rem' }],
+        'xl': ['1.25rem', { lineHeight: '1.75rem' }],
+        '2xl': ['1.5rem', { lineHeight: '2rem' }],
       },
       boxShadow: {
         'glow-purple': '0 0 20px rgba(124, 58, 237, 0.3)',

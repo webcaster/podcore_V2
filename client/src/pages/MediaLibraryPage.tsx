@@ -65,7 +65,9 @@ export default function MediaLibraryPage() {
     setIsLoading(true);
     try {
       const data = await mediaApi.list({ type: typeFilter || undefined, search: search || undefined });
-      setAssets(data);
+      // Backend returns paginated object { items: [...], total: N }
+      const items = Array.isArray(data) ? data : (data as any)?.items || [];
+      setAssets(items);
     } catch (err: any) { showError(err.message); }
     finally { setIsLoading(false); }
   };
@@ -305,7 +307,7 @@ export default function MediaLibraryPage() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <a href={`/uploads/assets/${asset.filename}`} download={asset.filename} onClick={e => e.stopPropagation()} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
+                      <a href={mediaApi.getStreamUrl(asset.filename)} download={asset.filename} onClick={e => e.stopPropagation()} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
                         <Download size={14} />
                       </a>
                       {can('canUploadMedia') && (

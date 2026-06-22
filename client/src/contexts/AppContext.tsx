@@ -20,6 +20,11 @@ export interface UserTheme {
   accentColor?: string;
   sidebarColor?: string;
   fontScale?: number;
+  // Extended theme options
+  accentColorLight?: string;
+  accentColorDark?: string;
+  surfaceColor?: string;
+  surfaceRaisedColor?: string;
 }
 
 export interface BrandingState {
@@ -116,25 +121,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [refreshBranding]);
 
   // Poll for permission/role changes every 30 seconds
-  // This ensures that when an admin changes a user's role or permissions,
-  // the affected user sees the changes without needing to re-login.
   useEffect(() => {
     const interval = setInterval(async () => {
       if (!user) return;
       try {
         const fresh = await authApi.me();
         if (!fresh) return;
-        // Only update if permissions or role actually changed
+        // Check for permission, role OR theme changes
         const oldPerms = JSON.stringify(user.permissions);
         const newPerms = JSON.stringify(fresh.permissions);
-        if (oldPerms !== newPerms || user.role !== fresh.role) {
+        const oldTheme = JSON.stringify(user.theme);
+        const newTheme = JSON.stringify(fresh.theme);
+        if (oldPerms !== newPerms || user.role !== fresh.role || oldTheme !== newTheme) {
           setUser(fresh);
-          if (fresh.theme) applyUserTheme(fresh.theme);
+          applyUserTheme(fresh.theme || null);
         }
       } catch {
         // Silently ignore polling errors
       }
-    }, 30_000); // every 30 seconds
+    }, 30_000);
 
     return () => clearInterval(interval);
   }, [user]);
@@ -142,8 +147,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     const result = await authApi.login(username, password);
     setUser(result.user);
-    if (result.user?.theme) applyUserTheme(result.user.theme);
-    // Refresh branding after login in case it changed
+    applyUserTheme(result.user?.theme || null);
+    // Refresh branding after login
     refreshBranding();
   }, [refreshBranding]);
 
@@ -162,7 +167,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const u = await authApi.me();
       setUser(u);
-      if (u?.theme) applyUserTheme(u.theme);
+      applyUserTheme(u?.theme || null);
     } catch {
       setUser(null);
     }
@@ -218,17 +223,70 @@ export function AppProvider({ children }: { children: ReactNode }) {
 // Apply user theme via CSS custom properties
 // ============================================================
 
-function applyUserTheme(theme: UserTheme | null | undefined) {
+export function applyUserTheme(theme: UserTheme | null | undefined) {
   const root = document.documentElement;
+
   if (!theme) {
+    // Reset all to defaults
     root.style.removeProperty('--color-accent-primary');
+    root.style.removeProperty('--color-accent-primary-light');
+    root.style.removeProperty('--color-accent-primary-dark');
+    root.style.removeProperty('--color-text-accent');
     root.style.removeProperty('--color-sidebar-bg');
+    root.style.removeProperty('--color-sidebar-border');
     root.style.removeProperty('--font-scale');
+    root.style.removeProperty('--color-surface');
+    root.style.removeProperty('--color-surface-raised');
+    root.style.removeProperty('--color-obsidian-800');
     return;
   }
-  if (theme.accentColor) root.style.setProperty('--color-accent-primary', theme.accentColor);
-  if (theme.sidebarColor) root.style.setProperty('--color-sidebar-bg', theme.sidebarColor);
-  if (theme.fontScale) root.style.setProperty('--font-scale', String(theme.fontScale));
+
+  if (theme.accentColor) {
+    root.style.setProperty('--color-accent-primary', theme.accentColor);
+    // Derive light/dark variants by adjusting opacity
+    root.style.setProperty('--color-accent-primary-light', theme.accentColorLight || lightenColor(theme.accentColor, 20));
+    root.style.setProperty('--color-accent-primary-dark', theme.accentColorDark || darkenColor(theme.accentColor, 20));
+    root.style.setProperty('--color-text-accent', lightenColor(theme.accentColor, 30));
+  }
+
+  if (theme.sidebarColor) {
+    root.style.setProperty('--color-sidebar-bg', theme.sidebarColor);
+    root.style.setProperty('--color-obsidian-800', theme.sidebarColor);
+    // Slightly lighter for surface
+    root.style.setProperty('--color-surface', lightenColor(theme.sidebarColor, 8));
+    root.style.setProperty('--color-surface-raised', lightenColor(theme.sidebarColor, 12));
+  }
+
+  if (theme.fontScale) {
+    root.style.setProperty('--font-scale', String(theme.fontScale));
+  }
+}
+
+// ============================================================
+// Color utility helpers
+// ============================================================
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+    : null;
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return '#' + [r, g, b].map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join('');
+}
+
+function lightenColor(hex: string, amount: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  return rgbToHex(rgb[0] + amount, rgb[1] + amount, rgb[2] + amount);
+}
+
+function darkenColor(hex: string, amount: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  return rgbToHex(rgb[0] - amount, rgb[1] - amount, rgb[2] - amount);
 }
 
 // ============================================================

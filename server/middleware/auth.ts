@@ -61,6 +61,18 @@ export function requirePermission(permission: string) {
   };
 }
 
+// Helper: verify a token and return the user object or null
+export function verifyToken(token: string): { id: string; username: string; role: string } | null {
+  try {
+    const db = getDb();
+    const session = db.get(SESSION_QUERY, [token]) as any;
+    if (!session || !session.is_active) return null;
+    return { id: session.user_id, username: session.username, role: session.role };
+  } catch {
+    return null;
+  }
+}
+
 export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction): void {
   const token = req.cookies?.podcore_session || req.headers.authorization?.replace('Bearer ', '');
 

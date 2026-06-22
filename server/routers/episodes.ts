@@ -357,4 +357,91 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
   doc.end();
 });
 
+// ============================================================
+// EPISODE APPROVAL WORKFLOW
+// ============================================================
+
+// GET /api/episodes/pending-approval — list episodes awaiting approval
+router.get('/pending-approval', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const episodes = db.all(
+    `SELECT * FROM episodes WHERE approval_status = 'angefragt' ORDER BY approval_requested_at ASC`,
+    []
+  ).map(parseEpisode);
+  return res.json({ success: true, data: episodes });
+});
+
+// POST /api/episodes/:id/request-approval — request approval for an episode
+router.post('/:id/request-approval', requirePermission('canRequestApproval') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
+
+  // Check if workflow is enabled
+  const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+  const settings = settingsRow ? JSON.parse(settingsRow.value) : {};
+  const workflowEnabled = settings?.workflow?.episodeApprovalRequired === true;
+
+  if (!workflowEnabled) {
+    return res.status(400).json({ success: false, error: 'Freigabe-Workflow ist nicht aktiviert' });
+  }
+
+  db.run(
+    `UPDATE episodes SET approval_status = 'angefragt', approval_requested_by = ?, approval_requested_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+    [req.user!.id, req.params.id]
+  );
+
+  const updated = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]);
+  return res.json({ success: true, data: parseEpisode(updated), message: 'Freigabe angefragt' });
+});
+
+// POST /api/episodes/:id/approve — approve an episode
+router.post('/:id/approve', requirePermission('canApproveEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
+
+  const { notes } = req.body;
+
+  db.run(
+    `UPDATE episodes SET approval_status = 'freigegeben', approved_by = ?, approved_at = datetime('now'), approval_notes = ?, updated_at = datetime('now') WHERE id = ?`,
+    [req.user!.id, notes || null, req.params.id]
+  );
+
+  const updated = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]);
+  return res.json({ success: true, data: parseEpisode(updated), message: 'Episode freigegeben' });
+});
+
+// POST /api/episodes/:id/reject — reject an episode (send back for revision)
+router.post('/:id/reject', requirePermission('canApproveEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
+
+  const { notes } = req.body;
+
+  db.run(
+    `UPDATE episodes SET approval_status = 'abgelehnt', approved_by = ?, approved_at = datetime('now'), approval_notes = ?, updated_at = datetime('now') WHERE id = ?`,
+    [req.user!.id, notes || null, req.params.id]
+  );
+
+  const updated = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]);
+  return res.json({ success: true, data: parseEpisode(updated), message: 'Episode zur Überarbeitung zurückgegeben' });
+});
+
+// POST /api/episodes/:id/reset-approval — reset approval status (back to pending)
+router.post('/:id/reset-approval', requirePermission('canEditEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
+
+  db.run(
+    `UPDATE episodes SET approval_status = 'ausstehend', approved_by = NULL, approved_at = NULL, approval_notes = NULL, approval_requested_by = NULL, approval_requested_at = NULL, updated_at = datetime('now') WHERE id = ?`,
+    [req.params.id]
+  );
+
+  const updated = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]);
+  return res.json({ success: true, data: parseEpisode(updated), message: 'Freigabe-Status zurückgesetzt' });
+});
+
 export default router;

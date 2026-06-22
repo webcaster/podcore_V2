@@ -803,6 +803,98 @@ const wikiData: WikiCategory[] = [
       },
     ],
   },
+  {
+    id: 'changelog',
+    label: 'Versionshistorie',
+    icon: <Package size={16} />,
+    color: 'text-accent-green',
+    articles: [
+      {
+        id: 'v2-0-9',
+        title: 'v2.0.9 — Notizen-Fix, Redaktionsplan-Dashboard, Cover-Sidebar',
+        summary: 'Notizen-Bug behoben, Redaktionsplan-Monatsübersicht im Dashboard, Podcast-Cover in der Seitenleiste.',
+        icon: <Package size={18} />,
+        tags: ['update', 'notizen', 'dashboard', 'redaktionsplan', 'cover', 'sidebar'],
+        content: [
+          {
+            heading: 'Neue Features',
+            list: [
+              'Dashboard: Redaktionsplan-Monatsübersicht mit Navigation (Vorwärts/Rückwärts) direkt im Dashboard',
+              'Dashboard: Redaktionsplan-Einträge mit Datum, Titel, Zuständigem und Status-Badge',
+              'Seitenleiste: Podcast-Cover wird oben links angezeigt (statt Logo); Logo als Fallback wenn kein Cover vorhanden',
+            ],
+          },
+          {
+            heading: 'Bug-Fixes',
+            list: [
+              'Notizen: Notizen werden jetzt korrekt gespeichert und angezeigt (Build-Cache-Problem behoben)',
+              'Versions-Anzeige: Auto-Reload-Mechanismus verbessert — App lädt automatisch neu wenn ein neuer Build verfügbar ist',
+            ],
+          },
+          {
+            tip: 'Das Podcast-Cover kann unter Branding & Backup hochgeladen werden. Es erscheint dann automatisch oben links in der Seitenleiste.',
+          },
+        ],
+      },
+      {
+        id: 'v2-0-8',
+        title: 'v2.0.8 — Freigabe-Workflows & Abrechnung',
+        summary: 'Interview-Fragen-Freigabe, Episoden-Freigabe-Workflow, PDF CI-Farben, Sponsoring-Abrechnung und Rollen-Bug-Fix.',
+        icon: <Package size={18} />,
+        tags: ['update', 'freigabe', 'sponsoring', 'abrechnung', 'rollen', 'ci-farben'],
+        content: [
+          {
+            heading: 'Neue Features',
+            list: [
+              'Interview-Fragen: Fragen können jetzt bearbeitet werden (Edit-Funktion)',
+              'Interview-Fragen: Freigabe-Workflow — Moderator kann Fragen freigeben/zurückziehen',
+              'Interview-Fragen: Personalisierter Begleittext pro Gast (Gast-Intro)',
+              'Interview-Fragen: Begleittext wird beim E-Mail-Versand vorausgefüllt',
+              'Episoden-Freigabe: Optionaler Freigabe-Workflow für Episoden (Admin-Einstellung)',
+              'Episoden-Freigabe: Freigabe durch Benutzer mit Berechtigung canApproveEpisodes',
+              'Episoden-Freigabe: Freigabe-Status-Badge und Freigabe-Karte in der Episode-Detailseite',
+              'Sponsoring-Abrechnung: Preise und Rechnungsstatus für gebuchte Positionen',
+              'Sponsoring-Abrechnung: Abrechnungs-Tab pro Sponsor mit Gesamtübersicht',
+              'Sponsoring-Abrechnung: PDF-Rechnungsexport pro Sponsor',
+              'PDF CI-Farben: Admin kann Primär- und Akzentfarbe für PDF-Exporte einstellen',
+              'Workflow-Einstellungen: Freigabe-Workflow kann in den Einstellungen aktiviert/deaktiviert werden',
+            ],
+          },
+          {
+            heading: 'Bug-Fixes',
+            list: [
+              'Rollen-Bug: Beim Ändern der Benutzerrolle werden jetzt automatisch die Standard-Berechtigungen der neuen Rolle gesetzt',
+              'Versions-Anzeige: App zeigt jetzt immer die korrekte Version an (Auto-Reload bei veralteten Bundles)',
+              'Login-Seite: Versionsnummer wird jetzt dynamisch aus dem Build eingelesen',
+            ],
+          },
+          {
+            heading: 'Neue Berechtigungen',
+            list: [
+              'canApproveEpisodes — Episoden freigeben (Standard: Moderator, Admin)',
+              'canRequestApproval — Freigabe anfordern (Standard: Redakteur, Moderator, Admin)',
+              'canApproveInterviewQuestions — Interview-Fragen freigeben (Standard: Moderator, Admin)',
+            ],
+          },
+          {
+            tip: 'Der Freigabe-Workflow für Episoden ist optional und kann in Einstellungen → Workflow deaktiviert werden. Wenn deaktiviert, können Episoden ohne Freigabe veröffentlicht werden.',
+          },
+        ],
+      },
+      {
+        id: 'v2-0-6',
+        title: 'v2.0.6 — Vorherige Version',
+        summary: 'Stabilitätsverbesserungen und kleinere Anpassungen.',
+        icon: <Package size={18} />,
+        tags: ['update', 'v2.0.6'],
+        content: [
+          {
+            text: 'Version 2.0.6 enthielt Stabilitätsverbesserungen, Performance-Optimierungen und kleinere UI-Anpassungen.',
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

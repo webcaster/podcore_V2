@@ -69,6 +69,7 @@ export default function AdminPage() {
 
   const [logs, setLogs] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [roleChanged, setRoleChanged] = useState(false);
 
   const load = async () => {
     setIsLoading(true);
@@ -104,12 +105,19 @@ export default function AdminPage() {
         const payload: any = { displayName: userForm.displayName, email: userForm.email, role: userForm.role, avatarColor: userForm.avatarColor };
         if (userForm.password) payload.password = userForm.password;
         await adminApi.updateUser(editingUser.id, payload);
-        showSuccess('Benutzer aktualisiert');
+        if (roleChanged) {
+          showSuccess('Benutzer aktualisiert — Berechtigungen wurden auf Rollen-Standard gesetzt');
+        } else {
+          showSuccess('Benutzer aktualisiert');
+        }
+        // If admin changed their own role, refresh session
+        if (editingUser.id === currentUser?.id) await refreshUser();
       } else {
         await adminApi.createUser(userForm);
         showSuccess('Benutzer erstellt');
       }
       setShowUserModal(false);
+      setRoleChanged(false);
       load();
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
@@ -133,6 +141,7 @@ export default function AdminPage() {
   const openEditUser = (u: any) => {
     setEditingUser(u);
     setUserForm({ username: u.username, displayName: u.displayName, email: u.email || '', password: '', role: u.role, avatarColor: u.avatarColor || '#7c3aed' });
+    setRoleChanged(false);
     setShowUserModal(true);
   };
 
@@ -559,9 +568,26 @@ export default function AdminPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Rolle</label>
-              <select value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value }))} className="select">
+              <select
+                value={userForm.role}
+                onChange={e => {
+                  const newRole = e.target.value;
+                  setUserForm(p => ({ ...p, role: newRole }));
+                  if (editingUser && newRole !== editingUser.role) {
+                    setRoleChanged(true);
+                  } else {
+                    setRoleChanged(false);
+                  }
+                }}
+                className="select"
+              >
                 {roles.map(r => <option key={r.name} value={r.name}>{r.label}</option>)}
               </select>
+              {roleChanged && (
+                <p className="text-xs text-accent-orange mt-1 flex items-center gap-1">
+                  <span>⚠️</span> Berechtigungen werden auf Rollen-Standard zurückgesetzt
+                </p>
+              )}
             </div>
             <div>
               <label className="label">Avatar-Farbe</label>

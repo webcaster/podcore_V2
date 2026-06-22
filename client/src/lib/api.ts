@@ -91,6 +91,12 @@ export const authApi = {
 // Episodes API
 // ============================================================
 export const episodesApi = {
+  // Approval workflow
+  requestApproval: (id: string, notes?: string) => api.post<any>(`/episodes/${id}/request-approval`, { notes }),
+  approve: (id: string, notes?: string) => api.post<any>(`/episodes/${id}/approve`, { notes }),
+  reject: (id: string, notes?: string) => api.post<any>(`/episodes/${id}/reject`, { notes }),
+  resetApproval: (id: string) => api.post<any>(`/episodes/${id}/reset-approval`, {}),
+  getPendingApprovals: () => api.get<any[]>('/episodes/pending-approval'),
   list: (params?: { status?: string; search?: string; page?: number; pageSize?: number }) => {
     const qs = new URLSearchParams();
     if (params?.status) qs.set('status', params.status);
@@ -142,6 +148,12 @@ export const editorialApi = {
   createQuestion: (data: any) => api.post<any>('/editorial/interviews/questions', data),
   updateQuestion: (id: string, data: any) => api.put<any>(`/editorial/interviews/questions/${id}`, data),
   deleteQuestion: (id: string) => api.delete(`/editorial/interviews/questions/${id}`),
+  approveQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/approve`, {}),
+  revokeQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/revoke`, {}),
+  sendSummaryUrl: (partnerId: string, episodeId?: string) => {
+    const qs = episodeId ? `?episodeId=${episodeId}` : '';
+    return `/api/editorial/interviews/partners/${partnerId}/send-summary${qs}`;
+  },
 
   // Notes
   listNotes: (params?: any) => {
@@ -193,6 +205,10 @@ export const sponsorsApi = {
   createCategory: (data: any) => Promise.resolve(data),
   updateCategory: (id: string, data: any) => Promise.resolve(data),
   deleteCategory: (id: string) => Promise.resolve({}),
+
+  // Billing
+  getBilling: (sponsorId: string) => api.get<any>(`/sponsors/${sponsorId}/billing`),
+  getInvoicePdfUrl: (sponsorId: string) => `/api/sponsors/${sponsorId}/invoice-pdf`,
 
   // Reports
   getReport: (sponsorIdOrParams: string | { sponsorId?: string; dateFrom?: string; dateTo?: string }, params?: { from?: string; to?: string }) => {

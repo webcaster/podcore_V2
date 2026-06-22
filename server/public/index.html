@@ -9,10 +9,33 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/assets/index-BOTZAF8S.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CFJL4La7.css">
+    <script type="module" crossorigin src="/assets/index-B1Um8SzA.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-aDEIPm2S.css">
   </head>
   <body>
+    <!-- Auto-reload: check server version and force hard reload if bundle is outdated -->
+    <script>
+      (function() {
+        var RELOAD_KEY = 'podcore_last_reload';
+        var CHECK_KEY = 'podcore_version_checked';
+        // Only check once per session to avoid reload loops
+        if (sessionStorage.getItem(CHECK_KEY)) return;
+        sessionStorage.setItem(CHECK_KEY, '1');
+        fetch('/api/health', { cache: 'no-store' })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var serverVer = data && data.version;
+            var lastReload = localStorage.getItem(RELOAD_KEY);
+            if (serverVer && lastReload !== serverVer) {
+              localStorage.setItem(RELOAD_KEY, serverVer);
+              sessionStorage.removeItem(CHECK_KEY);
+              // Hard reload to bypass disk cache
+              window.location.href = window.location.href.split('?')[0] + '?v=' + serverVer;
+            }
+          })
+          .catch(function() {});
+      })();
+    </script>
     <div id="root"></div>
   </body>
 </html>

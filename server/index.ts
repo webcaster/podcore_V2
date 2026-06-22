@@ -8,7 +8,8 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 
-import { getDb, DATA_DIR } from './database';
+import { getDb, DATA_DIR, ASSETS_DIR } from './database';
+import { verifyToken } from './middleware/auth';
 import { getLocalNetworkIPs } from './storage';
 import authRouter from './routers/auth';
 import episodesRouter from './routers/episodes';
@@ -64,6 +65,50 @@ app.use('/api/auth', authRouter);
 app.use('/api/episodes', episodesRouter);
 app.use('/api/editorial', editorialRouter);
 app.use('/api/sponsors', sponsorsRouter);
+
+// Stream endpoint BEFORE mediaRouter — accepts cookie OR query token for <audio> elements
+app.get('/api/media/stream/:filename', (req: any, res: any) => {
+  const token = (req.query.token as string) || req.cookies?.podcore_session || (req.headers.authorization?.replace('Bearer ', '') || '');
+  const user = token ? verifyToken(token) : null;
+  if (!user) return res.status(401).json({ success: false, error: 'Nicht authentifiziert' });
+
+  const filename = req.params.filename;
+  const db = getDb();
+  const asset = db.get('SELECT filepath, filename FROM assets WHERE filename = ?', [filename]) as any;
+
+  let filePath = asset?.filepath || path.join(ASSETS_DIR, filename);
+  if (!fs.existsSync(filePath)) filePath = path.join(ASSETS_DIR, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, error: 'Datei nicht gefunden' });
+
+  const stat = fs.statSync(filePath);
+  const fileSize = stat.size;
+  const range = req.headers.range;
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.aac': 'audio/aac',
+    '.ogg': 'audio/ogg', '.flac': 'audio/flac', '.m4a': 'audio/mp4',
+    '.mp4': 'video/mp4', '.webm': 'video/webm', '.m4b': 'audio/mp4',
+  };
+  const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const chunksize = end - start + 1;
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunksize,
+      'Content-Type': contentType,
+    });
+    fs.createReadStream(filePath, { start, end }).pipe(res);
+  } else {
+    res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': contentType, 'Accept-Ranges': 'bytes' });
+    fs.createReadStream(filePath).pipe(res);
+  }
+});
+
 app.use('/api/media', mediaRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/podigee', podigeeRouter);
@@ -81,7 +126,7 @@ app.get('/api/health', (req, res) => {
   const ips = getLocalNetworkIPs();
   res.json({
     status: 'ok',
-    version: '2.0.4',
+    version: '2.0.9',
     timestamp: new Date().toISOString(),
     dataDir: DATA_DIR,
     networkIPs: ips,
@@ -95,10 +140,31 @@ app.get('/api/health', (req, res) => {
 
 const publicDir = path.join(__dirname, 'public');
 if (fs.existsSync(publicDir)) {
-  app.use(express.static(publicDir));
+  // Hashed assets (JS/CSS with content hash in filename) → cache forever
+  app.use('/assets', express.static(path.join(publicDir, 'assets'), {
+    maxAge: '1y',
+    immutable: true,
+  }));
+
+  // index.html and other root files → never cache (always fetch fresh)
+  app.use(express.static(publicDir, {
+    maxAge: 0,
+    etag: false,
+    lastModified: false,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    },
+  }));
 
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads') && !req.path.startsWith('/branding')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(path.join(publicDir, 'index.html'));
     } else {
       res.status(404).json({ success: false, error: 'Route nicht gefunden' });
@@ -107,7 +173,7 @@ if (fs.existsSync(publicDir)) {
 } else {
   app.get('/', (req, res) => {
     res.json({
-      message: 'PodCore API Server v2.0.4',
+      message: 'PodCore API Server v2.0.8',
       note: 'Frontend build not found. Run: npm run build:client',
       api: '/api',
     });
@@ -147,7 +213,7 @@ app.listen(PORT, HOST, () => {
 
   console.log('');
   console.log('╔══════════════════════════════════════════════╗');
-  console.log('║           PodCore v2.0.6 Server              ║');
+  console.log('║           PodCore v2.0.8 Server              ║');
   console.log('╠══════════════════════════════════════════════╣');
   console.log(`║  Lokal:   http://localhost:${PORT}               ║`);
   if (ips.length > 0) {

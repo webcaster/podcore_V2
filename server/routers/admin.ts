@@ -73,8 +73,20 @@ router.put('/users/:id', requirePermission('canManageUsers') as any, (req: AuthR
   const db = getDb();
   const { displayName, email, role, permissions, isActive, avatarColor } = req.body;
 
+  // If role is being changed and no explicit permissions are provided,
+  // automatically apply the default permissions for the new role
+  let resolvedPermissions: string | null = null;
+  if (permissions) {
+    // Explicit permissions provided — use them directly
+    resolvedPermissions = JSON.stringify(permissions);
+  } else if (role) {
+    // Role changed without explicit permissions — apply role defaults
+    const defaultPerms = getDefaultPermissions(role);
+    resolvedPermissions = JSON.stringify(defaultPerms);
+  }
+
   db.run(`UPDATE users SET display_name = COALESCE(?, display_name), email = ?, role = COALESCE(?, role), permissions = COALESCE(?, permissions), is_active = COALESCE(?, is_active), avatar_color = COALESCE(?, avatar_color), updated_at = datetime('now') WHERE id = ?`,
-    [displayName ?? null, email ?? null, role ?? null, permissions ? JSON.stringify(permissions) : null, isActive !== undefined ? (isActive ? 1 : 0) : null, avatarColor ?? null, req.params.id]);
+    [displayName ?? null, email ?? null, role ?? null, resolvedPermissions, isActive !== undefined ? (isActive ? 1 : 0) : null, avatarColor ?? null, req.params.id]);
 
   const user = db.get('SELECT * FROM users WHERE id = ?', [req.params.id]);
   if (!user) return res.status(404).json({ success: false, error: 'Benutzer nicht gefunden' });

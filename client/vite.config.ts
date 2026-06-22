@@ -26,5 +26,17 @@ export default defineConfig({
   build: {
     outDir: '../server/public',
     emptyOutDir: true,
+    // Content-based hashes in filenames → browser always loads new files after update
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
+      },
+    },
+  },
+  // Inject app version from package.json into the bundle
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '2.0.8'),
   },
 })

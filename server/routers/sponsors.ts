@@ -51,6 +51,11 @@ function parsePlacement(row: any) {
     episodeTitle: row.episode_title,
     episodeNumber: row.episode_number,
     publishDate: row.publish_date,
+    invoiceNumber: row.invoice_number,
+    invoiceDate: row.invoice_date,
+    invoiceStatus: row.invoice_status || 'offen',
+    invoiceNotes: row.invoice_notes,
+    currency: row.currency || 'EUR',
   };
 }
 
@@ -305,10 +310,38 @@ router.post('/slots/:slotId/placements', requirePermission('canEditSponsors') as
 
 router.put('/placements/:placementId', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { position, confirmed, publishDate, listens, notes, episodeTitle, episodeNumber } = req.body;
+  const { position, confirmed, publishDate, listens, notes, episodeTitle, episodeNumber,
+    price, currency, invoiceNumber, invoiceDate, invoiceStatus, invoiceNotes } = req.body;
 
-  db.run(`UPDATE ad_placements SET position = COALESCE(?, position), confirmed = COALESCE(?, confirmed), publish_date = ?, listens = ?, notes = ?, episode_title = COALESCE(?, episode_title), episode_number = COALESCE(?, episode_number) WHERE id = ?`,
-    [position ?? null, confirmed !== undefined ? (confirmed ? 1 : 0) : null, publishDate ?? null, listens ?? null, notes ?? null, episodeTitle ?? null, episodeNumber ?? null, req.params.placementId]);
+  db.run(
+    `UPDATE ad_placements SET
+      position = COALESCE(?, position),
+      confirmed = COALESCE(?, confirmed),
+      publish_date = ?,
+      listens = ?,
+      notes = ?,
+      episode_title = COALESCE(?, episode_title),
+      episode_number = COALESCE(?, episode_number),
+      price = ?,
+      currency = COALESCE(?, currency),
+      invoice_number = ?,
+      invoice_date = ?,
+      invoice_status = COALESCE(?, invoice_status),
+      invoice_notes = ?
+    WHERE id = ?`,
+    [
+      position ?? null, confirmed !== undefined ? (confirmed ? 1 : 0) : null,
+      publishDate ?? null, listens ?? null, notes ?? null,
+      episodeTitle ?? null, episodeNumber ?? null,
+      price !== undefined ? price : null,
+      currency ?? null,
+      invoiceNumber !== undefined ? invoiceNumber : null,
+      invoiceDate !== undefined ? invoiceDate : null,
+      invoiceStatus ?? null,
+      invoiceNotes !== undefined ? invoiceNotes : null,
+      req.params.placementId
+    ]
+  );
 
   const placement = parsePlacement(db.get('SELECT * FROM ad_placements WHERE id = ?', [req.params.placementId]));
   return res.json({ success: true, data: placement });
@@ -318,6 +351,173 @@ router.delete('/placements/:placementId', requirePermission('canEditSponsors') a
   const db = getDb();
   db.run('DELETE FROM ad_placements WHERE id = ?', [req.params.placementId]);
   return res.json({ success: true, message: 'Platzierung gelöscht' });
+});
+
+// ============================================================
+// BILLING / ABRECHNUNG
+// ============================================================
+
+// GET /api/sponsors/:id/billing — billing summary for a sponsor
+router.get('/:id/billing', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [req.params.id]) as any;
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
+
+  const slots = db.all('SELECT * FROM ad_slots WHERE sponsor_id = ?', [req.params.id]) as any[];
+  const slotIds = slots.map((s: any) => s.id);
+
+  let placements: any[] = [];
+  if (slotIds.length > 0) {
+    const placeholders = slotIds.map(() => '?').join(',');
+    placements = db.all(`SELECT p.*, s.name as slot_name, s.category as slot_category FROM ad_placements p JOIN ad_slots s ON p.ad_slot_id = s.id WHERE p.ad_slot_id IN (${placeholders}) ORDER BY p.created_at DESC`, slotIds);
+  }
+
+  const totalRevenue = placements.reduce((sum: number, p: any) => sum + (p.price || 0), 0);
+  const invoicedRevenue = placements.filter((p: any) => p.invoice_status === 'bezahlt').reduce((sum: number, p: any) => sum + (p.price || 0), 0);
+  const openRevenue = placements.filter((p: any) => p.invoice_status === 'offen' || !p.invoice_status).reduce((sum: number, p: any) => sum + (p.price || 0), 0);
+
+  const billingData = {
+    sponsor: parseSponsor(sponsor),
+    placements: placements.map(parsePlacement),
+    summary: {
+      totalPlacements: placements.length,
+      confirmedPlacements: placements.filter((p: any) => p.confirmed === 1).length,
+      totalRevenue,
+      invoicedRevenue,
+      openRevenue,
+      currency: sponsor.currency || 'EUR',
+    },
+  };
+
+  return res.json({ success: true, data: billingData });
+});
+
+// GET /api/sponsors/:id/invoice-pdf — generate invoice PDF for a sponsor
+router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [req.params.id]) as any;
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
+
+  const slots = db.all('SELECT * FROM ad_slots WHERE sponsor_id = ?', [req.params.id]) as any[];
+  const slotIds = slots.map((s: any) => s.id);
+
+  let placements: any[] = [];
+  if (slotIds.length > 0) {
+    const placeholders = slotIds.map(() => '?').join(',');
+    placements = db.all(`SELECT p.*, s.name as slot_name, s.category as slot_category FROM ad_placements p JOIN ad_slots s ON p.ad_slot_id = s.id WHERE p.ad_slot_id IN (${placeholders}) ORDER BY p.created_at DESC`, slotIds);
+  }
+
+  // Load CI colors from settings
+  const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+  const settings = settingsRow ? JSON.parse(settingsRow.value) : {};
+  const pdfSettings = settings?.pdf || {};
+  const primaryColor = pdfSettings.primaryColor || '#7c3aed';
+  const accentColor = pdfSettings.accentColor || '#2563eb';
+  const headerBg = pdfSettings.headerBg || '#1a1a2e';
+
+  // Load branding
+  const brandingRow = db.get("SELECT value FROM settings WHERE key = 'branding'") as any;
+  const branding = brandingRow ? JSON.parse(brandingRow.value) : {};
+  const podcastName = branding?.podcastName || settings?.general?.podcastName || 'PodCore';
+
+  const PDFDocument = require('pdfkit');
+  const fs = require('fs');
+  const path = require('path');
+
+  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Abrechnung_${sponsor.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`);
+  doc.pipe(res);
+
+  // Helper: hex to rgb
+  function hexToRgb(hex: string): [number, number, number] {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return [r, g, b];
+  }
+
+  // Header
+  const [hr, hg, hb] = hexToRgb(headerBg);
+  doc.rect(0, 0, 595, 120).fill(`rgb(${hr},${hg},${hb})`);
+
+  // Logo
+  const DATA_DIR = process.env.PODCORE_DATA_DIR || require('path').join(require('os').homedir(), '.podcore');
+  const logoPath = path.join(DATA_DIR, 'branding', 'logo.png');
+  if (fs.existsSync(logoPath)) {
+    try { doc.image(logoPath, 50, 20, { height: 50 }); } catch (_) {}
+  }
+
+  const [pr, pg, pb] = hexToRgb(primaryColor);
+  doc.fillColor(`rgb(${pr},${pg},${pb})`).fontSize(20).font('Helvetica-Bold').text(podcastName, 50, 30, { align: 'right' });
+  doc.fillColor('#ffffff').fontSize(11).font('Helvetica').text('Sponsoring-Abrechnung', 50, 58, { align: 'right' });
+  doc.fillColor('#cccccc').fontSize(9).text(new Date().toLocaleDateString('de-DE'), 50, 76, { align: 'right' });
+
+  doc.fillColor('#000000').moveDown(4);
+
+  // Sponsor info
+  doc.fontSize(16).font('Helvetica-Bold').fillColor('#1a1a2e').text(sponsor.name, 50, 140);
+  if (sponsor.company) doc.fontSize(11).font('Helvetica').fillColor('#555').text(sponsor.company);
+  if (sponsor.contact_name) doc.text(`Ansprechpartner: ${sponsor.contact_name}`);
+  if (sponsor.contact_email) doc.text(`E-Mail: ${sponsor.contact_email}`);
+  doc.moveDown(1);
+
+  // Divider
+  const [ar, ag, ab] = hexToRgb(accentColor);
+  doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(`rgb(${ar},${ag},${ab})`).lineWidth(2).stroke();
+  doc.moveDown(0.5);
+
+  // Table header
+  doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff');
+  doc.rect(50, doc.y, 495, 20).fill(`rgb(${pr},${pg},${pb})`);
+  const tableY = doc.y - 20;
+  doc.fillColor('#ffffff').text('Episode', 55, tableY + 6, { width: 160 });
+  doc.text('Position', 220, tableY + 6, { width: 80 });
+  doc.text('Datum', 305, tableY + 6, { width: 80 });
+  doc.text('Status', 390, tableY + 6, { width: 70 });
+  doc.text('Preis', 465, tableY + 6, { width: 75, align: 'right' });
+  doc.moveDown(0.5);
+
+  // Table rows
+  let totalRevenue = 0;
+  let rowY = doc.y;
+  placements.forEach((p: any, i: number) => {
+    if (rowY > 720) {
+      doc.addPage();
+      rowY = 50;
+    }
+    const bg = i % 2 === 0 ? '#f8f9fa' : '#ffffff';
+    doc.rect(50, rowY, 495, 18).fill(bg);
+    doc.fillColor('#1a1a2e').fontSize(8).font('Helvetica');
+    const title = p.episode_title || p.episode_id || '-';
+    doc.text(title.length > 30 ? title.substring(0, 28) + '…' : title, 55, rowY + 5, { width: 160 });
+    doc.text(p.position || '-', 220, rowY + 5, { width: 80 });
+    doc.text(p.publish_date ? new Date(p.publish_date).toLocaleDateString('de-DE') : '-', 305, rowY + 5, { width: 80 });
+    const statusColor = p.invoice_status === 'bezahlt' ? '#16a34a' : p.invoice_status === 'versendet' ? '#d97706' : '#dc2626';
+    doc.fillColor(statusColor).text(p.invoice_status || 'offen', 390, rowY + 5, { width: 70 });
+    const price = p.price || 0;
+    totalRevenue += price;
+    doc.fillColor('#1a1a2e').text(`${price.toFixed(2)} €`, 465, rowY + 5, { width: 75, align: 'right' });
+    rowY += 18;
+  });
+
+  if (placements.length === 0) {
+    doc.fillColor('#888').fontSize(10).text('Keine Platzierungen vorhanden.', 50, rowY + 10);
+    rowY += 30;
+  }
+
+  // Total
+  doc.moveDown(1);
+  doc.moveTo(50, rowY + 10).lineTo(545, rowY + 10).strokeColor('#cccccc').lineWidth(1).stroke();
+  doc.fontSize(12).font('Helvetica-Bold').fillColor('#1a1a2e').text(`Gesamt: ${totalRevenue.toFixed(2)} €`, 50, rowY + 18, { align: 'right' });
+
+  // Footer
+  doc.fontSize(8).fillColor('#aaa').text(
+    `Erstellt mit PodCore — ${new Date().toLocaleDateString('de-DE')}`,
+    50, 780, { align: 'center' }
+  );
+
+  doc.end();
 });
 
 export default router;

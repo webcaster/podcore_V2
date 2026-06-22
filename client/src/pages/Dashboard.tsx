@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import {
   Mic2, Lightbulb, Library, Megaphone, TrendingUp, Clock, CheckCircle,
   BarChart2, Radio, Users, Calendar, Globe, Edit2, Save, X, RefreshCw,
-  Download, Eye, Headphones, MapPin, Smartphone
+  Download, Eye, Headphones, MapPin, Smartphone, ChevronLeft, ChevronRight,
+  BookOpen
 } from 'lucide-react';
 import { episodesApi, editorialApi, sponsorsApi, adminApi, podigeeApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
@@ -26,8 +27,19 @@ export default function Dashboard() {
   const [editingPodcast, setEditingPodcast] = useState(false);
   const [podcastForm, setPodcastForm] = useState<any>({});
   const [savingPodcast, setSavingPodcast] = useState(false);
+  const [editorialPlan, setEditorialPlan] = useState<any[]>([]);
+  const [planMonth, setPlanMonth] = useState(new Date().getMonth() + 1);
+  const [planYear, setPlanYear] = useState(new Date().getFullYear());
 
   const { showSuccess, showError } = useApp();
+
+  useEffect(() => {
+    if (can('canViewEditorialPlan')) {
+      editorialApi.listPlan({ month: planMonth, year: planYear })
+        .then((data: any[]) => setEditorialPlan(data))
+        .catch(() => {});
+    }
+  }, [planMonth, planYear, can]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -468,6 +480,91 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Editorial Plan Monthly Overview */}
+      {can('canViewEditorialPlan') && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="section-title mb-0 flex items-center gap-2">
+              <BookOpen size={16} className="text-accent-orange" /> Redaktionsplan
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const d = new Date(planYear, planMonth - 2, 1);
+                  setPlanMonth(d.getMonth() + 1);
+                  setPlanYear(d.getFullYear());
+                }}
+                className="p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-raised rounded-lg transition-colors"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-text-secondary text-sm font-medium min-w-[130px] text-center">
+                {new Date(planYear, planMonth - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}
+              </span>
+              <button
+                onClick={() => {
+                  const d = new Date(planYear, planMonth, 1);
+                  setPlanMonth(d.getMonth() + 1);
+                  setPlanYear(d.getFullYear());
+                }}
+                className="p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-raised rounded-lg transition-colors"
+              >
+                <ChevronRight size={16} />
+              </button>
+              <Link to="/editorial" className="text-accent-purple text-sm hover:underline ml-2">Alle →</Link>
+            </div>
+          </div>
+
+          {editorialPlan.length === 0 ? (
+            <div className="text-center py-8">
+              <Calendar size={32} className="mx-auto text-text-muted mb-2" />
+              <p className="text-text-muted text-sm">Keine Einträge für diesen Monat</p>
+              {can('canEditEditorialPlan') && (
+                <Link to="/editorial" className="btn-ghost text-sm mt-2 inline-block">Redaktionsplan öffnen</Link>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {[...editorialPlan]
+                .sort((a: any, b: any) => (a.plannedDate || '').localeCompare(b.plannedDate || ''))
+                .map((entry: any) => (
+                  <div key={entry.id} className="flex items-center gap-3 p-3 rounded-lg bg-obsidian-800 hover:bg-surface-raised transition-colors">
+                    <div className="w-12 text-center flex-shrink-0">
+                      {entry.plannedDate ? (
+                        <>
+                          <p className="text-text-muted text-xs">{new Date(entry.plannedDate).toLocaleDateString('de-DE', { weekday: 'short' })}</p>
+                          <p className="text-text-primary font-bold text-sm">{new Date(entry.plannedDate).getDate()}.</p>
+                        </>
+                      ) : (
+                        <p className="text-text-muted text-xs">—</p>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-text-primary text-sm font-medium truncate">{entry.title}</p>
+                      {entry.assignedTo && (
+                        <p className="text-text-muted text-xs mt-0.5">{entry.assignedTo}</p>
+                      )}
+                    </div>
+                    <span className={`badge text-xs flex-shrink-0 ${
+                      entry.status === 'veroeffentlicht' ? 'bg-accent-green/20 text-accent-green' :
+                      entry.status === 'produktion' ? 'bg-accent-blue/20 text-accent-blue' :
+                      entry.status === 'aufnahme' ? 'bg-accent-orange/20 text-accent-orange' :
+                      entry.status === 'geplant' ? 'bg-accent-purple/20 text-accent-purple' :
+                      'bg-surface-overlay text-text-muted'
+                    }`}>
+                      {entry.status === 'entwurf' ? 'Entwurf' :
+                       entry.status === 'geplant' ? 'Geplant' :
+                       entry.status === 'aufnahme' ? 'Aufnahme' :
+                       entry.status === 'produktion' ? 'Produktion' :
+                       entry.status === 'veroeffentlicht' ? 'Veröffentlicht' : entry.status}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="card">

@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   CSS Custom Properties — Default Theme
+   These are overridden per-user by AppContext.applyUserTheme()
+   ============================================================ */
+:root {
+  /* Accent / Primary color */
+  --color-accent-primary: #7c3aed;
+  --color-accent-primary-light: #8b5cf6;
+  --color-accent-primary-dark: #6d28d9;
+  --color-text-accent: #a78bfa;
+
+  /* Background layers */
+  --color-obsidian-950: #0a0a0f;
+  --color-obsidian-900: #0f0f1a;
+  --color-obsidian-800: #141420;
+  --color-obsidian-700: #1a1a2e;
+  --color-obsidian-600: #1e1e35;
+  --color-obsidian-500: #252540;
+
+  /* Surface colors */
+  --color-surface: #1a1a2e;
+  --color-surface-raised: #1e1e35;
+  --color-surface-overlay: #252540;
+  --color-surface-border: #2d2d4e;
+  --color-surface-border-light: #3d3d6e;
+
+  /* Sidebar */
+  --color-sidebar-bg: #141420;
+  --color-sidebar-border: #2d2d4e;
+
+  /* Font scale (1 = default, 0.9 = smaller, 1.1 = larger) */
+  --font-scale: 1;
+}
+
 @layer base {
   * {
     box-sizing: border-box;
