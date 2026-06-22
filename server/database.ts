@@ -1,0 +1,344 @@
+import path from 'path';
+import fs from 'fs';
+import os from 'os';
+
+// ============================================================
+// Data directories
+// ============================================================
+const DATA_DIR = process.env.PODCORE_DATA_DIR || path.join(os.homedir(), '.podcore');
+const DB_PATH = path.join(DATA_DIR, 'podcore.db');
+
+for (const dir of [
+  DATA_DIR,
+  path.join(DATA_DIR, 'assets'),
+  path.join(DATA_DIR, 'backups'),
+  path.join(DATA_DIR, 'logs'),
+  path.join(DATA_DIR, 'branding'),
+  path.join(DATA_DIR, 'tmp'),
+]) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+const ASSETS_DIR = path.join(DATA_DIR, 'assets');
+const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
+const LOGS_DIR = path.join(DATA_DIR, 'logs');
+
+export { DATA_DIR, ASSETS_DIR, BACKUPS_DIR, LOGS_DIR };
+
+// ============================================================
+// node-sqlite3-wasm wrapper (synchronous, no native compilation)
+// ============================================================
+
+let _db: any = null;
+
+export function getDb(): any {
+  if (!_db) {
+    const { Database } = require('node-sqlite3-wasm');
+    _db = new Database(DB_PATH);
+    initializeSchema(_db);
+  }
+  return _db;
+}
+
+// ============================================================
+// Schema initialization
+// ============================================================
+
+function initializeSchema(db: any): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      display_name TEXT NOT NULL,
+      email TEXT,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'redakteur',
+      permissions TEXT NOT NULL DEFAULT '{}',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      avatar_color TEXT DEFAULT '#7c3aed',
+      last_login TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS episodes (
+      id TEXT PRIMARY KEY,
+      number INTEGER,
+      title TEXT NOT NULL,
+      subtitle TEXT,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'entwurf',
+      recording_date TEXT,
+      publish_date TEXT,
+      duration INTEGER,
+      hosts TEXT NOT NULL DEFAULT '[]',
+      guests TEXT NOT NULL DEFAULT '[]',
+      tags TEXT NOT NULL DEFAULT '[]',
+      blocks TEXT NOT NULL DEFAULT '[]',
+      sponsors TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_by TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ideas (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'neu',
+      priority TEXT NOT NULL DEFAULT 'mittel',
+      tags TEXT NOT NULL DEFAULT '[]',
+      assigned_to TEXT,
+      episode_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_by TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS editorial_plan (
+      id TEXT PRIMARY KEY,
+      episode_id TEXT,
+      idea_id TEXT,
+      title TEXT NOT NULL,
+      planned_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'entwurf',
+      assigned_to TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS interview_partners (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      company TEXT,
+      role TEXT,
+      email TEXT,
+      phone TEXT,
+      bio TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
+      episodes TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS interview_questions (
+      id TEXT PRIMARY KEY,
+      partner_id TEXT,
+      episode_id TEXT,
+      question TEXT NOT NULL,
+      category TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      answered INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS editorial_notes (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      category TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
+      is_pinned INTEGER NOT NULL DEFAULT 0,
+      episode_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_by TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS assets (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'other',
+      filename TEXT NOT NULL,
+      filepath TEXT NOT NULL,
+      filesize INTEGER,
+      duration INTEGER,
+      mime_type TEXT,
+      description TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
+      comments TEXT NOT NULL DEFAULT '[]',
+      used_in_episodes TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      uploaded_by TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sponsors (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      company TEXT NOT NULL,
+      contact_name TEXT,
+      contact_email TEXT,
+      contact_phone TEXT,
+      website TEXT,
+      logo TEXT,
+      status TEXT NOT NULL DEFAULT 'interessent',
+      description TEXT,
+      notes TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
+      total_budget REAL,
+      currency TEXT NOT NULL DEFAULT 'EUR',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_by TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ad_slots (
+      id TEXT PRIMARY KEY,
+      sponsor_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'mid-roll',
+      production_type TEXT NOT NULL DEFAULT 'eigenproduktion',
+      status TEXT NOT NULL DEFAULT 'angefragt',
+      duration INTEGER,
+      script TEXT,
+      asset_id TEXT,
+      delivered_asset_path TEXT,
+      price REAL,
+      currency TEXT NOT NULL DEFAULT 'EUR',
+      start_date TEXT,
+      end_date TEXT,
+      target_episodes INTEGER,
+      booked_episodes TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS ad_placements (
+      id TEXT PRIMARY KEY,
+      ad_slot_id TEXT NOT NULL,
+      episode_id TEXT NOT NULL,
+      episode_title TEXT,
+      episode_number INTEGER,
+      position TEXT NOT NULL DEFAULT 'mid-roll',
+      confirmed INTEGER NOT NULL DEFAULT 0,
+      publish_date TEXT,
+      listens INTEGER,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS error_logs (
+      id TEXT PRIMARY KEY,
+      level TEXT NOT NULL DEFAULT 'error',
+      category TEXT NOT NULL DEFAULT 'system',
+      message TEXT NOT NULL,
+      details TEXT,
+      stack TEXT,
+      user_id TEXT,
+      user_agent TEXT,
+      url TEXT,
+      timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Default admin user
+  const userCount = db.get('SELECT COUNT(*) as count FROM users') as any;
+  if (!userCount || userCount.count === 0) {
+    const bcrypt = require('bcryptjs');
+    const { v4: uuidv4 } = require('uuid');
+    const adminId = uuidv4();
+    const passwordHash = bcrypt.hashSync('admin123', 10);
+    const defaultPermissions = JSON.stringify(getDefaultPermissions('admin'));
+
+    db.run(
+      'INSERT INTO users (id, username, display_name, email, password_hash, role, permissions, is_active, avatar_color) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
+      [adminId, 'admin', 'Administrator', 'admin@podcore.local', passwordHash, 'admin', defaultPermissions, '#7c3aed']
+    );
+
+    console.log('[DB] Default admin user created: admin / admin123');
+  }
+
+  // Default settings
+  const settingsCount = db.get('SELECT COUNT(*) as count FROM settings') as any;
+  if (!settingsCount || settingsCount.count === 0) {
+    const defaultSettings = {
+      general: {
+        podcastName: 'Mein Podcast',
+        language: 'de',
+        timezone: 'Europe/Berlin',
+        dateFormat: 'DD.MM.YYYY',
+      },
+      storage: { type: 'local', localPath: DATA_DIR },
+      backup: { enabled: true, frequency: 'daily', keepDays: 30 },
+      appearance: { theme: 'dark', accentColor: '#7c3aed', compactMode: false },
+      notifications: { enabled: false, emailEnabled: false },
+      podigee: { apiToken: '', podcastSubdomain: '', podcastId: '' },
+      branding: { podcastName: '', podcastDescription: '' },
+    };
+    db.run('INSERT INTO settings (key, value) VALUES (?, ?)', ['app', JSON.stringify(defaultSettings)]);
+  }
+
+  console.log('[DB] Database initialized at:', DB_PATH);
+}
+
+export function getDefaultPermissions(role: string): Record<string, boolean> {
+  const base = {
+    canViewIdeas: false, canCreateIdeas: false, canEditIdeas: false, canDeleteIdeas: false,
+    canViewEditorialPlan: false, canEditEditorialPlan: false,
+    canViewInterviews: false, canEditInterviews: false,
+    canViewNotes: false, canEditNotes: false,
+    canViewEpisodes: false, canCreateEpisodes: false, canEditEpisodes: false, canDeleteEpisodes: false,
+    canEditScript: false,
+    canViewMedia: false, canUploadMedia: false, canDeleteMedia: false, canCommentMedia: false,
+    canViewSponsors: false, canCreateSponsors: false, canEditSponsors: false, canDeleteSponsors: false,
+    canViewSponsorReports: false,
+    canManageUsers: false, canViewErrorLogs: false, canExport: false, canManageSettings: false,
+  };
+
+  switch (role) {
+    case 'admin':
+      return Object.fromEntries(Object.keys(base).map(k => [k, true]));
+    case 'redakteur':
+      return {
+        ...base,
+        canViewIdeas: true, canCreateIdeas: true, canEditIdeas: true,
+        canViewEditorialPlan: true, canEditEditorialPlan: true,
+        canViewInterviews: true, canEditInterviews: true,
+        canViewNotes: true, canEditNotes: true,
+        canViewEpisodes: true, canCreateEpisodes: true, canEditEpisodes: true,
+        canEditScript: true,
+        canViewMedia: true, canUploadMedia: true, canCommentMedia: true,
+        canViewSponsors: true, canViewSponsorReports: true,
+        canExport: true,
+      };
+    case 'moderator':
+      return {
+        ...base,
+        canViewIdeas: true, canViewEditorialPlan: true, canViewInterviews: true, canViewNotes: true,
+        canViewEpisodes: true, canEditEpisodes: true, canEditScript: true,
+        canViewMedia: true, canCommentMedia: true,
+        canViewSponsors: true, canViewSponsorReports: true,
+        canExport: true,
+      };
+    case 'produktion':
+      return {
+        ...base,
+        canViewEpisodes: true,
+        canViewMedia: true, canCommentMedia: true,
+        canViewSponsors: true,
+        canExport: true,
+      };
+    default:
+      return base;
+  }
+}

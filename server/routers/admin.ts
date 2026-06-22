@@ -1,0 +1,219 @@
+import { Router, Response } from 'express';
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
+import { getDb, getDefaultPermissions } from '../database';
+import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
+
+const router = Router();
+router.use(requireAuth as any);
+
+function parseUser(row: any) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    email: row.email,
+    role: row.role,
+    permissions: JSON.parse(row.permissions || '{}'),
+    isActive: row.is_active === 1,
+    avatarColor: row.avatar_color,
+    lastLogin: row.last_login,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+// ============================================================
+// USERS
+// ============================================================
+
+router.get('/users', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const users = db.all('SELECT * FROM users ORDER BY created_at ASC', []).map(parseUser);
+  return res.json({ success: true, data: users });
+});
+
+router.get('/users/:id', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const user = db.get('SELECT * FROM users WHERE id = ?', [req.params.id]);
+  if (!user) return res.status(404).json({ success: false, error: 'Benutzer nicht gefunden' });
+  return res.json({ success: true, data: parseUser(user) });
+});
+
+router.post('/users', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { username, displayName, email, password, role = 'redakteur', permissions, avatarColor } = req.body;
+
+  if (!username || !displayName || !password) {
+    return res.status(400).json({ success: false, error: 'Benutzername, Anzeigename und Passwort erforderlich' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ success: false, error: 'Passwort muss mindestens 6 Zeichen haben' });
+  }
+
+  const existing = db.get('SELECT id FROM users WHERE username = ?', [username]);
+  if (existing) return res.status(409).json({ success: false, error: 'Benutzername bereits vergeben' });
+
+  const id = uuidv4();
+  const passwordHash = bcrypt.hashSync(password, 10);
+  const userPermissions = permissions || getDefaultPermissions(role);
+  const colors = ['#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#0891b2'];
+  const color = avatarColor || colors[Math.floor(Math.random() * colors.length)];
+
+  db.run('INSERT INTO users (id, username, display_name, email, password_hash, role, permissions, is_active, avatar_color) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
+    [id, username, displayName, email || null, passwordHash, role, JSON.stringify(userPermissions), color]);
+
+  const user = db.get('SELECT * FROM users WHERE id = ?', [id]);
+  return res.status(201).json({ success: true, data: parseUser(user) });
+});
+
+router.put('/users/:id', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { displayName, email, role, permissions, isActive, avatarColor } = req.body;
+
+  db.run(`UPDATE users SET display_name = COALESCE(?, display_name), email = ?, role = COALESCE(?, role), permissions = COALESCE(?, permissions), is_active = COALESCE(?, is_active), avatar_color = COALESCE(?, avatar_color), updated_at = datetime('now') WHERE id = ?`,
+    [displayName ?? null, email ?? null, role ?? null, permissions ? JSON.stringify(permissions) : null, isActive !== undefined ? (isActive ? 1 : 0) : null, avatarColor ?? null, req.params.id]);
+
+  const user = db.get('SELECT * FROM users WHERE id = ?', [req.params.id]);
+  if (!user) return res.status(404).json({ success: false, error: 'Benutzer nicht gefunden' });
+  return res.json({ success: true, data: parseUser(user) });
+});
+
+router.post('/users/:id/reset-password', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ success: false, error: 'Passwort muss mindestens 6 Zeichen haben' });
+  }
+
+  const passwordHash = bcrypt.hashSync(newPassword, 10);
+  db.run(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`, [passwordHash, req.params.id]);
+  db.run('DELETE FROM sessions WHERE user_id = ?', [req.params.id]);
+
+  return res.json({ success: true, message: 'Passwort zurückgesetzt' });
+});
+
+router.delete('/users/:id', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  if (req.params.id === req.user!.id) {
+    return res.status(400).json({ success: false, error: 'Sie können sich nicht selbst löschen' });
+  }
+
+  db.run('DELETE FROM sessions WHERE user_id = ?', [req.params.id]);
+  db.run('DELETE FROM users WHERE id = ?', [req.params.id]);
+  return res.json({ success: true, message: 'Benutzer gelöscht' });
+});
+
+router.get('/roles/:role/permissions', requirePermission('canManageUsers') as any, (req: AuthRequest, res: Response) => {
+  const permissions = getDefaultPermissions(req.params.role);
+  return res.json({ success: true, data: permissions });
+});
+
+// ============================================================
+// ERROR LOGS
+// ============================================================
+
+router.get('/logs', requirePermission('canViewErrorLogs') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { level, category, from, to, page = '1', pageSize = '50' } = req.query;
+
+  let query = 'SELECT * FROM error_logs WHERE 1=1';
+  let countQuery = 'SELECT COUNT(*) as count FROM error_logs WHERE 1=1';
+  const params: any[] = [];
+  const countParams: any[] = [];
+
+  if (level) { query += ' AND level = ?'; countQuery += ' AND level = ?'; params.push(level); countParams.push(level); }
+  if (category) { query += ' AND category = ?'; countQuery += ' AND category = ?'; params.push(category); countParams.push(category); }
+  if (from) { query += ' AND timestamp >= ?'; countQuery += ' AND timestamp >= ?'; params.push(from); countParams.push(from); }
+  if (to) { query += ' AND timestamp <= ?'; countQuery += ' AND timestamp <= ?'; params.push(to); countParams.push(to); }
+
+  const countRow = db.get(countQuery, countParams) as any;
+  const total = countRow?.count || 0;
+
+  const pageNum = parseInt(page as string);
+  const pageSizeNum = parseInt(pageSize as string);
+  query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
+  params.push(pageSizeNum, (pageNum - 1) * pageSizeNum);
+
+  const logs = db.all(query, params).map((r: any) => ({
+    ...r, userId: r.user_id, userAgent: r.user_agent,
+  }));
+
+  return res.json({ success: true, data: { items: logs, total, page: pageNum, pageSize: pageSizeNum, totalPages: Math.ceil(total / pageSizeNum) } });
+});
+
+router.post('/logs', (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { level = 'error', category = 'frontend', message, details, stack, url } = req.body;
+
+  if (!message) return res.status(400).json({ success: false, error: 'Nachricht erforderlich' });
+
+  const id = uuidv4();
+  db.run('INSERT INTO error_logs (id, level, category, message, details, stack, user_id, user_agent, url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, level, category, message, details || null, stack || null, req.user?.id || null, req.headers['user-agent'] || null, url || null]);
+
+  return res.status(201).json({ success: true, data: { id } });
+});
+
+router.delete('/logs', requirePermission('canViewErrorLogs') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { before } = req.query;
+
+  if (before) {
+    db.run('DELETE FROM error_logs WHERE timestamp < ?', [before]);
+  } else {
+    db.run('DELETE FROM error_logs', []);
+  }
+
+  return res.json({ success: true, message: 'Logs gelöscht' });
+});
+
+// ============================================================
+// SETTINGS
+// ============================================================
+
+router.get('/settings', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const row = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
+  const settings = row ? JSON.parse(row.value) : {};
+  return res.json({ success: true, data: settings });
+});
+
+router.put('/settings', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const current = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
+  const currentSettings = current ? JSON.parse(current.value) : {};
+  const newSettings = { ...currentSettings, ...req.body };
+
+  // node-sqlite3-wasm supports ON CONFLICT
+  db.run(`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    ['app', JSON.stringify(newSettings)]);
+
+  return res.json({ success: true, data: newSettings });
+});
+
+// ============================================================
+// SYSTEM INFO
+// ============================================================
+
+router.get('/system', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const stats = {
+    episodes: (db.get('SELECT COUNT(*) as count FROM episodes', []) as any)?.count || 0,
+    ideas: (db.get('SELECT COUNT(*) as count FROM ideas', []) as any)?.count || 0,
+    assets: (db.get('SELECT COUNT(*) as count FROM assets', []) as any)?.count || 0,
+    sponsors: (db.get('SELECT COUNT(*) as count FROM sponsors', []) as any)?.count || 0,
+    users: (db.get('SELECT COUNT(*) as count FROM users', []) as any)?.count || 0,
+    errorLogs: (db.get('SELECT COUNT(*) as count FROM error_logs', []) as any)?.count || 0,
+    version: '2.0.0',
+    nodeVersion: process.version,
+    uptime: process.uptime(),
+    platform: process.platform,
+  };
+  return res.json({ success: true, data: stats });
+});
+
+export default router;

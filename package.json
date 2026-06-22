@@ -1,0 +1,19 @@
+{
+  "name": "podcore",
+  "version": "2.0.0",
+  "description": "PodCore - Professionelles Podcast Management System",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npx ts-node-dev --respawn --transpile-only index.ts",
+    "dev:client": "cd client && npx vite",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "cd client && npx vite build",
+    "build:server": "cd server && npx tsc",
+    "start": "node server/dist/index.js",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
