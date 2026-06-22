@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dashboard: 'localhost:3001/',
     episodes: 'localhost:3001/episodes',
     editorial: 'localhost:3001/editorial',
+    ideas: 'localhost:3001/editorial/ideas/...',
     sponsors: 'localhost:3001/sponsors',
     admin: 'localhost:3001/admin',
     settings: 'localhost:3001/settings'

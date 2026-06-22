@@ -52,7 +52,7 @@
     <div class="container">
       <div class="hero-badge">
         <span class="badge-dot"></span>
-        v2.0.9 — Aktuelle Version
+        v2.1.2 — Aktuelle Version
       </div>
       <h1 class="hero-title">
         Professionelles<br />
@@ -95,7 +95,7 @@
     <div class="container">
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-number">10+</div>
+          <div class="stat-number">12+</div>
           <div class="stat-label">Haupt-Module</div>
         </div>
         <div class="stat-card">
@@ -103,8 +103,8 @@
           <div class="stat-label">PDF Export-Typen</div>
         </div>
         <div class="stat-card">
-          <div class="stat-number">5</div>
-          <div class="stat-label">Episoden-Status</div>
+          <div class="stat-number">6</div>
+          <div class="stat-label">Ideen-Tabs</div>
         </div>
         <div class="stat-card">
           <div class="stat-number">4</div>
@@ -162,10 +162,10 @@
           <p>Login & Authentifizierung mit rollen-basierter Zugriffskontrolle. Admin, Moderator, Redakteur und Viewer. Berechtigungen granular konfigurierbar.</p>
         </div>
 
-        <div class="feature-card">
-          <div class="feature-icon">📋</div>
-          <h3>Interview-Fragen & Freigabe</h3>
-          <p>Interview-Fragen anlegen, bearbeiten und durch Moderatoren freigeben. Personalisierbarer Begleittext an Gäste. Freigegebene Fragen per E-Mail versenden.</p>
+        <div class="feature-card feature-card-highlight">
+          <div class="feature-icon">💡</div>
+          <h3>Ideen-Arbeitsmappe <span class="feature-new-badge">NEU</span></h3>
+          <p>Jede Idee ist eine vollständige Episoden-Vorbereitungsmappe mit 6 Tabs: Übersicht, Recherche-Quellen, Datei-Uploads, Interview-Partner & Fragen, Notizen und Checkliste. Am Ende direkt Episode erstellen.</p>
         </div>
 
         <div class="feature-card">
@@ -177,7 +177,7 @@
         <div class="feature-card">
           <div class="feature-icon">🎨</div>
           <h3>Branding & Theming</h3>
-          <p>Podcast-Cover in der Seitenleiste, Dark/Light Mode, benutzerdefinierte CI-Farben für PDFs. Logo-Upload und vollständiges Branding-Management.</p>
+          <p>Podcast-Cover in der Seitenleiste, Dark/Light Mode, benutzerdefinierte CI-Farben für PDFs. Logo-Upload, Cover-Upload und vollständiges Branding-Management.</p>
         </div>
 
         <div class="feature-card">
@@ -213,6 +213,7 @@
         <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
         <button class="tab-btn" data-tab="episodes">Episoden</button>
         <button class="tab-btn" data-tab="editorial">Redaktions-Hub</button>
+        <button class="tab-btn" data-tab="ideas">Ideen-Arbeitsmappe</button>
         <button class="tab-btn" data-tab="sponsors">Sponsoring</button>
         <button class="tab-btn" data-tab="admin">Administration</button>
         <button class="tab-btn" data-tab="settings">Einstellungen</button>
@@ -233,7 +234,7 @@
             <div class="mock-screen active" id="tab-dashboard">
               <div class="mock-sidebar">
                 <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.0.9</div>
+                <div class="mock-version">v2.1.2</div>
                 <div class="mock-nav-item active">📊 Dashboard</div>
                 <div class="mock-nav-item">🎙 Episoden</div>
                 <div class="mock-nav-item">📋 Redaktions-Hub</div>
@@ -273,7 +274,7 @@
             <div class="mock-screen" id="tab-episodes">
               <div class="mock-sidebar">
                 <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.0.9</div>
+                <div class="mock-version">v2.1.2</div>
                 <div class="mock-nav-item">📊 Dashboard</div>
                 <div class="mock-nav-item active">🎙 Episoden</div>
                 <div class="mock-nav-item">📋 Redaktions-Hub</div>
@@ -289,7 +290,7 @@
                     <button class="mock-btn primary">+ Neue Episode</button>
                   </div>
                 </div>
-                <div class="mock-episode-list">
+                <div class="mock-ep-table">
                   <div class="mock-ep-row"><span class="mock-ep-num">#12</span><div class="mock-ep-info"><strong>Die Zukunft des Podcasting</strong><small>22. Jun 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
                   <div class="mock-ep-row"><span class="mock-ep-num">#11</span><div class="mock-ep-info"><strong>Interview: Max Mustermann</strong><small>15. Jun 2026</small></div><span class="mock-ep-status schnitt">Im Schnitt</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
                   <div class="mock-ep-row"><span class="mock-ep-num">#10</span><div class="mock-ep-info"><strong>Technik-Special 2026</strong><small>08. Jun 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
@@ -303,7 +304,7 @@
             <div class="mock-screen" id="tab-editorial">
               <div class="mock-sidebar">
                 <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.0.9</div>
+                <div class="mock-version">v2.1.2</div>
                 <div class="mock-nav-item">📊 Dashboard</div>
                 <div class="mock-nav-item">🎙 Episoden</div>
                 <div class="mock-nav-item active">📋 Redaktions-Hub</div>
@@ -338,11 +339,58 @@
               </div>
             </div>
 
+            <!-- Ideas Arbeitsmappe Mock (NEU) -->
+            <div class="mock-screen" id="tab-ideas">
+              <div class="mock-sidebar">
+                <div class="mock-logo">🎙 PodCore</div>
+                <div class="mock-version">v2.1.2</div>
+                <div class="mock-nav-item">📊 Dashboard</div>
+                <div class="mock-nav-item">🎙 Episoden</div>
+                <div class="mock-nav-item active">📋 Redaktions-Hub</div>
+                <div class="mock-nav-item">🎵 Media Library</div>
+                <div class="mock-nav-item">💰 Sponsoring</div>
+                <div class="mock-nav-item">⚙️ Einstellungen</div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-header">
+                  <h2>💡 KI im Podcast – Ideen-Arbeitsmappe</h2>
+                  <span class="mock-badge-new">NEU in v2.1.1</span>
+                </div>
+                <div class="mock-tabs-row">
+                  <span class="mock-tab active">📋 Übersicht</span>
+                  <span class="mock-tab">🔍 Recherche</span>
+                  <span class="mock-tab">📁 Uploads</span>
+                  <span class="mock-tab">🎤 Interview</span>
+                  <span class="mock-tab">📝 Notizen</span>
+                  <span class="mock-tab">✅ Checkliste</span>
+                </div>
+                <div class="mock-idea-content">
+                  <div class="mock-idea-meta">
+                    <div class="mock-meta-row"><span class="mock-meta-label">Status</span><span class="mock-ep-status idee">Idee</span></div>
+                    <div class="mock-meta-row"><span class="mock-meta-label">Priorität</span><span class="mock-ep-status schnitt">Hoch</span></div>
+                    <div class="mock-meta-row"><span class="mock-meta-label">Zieldatum</span><span>01. Juli 2026</span></div>
+                  </div>
+                  <div class="mock-idea-progress">
+                    <div class="mock-progress-label">Fortschritt</div>
+                    <div class="mock-progress-bar"><div class="mock-progress-fill" style="width:60%"></div></div>
+                    <div class="mock-progress-counters">
+                      <span>🔍 3 Quellen</span>
+                      <span>🎤 2 Fragen</span>
+                      <span>✅ 4/6 Aufgaben</span>
+                    </div>
+                  </div>
+                  <div class="mock-actions-row" style="margin-top:12px">
+                    <button class="mock-btn primary">🎙 Episode erstellen</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Sponsors Mock -->
             <div class="mock-screen" id="tab-sponsors">
               <div class="mock-sidebar">
                 <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.0.9</div>
+                <div class="mock-version">v2.1.2</div>
                 <div class="mock-nav-item">📊 Dashboard</div>
                 <div class="mock-nav-item">🎙 Episoden</div>
                 <div class="mock-nav-item">📋 Redaktions-Hub</div>
@@ -381,7 +429,7 @@
             <div class="mock-screen" id="tab-admin">
               <div class="mock-sidebar">
                 <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.0.9</div>
+                <div class="mock-version">v2.1.2</div>
                 <div class="mock-nav-item">📊 Dashboard</div>
                 <div class="mock-nav-item">🎙 Episoden</div>
                 <div class="mock-nav-item">📋 Redaktions-Hub</div>
@@ -404,7 +452,7 @@
             <div class="mock-screen" id="tab-settings">
               <div class="mock-sidebar">
                 <div class="mock-logo">🎙 PodCore</div>
-                <div class="mock-version">v2.0.9</div>
+                <div class="mock-version">v2.1.2</div>
                 <div class="mock-nav-item">📊 Dashboard</div>
                 <div class="mock-nav-item">🎙 Episoden</div>
                 <div class="mock-nav-item">📋 Redaktions-Hub</div>
@@ -472,7 +520,7 @@
           <p>ZIP-Archiv von GitHub herunterladen und entpacken. Node.js v18+ muss installiert sein.</p>
           <div class="code-block">
             <span class="code-comment"># ZIP entpacken</span><br />
-            unzip PodCore_v2.0.9.zip
+            unzip PodCore_v2.1.2.zip
           </div>
         </div>
         <div class="step-card">
@@ -501,7 +549,7 @@
       <div class="download-cta">
         <a href="https://github.com/webcaster/podcore_V2/releases" target="_blank" rel="noopener" class="btn btn-primary btn-large">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          PodCore v2.0.9 herunterladen
+          PodCore v2.1.2 herunterladen
         </a>
         <a href="https://github.com/webcaster/podcore_V2" target="_blank" rel="noopener" class="btn btn-ghost btn-large">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -567,7 +615,7 @@
           <h4>Funktionen</h4>
           <a href="#features">Episoden-Management</a>
           <a href="#features">Sponsoring & Abrechnung</a>
-          <a href="#features">Interview-Fragen</a>
+          <a href="#features">Ideen-Arbeitsmappe</a>
           <a href="#features">PDF Export</a>
           <a href="#features">Mehrbenutzer-System</a>
         </div>
@@ -585,7 +633,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <p><strong>PodCore v2.0.9</strong> · Podcast Management System · MIT Lizenz</p>
+        <p><strong>PodCore v2.1.2</strong> · Podcast Management System · MIT Lizenz</p>
         <p>© 2026 <strong>Maximilian Hartwich</strong> – Medien der Sinne</p>
       </div>
     </div>
