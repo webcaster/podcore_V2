@@ -50,6 +50,17 @@ async function requestRaw(method: string, path: string): Promise<any> {
   return res.json();
 }
 
+// Helper: build query string, filtering out undefined/null/empty values
+function buildQs(params?: Record<string, any>): string {
+  if (!params) return '';
+  const filtered: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') filtered[k] = String(v);
+  }
+  const qs = new URLSearchParams(filtered).toString();
+  return qs ? `?${qs}` : '';
+}
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
@@ -99,12 +110,7 @@ export const episodesApi = {
   resetApproval: (id: string) => api.post<any>(`/episodes/${id}/reset-approval`, {}),
   getPendingApprovals: () => api.get<any[]>('/episodes/pending-approval'),
   list: (params?: { status?: string; search?: string; page?: number; pageSize?: number }) => {
-    const qs = new URLSearchParams();
-    if (params?.status) qs.set('status', params.status);
-    if (params?.search) qs.set('search', params.search);
-    if (params?.page) qs.set('page', String(params.page));
-    if (params?.pageSize) qs.set('pageSize', String(params.pageSize));
-    return api.get<any>(`/episodes?${qs}`);
+    return api.get<any>(`/episodes${buildQs(params as any)}`);
   },
   get: (id: string) => api.get<any>(`/episodes/${id}`),
   create: (data: any) => api.post<any>('/episodes', data),
@@ -119,8 +125,7 @@ export const episodesApi = {
 export const editorialApi = {
   // Ideas
   listIdeas: (params?: any) => {
-    const qs = new URLSearchParams(params || {});
-    return api.get<any[]>(`/editorial/ideas?${qs}`);
+    return api.get<any[]>(`/editorial/ideas${buildQs(params)}`);
   },
   getIdea: (id: string) => api.get<any>(`/editorial/ideas/${id}`),
   createIdea: (data: any) => api.post<any>('/editorial/ideas', data),
@@ -146,8 +151,7 @@ export const editorialApi = {
 
   // Plan
   listPlan: (params?: any) => {
-    const qs = new URLSearchParams(params || {});
-    return api.get<any[]>(`/editorial/plan?${qs}`);
+    return api.get<any[]>(`/editorial/plan${buildQs(params)}`);
   },
   createPlanEntry: (data: any) => api.post<any>('/editorial/plan', data),
   updatePlanEntry: (id: string, data: any) => api.put<any>(`/editorial/plan/${id}`, data),
@@ -155,8 +159,7 @@ export const editorialApi = {
 
   // Interview Partners
   listPartners: (params?: any) => {
-    const qs = params ? `?${new URLSearchParams(params)}` : '';
-    return api.get<any[]>(`/editorial/interviews/partners${qs}`);
+    return api.get<any[]>(`/editorial/interviews/partners${buildQs(params)}`);
   },
   createPartner: (data: any) => api.post<any>('/editorial/interviews/partners', data),
   updatePartner: (id: string, data: any) => api.put<any>(`/editorial/interviews/partners/${id}`, data),
@@ -164,8 +167,7 @@ export const editorialApi = {
 
   // Interview Questions
   listQuestions: (params?: any) => {
-    const qs = new URLSearchParams(params || {});
-    return api.get<any[]>(`/editorial/interviews/questions?${qs}`);
+    return api.get<any[]>(`/editorial/interviews/questions${buildQs(params)}`);
   },
   createQuestion: (data: any) => api.post<any>('/editorial/interviews/questions', data),
   updateQuestion: (id: string, data: any) => api.put<any>(`/editorial/interviews/questions/${id}`, data),
@@ -179,8 +181,7 @@ export const editorialApi = {
 
   // Notes
   listNotes: (params?: any) => {
-    const qs = new URLSearchParams(params || {});
-    return api.get<any[]>(`/editorial/notes?${qs}`);
+    return api.get<any[]>(`/editorial/notes${buildQs(params)}`);
   },
   createNote: (data: any) => api.post<any>('/editorial/notes', data),
   updateNote: (id: string, data: any) => api.put<any>(`/editorial/notes/${id}`, data),
@@ -188,8 +189,7 @@ export const editorialApi = {
 
   // Research Sources
   listResearch: (params?: any) => {
-    const qs = new URLSearchParams(params || {});
-    return api.get<any[]>(`/editorial/research?${qs}`);
+    return api.get<any[]>(`/editorial/research${buildQs(params)}`);
   },
   createResearch: (data: any) => api.post<any>('/editorial/research', data),
   updateResearch: (id: string, data: any) => api.put<any>(`/editorial/research/${id}`, data),
@@ -201,8 +201,7 @@ export const editorialApi = {
 // ============================================================
 export const sponsorsApi = {
   list: (params?: any) => {
-    const qs = new URLSearchParams(params || {});
-    return api.get<any[]>(`/sponsors?${qs}`);
+    return api.get<any[]>(`/sponsors${buildQs(params)}`);
   },
   get: (id: string) => api.get<any>(`/sponsors/${id}`),
   create: (data: any) => api.post<any>('/sponsors', data),
@@ -235,27 +234,25 @@ export const sponsorsApi = {
   // Reports
   getReport: (sponsorIdOrParams: string | { sponsorId?: string; dateFrom?: string; dateTo?: string }, params?: { from?: string; to?: string }) => {
     if (typeof sponsorIdOrParams === 'string') {
-      const qs = new URLSearchParams(params as any || {});
-      return api.get<any>(`/sponsors/${sponsorIdOrParams}/report?${qs}`);
+      return api.get<any>(`/sponsors/${sponsorIdOrParams}/report${buildQs(params as any)}`);
     }
-    // Called with object params — get overview
-    const qs = new URLSearchParams();
-    if (sponsorIdOrParams.dateFrom) qs.set('from', sponsorIdOrParams.dateFrom);
-    if (sponsorIdOrParams.dateTo) qs.set('to', sponsorIdOrParams.dateTo);
+    const p: any = {};
+    if (sponsorIdOrParams.dateFrom) p.from = sponsorIdOrParams.dateFrom;
+    if (sponsorIdOrParams.dateTo) p.to = sponsorIdOrParams.dateTo;
     if (sponsorIdOrParams.sponsorId) {
-      return api.get<any>(`/sponsors/${sponsorIdOrParams.sponsorId}/report?${qs}`);
+      return api.get<any>(`/sponsors/${sponsorIdOrParams.sponsorId}/report${buildQs(p)}`);
     }
-    return api.get<any>(`/sponsors/reports/overview?${qs}`);
+    return api.get<any>(`/sponsors/reports/overview${buildQs(p)}`);
   },
   exportReport: (params: { sponsorId?: string; dateFrom?: string; dateTo?: string; format?: string }) => {
-    const qs = new URLSearchParams();
-    if (params.dateFrom) qs.set('from', params.dateFrom);
-    if (params.dateTo) qs.set('to', params.dateTo);
-    if (params.format) qs.set('format', params.format);
+    const p: any = {};
+    if (params.dateFrom) p.from = params.dateFrom;
+    if (params.dateTo) p.to = params.dateTo;
+    if (params.format) p.format = params.format;
     if (params.sponsorId) {
-      return api.get<any>(`/sponsors/${params.sponsorId}/report?${qs}`);
+      return api.get<any>(`/sponsors/${params.sponsorId}/report${buildQs(p)}`);
     }
-    return api.get<any[]>(`/sponsors/reports/overview?${qs}`);
+    return api.get<any[]>(`/sponsors/reports/overview${buildQs(p)}`);
   },
   getOverview: () => api.get<any[]>('/sponsors/reports/overview'),
 };
@@ -265,8 +262,7 @@ export const sponsorsApi = {
 // ============================================================
 export const mediaApi = {
   list: (params?: any) => {
-    const qs = new URLSearchParams(params || {});
-    return api.get<any[]>(`/media?${qs}`);
+    return api.get<any[]>(`/media${buildQs(params)}`);
   },
   get: (id: string) => api.get<any>(`/media/${id}`),
   upload: (formData: FormData) => api.upload<any>('/media/upload', formData),
@@ -315,13 +311,14 @@ export const adminApi = {
 
   // Logs
   listLogs: (params?: any) => {
-    const qs = new URLSearchParams(params || {});
-    return api.get<any>(`/admin/logs?${qs}`);
+    return api.get<any>(`/admin/logs${buildQs(params)}`);
+  },
+  getLogs: (params?: any) => {
+    return api.get<any>(`/admin/logs${buildQs(params)}`);
   },
   createLog: (data: any) => api.post('/admin/logs', data),
   deleteLogs: (params?: any) => {
-    const qs = new URLSearchParams(params || {});
-    return api.delete(`/admin/logs?${qs}`);
+    return api.delete(`/admin/logs${buildQs(params)}`);
   },
 
   // Settings
@@ -333,22 +330,19 @@ export const adminApi = {
 
   // Aliases used in AdminPage
   getUsers: () => api.get<any[]>('/admin/users'),
-  getLogs: (params?: any) => {
-    const qs = new URLSearchParams(params || {});
-    return api.get<any>(`/admin/logs?${qs}`);
-  },
   exportDb: () => backupApi.export('full'),
+
+  // Approval users
+  listApprovalUsers: () => api.get<any[]>('/admin/approval-users'),
+  updateApprovalUsers: (userIds: string[]) => api.put<any>('/admin/approval-users', { userIds }),
 };
 
 // ============================================================
-// Storage API
+// Settings API (public)
 // ============================================================
-export const storageApi = {
-  getConfig: () => api.get<any>('/storage/config'),
-  saveConfig: (data: any) => api.put<any>('/storage/config', data),
-  testConnection: (config: any) => api.post<any>('/storage/test', config),
-  getNetwork: () => api.get<any>('/storage/network'),
-  getNetworkQR: () => api.get<any>('/storage/network/qr'),
+export const settingsApi = {
+  get: () => api.get<any>('/settings'),
+  update: (data: any) => api.put<any>('/settings', data),
 };
 
 // ============================================================
@@ -359,32 +353,22 @@ export const podigeeApi = {
   getPodcast: () => api.get<any>('/podigee/podcast'),
   getEpisodes: () => api.get<any[]>('/podigee/episodes'),
   getOverview: (params?: { from?: string; to?: string }) => {
-    const qs = new URLSearchParams(params as any || {});
-    return api.get<any>(`/podigee/stats/overview?${qs}`);
+    return api.get<any>(`/podigee/stats/overview${buildQs(params)}`);
   },
   getTopEpisodes: (params?: { from?: string; to?: string; limit?: number }) => {
-    const qs = new URLSearchParams();
-    if (params?.from) qs.set('from', params.from);
-    if (params?.to) qs.set('to', params.to);
-    if (params?.limit) qs.set('limit', String(params.limit));
-    return api.get<any>(`/podigee/stats/top?${qs}`);
+    return api.get<any>(`/podigee/stats/top${buildQs(params as any)}`);
   },
   getClients: (params?: { from?: string; to?: string }) => {
-    const qs = new URLSearchParams(params as any || {});
-    return api.get<any>(`/podigee/stats/clients?${qs}`);
+    return api.get<any>(`/podigee/stats/clients${buildQs(params)}`);
   },
   getGeo: (params?: { from?: string; to?: string }) => {
-    const qs = new URLSearchParams(params as any || {});
-    return api.get<any>(`/podigee/stats/geo?${qs}`);
+    return api.get<any>(`/podigee/stats/geo${buildQs(params)}`);
   },
   getEpisodeStats: (episodeId: string, params?: { from?: string; to?: string }) => {
-    const qs = new URLSearchParams(params as any || {});
-    return api.get<any>(`/podigee/stats/episode/${episodeId}?${qs}`);
+    return api.get<any>(`/podigee/stats/episode/${episodeId}${buildQs(params)}`);
   },
   testConnection: (apiToken: string, podcastSubdomain?: string) =>
     api.post<any>('/podigee/test', { apiToken, podcastSubdomain }),
   getConfig: () => api.get<any>('/podigee/config'),
   saveConfig: (data: any) => api.put<any>('/podigee/config', data),
 };
-
-

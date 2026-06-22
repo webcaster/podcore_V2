@@ -811,7 +811,7 @@ const wikiData: WikiCategory[] = [
     articles: [
       {
         id: 'v2-1-0',
-        title: 'v2.1.0 — Ideen-Arbeitsmappe & Deployment-Fix',
+        title: 'v2.1.1 — Ideen-Arbeitsmappe & Deployment-Fix',
         summary: 'Ideen sind jetzt vollständige Episoden-Vorbereitungsmappen mit Recherche, Uploads, Interview, Notizen, Checklisten und Episode-Erstellung. Deployment-Bug behoben.',
         icon: <Package size={18} />,
         tags: ['update', 'ideen', 'recherche', 'interview', 'checkliste', 'episode', 'deployment'],
