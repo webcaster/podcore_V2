@@ -95,6 +95,42 @@ router.get('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
   });
 });
 
+// PUT /api/auth/me — Update own profile (displayName, email, avatarColor)
+router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
+  const { displayName, email, avatarColor } = req.body;
+
+  const db = getDb();
+  const user = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;
+
+  if (!user) {
+    return res.status(404).json({ success: false, error: 'Benutzer nicht gefunden' });
+  }
+
+  const newDisplayName = displayName !== undefined ? displayName : user.display_name;
+  const newEmail = email !== undefined ? email : user.email;
+  const newAvatarColor = avatarColor !== undefined ? avatarColor : user.avatar_color;
+
+  db.run(
+    "UPDATE users SET display_name = ?, email = ?, avatar_color = ?, updated_at = datetime('now') WHERE id = ?",
+    [newDisplayName, newEmail, newAvatarColor, req.user!.id]
+  );
+
+  const updated = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;
+
+  return res.json({
+    success: true,
+    data: {
+      id: updated.id,
+      username: updated.username,
+      displayName: updated.display_name,
+      email: updated.email,
+      role: updated.role,
+      permissions: JSON.parse(updated.permissions || '{}'),
+      avatarColor: updated.avatar_color,
+    },
+  });
+});
+
 // POST /api/auth/change-password
 router.post('/change-password', requireAuth as any, (req: AuthRequest, res: Response) => {
   const { currentPassword, newPassword } = req.body;
