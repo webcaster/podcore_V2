@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
-  Shield, Menu, X, Headphones, TrendingUp, Image, FileText
+  Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle
 } from 'lucide-react';
 import { useApp, usePermissions } from '../../contexts/AppContext';
 
@@ -132,17 +132,42 @@ export default function Layout() {
           <LogOut size={16} />
           {(!collapsed || mobile) && <span>Abmelden</span>}
         </button>
-        {(!collapsed || mobile) && (
+        {(!collapsed || mobile) ? (
+          <div className="flex items-center gap-1 mt-1">
+            <NavLink
+              to="/wiki"
+              className={({ isActive }) =>
+                `flex items-center gap-1.5 text-xs px-2 py-1 rounded transition-colors flex-1 ${
+                  isActive ? 'text-accent-purple' : 'text-text-muted hover:text-text-secondary'
+                }`
+              }
+            >
+              <HelpCircle size={12} />
+              <span>Wiki</span>
+            </NavLink>
+            <NavLink
+              to="/impressum"
+              className={({ isActive }) =>
+                `flex items-center gap-1.5 text-xs px-2 py-1 rounded transition-colors ${
+                  isActive ? 'text-accent-purple' : 'text-text-muted hover:text-text-secondary'
+                }`
+              }
+            >
+              <FileText size={12} />
+              <span>Impressum</span>
+            </NavLink>
+          </div>
+        ) : (
           <NavLink
-            to="/impressum"
+            to="/wiki"
             className={({ isActive }) =>
-              `flex items-center gap-2 text-xs px-2 py-1 rounded transition-colors mt-1 ${
+              `flex items-center justify-center p-1 rounded transition-colors mt-1 ${
                 isActive ? 'text-accent-purple' : 'text-text-muted hover:text-text-secondary'
               }`
             }
+            title="Wiki"
           >
-            <FileText size={12} />
-            <span>Impressum</span>
+            <HelpCircle size={14} />
           </NavLink>
         )}
       </div>
