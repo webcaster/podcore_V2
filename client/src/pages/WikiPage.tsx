@@ -810,6 +810,42 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-1-2',
+        title: 'v2.1.2 — Bugfix: Branding-Route & vollständiger App-Test',
+        summary: 'Branding & Backup Seite war durch einen Route-Konflikt nicht erreichbar. Vollständiger systematischer App-Test durchgeführt.',
+        icon: <Package size={18} />,
+        tags: ['update', 'bugfix', 'branding', 'route', 'test'],
+        content: [
+          {
+            heading: 'Bug-Fixes',
+            list: [
+              'Branding & Backup Seite: Route-Konflikt behoben — /branding war durch statische Asset-Route blockiert',
+              'Trailing-Slash-Problem: /branding/ gab 404-Fehler zurück, jetzt korrekt zur React-App weitergeleitet',
+              'Branding-Assets werden jetzt über /branding-assets (intern) ausgeliefert, ohne Konflikt mit der App-Navigation',
+            ],
+          },
+          {
+            heading: 'Getestete Funktionen (v2.1.2)',
+            list: [
+              'Dashboard: Alle Widgets, Redaktionsplan-Monatsübersicht, Schnellzugriff',
+              'Ideen-Arbeitsmappe: Alle 6 Tabs (Übersicht, Recherche, Interview, Notizen, Checkliste, Episode erstellen)',
+              'Recherche-Tab: Quellen mit URL, Typ, Beschreibung und Notizen hinzufügen',
+              'Interview-Tab: Partner und Fragen anlegen',
+              'Notizen-Tab: Notizen erstellen und speichern',
+              'Checkliste-Tab: Aufgaben per Enter-Taste hinzufügen',
+              'Media Library: Assets werden korrekt angezeigt',
+              'Sponsoring: Sponsor erstellen, Sponsor-Detail-Seite',
+              'Administration: Benutzerverwaltung, Rollen',
+              'Einstellungen: PDF CI-Farben, Freigabe-Workflow',
+              'Wiki: Versionshistorie vollständig',
+            ],
+          },
+          {
+            tip: 'Die Branding & Backup Seite ist jetzt wieder vollständig erreichbar. Alle Podcast-Logo und Cover-Upload-Funktionen funktionieren korrekt.',
+          },
+        ],
+      },
+      {
         id: 'v2-1-0',
         title: 'v2.1.1 — Ideen-Arbeitsmappe & Deployment-Fix',
         summary: 'Ideen sind jetzt vollständige Episoden-Vorbereitungsmappen mit Recherche, Uploads, Interview, Notizen, Checklisten und Episode-Erstellung. Deployment-Bug behoben.',
