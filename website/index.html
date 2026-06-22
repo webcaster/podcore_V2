@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PodCore – Professionelles Podcast Management System</title>
+  <meta name="description" content="PodCore ist ein vollständig lokales Podcast Management System für Studios. Mehrbenutzer-System, PDF-Export, Episoden-Freigabe, Sponsoring-Abrechnung – ohne Cloud-Abhängigkeit." />
+  <meta property="og:title" content="PodCore – Podcast Management System" />
+  <meta property="og:description" content="Lokales Podcast Management für Studios. Kostenlos, Open Source, ohne Cloud." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="nav" id="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <span class="nav-logo-icon">🎙</span>
+        <span class="nav-logo-text">PodCore</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#screenshots">Screenshots</a>
+        <a href="#tech">Technologie</a>
+        <a href="#quickstart">Schnellstart</a>
+        <a href="#sponsor" class="nav-cta">☕ Unterstützen</a>
+      </div>
+      <button class="nav-mobile-toggle" id="navToggle" aria-label="Menü öffnen">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div class="nav-mobile-menu" id="navMobile">
+      <a href="#features">Features</a>
+      <a href="#screenshots">Screenshots</a>
+      <a href="#tech">Technologie</a>
+      <a href="#quickstart">Schnellstart</a>
+      <a href="#sponsor">☕ Unterstützen</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero" id="top">
+    <div class="hero-bg">
+      <div class="hero-glow hero-glow-1"></div>
+      <div class="hero-glow hero-glow-2"></div>
+      <div class="hero-grid"></div>
+    </div>
+    <div class="container">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        v2.0.9 — Aktuelle Version
+      </div>
+      <h1 class="hero-title">
+        Professionelles<br />
+        <em>Podcast Management</em><br />
+        für dein Studio
+      </h1>
+      <p class="hero-desc">
+        PodCore ist ein vollständig lokales Podcast Management System für Studios und Einzelproduzenten. Mehrbenutzer-System, Episoden-Freigabe, Sponsoring-Abrechnung und leistungsstarke PDF-Exporte – ohne Cloud-Abhängigkeit.
+      </p>
+      <div class="hero-tags">
+        <span>React 18</span>
+        <span>Tailwind CSS</span>
+        <span>Node.js + Express</span>
+        <span>TypeScript</span>
+        <span>Vite</span>
+        <span>SQLite (WASM)</span>
+      </div>
+      <div class="hero-actions">
+        <a href="https://github.com/webcaster/podcore_V2" target="_blank" rel="noopener" class="btn btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+        <a href="#quickstart" class="btn btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </a>
+        <a href="#sponsor" class="btn btn-coffee">
+          ☕ Buy me a Coffee
+        </a>
+      </div>
+      <a href="#features" class="hero-scroll">
+        <span>Mehr entdecken</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="stats">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number">10+</div>
+          <div class="stat-label">Haupt-Module</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">3</div>
+          <div class="stat-label">PDF Export-Typen</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">5</div>
+          <div class="stat-label">Episoden-Status</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">4</div>
+          <div class="stat-label">Benutzer-Rollen</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">0</div>
+          <div class="stat-label">Cloud-Abhängigkeit</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-label">FEATURES</div>
+      <h2 class="section-title">Alles für deinen Podcast,<br /><span>lokal auf deinem Rechner</span></h2>
+      <p class="section-desc">Von der ersten Episoden-Idee bis zum fertigen Moderator-PDF — PodCore deckt den gesamten Produktions-Workflow ab.</p>
+      <div class="features-grid">
+
+        <div class="feature-card">
+          <div class="feature-icon">🎙</div>
+          <h3>Episoden-Management</h3>
+          <p>Vollständiger Editor mit Skript, Metadaten und Shownotes. Kalender-Ansicht, Statusfilter (Idee, Entwurf, Aufnahme, Schnitt, Veröffentlicht) und Drag-and-Drop Asset-Integration.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">✅</div>
+          <h3>Episoden-Freigabe</h3>
+          <p>Optionaler Freigabe-Workflow: Redakteur stellt Freigabe-Anfrage, Moderator genehmigt oder lehnt ab. Vollständig konfigurierbar – kann auch deaktiviert werden.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💰</div>
+          <h3>Sponsoring & Abrechnung</h3>
+          <p>Sponsoren-Datenbank mit Logo-Upload, Ad-Placement-Engine (Pre/Mid/Post-Roll) und vollständiger Abrechnung: Preise, Rechnungsstatus, Rechnungsnummer und PDF-Export.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎵</div>
+          <h3>Media Library</h3>
+          <p>Asset-Verwaltung für Intros, Outros, Jingles und Segmente. Eingebauter Audio-Player mit Play/Pause/Skip/Volume/Download und Kategorisierung.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📄</div>
+          <h3>PDF Export & CI-Farben</h3>
+          <p>Drei spezialisierte PDFs: Moderator-PDF für Host & Gäste, Produktions-PDF für das Team, Episode-PDF mit allen Infos. CI-Farben für PDFs im Admin konfigurierbar.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">👥</div>
+          <h3>Mehrbenutzer-System</h3>
+          <p>Login & Authentifizierung mit rollen-basierter Zugriffskontrolle. Admin, Moderator, Redakteur und Viewer. Berechtigungen granular konfigurierbar.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📋</div>
+          <h3>Interview-Fragen & Freigabe</h3>
+          <p>Interview-Fragen anlegen, bearbeiten und durch Moderatoren freigeben. Personalisierbarer Begleittext an Gäste. Freigegebene Fragen per E-Mail versenden.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Dashboard & Redaktionsplan</h3>
+          <p>Statistik-Karten, Redaktionsplan-Monatsübersicht mit Navigation, aktuelle Episoden und Schnellzugriff. Podigee Analytics-Integration.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎨</div>
+          <h3>Branding & Theming</h3>
+          <p>Podcast-Cover in der Seitenleiste, Dark/Light Mode, benutzerdefinierte CI-Farben für PDFs. Logo-Upload und vollständiges Branding-Management.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💾</div>
+          <h3>Lokale Datenspeicherung</h3>
+          <p>Alle Daten in ~/.podcore/ als SQLite-Datenbank. Kein Cloud-Account, keine Abo-Kosten, volle Datenkontrolle. Backup & Restore integriert.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>Auto-Update-Erkennung</h3>
+          <p>Die App erkennt automatisch neue Versionen und lädt die Seite neu. Kein manuelles Cache-Leeren mehr nötig – immer die aktuelle Version.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🚀</div>
+          <h3>Einfache Installation</h3>
+          <p>Startskript für Windows und macOS/Linux. Node.js v18+ Versionscheck, automatische Abhängigkeits-Installation und verständliche Fehlermeldungen.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section class="screenshots" id="screenshots">
+    <div class="container">
+      <div class="section-label">SCREENSHOTS</div>
+      <h2 class="section-title">Alle Module<br /><span>im Überblick</span></h2>
+      <p class="section-desc">Wähle ein Modul, um den zugehörigen Screen zu sehen.</p>
+
+      <div class="screenshot-tabs">
+        <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+        <button class="tab-btn" data-tab="episodes">Episoden</button>
+        <button class="tab-btn" data-tab="editorial">Redaktions-Hub</button>
+        <button class="tab-btn" data-tab="sponsors">Sponsoring</button>
+        <button class="tab-btn" data-tab="admin">Administration</button>
+        <button class="tab-btn" data-tab="settings">Einstellungen</button>
+      </div>
+
+      <div class="screenshot-display">
+        <div class="screenshot-browser">
+          <div class="browser-bar">
+            <div class="browser-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <div class="browser-url" id="browserUrl">localhost:3001/</div>
+          </div>
+          <div class="screenshot-content" id="screenshotContent">
+            <!-- Dashboard Mock -->
+            <div class="mock-screen active" id="tab-dashboard">
+              <div class="mock-sidebar">
+                <div class="mock-logo">🎙 PodCore</div>
+                <div class="mock-version">v2.0.9</div>
+                <div class="mock-nav-item active">📊 Dashboard</div>
+                <div class="mock-nav-item">🎙 Episoden</div>
+                <div class="mock-nav-item">📋 Redaktions-Hub</div>
+                <div class="mock-nav-item">🎵 Media Library</div>
+                <div class="mock-nav-item">💰 Sponsoring</div>
+                <div class="mock-nav-item">⚙️ Einstellungen</div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-header">
+                  <h2>Guten Morgen, Administrator! 👋</h2>
+                  <p>Willkommen zurück bei Mein Podcast</p>
+                </div>
+                <div class="mock-stats-row">
+                  <div class="mock-stat"><div class="mock-stat-num">12</div><div class="mock-stat-lbl">Episoden</div></div>
+                  <div class="mock-stat"><div class="mock-stat-num">3</div><div class="mock-stat-lbl">Ideen</div></div>
+                  <div class="mock-stat"><div class="mock-stat-num">24</div><div class="mock-stat-lbl">Assets</div></div>
+                  <div class="mock-stat"><div class="mock-stat-num">5</div><div class="mock-stat-lbl">Sponsoren</div></div>
+                </div>
+                <div class="mock-cards-row">
+                  <div class="mock-card">
+                    <div class="mock-card-title">📅 Redaktionsplan – Juni 2026</div>
+                    <div class="mock-plan-item"><span class="mock-plan-date">15. Jun</span><span class="mock-plan-title">Episode 13: Interview</span><span class="mock-plan-status entwurf">Entwurf</span></div>
+                    <div class="mock-plan-item"><span class="mock-plan-date">22. Jun</span><span class="mock-plan-title">Episode 14: Deep Dive</span><span class="mock-plan-status idee">Idee</span></div>
+                    <div class="mock-plan-item"><span class="mock-plan-date">29. Jun</span><span class="mock-plan-title">Episode 15: Recap</span><span class="mock-plan-status idee">Idee</span></div>
+                  </div>
+                  <div class="mock-card">
+                    <div class="mock-card-title">🎙 Aktuelle Episoden</div>
+                    <div class="mock-ep-item"><span class="mock-ep-num">#12</span><span class="mock-ep-title">Die Zukunft des Podcasting</span><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span></div>
+                    <div class="mock-ep-item"><span class="mock-ep-num">#11</span><span class="mock-ep-title">Interview: Max Mustermann</span><span class="mock-ep-status schnitt">Im Schnitt</span></div>
+                    <div class="mock-ep-item"><span class="mock-ep-num">#10</span><span class="mock-ep-title">Technik-Special 2026</span><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Episodes Mock -->
+            <div class="mock-screen" id="tab-episodes">
+              <div class="mock-sidebar">
+                <div class="mock-logo">🎙 PodCore</div>
+                <div class="mock-version">v2.0.9</div>
+                <div class="mock-nav-item">📊 Dashboard</div>
+                <div class="mock-nav-item active">🎙 Episoden</div>
+                <div class="mock-nav-item">📋 Redaktions-Hub</div>
+                <div class="mock-nav-item">🎵 Media Library</div>
+                <div class="mock-nav-item">💰 Sponsoring</div>
+                <div class="mock-nav-item">⚙️ Einstellungen</div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-header">
+                  <h2>Episoden</h2>
+                  <div class="mock-actions">
+                    <button class="mock-btn">Filter</button>
+                    <button class="mock-btn primary">+ Neue Episode</button>
+                  </div>
+                </div>
+                <div class="mock-episode-list">
+                  <div class="mock-ep-row"><span class="mock-ep-num">#12</span><div class="mock-ep-info"><strong>Die Zukunft des Podcasting</strong><small>22. Jun 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
+                  <div class="mock-ep-row"><span class="mock-ep-num">#11</span><div class="mock-ep-info"><strong>Interview: Max Mustermann</strong><small>15. Jun 2026</small></div><span class="mock-ep-status schnitt">Im Schnitt</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
+                  <div class="mock-ep-row"><span class="mock-ep-num">#10</span><div class="mock-ep-info"><strong>Technik-Special 2026</strong><small>08. Jun 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
+                  <div class="mock-ep-row"><span class="mock-ep-num">#9</span><div class="mock-ep-info"><strong>Deep Dive: KI im Podcast</strong><small>01. Jun 2026</small></div><span class="mock-ep-status freigabe">Freigabe ausstehend</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
+                  <div class="mock-ep-row"><span class="mock-ep-num">#8</span><div class="mock-ep-info"><strong>Gast: Sarah Schmidt</strong><small>25. Mai 2026</small></div><span class="mock-ep-status veroeffentlicht">Veröffentlicht</span><span class="mock-ep-actions">✏️ 📄 🗑</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Editorial Mock -->
+            <div class="mock-screen" id="tab-editorial">
+              <div class="mock-sidebar">
+                <div class="mock-logo">🎙 PodCore</div>
+                <div class="mock-version">v2.0.9</div>
+                <div class="mock-nav-item">📊 Dashboard</div>
+                <div class="mock-nav-item">🎙 Episoden</div>
+                <div class="mock-nav-item active">📋 Redaktions-Hub</div>
+                <div class="mock-nav-item">🎵 Media Library</div>
+                <div class="mock-nav-item">💰 Sponsoring</div>
+                <div class="mock-nav-item">⚙️ Einstellungen</div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-header"><h2>Redaktions-Hub</h2></div>
+                <div class="mock-tabs-row">
+                  <span class="mock-tab active">Interview-Fragen</span>
+                  <span class="mock-tab">Ideen</span>
+                  <span class="mock-tab">Notizen</span>
+                  <span class="mock-tab">Recherche</span>
+                </div>
+                <div class="mock-interview">
+                  <div class="mock-partner-card">
+                    <div class="mock-partner-name">👤 Max Mustermann</div>
+                    <div class="mock-partner-role">Podcast-Gast, Episode #11</div>
+                    <div class="mock-question-list">
+                      <div class="mock-question approved"><span class="mock-q-status">✅</span> Wie bist du zum Podcasting gekommen?</div>
+                      <div class="mock-question approved"><span class="mock-q-status">✅</span> Was sind deine drei wichtigsten Tipps?</div>
+                      <div class="mock-question pending"><span class="mock-q-status">⏳</span> Welche Tools nutzt du täglich?</div>
+                      <div class="mock-question pending"><span class="mock-q-status">⏳</span> Was planst du für 2027?</div>
+                    </div>
+                    <div class="mock-actions-row">
+                      <button class="mock-btn">✉️ Fragen senden</button>
+                      <button class="mock-btn primary">+ Frage hinzufügen</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sponsors Mock -->
+            <div class="mock-screen" id="tab-sponsors">
+              <div class="mock-sidebar">
+                <div class="mock-logo">🎙 PodCore</div>
+                <div class="mock-version">v2.0.9</div>
+                <div class="mock-nav-item">📊 Dashboard</div>
+                <div class="mock-nav-item">🎙 Episoden</div>
+                <div class="mock-nav-item">📋 Redaktions-Hub</div>
+                <div class="mock-nav-item">🎵 Media Library</div>
+                <div class="mock-nav-item active">💰 Sponsoring</div>
+                <div class="mock-nav-item">⚙️ Einstellungen</div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-header"><h2>Sponsoring</h2><button class="mock-btn primary">+ Neuer Sponsor</button></div>
+                <div class="mock-sponsor-list">
+                  <div class="mock-sponsor-row">
+                    <div class="mock-sponsor-logo">🏢</div>
+                    <div class="mock-sponsor-info"><strong>TechCorp GmbH</strong><small>3 aktive Buchungen · 1.250 € offen</small></div>
+                    <span class="mock-ep-status veroeffentlicht">Aktiv</span>
+                  </div>
+                  <div class="mock-sponsor-row">
+                    <div class="mock-sponsor-logo">🎧</div>
+                    <div class="mock-sponsor-info"><strong>AudioGear Pro</strong><small>1 aktive Buchung · 450 € bezahlt</small></div>
+                    <span class="mock-ep-status veroeffentlicht">Aktiv</span>
+                  </div>
+                  <div class="mock-sponsor-row">
+                    <div class="mock-sponsor-logo">📱</div>
+                    <div class="mock-sponsor-info"><strong>AppStudio Berlin</strong><small>Kampagne abgeschlossen · 800 € bezahlt</small></div>
+                    <span class="mock-ep-status schnitt">Abgeschlossen</span>
+                  </div>
+                </div>
+                <div class="mock-billing-summary">
+                  <div class="mock-billing-title">💳 Abrechnung Übersicht</div>
+                  <div class="mock-billing-row"><span>Offen</span><span class="mock-billing-amount open">1.250,00 €</span></div>
+                  <div class="mock-billing-row"><span>Bezahlt (gesamt)</span><span class="mock-billing-amount paid">1.250,00 €</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Admin Mock -->
+            <div class="mock-screen" id="tab-admin">
+              <div class="mock-sidebar">
+                <div class="mock-logo">🎙 PodCore</div>
+                <div class="mock-version">v2.0.9</div>
+                <div class="mock-nav-item">📊 Dashboard</div>
+                <div class="mock-nav-item">🎙 Episoden</div>
+                <div class="mock-nav-item">📋 Redaktions-Hub</div>
+                <div class="mock-nav-item">🎵 Media Library</div>
+                <div class="mock-nav-item">💰 Sponsoring</div>
+                <div class="mock-nav-item active">👥 Administration</div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-header"><h2>Benutzerverwaltung</h2><button class="mock-btn primary">+ Neuer Benutzer</button></div>
+                <div class="mock-user-list">
+                  <div class="mock-user-row"><div class="mock-user-avatar admin">A</div><div class="mock-user-info"><strong>Administrator</strong><small>admin@podcast.de</small></div><span class="mock-role-badge admin">Admin</span><span class="mock-ep-actions">✏️ 🗑</span></div>
+                  <div class="mock-user-row"><div class="mock-user-avatar mod">M</div><div class="mock-user-info"><strong>Max Moderator</strong><small>max@podcast.de</small></div><span class="mock-role-badge mod">Moderator</span><span class="mock-ep-actions">✏️ 🗑</span></div>
+                  <div class="mock-user-row"><div class="mock-user-avatar red">R</div><div class="mock-user-info"><strong>Sarah Redakteur</strong><small>sarah@podcast.de</small></div><span class="mock-role-badge red">Redakteur</span><span class="mock-ep-actions">✏️ 🗑</span></div>
+                  <div class="mock-user-row"><div class="mock-user-avatar view">V</div><div class="mock-user-info"><strong>Tom Viewer</strong><small>tom@podcast.de</small></div><span class="mock-role-badge view">Viewer</span><span class="mock-ep-actions">✏️ 🗑</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Settings Mock -->
+            <div class="mock-screen" id="tab-settings">
+              <div class="mock-sidebar">
+                <div class="mock-logo">🎙 PodCore</div>
+                <div class="mock-version">v2.0.9</div>
+                <div class="mock-nav-item">📊 Dashboard</div>
+                <div class="mock-nav-item">🎙 Episoden</div>
+                <div class="mock-nav-item">📋 Redaktions-Hub</div>
+                <div class="mock-nav-item">🎵 Media Library</div>
+                <div class="mock-nav-item">💰 Sponsoring</div>
+                <div class="mock-nav-item active">⚙️ Einstellungen</div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-header"><h2>Einstellungen</h2></div>
+                <div class="mock-settings-grid">
+                  <div class="mock-settings-card">
+                    <div class="mock-settings-title">🎨 PDF & CI-Farben</div>
+                    <div class="mock-color-row"><span>Primärfarbe</span><div class="mock-color-swatch" style="background:#7c3aed"></div></div>
+                    <div class="mock-color-row"><span>Akzentfarbe</span><div class="mock-color-swatch" style="background:#06b6d4"></div></div>
+                  </div>
+                  <div class="mock-settings-card">
+                    <div class="mock-settings-title">🔄 Workflow</div>
+                    <div class="mock-toggle-row"><span>Episoden-Freigabe</span><div class="mock-toggle on"></div></div>
+                    <div class="mock-toggle-row"><span>Interview-Freigabe</span><div class="mock-toggle on"></div></div>
+                  </div>
+                  <div class="mock-settings-card">
+                    <div class="mock-settings-title">📧 E-Mail</div>
+                    <div class="mock-field"><label>SMTP Server</label><div class="mock-input">smtp.gmail.com</div></div>
+                    <div class="mock-field"><label>Port</label><div class="mock-input">587</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech Stack -->
+  <section class="tech" id="tech">
+    <div class="container">
+      <div class="section-label">TECHNOLOGIE</div>
+      <h2 class="section-title">Moderner Stack,<br /><span>stabile Basis</span></h2>
+      <p class="section-desc">PodCore basiert auf bewährten Open-Source-Technologien. Kein Legacy-Code, kein proprietäres Lock-in.</p>
+      <div class="tech-grid">
+        <div class="tech-card"><div class="tech-icon">⚛️</div><div class="tech-name">React 18</div><div class="tech-role">Frontend Framework</div></div>
+        <div class="tech-card"><div class="tech-icon">🎨</div><div class="tech-name">Tailwind CSS</div><div class="tech-role">CSS Framework</div></div>
+        <div class="tech-card"><div class="tech-icon">🟩</div><div class="tech-name">Node.js</div><div class="tech-role">Runtime (v18+)</div></div>
+        <div class="tech-card"><div class="tech-icon">🚂</div><div class="tech-name">Express.js</div><div class="tech-role">Backend API</div></div>
+        <div class="tech-card"><div class="tech-icon">🔷</div><div class="tech-name">TypeScript</div><div class="tech-role">Typsicherheit</div></div>
+        <div class="tech-card"><div class="tech-icon">⚡</div><div class="tech-name">Vite</div><div class="tech-role">Build-Tool</div></div>
+        <div class="tech-card"><div class="tech-icon">🗄️</div><div class="tech-name">SQLite WASM</div><div class="tech-role">Datenbank (kein Compiler)</div></div>
+        <div class="tech-card"><div class="tech-icon">📦</div><div class="tech-name">npm</div><div class="tech-role">Paket-Manager</div></div>
+        <div class="tech-card"><div class="tech-icon">📄</div><div class="tech-name">PDFKit</div><div class="tech-role">PDF-Generierung</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quickstart -->
+  <section class="quickstart" id="quickstart">
+    <div class="container">
+      <div class="section-label">SCHNELLSTART</div>
+      <h2 class="section-title">In 3 Schritten<br /><span>zum laufenden System</span></h2>
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-number">01</div>
+          <h3>Herunterladen</h3>
+          <p>ZIP-Archiv von GitHub herunterladen und entpacken. Node.js v18+ muss installiert sein.</p>
+          <div class="code-block">
+            <span class="code-comment"># ZIP entpacken</span><br />
+            unzip PodCore_v2.0.9.zip
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">02</div>
+          <h3>Starten</h3>
+          <p>Startskript ausführen – installiert Abhängigkeiten automatisch und prüft die Node.js-Version.</p>
+          <div class="code-block">
+            <span class="code-comment"># macOS / Linux</span><br />
+            ./start-unix.sh<br /><br />
+            <span class="code-comment"># Windows</span><br />
+            start-windows.bat
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">03</div>
+          <h3>Loslegen</h3>
+          <p>Browser öffnen und mit den Standard-Zugangsdaten einloggen. Sofort einsatzbereit.</p>
+          <div class="code-block">
+            <span class="code-comment"># Browser öffnen</span><br />
+            http://localhost:3001<br /><br />
+            <span class="code-comment"># Login</span><br />
+            admin / admin123
+          </div>
+        </div>
+      </div>
+      <div class="download-cta">
+        <a href="https://github.com/webcaster/podcore_V2/releases" target="_blank" rel="noopener" class="btn btn-primary btn-large">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          PodCore v2.0.9 herunterladen
+        </a>
+        <a href="https://github.com/webcaster/podcore_V2" target="_blank" rel="noopener" class="btn btn-ghost btn-large">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          Auf GitHub ansehen
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sponsor / Buy me a Coffee -->
+  <section class="sponsor" id="sponsor">
+    <div class="container">
+      <div class="sponsor-card">
+        <div class="sponsor-icon">☕</div>
+        <div class="sponsor-content">
+          <div class="section-label" style="margin-bottom: 0.5rem;">OPEN SOURCE · KOSTENLOS</div>
+          <h2 class="sponsor-title">PodCore unterstützen</h2>
+          <p class="sponsor-desc">
+            PodCore ist kostenlos und Open Source. Wenn dir die App hilft und du die Weiterentwicklung unterstützen möchtest, freue ich mich über einen Kaffee. Jede Unterstützung hilft, neue Features zu entwickeln und Bugs schneller zu beheben.
+          </p>
+          <div class="sponsor-features">
+            <div class="sponsor-feature">✅ Keine Abo-Kosten</div>
+            <div class="sponsor-feature">✅ Keine Cloud-Pflicht</div>
+            <div class="sponsor-feature">✅ Volle Datenkontrolle</div>
+            <div class="sponsor-feature">✅ Aktive Weiterentwicklung</div>
+          </div>
+          <div class="sponsor-actions">
+            <a href="https://www.paypal.com/donate/?business=webmaster%40medien-der-sinne.com&no_recurring=0&item_name=PodCore+Unterst%C3%BCtzung+%E2%98%95&currency_code=EUR" target="_blank" rel="noopener" class="btn btn-paypal">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.93 4.778-4.005 7.201-9.138 7.201h-2.19a.563.563 0 0 0-.556.479l-1.187 7.527h-.506l-.24 1.516a.56.56 0 0 0 .554.647h3.882c.46 0 .85-.334.922-.788.06-.26.76-4.852.816-5.09a.932.932 0 0 1 .923-.788h.58c3.76 0 6.705-1.528 7.565-5.946.36-1.847.174-3.388-.777-4.471z"/></svg>
+              ☕ Buy me a Coffee via PayPal
+            </a>
+            <div class="sponsor-paypal-info">
+              <small>Zahlung über PayPal · webmaster@medien-der-sinne.com</small>
+            </div>
+          </div>
+        </div>
+        <div class="sponsor-visual">
+          <div class="coffee-cup">
+            <div class="coffee-steam">
+              <span></span><span></span><span></span>
+            </div>
+            <div class="coffee-body">☕</div>
+            <div class="coffee-label">PodCore</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <div class="footer-logo">🎙 PodCore</div>
+          <p>Professionelles Podcast Management System.<br />Lokal, kostenlos, Open Source.</p>
+          <div class="footer-links-inline">
+            <a href="https://github.com/webcaster/podcore_V2" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://medien-der-sinne.de" target="_blank" rel="noopener">Medien der Sinne</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <h4>Funktionen</h4>
+          <a href="#features">Episoden-Management</a>
+          <a href="#features">Sponsoring & Abrechnung</a>
+          <a href="#features">Interview-Fragen</a>
+          <a href="#features">PDF Export</a>
+          <a href="#features">Mehrbenutzer-System</a>
+        </div>
+        <div class="footer-col">
+          <h4>Ressourcen</h4>
+          <a href="https://github.com/webcaster/podcore_V2" target="_blank" rel="noopener">GitHub Repository</a>
+          <a href="https://github.com/webcaster/podcore_V2/releases" target="_blank" rel="noopener">Releases</a>
+          <a href="https://github.com/webcaster/podcore_V2/issues" target="_blank" rel="noopener">Bug melden</a>
+          <a href="#sponsor">Unterstützen</a>
+        </div>
+        <div class="footer-col">
+          <h4>Kontakt</h4>
+          <a href="https://medien-der-sinne.de/kontakt" target="_blank" rel="noopener">Kontakt aufnehmen</a>
+          <a href="mailto:webmaster@medien-der-sinne.com">webmaster@medien-der-sinne.com</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p><strong>PodCore v2.0.9</strong> · Podcast Management System · MIT Lizenz</p>
+        <p>© 2026 <strong>Maximilian Hartwich</strong> – Medien der Sinne</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Back to top -->
+  <a href="#top" class="back-to-top" id="backToTop" aria-label="Nach oben">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+  </a>
+
+  <script src="script.js"></script>
+</body>
+</html>
