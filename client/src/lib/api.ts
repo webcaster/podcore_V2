@@ -158,6 +158,8 @@ export const editorialApi = {
   createPlanEntry: (data: any) => api.post<any>('/editorial/plan', data),
   updatePlanEntry: (id: string, data: any) => api.put<any>(`/editorial/plan/${id}`, data),
   deletePlanEntry: (id: string) => api.delete(`/editorial/plan/${id}`),
+  getCalendar: (year: number, month: number) => api.get<any>(`/editorial/calendar/${year}/${month}`),
+  downloadCalendarPdf: (year: number, month: number) => { window.location.href = `/api/editorial/calendar/${year}/${month}/export-pdf`; },
 
   // Interview Partners
   listPartners: (params?: any) => {

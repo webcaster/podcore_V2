@@ -413,6 +413,112 @@ router.delete('/plan/:id', requirePermission('canEditEditorialPlan') as any, (re
 });
 
 // ============================================================
+// CALENDAR DATA (Episodes + Plan)
+// ============================================================
+
+router.get('/calendar/:year/:month', requirePermission('canViewEditorialPlan') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { year, month } = req.params;
+  const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+
+  // Get episodes for this month
+  const episodes = db.all(
+    `SELECT id, title, number, publish_date, status FROM episodes 
+     WHERE strftime('%Y-%m', publish_date) = ? OR strftime('%Y-%m', recording_date) = ?
+     ORDER BY publish_date ASC`,
+    [yearMonth, yearMonth]
+  ) as any[];
+
+  // Get plan entries for this month
+  const planEntries = db.all(
+    `SELECT id, title, planned_date, status, episode_id FROM editorial_plan 
+     WHERE strftime('%Y-%m', planned_date) = ?
+     ORDER BY planned_date ASC`,
+    [yearMonth]
+  ) as any[];
+
+  // Combine into calendar structure
+  const calendarData = {
+    year: parseInt(year),
+    month: parseInt(month),
+    episodes: episodes.map((e: any) => ({
+      id: e.id, title: e.title, number: e.number,
+      date: e.publish_date || e.recording_date,
+      status: e.status, type: 'episode'
+    })),
+    planEntries: planEntries.map((p: any) => ({
+      id: p.id, title: p.title, date: p.planned_date,
+      status: p.status, episodeId: p.episode_id, type: 'plan'
+    }))
+  };
+
+  return res.json({ success: true, data: calendarData });
+});
+
+// PDF Export for calendar
+router.get('/calendar/:year/:month/export-pdf', requirePermission('canViewEditorialPlan') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { year, month } = req.params;
+  const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+
+  try {
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+    const filename = `Redaktionsplan_${year}_${String(month).padStart(2, '0')}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    doc.pipe(res);
+
+    // Title
+    doc.fontSize(20).font('Helvetica-Bold').text('Redaktionsplan', { align: 'center' });
+    doc.fontSize(14).font('Helvetica').text(`${new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}`, { align: 'center' });
+    doc.moveDown(0.5);
+
+    // Get episodes
+    const episodes = db.all(
+      `SELECT id, title, number, publish_date, recording_date, status FROM episodes 
+       WHERE strftime('%Y-%m', publish_date) = ? OR strftime('%Y-%m', recording_date) = ?
+       ORDER BY publish_date ASC`,
+      [yearMonth, yearMonth]
+    ) as any[];
+
+    // Get plan entries
+    const planEntries = db.all(
+      `SELECT id, title, planned_date, status FROM editorial_plan 
+       WHERE strftime('%Y-%m', planned_date) = ?
+       ORDER BY planned_date ASC`,
+      [yearMonth]
+    ) as any[];
+
+    // Episodes section
+    if (episodes.length > 0) {
+      doc.fontSize(12).font('Helvetica-Bold').text('Episoden', { underline: true });
+      doc.fontSize(10).font('Helvetica');
+      episodes.forEach((e: any) => {
+        const date = e.publish_date || e.recording_date;
+        doc.text(`• Folge ${e.number}: "${e.title}" (${new Date(date).toLocaleDateString('de-DE')}) - ${e.status}`);
+      });
+      doc.moveDown(0.5);
+    }
+
+    // Plan entries section
+    if (planEntries.length > 0) {
+      doc.fontSize(12).font('Helvetica-Bold').text('Redaktionsplan-Einträge', { underline: true });
+      doc.fontSize(10).font('Helvetica');
+      planEntries.forEach((p: any) => {
+        doc.text(`• ${p.title} (${new Date(p.planned_date).toLocaleDateString('de-DE')}) - ${p.status}`);
+      });
+    }
+
+    doc.end();
+  } catch (err: any) {
+    console.error('[ERROR] Calendar PDF export failed:', err);
+    return res.status(500).json({ success: false, error: 'PDF-Export fehlgeschlagen' });
+  }
+});
+
+// ============================================================
 // INTERVIEW PARTNERS
 // ============================================================
 
