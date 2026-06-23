@@ -419,6 +419,46 @@ function initializeSchema(db: any): void {
   const ideaUploadsDir = path.join(DATA_DIR, 'idea-uploads');
   if (!fs.existsSync(ideaUploadsDir)) fs.mkdirSync(ideaUploadsDir, { recursive: true });
 
+  // Ad categories table (with price list and presentation text)
+  try { db.exec(`CREATE TABLE IF NOT EXISTS ad_categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    color TEXT NOT NULL DEFAULT '#7c3aed',
+    default_position TEXT NOT NULL DEFAULT 'mid-roll',
+    default_duration INTEGER NOT NULL DEFAULT 30,
+    presentation_text TEXT,
+    presentation_template TEXT NOT NULL DEFAULT 'präsentiert von',
+    base_price REAL,
+    price_per_episode REAL,
+    price_per_1000_listens REAL,
+    currency TEXT NOT NULL DEFAULT 'EUR',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
+
+  // Episode ad bookings — links confirmed ad placements to episode script sections
+  try { db.exec(`CREATE TABLE IF NOT EXISTS episode_ad_bookings (
+    id TEXT PRIMARY KEY,
+    episode_id TEXT NOT NULL,
+    ad_slot_id TEXT NOT NULL,
+    ad_category_id TEXT,
+    sponsor_id TEXT NOT NULL,
+    position TEXT NOT NULL DEFAULT 'mid-roll',
+    script_text TEXT,
+    presentation_text TEXT,
+    duration INTEGER,
+    confirmed INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
+
+  // Ad slots: add category_id reference
+  try { db.exec('ALTER TABLE ad_slots ADD COLUMN category_id TEXT DEFAULT NULL'); } catch (_) {}
+
   // Chat messages table migration for existing DBs
   try { db.exec('CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, recipient_id TEXT, channel TEXT, message TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime("now")), FOREIGN KEY (sender_id) REFERENCES users(id), FOREIGN KEY (recipient_id) REFERENCES users(id))'); } catch (_) {}
 

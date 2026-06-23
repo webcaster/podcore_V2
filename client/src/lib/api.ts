@@ -229,11 +229,18 @@ export const sponsorsApi = {
   updatePlacement: (placementId: string, data: any) => api.put<any>(`/sponsors/placements/${placementId}`, data),
   deletePlacement: (placementId: string) => api.delete(`/sponsors/placements/${placementId}`),
 
-  // Categories (stored as ad slot categories — handled client-side from slot data)
-  listCategories: () => Promise.resolve(['pre-roll', 'mid-roll', 'post-roll', 'host-read', 'display']),
-  createCategory: (data: any) => Promise.resolve(data),
-  updateCategory: (id: string, data: any) => Promise.resolve(data),
-  deleteCategory: (id: string) => Promise.resolve({}),
+  // Ad Categories (Werbekategorien mit Preislisten & Präsentationstext)
+  listCategories: () => api.get<any[]>('/sponsors/categories'),
+  createCategory: (data: any) => api.post<any>('/sponsors/categories', data),
+  updateCategory: (id: string, data: any) => api.put<any>(`/sponsors/categories/${id}`, data),
+  deleteCategory: (id: string) => api.delete(`/sponsors/categories/${id}`),
+
+  // Episode Ad Bookings (gebuchte Werbungen pro Episode)
+  getEpisodeBookings: (episodeId: string) => api.get<any[]>(`/sponsors/episode-bookings/${episodeId}`),
+  createEpisodeBooking: (data: any) => api.post<any>('/sponsors/episode-bookings', data),
+  updateEpisodeBooking: (id: string, data: any) => api.put<any>(`/sponsors/episode-bookings/${id}`, data),
+  deleteEpisodeBooking: (id: string) => api.delete(`/sponsors/episode-bookings/${id}`),
+  getAvailableSlotsForEpisode: (episodeId: string) => api.get<any[]>(`/sponsors/available-for-episode/${episodeId}`),
 
   // Billing
   getBilling: (sponsorId: string) => api.get<any>(`/sponsors/${sponsorId}/billing`),

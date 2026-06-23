@@ -41,6 +41,8 @@ export default function SponsorsPage() {
   });
   const [categoryForm, setCategoryForm] = useState({
     name: '', description: '', color: '#7c3aed', defaultDuration: 30, defaultPosition: 'pre-roll',
+    presentationTemplate: 'präsentiert von', presentationText: '',
+    basePrice: '', pricePerEpisode: '', pricePer1000Listens: '', currency: 'EUR',
   });
   const [isCreating, setIsCreating] = useState(false);
 
@@ -78,11 +80,17 @@ export default function SponsorsPage() {
   const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload = {
+        ...categoryForm,
+        basePrice: categoryForm.basePrice ? parseFloat(categoryForm.basePrice) : null,
+        pricePerEpisode: categoryForm.pricePerEpisode ? parseFloat(categoryForm.pricePerEpisode) : null,
+        pricePer1000Listens: categoryForm.pricePer1000Listens ? parseFloat(categoryForm.pricePer1000Listens) : null,
+      };
       if (editingCategory) {
-        await sponsorsApi.updateCategory(editingCategory.id, categoryForm);
+        await sponsorsApi.updateCategory(editingCategory.id, payload);
         showSuccess('Kategorie aktualisiert');
       } else {
-        await sponsorsApi.createCategory(categoryForm);
+        await sponsorsApi.createCategory(payload);
         showSuccess('Kategorie erstellt');
       }
       setShowCategoryModal(false);
@@ -260,7 +268,7 @@ export default function SponsorsPage() {
           <div className="flex justify-between items-center">
             <p className="text-text-secondary text-sm">Werbekategorien definieren die Art und Position von Werbeplatzierungen</p>
             {can('canManageSponsors') && (
-              <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', color: '#7c3aed', defaultDuration: 30, defaultPosition: 'pre-roll' }); setShowCategoryModal(true); }} className="btn-primary">
+              <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', color: '#7c3aed', defaultDuration: 30, defaultPosition: 'pre-roll', presentationTemplate: 'präsentiert von', presentationText: '', basePrice: '', pricePerEpisode: '', pricePer1000Listens: '', currency: 'EUR' }); setShowCategoryModal(true); }} className="btn-primary">
                 <Plus size={16} /><span>Neue Kategorie</span>
               </button>
             )}
@@ -289,7 +297,7 @@ export default function SponsorsPage() {
               <Tag size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-text-secondary">Noch keine Werbekategorien</p>
               {can('canManageSponsors') && (
-                <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', color: '#7c3aed', defaultDuration: 30, defaultPosition: 'pre-roll' }); setShowCategoryModal(true); }} className="btn-primary mt-4 mx-auto">
+                <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', color: '#7c3aed', defaultDuration: 30, defaultPosition: 'pre-roll', presentationTemplate: 'präsentiert von', presentationText: '', basePrice: '', pricePerEpisode: '', pricePer1000Listens: '', currency: 'EUR' }); setShowCategoryModal(true); }} className="btn-primary mt-4 mx-auto">
                   <Plus size={16} /><span>Erste Kategorie erstellen</span>
                 </button>
               )}
@@ -305,17 +313,26 @@ export default function SponsorsPage() {
                     </div>
                     {can('canManageSponsors') && (
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => { setEditingCategory(cat); setCategoryForm({ name: cat.name, description: cat.description || '', color: cat.color, defaultDuration: cat.defaultDuration, defaultPosition: cat.defaultPosition }); setShowCategoryModal(true); }} className="p-1.5 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg"><Edit2 size={13} /></button>
+                        <button onClick={() => { setEditingCategory(cat); setCategoryForm({ name: cat.name, description: cat.description || '', color: cat.color, defaultDuration: cat.default_duration || cat.defaultDuration || 30, defaultPosition: cat.default_position || cat.defaultPosition || 'mid-roll', presentationTemplate: cat.presentation_template || 'präsentiert von', presentationText: cat.presentation_text || '', basePrice: cat.base_price != null ? String(cat.base_price) : '', pricePerEpisode: cat.price_per_episode != null ? String(cat.price_per_episode) : '', pricePer1000Listens: cat.price_per_1000_listens != null ? String(cat.price_per_1000_listens) : '', currency: cat.currency || 'EUR' }); setShowCategoryModal(true); }} className="p-1.5 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg"><Edit2 size={13} /></button>
                         <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg"><Trash2 size={13} /></button>
                       </div>
                     )}
                   </div>
                   {cat.description && <p className="text-text-secondary text-sm mb-3">{cat.description}</p>}
-                  <div className="flex items-center gap-3 text-xs text-text-muted">
-                    <span className="flex items-center gap-1"><Clock size={11} />{cat.defaultDuration}s Standard</span>
-                    <span className="capitalize">{cat.defaultPosition?.replace('-', ' ')}</span>
-                    {cat.placementCount > 0 && <span className="flex items-center gap-1"><Tag size={11} />{cat.placementCount} Platzierungen</span>}
+                  {cat.presentation_text && (
+                    <p className="text-xs text-accent-purple/80 italic mb-2">"‹Segment› {cat.presentation_template || 'präsentiert von'} {cat.presentation_text}"</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted mb-2">
+                    <span className="flex items-center gap-1"><Clock size={11} />{cat.default_duration || cat.defaultDuration || 30}s Standard</span>
+                    <span className="capitalize">{(cat.default_position || cat.defaultPosition || 'mid-roll').replace('-', ' ')}</span>
                   </div>
+                  {(cat.base_price || cat.price_per_episode || cat.price_per_1000_listens) && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {cat.base_price != null && <span className="text-xs bg-accent-green/10 text-accent-green px-2 py-0.5 rounded-full">Basis: {cat.base_price.toFixed(2)} {cat.currency || 'EUR'}</span>}
+                      {cat.price_per_episode != null && <span className="text-xs bg-accent-blue/10 text-accent-blue px-2 py-0.5 rounded-full">{cat.price_per_episode.toFixed(2)} {cat.currency || 'EUR'}/Folge</span>}
+                      {cat.price_per_1000_listens != null && <span className="text-xs bg-accent-orange/10 text-accent-orange px-2 py-0.5 rounded-full">{cat.price_per_1000_listens.toFixed(2)} {cat.currency || 'EUR'}/1000 Hörer</span>}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -408,12 +425,12 @@ export default function SponsorsPage() {
       </Modal>
 
       {/* Category Modal */}
-      <Modal isOpen={showCategoryModal} onClose={() => setShowCategoryModal(false)} title={editingCategory ? 'Kategorie bearbeiten' : 'Neue Werbekategorie'}>
+      <Modal isOpen={showCategoryModal} onClose={() => setShowCategoryModal(false)} title={editingCategory ? 'Kategorie bearbeiten' : 'Neue Werbekategorie'} size="lg">
         <form onSubmit={handleSaveCategory} className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-2">
               <label className="label">Name *</label>
-              <input type="text" value={categoryForm.name} onChange={e => setCategoryForm(p => ({ ...p, name: e.target.value }))} className="input" required autoFocus placeholder="z.B. Produkt-Spot, Host-Read..." />
+              <input type="text" value={categoryForm.name} onChange={e => setCategoryForm(p => ({ ...p, name: e.target.value }))} className="input" required autoFocus placeholder="z.B. Produkt-Spot, Host-Read, Segment-Sponsoring..." />
             </div>
             <div>
               <label className="label">Farbe</label>
@@ -427,6 +444,30 @@ export default function SponsorsPage() {
             <label className="label">Beschreibung</label>
             <textarea value={categoryForm.description} onChange={e => setCategoryForm(p => ({ ...p, description: e.target.value }))} className="textarea" rows={2} />
           </div>
+
+          {/* Presentation Text (Segment-Sponsoring) */}
+          <div className="card bg-obsidian-800/50 space-y-3">
+            <h4 className="text-text-primary font-medium text-sm flex items-center gap-2">
+              🎤 Präsentations-Text (Segment-Sponsoring)
+            </h4>
+            <p className="text-text-muted text-xs">Beispiel: „Der Pfotenabdruck der Woche wird Ihnen präsentiert von Sponsor XY“</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label text-xs">Präsentations-Vorlage</label>
+                <input type="text" value={categoryForm.presentationTemplate} onChange={e => setCategoryForm(p => ({ ...p, presentationTemplate: e.target.value }))} className="input" placeholder="präsentiert von" />
+              </div>
+              <div>
+                <label className="label text-xs">Segment-Name (optional)</label>
+                <input type="text" value={categoryForm.presentationText} onChange={e => setCategoryForm(p => ({ ...p, presentationText: e.target.value }))} className="input" placeholder="z.B. Der Pfotenabdruck der Woche" />
+              </div>
+            </div>
+            {(categoryForm.presentationText || categoryForm.presentationTemplate) && (
+              <div className="bg-obsidian-900 rounded-lg p-3 text-sm text-text-secondary italic">
+                Vorschau: „{categoryForm.presentationText || '‹Segment-Name›'} {categoryForm.presentationTemplate || 'präsentiert von'} ‹Sponsor-Name›“
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Standard-Dauer (Sekunden)</label>
@@ -439,10 +480,43 @@ export default function SponsorsPage() {
                 <option value="mid-roll">Mid-Roll</option>
                 <option value="post-roll">Post-Roll</option>
                 <option value="host-read">Host-Read</option>
+                <option value="segment">Segment-Sponsoring</option>
                 <option value="custom">Benutzerdefiniert</option>
               </select>
             </div>
           </div>
+
+          {/* Price List */}
+          <div className="card bg-obsidian-800/50 space-y-3">
+            <h4 className="text-text-primary font-medium text-sm flex items-center gap-2">
+              💰 Preisliste
+            </h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label text-xs">Währung</label>
+                <select value={categoryForm.currency} onChange={e => setCategoryForm(p => ({ ...p, currency: e.target.value }))} className="select">
+                  <option value="EUR">EUR (€)</option>
+                  <option value="USD">USD ($)</option>
+                  <option value="CHF">CHF (Fr.)</option>
+                </select>
+              </div>
+              <div>
+                <label className="label text-xs">Basispreis (einmalig)</label>
+                <input type="number" value={categoryForm.basePrice} onChange={e => setCategoryForm(p => ({ ...p, basePrice: e.target.value }))} className="input" placeholder="0.00" min="0" step="0.01" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label text-xs">Preis pro Episode</label>
+                <input type="number" value={categoryForm.pricePerEpisode} onChange={e => setCategoryForm(p => ({ ...p, pricePerEpisode: e.target.value }))} className="input" placeholder="0.00" min="0" step="0.01" />
+              </div>
+              <div>
+                <label className="label text-xs">Preis pro 1.000 Hörer (CPM)</label>
+                <input type="number" value={categoryForm.pricePer1000Listens} onChange={e => setCategoryForm(p => ({ ...p, pricePer1000Listens: e.target.value }))} className="input" placeholder="0.00" min="0" step="0.01" />
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowCategoryModal(false)} className="btn-secondary">Abbrechen</button>
             <button type="submit" disabled={!categoryForm.name} className="btn-primary">Speichern</button>

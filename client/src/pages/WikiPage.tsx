@@ -810,6 +810,29 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-6-0',
+        title: 'v2.6.0 — Erweitertes Sponsoring-System & Werbung im Episoden-Editor',
+        summary: 'Preislisten für Werbekategorien, Präsentations-Kategorien (z.B. „Der Pfotenabdruck der Woche präsentiert von...“), automatische Werbe-Integration im Episoden-Editor mit Bestätigungs-Workflow.',
+        icon: <Package size={18} />,
+        tags: ['update', 'sponsoring', 'werbung', 'episoden-editor', 'preisliste', 'kategorien'],
+        content: [
+          {
+            heading: 'Neue Features',
+            list: [
+              'Werbekategorien: Vollständige Verwaltung mit Name, Farbe, Standard-Position, Standard-Dauer und Präsentations-Template',
+              'Preislisten: Basispreis, Preis pro Episode und Preis pro 1.000 Abrufe pro Kategorie definierbar',
+              'Präsentations-Text: z.B. „Der Pfotenabdruck der Woche wird Ihnen präsentiert von Sponsor XY“',
+              'Episode-Ad-Buchungen: Neue Tabelle episode_ad_bookings verknüpft Werbeplatzierungen direkt mit Episoden',
+              'Werbung-Tab im Episoden-Editor: Zeigt alle gebuchten Werbungen mit Position, Script und Präsentationstext',
+              'Bestätigungs-Workflow: Werbungen können als bestätigt / nicht bestätigt markiert werden',
+              'Werbe-Übersicht: Zusammenfassung nach Position (Pre-Roll, Mid-Roll, Post-Roll, Host-Read) mit Gesamtdauer',
+              'Verfügbare Slots: Beim Hinzufügen einer Werbung werden alle aktiven Werbeplatzierungen zur Auswahl angeboten',
+              'Script-Auto-Fill: Script und Präsentationstext werden automatisch aus der Werbeplatzierung übernommen',
+            ],
+          },
+        ],
+      },
+      {
         id: 'v2-5-0',
         title: 'v2.5.0 — Globales Podcast-Profil, Technische Standards & Episoden-Dashboard',
         summary: 'Podcast-Profil wird global vom Admin definiert und überall in der App angezeigt. Technische Daten einmalig als Standard festlegen. Neues Episoden-Dashboard mit Kalender, Statistiken und Listenansicht.',

@@ -5,7 +5,7 @@ import {
   FileText, ChevronDown, ChevronUp, Calendar, Clock, Tag, Users, Loader2,
   Download, Settings, Wrench, Bold, Italic, Underline, List, ListOrdered,
   AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Quote, Code,
-  Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info
+  Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle
 } from 'lucide-react';
 import { episodesApi, adminApi, editorialApi } from '../lib/api';
 import Modal from '../components/ui/Modal';
@@ -129,7 +129,12 @@ export default function EpisodeDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const [activeTab, setActiveTab] = useState<'script' | 'meta' | 'production' | 'technical'>('script');
+  const [activeTab, setActiveTab] = useState<'script' | 'meta' | 'production' | 'technical' | 'ads'>('script');
+  const [adBookings, setAdBookings] = useState<any[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<any[]>([]);
+  const [showAdBookingModal, setShowAdBookingModal] = useState(false);
+  const [adBookingForm, setAdBookingForm] = useState<any>({ adSlotId: '', sponsorId: '', position: 'mid-roll', scriptText: '', presentationText: '', duration: '', confirmed: false });
+  const [isLoadingAds, setIsLoadingAds] = useState(false);
   const [approvalNotes, setApprovalNotes] = useState('');
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalAction, setApprovalAction] = useState<'request' | 'approve' | 'reject' | null>(null);
@@ -215,6 +220,8 @@ export default function EpisodeDetailPage() {
         setProductionInfo(ep.productionInfo || '');
         // Check for linked idea
         if (ep.ideaId) setLinkedIdeaId(ep.ideaId);
+        // Load ad bookings for this episode
+        loadAdBookings();
         // Merge: global defaults first, then episode-specific values override
         const globalTech = settings?.technicalDefaults || {};
         const episodeTech = (ep.technicalData && typeof ep.technicalData === 'object') ? ep.technicalData : {};
@@ -407,7 +414,65 @@ export default function EpisodeDetailPage() {
     { key: 'meta', label: 'Metadaten', icon: <Info size={14} /> },
     { key: 'production', label: 'Produktion', icon: <Wrench size={14} /> },
     { key: 'technical', label: 'Technische Daten', icon: <Cpu size={14} /> },
+    { key: 'ads', label: 'Werbung', icon: <Megaphone size={14} /> },
   ];
+
+  const loadAdBookings = async () => {
+    if (!id) return;
+    setIsLoadingAds(true);
+    try {
+      const { sponsorsApi } = await import('../lib/api');
+      const [bookings, slots] = await Promise.all([
+        sponsorsApi.getEpisodeBookings(id),
+        sponsorsApi.getAvailableSlotsForEpisode(id),
+      ]);
+      setAdBookings(bookings);
+      setAvailableSlots(slots);
+    } catch (_) {}
+    finally { setIsLoadingAds(false); }
+  };
+
+  const handleAddAdBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !adBookingForm.adSlotId) return;
+    try {
+      const { sponsorsApi } = await import('../lib/api');
+      const slot = availableSlots.find(s => s.id === adBookingForm.adSlotId);
+      await sponsorsApi.createEpisodeBooking({
+        episodeId: id,
+        adSlotId: adBookingForm.adSlotId,
+        sponsorId: slot?.sponsor_id || adBookingForm.sponsorId,
+        adCategoryId: slot?.category_id || null,
+        position: adBookingForm.position,
+        scriptText: adBookingForm.scriptText || slot?.slot_script || '',
+        presentationText: adBookingForm.presentationText || slot?.category_presentation_text || '',
+        duration: adBookingForm.duration ? parseInt(adBookingForm.duration) : null,
+        confirmed: adBookingForm.confirmed ? 1 : 0,
+      });
+      showSuccess('Werbebuchung hinzugefügt');
+      setShowAdBookingModal(false);
+      setAdBookingForm({ adSlotId: '', sponsorId: '', position: 'mid-roll', scriptText: '', presentationText: '', duration: '', confirmed: false });
+      loadAdBookings();
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const handleDeleteAdBooking = async (bookingId: string) => {
+    if (!confirm('Werbebuchung entfernen?')) return;
+    try {
+      const { sponsorsApi } = await import('../lib/api');
+      await sponsorsApi.deleteEpisodeBooking(bookingId);
+      showSuccess('Werbebuchung entfernt');
+      loadAdBookings();
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const handleToggleAdConfirmed = async (booking: any) => {
+    try {
+      const { sponsorsApi } = await import('../lib/api');
+      await sponsorsApi.updateEpisodeBooking(booking.id, { confirmed: booking.confirmed ? 0 : 1 });
+      loadAdBookings();
+    } catch (err: any) { showError(err.message); }
+  };
 
   const TECHNICAL_FIELDS = [
     { key: 'sampleRate', label: 'Sample Rate', placeholder: 'z.B. 48000 Hz', icon: <BarChart3 size={14} /> },
@@ -716,6 +781,198 @@ export default function EpisodeDetailPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── ADS TAB ──────────────────────────────────────── */}
+          {activeTab === 'ads' && (
+            <div className="space-y-4">
+              <div className="card">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Megaphone size={18} className="text-accent-orange" />
+                    <h2 className="font-semibold text-text-primary">Gebuchte Werbung</h2>
+                    {adBookings.length > 0 && (
+                      <span className="bg-accent-orange/20 text-accent-orange text-xs px-2 py-0.5 rounded-full">{adBookings.length}</span>
+                    )}
+                  </div>
+                  {can('canEditSponsors') && (
+                    <button onClick={() => { setAdBookingForm({ adSlotId: '', sponsorId: '', position: 'mid-roll', scriptText: '', presentationText: '', duration: '', confirmed: false }); setShowAdBookingModal(true); }} className="btn-primary">
+                      <Plus size={14} /><span>Werbung hinzufügen</span>
+                    </button>
+                  )}
+                </div>
+
+                {isLoadingAds ? (
+                  <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-accent-purple" /></div>
+                ) : adBookings.length === 0 ? (
+                  <div className="text-center py-10">
+                    <Megaphone size={32} className="text-text-muted mx-auto mb-3" />
+                    <p className="text-text-secondary">Keine Werbung für diese Episode gebucht</p>
+                    <p className="text-text-muted text-sm mt-1">Füge Werbeplatzierungen aus dem Sponsoring-Bereich hinzu</p>
+                    {can('canEditSponsors') && (
+                      <button onClick={() => setShowAdBookingModal(true)} className="btn-primary mt-4 mx-auto">
+                        <Plus size={14} /><span>Erste Werbung hinzufügen</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {adBookings.map((booking: any) => (
+                      <div key={booking.id} className="bg-obsidian-800 rounded-xl p-4 border border-surface-border hover:border-surface-border-light transition-all">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            {booking.category_color && (
+                              <div className="w-3 h-3 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: booking.category_color }} />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-text-primary">{booking.sponsor_name}</span>
+                                {booking.slot_name && <span className="text-text-muted text-sm">— {booking.slot_name}</span>}
+                                {booking.category_name && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-accent-orange/10 text-accent-orange">{booking.category_name}</span>
+                                )}
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  booking.position === 'pre-roll' ? 'bg-accent-cyan/10 text-accent-cyan' :
+                                  booking.position === 'mid-roll' ? 'bg-accent-orange/10 text-accent-orange' :
+                                  booking.position === 'post-roll' ? 'bg-accent-purple/10 text-accent-purple' :
+                                  'bg-accent-green/10 text-accent-green'
+                                }`}>{booking.position}</span>
+                                {booking.duration && <span className="text-xs text-text-muted">{booking.duration}s</span>}
+                              </div>
+                              {booking.presentation_text && (
+                                <p className="text-xs text-accent-purple/80 italic mt-1">„{booking.presentation_text} {booking.category_presentation_template || 'präsentiert von'} {booking.sponsor_name}“</p>
+                              )}
+                              {booking.script_text && (
+                                <p className="text-sm text-text-secondary mt-2 line-clamp-2">{booking.script_text}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              onClick={() => handleToggleAdConfirmed(booking)}
+                              title={booking.confirmed ? 'Bestätigt — klicken zum Aufheben' : 'Nicht bestätigt — klicken zum Bestätigen'}
+                              className={`p-1.5 rounded-lg transition-all ${
+                                booking.confirmed ? 'text-accent-green bg-accent-green/10 hover:bg-accent-green/20' : 'text-text-muted hover:text-accent-green hover:bg-accent-green/10'
+                              }`}
+                            >
+                              {booking.confirmed ? <CheckCircle size={16} /> : <Circle size={16} />}
+                            </button>
+                            {can('canEditSponsors') && (
+                              <button onClick={() => handleDeleteAdBooking(booking.id)} className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg">
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Summary: positions overview */}
+              {adBookings.length > 0 && (
+                <div className="card bg-obsidian-800/50">
+                  <h3 className="font-medium text-text-primary text-sm mb-3">Werbe-Übersicht</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {['pre-roll', 'mid-roll', 'post-roll', 'host-read'].map(pos => {
+                      const count = adBookings.filter((b: any) => b.position === pos).length;
+                      const confirmed = adBookings.filter((b: any) => b.position === pos && b.confirmed).length;
+                      return (
+                        <div key={pos} className="bg-obsidian-800 rounded-lg p-3">
+                          <p className="text-text-muted text-xs capitalize mb-1">{pos.replace('-', ' ')}</p>
+                          <p className="text-text-primary font-semibold">{count}</p>
+                          {count > 0 && <p className="text-accent-green text-xs">{confirmed} bestätigt</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-surface-border">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-text-muted">Gesamt Werbungen</span>
+                      <span className="text-text-primary font-medium">{adBookings.length}</span>
+                    </div>
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-text-muted">Bestätigt</span>
+                      <span className="text-accent-green font-medium">{adBookings.filter((b: any) => b.confirmed).length}</span>
+                    </div>
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-text-muted">Gesamtdauer Werbung</span>
+                      <span className="text-text-primary font-medium">{adBookings.reduce((s: number, b: any) => s + (b.duration || 0), 0)}s</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Add Ad Booking Modal */}
+              <Modal isOpen={showAdBookingModal} onClose={() => setShowAdBookingModal(false)} title="Werbung hinzufügen" size="lg">
+                <form onSubmit={handleAddAdBooking} className="space-y-4">
+                  <div>
+                    <label className="label">Werbeplatzierung auswählen *</label>
+                    {availableSlots.length === 0 ? (
+                      <div className="bg-obsidian-800 rounded-xl p-4 text-center">
+                        <p className="text-text-secondary text-sm">Keine verfügbaren Werbeplatzierungen</p>
+                        <p className="text-text-muted text-xs mt-1">Erstelle zuerst Sponsoren und Werbeplatzierungen im Sponsoring-Bereich</p>
+                      </div>
+                    ) : (
+                      <select value={adBookingForm.adSlotId} onChange={e => {
+                        const slot = availableSlots.find(s => s.id === e.target.value);
+                        setAdBookingForm((p: any) => ({
+                          ...p,
+                          adSlotId: e.target.value,
+                          position: slot?.default_position || slot?.category?.default_position || 'mid-roll',
+                          scriptText: slot?.slot_script || '',
+                          presentationText: slot?.category_presentation_text || '',
+                          duration: slot?.default_duration || '',
+                        }));
+                      }} className="select" required>
+                        <option value="">-- Platzierung auswählen --</option>
+                        {availableSlots.map((slot: any) => (
+                          <option key={slot.id} value={slot.id}>
+                            {slot.sponsor_name} — {slot.slot_name || slot.name} {slot.category_name ? `(${slot.category_name})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Position</label>
+                      <select value={adBookingForm.position} onChange={e => setAdBookingForm((p: any) => ({ ...p, position: e.target.value }))} className="select">
+                        <option value="pre-roll">Pre-Roll (vor der Episode)</option>
+                        <option value="mid-roll">Mid-Roll (in der Mitte)</option>
+                        <option value="post-roll">Post-Roll (am Ende)</option>
+                        <option value="host-read">Host-Read</option>
+                        <option value="segment">Segment-Sponsoring</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Dauer (Sekunden)</label>
+                      <input type="number" value={adBookingForm.duration} onChange={e => setAdBookingForm((p: any) => ({ ...p, duration: e.target.value }))} className="input" placeholder="z.B. 30" min="5" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Präsentations-Text (Segment-Sponsoring)</label>
+                    <input type="text" value={adBookingForm.presentationText} onChange={e => setAdBookingForm((p: any) => ({ ...p, presentationText: e.target.value }))} className="input" placeholder="z.B. Der Pfotenabdruck der Woche" />
+                    {adBookingForm.presentationText && (
+                      <p className="text-xs text-accent-purple/80 italic mt-1">„{adBookingForm.presentationText} präsentiert von ‹Sponsor›“</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="label">Werbe-Script</label>
+                    <textarea value={adBookingForm.scriptText} onChange={e => setAdBookingForm((p: any) => ({ ...p, scriptText: e.target.value }))} className="textarea" rows={4} placeholder="Werbetext / Script für diese Episode..." />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" id="adConfirmed" checked={adBookingForm.confirmed} onChange={e => setAdBookingForm((p: any) => ({ ...p, confirmed: e.target.checked }))} className="w-4 h-4 accent-accent-purple" />
+                    <label htmlFor="adConfirmed" className="text-text-secondary text-sm">Werbung bestätigt (Sponsor hat zugestimmt)</label>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button type="button" onClick={() => setShowAdBookingModal(false)} className="btn-secondary">Abbrechen</button>
+                    <button type="submit" disabled={!adBookingForm.adSlotId} className="btn-primary">Werbung hinzufügen</button>
+                  </div>
+                </form>
+              </Modal>
             </div>
           )}
 
