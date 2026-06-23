@@ -810,6 +810,39 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-4-0',
+        title: 'v2.4.0 — Kalender, Team-Chat & Redaktionshub-Workflow',
+        summary: 'Redaktionskalender mit PDF-Export, internes Team-Chat-Kommunikationstool, Episode-Editor mit Redaktionshub-Import und vollständige Workflow-Integration.',
+        icon: <Package size={18} />,
+        tags: ['update', 'kalender', 'chat', 'kommunikation', 'workflow', 'episode', 'pdf'],
+        content: [
+          {
+            heading: 'Neue Features',
+            list: [
+              'Redaktionskalender: Neue Seite /calendar mit Monat/Jahr-Übersicht aller Episoden und Redaktionsplan-Einträge',
+              'Kalender PDF-Export: Monatsübersicht als professionelles PDF für Besprechungen und Planung',
+              'Kalender Jahresansicht: Alle 12 Monate auf einen Blick, Klick wechselt in Monatsansicht',
+              'Team-Chat: Neues internes Kommunikationstool unter /chat mit 4 Kanälen (Allgemein, Redaktion, Technik, Ankündigungen)',
+              'Chat-Polling: Nachrichten werden automatisch alle 5 Sekunden aktualisiert',
+              'Chat-Unread-Badge: Ungelesene Nachrichten werden als Badge in der Navigation angezeigt',
+              'Episode-Editor: Neuer "Hub importieren"-Button lädt alle Daten aus der verknüpften Ideenmappe',
+              'Hub-Import: Notizen, Recherche-Quellen, Interview-Fragen und Checkliste werden in Episode-Notizen übernommen',
+            ],
+          },
+          {
+            heading: 'Bug-Fixes',
+            list: [
+              'Assets-Kommentare: Feldname-Mismatch zwischen Frontend (content) und Backend (text) behoben',
+              'Interview-Fragen: Werden beim Episode-Erstellen aus Ideenmappe jetzt korrekt übernommen',
+              'Ideenmappe PDF-Export: Exportiert alle Tabs (Recherche, Interview, Notizen, Checkliste) korrekt',
+            ],
+          },
+          {
+            tip: 'Der Redaktionskalender ist über die Seitenleiste erreichbar. Der Team-Chat unterstützt alle Benutzerrollen — Admins können Nachrichten anderer Nutzer löschen.',
+          },
+        ],
+      },
+      {
         id: 'v2-1-3',
         title: 'v2.1.3 — Bugfix: Episode erstellen aus Ideen-Arbeitsmappe',
         summary: 'Kritischer Bug behoben: "Episode erstellen" im Tab der Ideen-Arbeitsmappe führte zu einem internen Serverfehler (500). Ursache war ein falscher Spaltenname im SQL-INSERT.',

@@ -7,7 +7,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Quote, Code,
   Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info
 } from 'lucide-react';
-import { episodesApi, adminApi } from '../lib/api';
+import { episodesApi, adminApi, editorialApi } from '../lib/api';
 import Modal from '../components/ui/Modal';
 import { useApp } from '../contexts/AppContext';
 
@@ -135,6 +135,8 @@ export default function EpisodeDetailPage() {
   const [approvalAction, setApprovalAction] = useState<'request' | 'approve' | 'reject' | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [workflowEnabled, setWorkflowEnabled] = useState(false);
+  const [isImportingHub, setIsImportingHub] = useState(false);
+  const [linkedIdeaId, setLinkedIdeaId] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState<any>({});
@@ -211,6 +213,8 @@ export default function EpisodeDetailPage() {
         });
         setBlocks(ep.blocks || []);
         setProductionInfo(ep.productionInfo || '');
+        // Check for linked idea
+        if (ep.ideaId) setLinkedIdeaId(ep.ideaId);
         // Merge: global defaults first, then episode-specific values override
         const globalTech = settings?.technicalDefaults || {};
         const episodeTech = (ep.technicalData && typeof ep.technicalData === 'object') ? ep.technicalData : {};
@@ -221,6 +225,50 @@ export default function EpisodeDetailPage() {
   }, [id]);
 
   const markDirty = () => setIsDirty(true);
+
+  const handleImportFromHub = async () => {
+    if (!linkedIdeaId) {
+      showError('Diese Episode hat keine verknüpfte Ideenmappe.');
+      return;
+    }
+    setIsImportingHub(true);
+    try {
+      // Load all hub data
+      const [idea, notes, research, questions, checklist] = await Promise.all([
+        editorialApi.getIdea(linkedIdeaId),
+        editorialApi.listIdeaNotes(linkedIdeaId),
+        editorialApi.listResearch({ relatedIdeaId: linkedIdeaId }),
+        editorialApi.listQuestions({ ideaId: linkedIdeaId }),
+        editorialApi.listIdeaChecklist(linkedIdeaId),
+      ]);
+
+      // Build combined notes text
+      let hubNotes = '';
+      if (notes.length > 0) {
+        hubNotes += '## Notizen aus Ideenmappe\n' + notes.map((n: any) => `- ${n.content}`).join('\n') + '\n\n';
+      }
+      if (research.length > 0) {
+        hubNotes += '## Recherche-Quellen\n' + research.map((s: any) => `- ${s.title}${s.url ? ` (${s.url})` : ''}`).join('\n') + '\n\n';
+      }
+      if (questions.length > 0) {
+        hubNotes += '## Interview-Fragen\n' + questions.map((q: any) => `- ${q.question}${q.category ? ` (${q.category})` : ''}`).join('\n') + '\n\n';
+      }
+      if (checklist.length > 0) {
+        hubNotes += '## Checkliste\n' + checklist.map((c: any) => `${c.isDone ? '[x]' : '[ ]'} ${c.title}`).join('\n');
+      }
+
+      // Merge into current notes
+      const currentNotes = form.notes || '';
+      const separator = currentNotes.trim() ? '\n\n---\n\n' : '';
+      updateForm('notes', currentNotes + separator + hubNotes);
+
+      showSuccess(`Redaktionshub-Daten importiert: ${notes.length} Notizen, ${research.length} Quellen, ${questions.length} Fragen, ${checklist.length} Aufgaben`);
+    } catch (err: any) {
+      showError(err.message || 'Import fehlgeschlagen');
+    } finally {
+      setIsImportingHub(false);
+    }
+  };
 
   const updateForm = (key: string, value: any) => {
     setForm((p: any) => ({ ...p, [key]: value }));
@@ -408,6 +456,17 @@ export default function EpisodeDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {linkedIdeaId && can('canEditEpisodes') && (
+            <button
+              onClick={handleImportFromHub}
+              disabled={isImportingHub}
+              className="btn-secondary"
+              title="Alle Daten aus der Ideenmappe importieren"
+            >
+              {isImportingHub ? <Loader2 size={16} className="animate-spin" /> : <Lightbulb size={16} />}
+              <span>Hub importieren</span>
+            </button>
+          )}
           {can('canViewEpisodes') && (
             <button
               onClick={handleExportPdf}

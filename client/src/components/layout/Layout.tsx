@@ -4,7 +4,7 @@ import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
   Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle,
-  Layers, Archive, BarChart2
+  Layers, Archive, BarChart2, Calendar, MessageSquare
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding } from '../../contexts/AppContext';
 import { api } from '../../lib/api';
@@ -58,6 +58,8 @@ export default function Layout() {
     { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard', exact: true },
     { to: '/episodes', icon: <Mic2 size={18} />, label: 'Episoden', permission: 'canViewEpisodes' },
     { to: '/editorial', icon: <BookOpen size={18} />, label: 'Redaktions-Hub', permission: 'canViewIdeas' },
+    { to: '/calendar', icon: <Calendar size={18} />, label: 'Redaktionskalender', permission: 'canViewEditorialPlan' },
+    { to: '/chat', icon: <MessageSquare size={18} />, label: 'Team-Chat' },
     { to: '/media', icon: <Library size={18} />, label: 'Media Library', permission: 'canViewMedia' },
     { to: '/sponsors', icon: <Megaphone size={18} />, label: 'Sponsoring', permission: 'canViewSponsors', dividerBefore: true },
     { to: '/sponsors/reports', icon: <BarChart3 size={18} />, label: 'Sponsor-Auswertungen', permission: 'canViewSponsorReports' },

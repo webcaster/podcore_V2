@@ -24,6 +24,8 @@ const SeasonsPage = lazy(() => import('./pages/SeasonsPage'));
 const ArchivePage = lazy(() => import('./pages/ArchivePage'));
 const StatsPage = lazy(() => import('./pages/StatsPage'));
 const IdeaDetailPage = lazy(() => import('./pages/IdeaDetailPage'));
+const CalendarPage = lazy(() => import('./pages/CalendarPage'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
 
 function LoadingSpinner() {
   return (
@@ -89,6 +91,8 @@ function AppRoutes() {
         <Route path="seasons" element={<Suspense fallback={<LoadingSpinner />}><SeasonsPage /></Suspense>} />
         <Route path="archive" element={<Suspense fallback={<LoadingSpinner />}><ArchivePage /></Suspense>} />
         <Route path="stats" element={<Suspense fallback={<LoadingSpinner />}><StatsPage /></Suspense>} />
+        <Route path="calendar" element={<Suspense fallback={<LoadingSpinner />}><CalendarPage /></Suspense>} />
+        <Route path="chat" element={<Suspense fallback={<LoadingSpinner />}><ChatPage /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

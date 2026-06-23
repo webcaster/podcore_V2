@@ -22,6 +22,7 @@ import backupRouter from './routers/backup';
 import storageRouter from './routers/storage';
 import seasonsRouter from './routers/seasons';
 import statsRouter from './routers/stats';
+import chatRouter from './routers/chat';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -116,6 +117,7 @@ app.use('/api/backup', backupRouter);
 app.use('/api/storage', storageRouter);
 app.use('/api/seasons', seasonsRouter);
 app.use('/api/stats', statsRouter);
+app.use('/api/chat', chatRouter);
 
 // Serve branding assets publicly (no auth needed for display)
 const brandingDir = path.join(DATA_DIR, 'branding');
@@ -213,7 +215,7 @@ app.listen(PORT, HOST, () => {
 
   console.log('');
   console.log('╔══════════════════════════════════════════════╗');
-  console.log('║           PodCore v2.3.0 Server              ║');
+  console.log('║           PodCore v2.4.0 Server              ║');
   console.log('╠══════════════════════════════════════════════╣');
   console.log(`║  Lokal:   http://localhost:${PORT}               ║`);
   if (ips.length > 0) {
