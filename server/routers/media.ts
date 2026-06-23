@@ -295,13 +295,14 @@ router.post('/:id/comments', requirePermission('canCommentMedia') as any, (req: 
   const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
 
-  const { text } = req.body;
-  if (!text?.trim()) return res.status(400).json({ success: false, error: 'Kommentartext erforderlich' });
+  const { text, content } = req.body;
+  const commentText = (text || content)?.trim();
+  if (!commentText) return res.status(400).json({ success: false, error: 'Kommentartext erforderlich' });
 
   const comments = JSON.parse(asset.comments || '[]');
   const comment = {
     id: uuidv4(),
-    text: text.trim(),
+    text: commentText,
     userId: req.user!.id,
     username: req.user!.username,
     displayName: req.user!.displayName,

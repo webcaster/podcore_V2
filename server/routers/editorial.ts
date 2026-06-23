@@ -221,6 +221,98 @@ router.get('/ideas/:id/uploads/:uploadId/download', requirePermission('canViewId
 });
 
 // ============================================================
+// EXPORT IDEA AS PDF
+// ============================================================
+
+router.get('/ideas/:id/export-pdf', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const idea = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
+  if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+
+  try {
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    const filename = `Ideenmappe_${idea.title.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    doc.pipe(res);
+
+    // Title
+    doc.fontSize(24).font('Helvetica-Bold').text(idea.title, { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10).font('Helvetica').fillColor('#666').text(`Erstellt: ${new Date(idea.created_at).toLocaleDateString('de-DE')}`, { align: 'center' });
+    doc.moveDown(1);
+
+    // Description
+    if (idea.description) {
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('#000').text('Beschreibung');
+      doc.fontSize(10).font('Helvetica').text(idea.description);
+      doc.moveDown(0.5);
+    }
+
+    // Metadata
+    doc.fontSize(12).font('Helvetica-Bold').text('Informationen');
+    doc.fontSize(10).font('Helvetica');
+    doc.text(`Status: ${idea.status}`);
+    doc.text(`Priorität: ${idea.priority}`);
+    if (idea.assigned_to) doc.text(`Zugewiesen an: ${idea.assigned_to}`);
+    if (idea.tags && idea.tags !== '[]') doc.text(`Tags: ${JSON.parse(idea.tags).join(', ')}`);
+    doc.moveDown(0.5);
+
+    // Research sources
+    const sources = db.all('SELECT title, url, description FROM research_sources WHERE related_idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
+    if (sources.length > 0) {
+      doc.fontSize(12).font('Helvetica-Bold').text('Recherche-Quellen');
+      doc.fontSize(10).font('Helvetica');
+      sources.forEach((s: any) => {
+        doc.text(`• ${s.title}${s.url ? ` (${s.url})` : ''}`);
+        if (s.description) doc.text(`  ${s.description}`, { indent: 20 });
+      });
+      doc.moveDown(0.5);
+    }
+
+    // Interview partners and questions
+    const questions = db.all('SELECT * FROM interview_questions WHERE idea_id = ? ORDER BY sort_order ASC', [req.params.id]) as any[];
+    if (questions.length > 0) {
+      doc.fontSize(12).font('Helvetica-Bold').text('Interview-Fragen');
+      doc.fontSize(10).font('Helvetica');
+      questions.forEach((q: any) => {
+        doc.text(`• ${q.question}${q.category ? ` (${q.category})` : ''}`);
+      });
+      doc.moveDown(0.5);
+    }
+
+    // Notes
+    const notes = db.all('SELECT content FROM idea_notes WHERE idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
+    if (notes.length > 0) {
+      doc.fontSize(12).font('Helvetica-Bold').text('Notizen');
+      doc.fontSize(10).font('Helvetica');
+      notes.forEach((n: any) => {
+        doc.text(`• ${n.content}`);
+      });
+      doc.moveDown(0.5);
+    }
+
+    // Checklists
+    const checklists = db.all('SELECT * FROM idea_checklists WHERE idea_id = ? ORDER BY sort_order ASC', [req.params.id]) as any[];
+    if (checklists.length > 0) {
+      doc.fontSize(12).font('Helvetica-Bold').text('Checkliste');
+      doc.fontSize(10).font('Helvetica');
+      checklists.forEach((item: any) => {
+        const checkbox = item.is_done ? '☑' : '☐';
+        doc.text(`${checkbox} ${item.title}`);
+      });
+    }
+
+    doc.end();
+  } catch (err: any) {
+    console.error('[ERROR] PDF export failed:', err);
+    return res.status(500).json({ success: false, error: 'PDF-Export fehlgeschlagen' });
+  }
+});
+
+// ============================================================
 // CREATE EPISODE FROM IDEA
 // ============================================================
 
@@ -235,6 +327,11 @@ router.post('/ideas/:id/create-episode', requirePermission('canCreateEpisodes') 
 
   // Get research sources
   const sources = db.all('SELECT title, url, description FROM research_sources WHERE related_idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
+  const questions = db.all('SELECT partner_id, question, category FROM interview_questions WHERE idea_id = ? ORDER BY sort_order ASC', [req.params.id]) as any[];
+  const questionsText = questions.length > 0
+    ? '\n\n## Interview-Fragen\n' + questions.map((q: any) => `- ${q.question}${q.category ? ` (${q.category})` : ''}`).join('\n')
+    : '';
+
   const sourcesText = sources.length > 0
     ? '\n\n## Quellen\n' + sources.map((s: any) => `- ${s.title}${s.url ? ` (${s.url})` : ''}${s.description ? `: ${s.description}` : ''}`).join('\n')
     : '';
@@ -244,10 +341,17 @@ router.post('/ideas/:id/create-episode', requirePermission('canCreateEpisodes') 
 
   db.run(`INSERT INTO episodes (id, title, description, notes, status, created_by) VALUES (?, ?, ?, ?, 'entwurf', ?)`,
     [episodeId, title || idea.title, description || idea.description || '',
-     (notesText + sourcesText).trim() || null, req.user!.id]);
+     (notesText + sourcesText + questionsText).trim() || null, req.user!.id]);
 
   // Link idea to episode
   db.run(`UPDATE ideas SET episode_id = ?, status = 'in_bearbeitung', updated_at = datetime('now') WHERE id = ?`, [episodeId, req.params.id]);
+
+  // Copy interview questions to episode
+  for (const q of questions) {
+    const qId = uuidv4();
+    db.run('INSERT INTO interview_questions (id, episode_id, question, category, sort_order, notes) VALUES (?, ?, ?, ?, ?, ?)',
+      [qId, episodeId, q.question, q.category || null, questions.indexOf(q), null]);
+  }
 
   const episode = db.get('SELECT * FROM episodes WHERE id = ?', [episodeId]) as any;
   return res.status(201).json({ success: true, data: { ...episode, episodeId, ideaId: req.params.id } });

@@ -401,23 +401,28 @@ export default function IdeaDetailPage() {
             {idea.description && <p className="text-text-secondary text-sm mt-1 line-clamp-2">{idea.description}</p>}
           </div>
         </div>
-        {can('canEditIdeas') && (
-          <div className="flex gap-2 flex-shrink-0">
-            {isEditing ? (
-              <>
-                <button onClick={() => setIsEditing(false)} className="btn-secondary text-sm">Abbrechen</button>
-                <button onClick={handleSaveOverview} disabled={isSaving} className="btn-primary text-sm">
-                  {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  <span>Speichern</span>
+        <div className="flex gap-2 flex-shrink-0">
+          <button onClick={() => editorialApi.downloadIdeaPdf(id!)} className="btn-secondary text-sm">
+            <Download size={14} /><span>PDF exportieren</span>
+          </button>
+          {can('canEditIdeas') && (
+            <>
+              {isEditing ? (
+                <>
+                  <button onClick={() => setIsEditing(false)} className="btn-secondary text-sm">Abbrechen</button>
+                  <button onClick={handleSaveOverview} disabled={isSaving} className="btn-primary text-sm">
+                    {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    <span>Speichern</span>
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => setIsEditing(true)} className="btn-secondary text-sm">
+                  <Edit2 size={14} /><span>Bearbeiten</span>
                 </button>
-              </>
-            ) : (
-              <button onClick={() => setIsEditing(true)} className="btn-secondary text-sm">
-                <Edit2 size={14} /><span>Bearbeiten</span>
-              </button>
-            )}
-          </div>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}

@@ -310,6 +310,18 @@ function initializeSchema(db: any): void {
       expires_at TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      sender_id TEXT NOT NULL,
+      recipient_id TEXT,
+      channel TEXT,
+      message TEXT NOT NULL,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (sender_id) REFERENCES users(id),
+      FOREIGN KEY (recipient_id) REFERENCES users(id)
+    );
   `);
 
   // Migration: add new columns if they don't exist (for existing databases)
@@ -406,6 +418,9 @@ function initializeSchema(db: any): void {
   // Ensure uploads directory for idea files
   const ideaUploadsDir = path.join(DATA_DIR, 'idea-uploads');
   if (!fs.existsSync(ideaUploadsDir)) fs.mkdirSync(ideaUploadsDir, { recursive: true });
+
+  // Chat messages table migration for existing DBs
+  try { db.exec('CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, recipient_id TEXT, channel TEXT, message TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime("now")), FOREIGN KEY (sender_id) REFERENCES users(id), FOREIGN KEY (recipient_id) REFERENCES users(id))'); } catch (_) {}
 
   // Default admin user
   const userCount = db.get('SELECT COUNT(*) as count FROM users') as any;

@@ -139,6 +139,7 @@ export const editorialApi = {
     return api.upload<any>(`/editorial/ideas/${ideaId}/uploads`, fd);
   },
   deleteIdeaUpload: (ideaId: string, uploadId: string) => api.delete(`/editorial/ideas/${ideaId}/uploads/${uploadId}`),
+  exportIdeaPdf: (ideaId: string) => `/api/editorial/ideas/${ideaId}/export-pdf`,
   listIdeaNotes: (ideaId: string) => api.get<any[]>(`/editorial/ideas/${ideaId}/notes`),
   createIdeaNote: (ideaId: string, content: string) => api.post<any>(`/editorial/ideas/${ideaId}/notes`, { content }),
   updateIdeaNote: (ideaId: string, noteId: string, content: string) => api.put<any>(`/editorial/ideas/${ideaId}/notes/${noteId}`, { content }),
@@ -148,6 +149,7 @@ export const editorialApi = {
   updateChecklistItem: (ideaId: string, itemId: string, data: any) => api.put<any>(`/editorial/ideas/${ideaId}/checklists/${itemId}`, data),
   deleteChecklistItem: (ideaId: string, itemId: string) => api.delete(`/editorial/ideas/${ideaId}/checklists/${itemId}`),
   createEpisodeFromIdea: (ideaId: string, data: any) => api.post<any>(`/editorial/ideas/${ideaId}/create-episode`, data),
+  downloadIdeaPdf: (ideaId: string) => { window.location.href = `/api/editorial/ideas/${ideaId}/export-pdf`; },
 
   // Plan
   listPlan: (params?: any) => {

@@ -1,9 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
-title PodCore v2.1.3 - Startup
+title PodCore v2.2.0 - Startup
 
 echo ===================================================
-echo PodCore v2.1.3 - Podcast Management System
+echo PodCore v2.2.0 - Podcast Management System
 echo ===================================================
 echo.
 
