@@ -376,3 +376,14 @@ export const podigeeApi = {
   getConfig: () => api.get<any>('/podigee/config'),
   saveConfig: (data: any) => api.put<any>('/podigee/config', data),
 };
+
+// ============================================================
+// Chat API
+// ============================================================
+export const chatApi = {
+  getChannels: () => api.get<any[]>('/chat/channels'),
+  getMessages: (channel: string) => api.get<any[]>(`/chat/messages/${channel}`),
+  sendMessage: (channel: string, message: string) => api.post<any>('/chat/messages', { channel, message }),
+  deleteMessage: (id: string) => api.delete(`/chat/messages/${id}`),
+  getUnreadCount: () => api.get<any>('/chat/unread'),
+};

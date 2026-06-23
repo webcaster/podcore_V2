@@ -22,6 +22,7 @@ function parseEpisode(row: any) {
     createdBy: row.created_by,
     recordingDate: row.recording_date,
     publishDate: row.publish_date,
+    ideaId: row.idea_id || null,
   };
 }
 

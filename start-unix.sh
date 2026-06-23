@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "==================================================="
-echo "PodCore v2.4.0 - Podcast Management System"
+echo "PodCore v2.4.1 - Podcast Management System"
 echo "==================================================="
 echo ""
 

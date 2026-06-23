@@ -810,6 +810,23 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-4-1',
+        title: 'v2.4.1 — Versionsanzeige-Fix & chatApi-Integration',
+        summary: 'Kritischer Fix: Versionsnummer wurde in der Sidebar falsch als v2.1.2 angezeigt. Ursache: dist/public-Verzeichnis wurde nicht korrekt aktualisiert. chatApi-Modul in api.ts ergänzt.',
+        icon: <Package size={18} />,
+        tags: ['bugfix', 'version', 'chat'],
+        content: [
+          {
+            heading: 'Bug-Fixes',
+            list: [
+              'Versionsanzeige: Sidebar zeigte v2.1.2 statt v2.4.0 — dist/public wird jetzt korrekt aktualisiert',
+              'chatApi: Fehlende chatApi-Exportfunktion in api.ts ergänzt (getChannels, getMessages, sendMessage, deleteMessage, getUnreadCount)',
+              'Episode-Workflow: ideaId wird jetzt korrekt aus der Datenbank zurückgegeben (parseEpisode-Funktion erweitert)',
+            ],
+          },
+        ],
+      },
+      {
         id: 'v2-4-0',
         title: 'v2.4.0 — Kalender, Team-Chat & Redaktionshub-Workflow',
         summary: 'Redaktionskalender mit PDF-Export, internes Team-Chat-Kommunikationstool, Episode-Editor mit Redaktionshub-Import und vollständige Workflow-Integration.',
