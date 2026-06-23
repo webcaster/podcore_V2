@@ -4,14 +4,14 @@ import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
   Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle,
-  Layers, Archive, BarChart2, Calendar, MessageSquare
+  Layers, Archive, BarChart2, Calendar, MessageSquare, Radio
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding } from '../../contexts/AppContext';
 import { api } from '../../lib/api';
 
 // Injected at build time by vite.config.ts
 declare const __APP_VERSION__: string;
-const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.4.0';
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.5.0';
 
 interface NavItem {
   to: string;
@@ -57,6 +57,7 @@ export default function Layout() {
   const navItems: NavItem[] = [
     { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard', exact: true },
     { to: '/episodes', icon: <Mic2 size={18} />, label: 'Episoden', permission: 'canViewEpisodes' },
+    { to: '/episodes-dashboard', icon: <Radio size={18} />, label: 'Episoden-Dashboard', permission: 'canViewEpisodes' },
     { to: '/editorial', icon: <BookOpen size={18} />, label: 'Redaktions-Hub', permission: 'canViewIdeas' },
     { to: '/calendar', icon: <Calendar size={18} />, label: 'Redaktionskalender', permission: 'canViewEditorialPlan' },
     { to: '/chat', icon: <MessageSquare size={18} />, label: 'Team-Chat' },

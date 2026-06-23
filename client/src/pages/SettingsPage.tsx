@@ -36,7 +36,7 @@ const SIDEBAR_PRESETS = [
 
 // ── component ─────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
-  const { user, can, showSuccess, showError, refreshUser } = useApp();
+  const { user, can, showSuccess, showError, refreshUser, refreshPodcastProfile } = useApp();
 
   type TabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'app';
   const [activeTab, setActiveTab] = useState<TabKey>('profile');
@@ -253,8 +253,10 @@ export default function SettingsPage() {
     setIsSaving(true);
     try {
       await adminApi.updateSettings({ podcast: podcastForm, general: { ...settings?.general, podcastName: podcastForm.name } });
-      showSuccess('Podcast-Profil gespeichert');
+      showSuccess('Podcast-Profil gespeichert — wird überall in der App aktualisiert');
       await loadSettings();
+      // Globales Podcast-Profil im AppContext aktualisieren
+      await refreshPodcastProfile();
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
   };
@@ -263,7 +265,9 @@ export default function SettingsPage() {
     setIsSaving(true);
     try {
       await adminApi.updateSettings({ technicalDefaults: techForm });
-      showSuccess('Technische Standard-Daten gespeichert');
+      showSuccess('Technische Standard-Daten gespeichert — werden als Vorlage für neue Episoden verwendet');
+      // Globale technische Defaults im AppContext aktualisieren
+      await refreshPodcastProfile();
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
   };

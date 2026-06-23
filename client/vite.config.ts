@@ -37,6 +37,6 @@ export default defineConfig({
   },
   // Inject app version from package.json into the bundle
   define: {
-    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '2.4.1'),
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '2.5.0'),
   },
 })

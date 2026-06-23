@@ -810,6 +810,29 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-5-0',
+        title: 'v2.5.0 — Globales Podcast-Profil, Technische Standards & Episoden-Dashboard',
+        summary: 'Podcast-Profil wird global vom Admin definiert und überall in der App angezeigt. Technische Daten einmalig als Standard festlegen. Neues Episoden-Dashboard mit Kalender, Statistiken und Listenansicht.',
+        icon: <Package size={18} />,
+        tags: ['update', 'podcast-profil', 'technische-daten', 'episoden-dashboard', 'kalender', 'statistiken'],
+        content: [
+          {
+            heading: 'Neue Features',
+            list: [
+              'Globales Podcast-Profil: Admin definiert einmal, alle Nutzer sehen dieselben Daten überall in der App',
+              'Technische Standard-Daten: Einmalig in den Einstellungen festlegen (Sample Rate, Bitrate, Format, DAW etc.) — werden als Vorlage für neue Episoden verwendet',
+              'AppContext: PodcastProfile und TechnicalDefaults global verfügbar via usePodcastProfile()-Hook',
+              'Episoden-Dashboard: Neue Seite /episodes-dashboard mit Kalender-Ansicht, Listenansicht und Statistiken',
+              'Kalender-View: Monat/Jahr-Navigation, Episoden farblich nach Status markiert, Klick auf Tag zeigt Details',
+              'Statistiken-View: Status-Verteilung als Balkendiagramm, Episoden pro Monat, Podcast-Profil-Übersicht',
+              'Listenansicht: Filterbare Tabelle aller Episoden mit Status, Datum und Direktlink',
+              'PDF-Export: Monatsübersicht als PDF für Besprechungen und Planung',
+              'Einstellungen: Podcast-Profil-Speicherung aktualisiert AppContext global sofort',
+            ],
+          },
+        ],
+      },
+      {
         id: 'v2-4-1',
         title: 'v2.4.1 — Versionsanzeige-Fix & chatApi-Integration',
         summary: 'Kritischer Fix: Versionsnummer wurde in der Sidebar falsch als v2.1.2 angezeigt. Ursache: dist/public-Verzeichnis wurde nicht korrekt aktualisiert. chatApi-Modul in api.ts ergänzt.',

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { authApi, mediaApi } from '../lib/api';
+import { authApi, mediaApi, adminApi } from '../lib/api';
 
 // ============================================================
 // Types
@@ -20,7 +20,6 @@ export interface UserTheme {
   accentColor?: string;
   sidebarColor?: string;
   fontScale?: number;
-  // Extended theme options
   accentColorLight?: string;
   accentColorDark?: string;
   surfaceColor?: string;
@@ -32,6 +31,32 @@ export interface BrandingState {
   podcastDescription: string;
   logoUrl: string | null;
   coverUrl: string | null;
+}
+
+// Globales Podcast-Profil (vom Admin definiert, für alle Nutzer sichtbar)
+export interface PodcastProfile {
+  name: string;
+  description: string;
+  author: string;
+  email: string;
+  website: string;
+  rssUrl: string;
+  category: string;
+  language: string;
+  moderator: string;
+  copyright: string;
+  explicit: boolean;
+}
+
+// Globale technische Standards (einmal definiert, als Vorlage für Episoden)
+export interface TechnicalDefaults {
+  sampleRate: string;
+  bitrate: string;
+  format: string;
+  channels: string;
+  recordingDevice: string;
+  daw: string;
+  additionalNotes: string;
 }
 
 export interface Toast {
@@ -57,6 +82,11 @@ interface AppContextValue {
   branding: BrandingState;
   refreshBranding: () => Promise<void>;
 
+  // Globales Podcast-Profil
+  podcastProfile: PodcastProfile;
+  technicalDefaults: TechnicalDefaults;
+  refreshPodcastProfile: () => Promise<void>;
+
   // Toast notifications
   toasts: Toast[];
   addToast: (type: Toast['type'], message: string, duration?: number) => void;
@@ -77,6 +107,30 @@ const DEFAULT_BRANDING: BrandingState = {
   coverUrl: null,
 };
 
+const DEFAULT_PODCAST_PROFILE: PodcastProfile = {
+  name: '',
+  description: '',
+  author: '',
+  email: '',
+  website: '',
+  rssUrl: '',
+  category: '',
+  language: 'de',
+  moderator: '',
+  copyright: '',
+  explicit: false,
+};
+
+const DEFAULT_TECHNICAL_DEFAULTS: TechnicalDefaults = {
+  sampleRate: '',
+  bitrate: '',
+  format: '',
+  channels: '',
+  recordingDevice: '',
+  daw: '',
+  additionalNotes: '',
+};
+
 // ============================================================
 // Context
 // ============================================================
@@ -88,6 +142,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [branding, setBranding] = useState<BrandingState>(DEFAULT_BRANDING);
+  const [podcastProfile, setPodcastProfile] = useState<PodcastProfile>(DEFAULT_PODCAST_PROFILE);
+  const [technicalDefaults, setTechnicalDefaults] = useState<TechnicalDefaults>(DEFAULT_TECHNICAL_DEFAULTS);
 
   // Load branding from server
   const refreshBranding = useCallback(async () => {
@@ -96,7 +152,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setBranding({
         podcastName: data.podcastName || 'PodCore',
         podcastDescription: data.podcastDescription || '',
-        // Add cache-busting timestamp so the browser reloads the image after upload
         logoUrl: data.logo ? `${data.logo}?t=${Date.now()}` : null,
         coverUrl: data.cover ? `${data.cover}?t=${Date.now()}` : null,
       });
@@ -105,20 +160,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Check auth on mount, then load branding
+  // Load global podcast profile and technical defaults
+  const refreshPodcastProfile = useCallback(async () => {
+    try {
+      const data = await adminApi.getPublicSettings();
+      if (data) {
+        const podcast = data.podcast || {};
+        setPodcastProfile({
+          name: podcast.name || data.general?.podcastName || '',
+          description: podcast.description || data.branding?.podcastDescription || '',
+          author: podcast.author || '',
+          email: podcast.email || '',
+          website: podcast.website || '',
+          rssUrl: podcast.rssUrl || '',
+          category: podcast.category || '',
+          language: podcast.language || data.general?.language || 'de',
+          moderator: podcast.moderator || '',
+          copyright: podcast.copyright || '',
+          explicit: podcast.explicit || false,
+        });
+        const tech = data.technicalDefaults || {};
+        setTechnicalDefaults({
+          sampleRate: tech.sampleRate || '',
+          bitrate: tech.bitrate || '',
+          format: tech.format || '',
+          channels: tech.channels || '',
+          recordingDevice: tech.recordingDevice || '',
+          daw: tech.daw || '',
+          additionalNotes: tech.additionalNotes || '',
+        });
+        // Sync podcast name to branding if not set separately
+        if (podcast.name) {
+          setBranding(prev => ({
+            ...prev,
+            podcastName: podcast.name || prev.podcastName,
+          }));
+        }
+      }
+    } catch {
+      // Keep defaults on error
+    }
+  }, []);
+
+  // Check auth on mount, then load branding and podcast profile
   useEffect(() => {
     authApi.me()
       .then(u => {
         setUser(u);
-        // Apply user theme if set
         if (u?.theme) applyUserTheme(u.theme);
       })
       .catch(() => setUser(null))
       .finally(() => setIsLoading(false));
 
-    // Load branding independently (doesn't require auth)
+    // Load branding and podcast profile independently (doesn't require auth)
     refreshBranding();
-  }, [refreshBranding]);
+    refreshPodcastProfile();
+  }, [refreshBranding, refreshPodcastProfile]);
 
   // Poll for permission/role changes every 30 seconds
   useEffect(() => {
@@ -127,7 +224,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const fresh = await authApi.me();
         if (!fresh) return;
-        // Check for permission, role OR theme changes
         const oldPerms = JSON.stringify(user.permissions);
         const newPerms = JSON.stringify(fresh.permissions);
         const oldTheme = JSON.stringify(user.theme);
@@ -148,9 +244,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const result = await authApi.login(username, password);
     setUser(result.user);
     applyUserTheme(result.user?.theme || null);
-    // Refresh branding after login
     refreshBranding();
-  }, [refreshBranding]);
+    refreshPodcastProfile();
+  }, [refreshBranding, refreshPodcastProfile]);
 
   const logout = useCallback(async () => {
     try {
@@ -159,7 +255,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // ignore
     }
     setUser(null);
-    // Reset theme on logout
     applyUserTheme(null);
   }, []);
 
@@ -208,6 +303,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     can,
     branding,
     refreshBranding,
+    podcastProfile,
+    technicalDefaults,
+    refreshPodcastProfile,
     toasts,
     addToast,
     removeToast,
@@ -227,7 +325,6 @@ export function applyUserTheme(theme: UserTheme | null | undefined) {
   const root = document.documentElement;
 
   if (!theme) {
-    // Reset all to defaults
     root.style.removeProperty('--color-accent-primary');
     root.style.removeProperty('--color-accent-primary-light');
     root.style.removeProperty('--color-accent-primary-dark');
@@ -243,7 +340,6 @@ export function applyUserTheme(theme: UserTheme | null | undefined) {
 
   if (theme.accentColor) {
     root.style.setProperty('--color-accent-primary', theme.accentColor);
-    // Derive light/dark variants by adjusting opacity
     root.style.setProperty('--color-accent-primary-light', theme.accentColorLight || lightenColor(theme.accentColor, 20));
     root.style.setProperty('--color-accent-primary-dark', theme.accentColorDark || darkenColor(theme.accentColor, 20));
     root.style.setProperty('--color-text-accent', lightenColor(theme.accentColor, 30));
@@ -252,7 +348,6 @@ export function applyUserTheme(theme: UserTheme | null | undefined) {
   if (theme.sidebarColor) {
     root.style.setProperty('--color-sidebar-bg', theme.sidebarColor);
     root.style.setProperty('--color-obsidian-800', theme.sidebarColor);
-    // Slightly lighter for surface
     root.style.setProperty('--color-surface', lightenColor(theme.sidebarColor, 8));
     root.style.setProperty('--color-surface-raised', lightenColor(theme.sidebarColor, 12));
   }
@@ -317,4 +412,9 @@ export function useToast() {
 export function useBranding() {
   const { branding, refreshBranding } = useApp();
   return { branding, refreshBranding };
+}
+
+export function usePodcastProfile() {
+  const { podcastProfile, technicalDefaults, refreshPodcastProfile } = useApp();
+  return { podcastProfile, technicalDefaults, refreshPodcastProfile };
 }

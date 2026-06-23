@@ -1,10 +1,36 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb, getDefaultPermissions } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+// ============================================================
+// PUBLIC ROUTES (kein Auth nötig)
+// ============================================================
+
+// GET /api/admin/settings/public — Podcast-Profil und technische Defaults für alle Nutzer
+router.get('/settings/public', (req: Request, res: Response) => {
+  const db = getDb();
+  const row = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
+  const settings = row ? JSON.parse(row.value) : {};
+  return res.json({
+    success: true,
+    data: {
+      podcast: settings.podcast || {},
+      technicalDefaults: settings.technicalDefaults || {},
+      general: {
+        podcastName: settings.general?.podcastName || settings.podcast?.name || 'PodCore',
+        language: settings.general?.language || 'de',
+        timezone: settings.general?.timezone || 'Europe/Berlin',
+      },
+      branding: settings.branding || {},
+    },
+  });
+});
+
+// All routes below require authentication
 router.use(requireAuth as any);
 
 function parseUser(row: any) {

@@ -159,7 +159,11 @@ export const editorialApi = {
   updatePlanEntry: (id: string, data: any) => api.put<any>(`/editorial/plan/${id}`, data),
   deletePlanEntry: (id: string) => api.delete(`/editorial/plan/${id}`),
   getCalendar: (year: number, month: number) => api.get<any>(`/editorial/calendar/${year}/${month}`),
-  downloadCalendarPdf: (year: number, month: number) => { window.location.href = `/api/editorial/calendar/${year}/${month}/export-pdf`; },
+  downloadCalendarPdf: async (year: number, month: number): Promise<Blob> => {
+    const response = await fetch(`/api/editorial/calendar/${year}/${month}/export-pdf`, { credentials: 'include' });
+    if (!response.ok) throw new Error('PDF-Export fehlgeschlagen');
+    return response.blob();
+  },
 
   // Interview Partners
   listPartners: (params?: any) => {
@@ -328,6 +332,9 @@ export const adminApi = {
   // Settings
   getSettings: () => api.get<any>('/admin/settings'),
   updateSettings: (data: any) => api.put<any>('/admin/settings', data),
+  getPublicSettings: () => api.get<any>('/admin/settings/public'),
+  updatePodcastProfile: (data: any) => api.put<any>('/admin/settings', { podcast: data }),
+  updateTechnicalDefaults: (data: any) => api.put<any>('/admin/settings', { technicalDefaults: data }),
 
   // System
   getSystem: () => api.get<any>('/admin/system'),
