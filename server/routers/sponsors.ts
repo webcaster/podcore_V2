@@ -176,6 +176,125 @@ router.get('/:id/report', requirePermission('canViewSponsorReports') as any, (re
   });
 });
 
+// ===== AD CATEGORIES (Werbekategorien mit Preislisten & Präsentationstext) =====
+// WICHTIG: Diese Routen müssen VOR /:id stehen, sonst matcht Express /categories als id!
+
+// GET /api/sponsors/categories — list all ad categories
+router.get('/categories', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const categories = db.all('SELECT * FROM ad_categories ORDER BY sort_order ASC, name ASC') as any[];
+  return res.json({ success: true, data: categories });
+});
+
+// POST /api/sponsors/categories — create a new ad category
+router.post('/categories', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { name, description, color = '#7c3aed', defaultPosition = 'mid-roll', defaultDuration = 30,
+    presentationText, presentationTemplate = 'präsentiert von',
+    basePrice, pricePerEpisode, pricePer1000Listens, currency = 'EUR', sortOrder = 0 } = req.body;
+  if (!name) return res.status(400).json({ success: false, error: 'Name erforderlich' });
+  const id = uuidv4();
+  db.run(`INSERT INTO ad_categories (id, name, description, color, default_position, default_duration, presentation_text, presentation_template, base_price, price_per_episode, price_per_1000_listens, currency, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, name, description || null, color, defaultPosition, defaultDuration, presentationText || null, presentationTemplate, basePrice || null, pricePerEpisode || null, pricePer1000Listens || null, currency, sortOrder]);
+  const created = db.get('SELECT * FROM ad_categories WHERE id = ?', [id]) as any;
+  return res.json({ success: true, data: created });
+});
+
+// PUT /api/sponsors/categories/:id — update an ad category
+router.put('/categories/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { name, description, color, defaultPosition, defaultDuration,
+    presentationText, presentationTemplate, basePrice, pricePerEpisode, pricePer1000Listens, currency, isActive, sortOrder } = req.body;
+  db.run(`UPDATE ad_categories SET
+    name = COALESCE(?, name), description = ?,
+    color = COALESCE(?, color),
+    default_position = COALESCE(?, default_position), default_duration = COALESCE(?, default_duration),
+    presentation_text = ?, presentation_template = COALESCE(?, presentation_template),
+    base_price = ?, price_per_episode = ?, price_per_1000_listens = ?,
+    currency = COALESCE(?, currency), is_active = COALESCE(?, is_active), sort_order = COALESCE(?, sort_order),
+    updated_at = datetime('now') WHERE id = ?`,
+    [name ?? null, description ?? null, color ?? null, defaultPosition ?? null, defaultDuration ?? null,
+     presentationText ?? null, presentationTemplate ?? null, basePrice ?? null, pricePerEpisode ?? null,
+     pricePer1000Listens ?? null, currency ?? null, isActive ?? null, sortOrder ?? null, req.params.id]);
+  const updated = db.get('SELECT * FROM ad_categories WHERE id = ?', [req.params.id]) as any;
+  return res.json({ success: true, data: updated });
+});
+
+// DELETE /api/sponsors/categories/:id — delete an ad category
+router.delete('/categories/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  db.run('DELETE FROM ad_categories WHERE id = ?', [req.params.id]);
+  return res.json({ success: true });
+});
+
+// ===== EPISODE AD BOOKINGS (Gebuchte Werbungen pro Episode) =====
+
+// GET /api/sponsors/episode-bookings/:episodeId — get all ad bookings for an episode
+router.get('/episode-bookings/:episodeId', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const bookings = db.all(`
+    SELECT b.*, sp.name as sponsor_name, sp.logo as sponsor_logo, sp.company as sponsor_company,
+           s.name as slot_name, s.category as slot_category, s.script as slot_script,
+           c.name as category_name, c.color as category_color, c.presentation_template as category_presentation_template
+    FROM episode_ad_bookings b
+    LEFT JOIN sponsors sp ON b.sponsor_id = sp.id
+    LEFT JOIN ad_slots s ON b.ad_slot_id = s.id
+    LEFT JOIN ad_categories c ON b.ad_category_id = c.id
+    WHERE b.episode_id = ?
+    ORDER BY b.sort_order ASC, b.position ASC, b.created_at ASC
+  `, [req.params.episodeId]) as any[];
+  return res.json({ success: true, data: bookings });
+});
+
+// POST /api/sponsors/episode-bookings — create a new episode ad booking
+router.post('/episode-bookings', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { episodeId, adSlotId, adCategoryId, sponsorId, position = 'mid-roll',
+    scriptText, presentationText, duration, confirmed = 0, sortOrder = 0 } = req.body;
+  if (!episodeId || !adSlotId || !sponsorId) return res.status(400).json({ success: false, error: 'episodeId, adSlotId und sponsorId erforderlich' });
+  const id = uuidv4();
+  db.run(`INSERT INTO episode_ad_bookings (id, episode_id, ad_slot_id, ad_category_id, sponsor_id, position, script_text, presentation_text, duration, confirmed, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, episodeId, adSlotId, adCategoryId || null, sponsorId, position, scriptText || null, presentationText || null, duration || null, confirmed ? 1 : 0, sortOrder]);
+  const created = db.get(`SELECT b.*, sp.name as sponsor_name, sp.logo as sponsor_logo, sp.company as sponsor_company, s.name as slot_name, c.name as category_name, c.color as category_color FROM episode_ad_bookings b LEFT JOIN sponsors sp ON b.sponsor_id = sp.id LEFT JOIN ad_slots s ON b.ad_slot_id = s.id LEFT JOIN ad_categories c ON b.ad_category_id = c.id WHERE b.id = ?`, [id]) as any;
+  return res.json({ success: true, data: created });
+});
+
+// PUT /api/sponsors/episode-bookings/:id — update an episode ad booking
+router.put('/episode-bookings/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { position, scriptText, presentationText, duration, confirmed, sortOrder } = req.body;
+  db.run(`UPDATE episode_ad_bookings SET position = COALESCE(?, position), script_text = ?, presentation_text = ?, duration = ?, confirmed = COALESCE(?, confirmed), sort_order = COALESCE(?, sort_order), updated_at = datetime('now') WHERE id = ?`,
+    [position ?? null, scriptText ?? null, presentationText ?? null, duration ?? null, confirmed ?? null, sortOrder ?? null, req.params.id]);
+  return res.json({ success: true });
+});
+
+// DELETE /api/sponsors/episode-bookings/:id — delete an episode ad booking
+router.delete('/episode-bookings/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  db.run('DELETE FROM episode_ad_bookings WHERE id = ?', [req.params.id]);
+  return res.json({ success: true });
+});
+
+// GET /api/sponsors/available-for-episode/:episodeId — get all confirmed ad slots available for booking
+router.get('/available-for-episode/:episodeId', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const slots = db.all(`
+    SELECT s.*, sp.name as sponsor_name, sp.logo as sponsor_logo, sp.company as sponsor_company,
+           c.name as category_name, c.color as category_color, c.presentation_template,
+           c.presentation_text as category_presentation_text
+    FROM ad_slots s
+    JOIN sponsors sp ON s.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON s.category_id = c.id
+    WHERE s.status IN ('bestätigt', 'aktiv', 'angefragt')
+    ORDER BY sp.name ASC, s.name ASC
+  `) as any[];
+  return res.json({ success: true, data: slots });
+});
+
+// ============================================================
+// SPONSOR DETAIL (MUSS nach allen statischen Routen stehen!)
+// ============================================================
+
 router.get('/:id', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const row = db.get('SELECT * FROM sponsors WHERE id = ?', [req.params.id]) as any;
@@ -518,121 +637,6 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
   );
 
   doc.end();
-});
-
-// ===== AD CATEGORIES (Werbekategorien mit Preislisten & Präsentationstext) =====
-
-// GET /api/sponsors/categories — list all ad categories
-router.get('/categories', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const categories = db.all('SELECT * FROM ad_categories ORDER BY sort_order ASC, name ASC') as any[];
-  return res.json({ success: true, data: categories });
-});
-
-// POST /api/sponsors/categories — create a new ad category
-router.post('/categories', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const { v4: uuidv4 } = require('uuid');
-  const { name, description, color = '#7c3aed', defaultPosition = 'mid-roll', defaultDuration = 30,
-    presentationText, presentationTemplate = 'präsentiert von',
-    basePrice, pricePerEpisode, pricePer1000Listens, currency = 'EUR', sortOrder = 0 } = req.body;
-  if (!name) return res.status(400).json({ success: false, error: 'Name erforderlich' });
-  const id = uuidv4();
-  db.run(`INSERT INTO ad_categories (id, name, description, color, default_position, default_duration, presentation_text, presentation_template, base_price, price_per_episode, price_per_1000_listens, currency, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, name, description || null, color, defaultPosition, defaultDuration, presentationText || null, presentationTemplate, basePrice || null, pricePerEpisode || null, pricePer1000Listens || null, currency, sortOrder]);
-  const created = db.get('SELECT * FROM ad_categories WHERE id = ?', [id]) as any;
-  return res.json({ success: true, data: created });
-});
-
-// PUT /api/sponsors/categories/:id — update an ad category
-router.put('/categories/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const { name, description, color, defaultPosition, defaultDuration,
-    presentationText, presentationTemplate, basePrice, pricePerEpisode, pricePer1000Listens, currency, isActive, sortOrder } = req.body;
-  db.run(`UPDATE ad_categories SET
-    name = COALESCE(?, name), description = ?, color = COALESCE(?, color),
-    default_position = COALESCE(?, default_position), default_duration = COALESCE(?, default_duration),
-    presentation_text = ?, presentation_template = COALESCE(?, presentation_template),
-    base_price = ?, price_per_episode = ?, price_per_1000_listens = ?,
-    currency = COALESCE(?, currency), is_active = COALESCE(?, is_active), sort_order = COALESCE(?, sort_order),
-    updated_at = datetime('now') WHERE id = ?`,
-    [name ?? null, description ?? null, color ?? null, defaultPosition ?? null, defaultDuration ?? null,
-     presentationText ?? null, presentationTemplate ?? null, basePrice ?? null, pricePerEpisode ?? null,
-     pricePer1000Listens ?? null, currency ?? null, isActive ?? null, sortOrder ?? null, req.params.id]);
-  const updated = db.get('SELECT * FROM ad_categories WHERE id = ?', [req.params.id]) as any;
-  return res.json({ success: true, data: updated });
-});
-
-// DELETE /api/sponsors/categories/:id — delete an ad category
-router.delete('/categories/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  db.run('DELETE FROM ad_categories WHERE id = ?', [req.params.id]);
-  return res.json({ success: true });
-});
-
-// ===== EPISODE AD BOOKINGS (Gebuchte Werbungen pro Episode) =====
-
-// GET /api/sponsors/episode-bookings/:episodeId — get all ad bookings for an episode
-router.get('/episode-bookings/:episodeId', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const bookings = db.all(`
-    SELECT b.*, sp.name as sponsor_name, sp.logo as sponsor_logo, sp.company as sponsor_company,
-           s.name as slot_name, s.category as slot_category, s.script as slot_script,
-           c.name as category_name, c.color as category_color, c.presentation_template as category_presentation_template
-    FROM episode_ad_bookings b
-    LEFT JOIN sponsors sp ON b.sponsor_id = sp.id
-    LEFT JOIN ad_slots s ON b.ad_slot_id = s.id
-    LEFT JOIN ad_categories c ON b.ad_category_id = c.id
-    WHERE b.episode_id = ?
-    ORDER BY b.sort_order ASC, b.position ASC, b.created_at ASC
-  `, [req.params.episodeId]) as any[];
-  return res.json({ success: true, data: bookings });
-});
-
-// POST /api/sponsors/episode-bookings — create a new episode ad booking
-router.post('/episode-bookings', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const { v4: uuidv4 } = require('uuid');
-  const { episodeId, adSlotId, adCategoryId, sponsorId, position = 'mid-roll',
-    scriptText, presentationText, duration, confirmed = 0, sortOrder = 0 } = req.body;
-  if (!episodeId || !adSlotId || !sponsorId) return res.status(400).json({ success: false, error: 'episodeId, adSlotId und sponsorId erforderlich' });
-  const id = uuidv4();
-  db.run(`INSERT INTO episode_ad_bookings (id, episode_id, ad_slot_id, ad_category_id, sponsor_id, position, script_text, presentation_text, duration, confirmed, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, episodeId, adSlotId, adCategoryId || null, sponsorId, position, scriptText || null, presentationText || null, duration || null, confirmed ? 1 : 0, sortOrder]);
-  const created = db.get(`SELECT b.*, sp.name as sponsor_name, sp.logo as sponsor_logo, sp.company as sponsor_company, s.name as slot_name, c.name as category_name, c.color as category_color FROM episode_ad_bookings b LEFT JOIN sponsors sp ON b.sponsor_id = sp.id LEFT JOIN ad_slots s ON b.ad_slot_id = s.id LEFT JOIN ad_categories c ON b.ad_category_id = c.id WHERE b.id = ?`, [id]) as any;
-  return res.json({ success: true, data: created });
-});
-
-// PUT /api/sponsors/episode-bookings/:id — update an episode ad booking
-router.put('/episode-bookings/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const { position, scriptText, presentationText, duration, confirmed, sortOrder } = req.body;
-  db.run(`UPDATE episode_ad_bookings SET position = COALESCE(?, position), script_text = ?, presentation_text = ?, duration = ?, confirmed = COALESCE(?, confirmed), sort_order = COALESCE(?, sort_order), updated_at = datetime('now') WHERE id = ?`,
-    [position ?? null, scriptText ?? null, presentationText ?? null, duration ?? null, confirmed ?? null, sortOrder ?? null, req.params.id]);
-  return res.json({ success: true });
-});
-
-// DELETE /api/sponsors/episode-bookings/:id — delete an episode ad booking
-router.delete('/episode-bookings/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  db.run('DELETE FROM episode_ad_bookings WHERE id = ?', [req.params.id]);
-  return res.json({ success: true });
-});
-
-// GET /api/sponsors/available-for-episode/:episodeId — get all confirmed ad slots available for booking
-router.get('/available-for-episode/:episodeId', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const slots = db.all(`
-    SELECT s.*, sp.name as sponsor_name, sp.logo as sponsor_logo, sp.company as sponsor_company,
-           c.name as category_name, c.color as category_color, c.presentation_template,
-           c.presentation_text as category_presentation_text
-    FROM ad_slots s
-    JOIN sponsors sp ON s.sponsor_id = sp.id
-    LEFT JOIN ad_categories c ON s.category_id = c.id
-    WHERE s.status IN ('bestätigt', 'aktiv', 'angefragt')
-    ORDER BY sp.name ASC, s.name ASC
-  `) as any[];
-  return res.json({ success: true, data: slots });
 });
 
 export default router;

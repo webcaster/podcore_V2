@@ -7,7 +7,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Quote, Code,
   Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle
 } from 'lucide-react';
-import { episodesApi, adminApi, editorialApi } from '../lib/api';
+import { episodesApi, adminApi, editorialApi, sponsorsApi } from '../lib/api';
 import Modal from '../components/ui/Modal';
 import { useApp } from '../contexts/AppContext';
 
@@ -421,7 +421,6 @@ export default function EpisodeDetailPage() {
     if (!id) return;
     setIsLoadingAds(true);
     try {
-      const { sponsorsApi } = await import('../lib/api');
       const [bookings, slots] = await Promise.all([
         sponsorsApi.getEpisodeBookings(id),
         sponsorsApi.getAvailableSlotsForEpisode(id),
@@ -436,7 +435,6 @@ export default function EpisodeDetailPage() {
     e.preventDefault();
     if (!id || !adBookingForm.adSlotId) return;
     try {
-      const { sponsorsApi } = await import('../lib/api');
       const slot = availableSlots.find(s => s.id === adBookingForm.adSlotId);
       await sponsorsApi.createEpisodeBooking({
         episodeId: id,
@@ -459,7 +457,6 @@ export default function EpisodeDetailPage() {
   const handleDeleteAdBooking = async (bookingId: string) => {
     if (!confirm('Werbebuchung entfernen?')) return;
     try {
-      const { sponsorsApi } = await import('../lib/api');
       await sponsorsApi.deleteEpisodeBooking(bookingId);
       showSuccess('Werbebuchung entfernt');
       loadAdBookings();
@@ -468,7 +465,6 @@ export default function EpisodeDetailPage() {
 
   const handleToggleAdConfirmed = async (booking: any) => {
     try {
-      const { sponsorsApi } = await import('../lib/api');
       await sponsorsApi.updateEpisodeBooking(booking.id, { confirmed: booking.confirmed ? 0 : 1 });
       loadAdBookings();
     } catch (err: any) { showError(err.message); }
