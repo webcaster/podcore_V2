@@ -7,7 +7,8 @@ import {
   AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Quote, Code,
   Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle,
   Search, Star, CheckSquare, Square, BookOpen, UserCheck, Layers, ExternalLink, X,
-  MessageSquare, HelpCircle, FileEdit, StickyNote, Target, Timer, Timer as TimerIcon
+  MessageSquare, HelpCircle, FileEdit, StickyNote, Target, Timer, Timer as TimerIcon,
+  RotateCcw
 } from 'lucide-react';
 import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi } from '../lib/api';
 import Modal from '../components/ui/Modal';
@@ -1225,91 +1226,150 @@ export default function EpisodeDetailPage() {
 
           {activeTab === 'ads' && (
             <div className="space-y-4">
-              {/* Timeline-Visualisierung */}
+
+              {/* ── Sponsor-Status-Übersicht ─────────────────────────── */}
+              <div className="card">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="font-semibold text-text-primary flex items-center gap-2">
+                      <Megaphone size={16} className="text-accent-orange" /> Werbung dieser Episode
+                    </h2>
+                    <p className="text-xs text-text-muted mt-0.5">Übersicht der aktuell gebuchten Sponsoren-Werbung</p>
+                  </div>
+                  {can('canEditEpisodes') && (
+                    <button
+                      onClick={() => setShowAdBookingModal(true)}
+                      className="btn-primary text-xs py-1.5"
+                      title="Spontane Werbung nachbuchen"
+                    >
+                      <Plus size={14} /> Werbung nachbuchen
+                    </button>
+                  )}
+                </div>
+
+                {isLoadingAds ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 size={20} className="animate-spin text-accent-orange" />
+                  </div>
+                ) : adBookings.length === 0 ? (
+                  <div className="text-center py-10 border border-dashed border-surface-border rounded-xl">
+                    <Megaphone size={32} className="mx-auto mb-3 text-text-muted opacity-40" />
+                    <p className="text-text-muted text-sm font-medium">Keine Werbung gebucht</p>
+                    <p className="text-text-muted text-xs mt-1 mb-4">Für diese Episode ist momentan kein Sponsor gebucht.</p>
+                    {can('canEditEpisodes') && (
+                      <button
+                        onClick={() => setShowAdBookingModal(true)}
+                        className="btn-primary text-xs"
+                      >
+                        <Plus size={14} /> Werbung nachbuchen
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Positions-Gruppen */}
+                    {(['pre-roll', 'mid-roll', 'post-roll'] as const).map(pos => {
+                      const posBookings = adBookings.filter(b => b.position === pos);
+                      if (posBookings.length === 0) return null;
+                      const posColors: Record<string, string> = { 'pre-roll': 'text-accent-orange border-accent-orange/30 bg-accent-orange/5', 'mid-roll': 'text-accent-purple border-accent-purple/30 bg-accent-purple/5', 'post-roll': 'text-accent-blue border-accent-blue/30 bg-accent-blue/5' };
+                      const posLabels: Record<string, string> = { 'pre-roll': 'Pre-Roll', 'mid-roll': 'Mid-Roll', 'post-roll': 'Post-Roll' };
+                      return (
+                        <div key={pos}>
+                          <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1 ${posColors[pos].split(' ')[0]}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full inline-block ${pos === 'pre-roll' ? 'bg-accent-orange' : pos === 'mid-roll' ? 'bg-accent-purple' : 'bg-accent-blue'}`} />
+                            {posLabels[pos]}
+                          </p>
+                          <div className="space-y-2">
+                            {posBookings.map(b => (
+                              <div key={b.id} className={`flex items-center justify-between p-3 rounded-xl border ${posColors[pos]}`}>
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  <div className="w-9 h-9 rounded-lg bg-obsidian-800 border border-surface-border flex items-center justify-center flex-shrink-0">
+                                    <Megaphone size={16} className="text-accent-orange" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold text-text-primary truncate">{b.sponsor_name}</p>
+                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                      <span className="text-[10px] text-text-muted">{b.slot_name || 'Sonderbuchung'}</span>
+                                      {b.category_name && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{backgroundColor: (b.category_color || '#f97316') + '22', color: b.category_color || '#f97316', border: `1px solid ${(b.category_color || '#f97316')}44`}}>{b.category_name}</span>
+                                      )}
+                                      {b.time_position != null && (
+                                        <span className="text-[10px] text-text-muted flex items-center gap-0.5">
+                                          <Timer size={9} /> {formatTime(b.time_position)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                  <span className={`text-[10px] px-2 py-1 rounded-full font-medium border ${
+                                    b.confirmed
+                                      ? 'bg-accent-green/15 text-accent-green border-accent-green/30'
+                                      : 'bg-accent-orange/15 text-accent-orange border-accent-orange/30'
+                                  }`}>
+                                    {b.confirmed ? '✓ Bestätigt' : '⏳ Angefragt'}
+                                  </span>
+                                  {can('canEditEpisodes') && (
+                                    <button
+                                      onClick={async () => {
+                                        if (!window.confirm(`Buchung von "${b.sponsor_name}" wirklich löschen?`)) return;
+                                        try {
+                                          await sponsorsApi.deleteEpisodeBooking(b.id);
+                                          setAdBookings(prev => prev.filter(x => x.id !== b.id));
+                                          showSuccess('Buchung gelöscht');
+                                        } catch (err: any) { showError(err.message || 'Fehler beim Löschen'); }
+                                      }}
+                                      className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors"
+                                      title="Buchung löschen"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Timeline-Visualisierung (nur wenn Buchungen + Dauer vorhanden) ── */}
               {adBookings.length > 0 && totalDuration > 0 && (
                 <div className="card">
                   <h3 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2"><Timer size={14} /> Werbe-Timeline</h3>
                   <div className="relative h-10 bg-obsidian-900 rounded-lg border border-surface-border overflow-hidden">
-                    {/* Hintergrund-Segmente */}
                     <div className="absolute inset-0 flex">
-                      <div className="h-full bg-accent-cyan/10" style={{width: '10%'}} title="Intro"></div>
-                      <div className="h-full bg-accent-blue/5" style={{width: '80%'}} title="Hauptinhalt"></div>
-                      <div className="h-full bg-accent-red/10" style={{width: '10%'}} title="Outro"></div>
+                      <div className="h-full bg-accent-cyan/10" style={{width: '10%'}} title="Intro" />
+                      <div className="h-full bg-accent-blue/5" style={{width: '80%'}} title="Hauptinhalt" />
+                      <div className="h-full bg-accent-red/10" style={{width: '10%'}} title="Outro" />
                     </div>
-                    {/* Werbemarker */}
                     {adBookings.filter(b => b.time_position != null).map((b, i) => {
                       const pct = Math.min(100, Math.max(0, (b.time_position / totalDuration) * 100));
                       const colors: Record<string, string> = { 'pre-roll': '#f97316', 'mid-roll': '#a855f7', 'post-roll': '#3b82f6' };
                       const color = b.category_color || colors[b.position] || '#f97316';
                       return (
                         <div key={b.id} className="absolute top-0 bottom-0 flex flex-col items-center" style={{left: `${pct}%`, transform: 'translateX(-50%)'}}>
-                          <div className="w-0.5 h-full" style={{backgroundColor: color}}></div>
+                          <div className="w-0.5 h-full" style={{backgroundColor: color}} />
                           <div className="absolute top-1 w-4 h-4 rounded-full border-2 border-obsidian-900 flex items-center justify-center text-[8px] font-bold" style={{backgroundColor: color, color: 'white'}}>{i+1}</div>
                         </div>
                       );
                     })}
-                    {/* Zeitbeschriftungen */}
                     <div className="absolute bottom-0 left-1 text-[9px] text-text-muted">0:00</div>
                     <div className="absolute bottom-0 right-1 text-[9px] text-text-muted">{formatTime(totalDuration)}</div>
                   </div>
                   <div className="flex gap-3 mt-2">
                     {[{p:'pre-roll',l:'Pre-Roll',c:'#f97316'},{p:'mid-roll',l:'Mid-Roll',c:'#a855f7'},{p:'post-roll',l:'Post-Roll',c:'#3b82f6'}].map(pos => (
                       <div key={pos.p} className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full" style={{backgroundColor: pos.c}}></div>
+                        <div className="w-2 h-2 rounded-full" style={{backgroundColor: pos.c}} />
                         <span className="text-[10px] text-text-muted">{pos.l}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-
-              <div className="card">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-semibold text-text-primary">Werbebuchungen</h2>
-                  <button onClick={() => setShowAdBookingModal(true)} className="btn-primary text-xs py-1.5"><Plus size={14} /> Buchen</button>
-                </div>
-                {adBookings.length === 0 ? <p className="text-center py-8 text-text-muted text-sm">Keine Buchungen vorhanden.</p> : (
-                  <div className="space-y-2">
-                    {adBookings.map(b => (
-                      <div key={b.id} className="flex items-center justify-between p-3 bg-obsidian-800 rounded-lg border border-surface-border">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-text-primary">{b.sponsor_name}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <p className="text-[10px] text-text-muted uppercase">{b.slot_name || 'Sonderbuchung'} · {b.position}</p>
-                            {b.time_position != null && (
-                              <span className="text-[10px] text-accent-orange flex items-center gap-0.5">
-                                <Timer size={9} /> {formatTime(b.time_position)}
-                              </span>
-                            )}
-                            {b.category_name && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{backgroundColor: (b.category_color || '#f97316') + '30', color: b.category_color || '#f97316'}}>{b.category_name}</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className={`badge text-[10px] ${b.confirmed ? 'bg-accent-green/20 text-accent-green' : 'bg-accent-orange/20 text-accent-orange'}`}>
-                            {b.confirmed ? 'Bestätigt' : 'Angefragt'}
-                          </span>
-                          <button
-                            onClick={async () => {
-                              if (!window.confirm(`Buchung von "${b.sponsor_name}" wirklich löschen?`)) return;
-                              try {
-                                await sponsorsApi.deleteEpisodeBooking(b.id);
-                                setAdBookings(prev => prev.filter(x => x.id !== b.id));
-                                showSuccess('Buchung gelöscht');
-                              } catch (err: any) { showError(err.message || 'Fehler beim Löschen'); }
-                            }}
-                            className="p-1 text-text-muted hover:text-accent-red transition-colors"
-                            title="Buchung löschen"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           )}
 
@@ -1461,6 +1521,104 @@ export default function EpisodeDetailPage() {
               </div>
             </div>
           )}
+
+          {/* ── Episoden-Freigabe Widget ──────────────────────── */}
+          {(() => {
+            const approvalStatus = episode?.approvalStatus || 'ausstehend';
+            const statusConfig: Record<string, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
+              'ausstehend': { label: 'Ausstehend', color: 'text-text-muted', bg: 'bg-surface-overlay', border: 'border-surface-border', icon: <Circle size={14} className="text-text-muted" /> },
+              'angefragt':  { label: 'Freigabe angefragt', color: 'text-accent-orange', bg: 'bg-accent-orange/10', border: 'border-accent-orange/30', icon: <Clock size={14} className="text-accent-orange" /> },
+              'freigegeben': { label: 'Freigegeben', color: 'text-accent-green', bg: 'bg-accent-green/10', border: 'border-accent-green/30', icon: <CheckCircle size={14} className="text-accent-green" /> },
+              'abgelehnt':  { label: 'Zur Überarbeitung', color: 'text-accent-red', bg: 'bg-accent-red/10', border: 'border-accent-red/30', icon: <X size={14} className="text-accent-red" /> },
+            };
+            const cfg = statusConfig[approvalStatus] || statusConfig['ausstehend'];
+            return (
+              <div className={`card ${cfg.border} ${cfg.bg}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className={`text-sm font-bold uppercase tracking-wide ${cfg.color}`}>Freigabe</h3>
+                  {cfg.icon}
+                </div>
+
+                <div className="flex items-center gap-2 mb-3">
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+                    {cfg.label}
+                  </span>
+                </div>
+
+                {/* Freigabe-Notiz anzeigen */}
+                {episode?.approvalNotes && (
+                  <div className="mb-3 p-2 bg-obsidian-900 rounded-lg border border-surface-border">
+                    <p className="text-[10px] text-text-muted mb-0.5">Notiz:</p>
+                    <p className="text-xs text-text-primary">{episode.approvalNotes}</p>
+                  </div>
+                )}
+
+                {/* Angefragt-Info */}
+                {approvalStatus === 'angefragt' && episode?.approvalRequestedAt && (
+                  <p className="text-[10px] text-text-muted mb-3">
+                    Angefragt: {new Date(episode.approvalRequestedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
+
+                {/* Freigegeben-Info */}
+                {approvalStatus === 'freigegeben' && episode?.approvedAt && (
+                  <p className="text-[10px] text-text-muted mb-3">
+                    Freigegeben: {new Date(episode.approvedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
+
+                {/* Aktions-Buttons */}
+                <div className="space-y-2">
+                  {/* Freigabe anfordern (Redakteur/Moderator) */}
+                  {workflowEnabled && can('canRequestApproval') && approvalStatus === 'ausstehend' && (
+                    <button
+                      onClick={() => { setApprovalAction('request'); setApprovalNotes(''); setShowApprovalModal(true); }}
+                      className="w-full btn-secondary text-xs py-1.5 flex items-center justify-center gap-1.5 border-accent-orange/40 text-accent-orange hover:bg-accent-orange/10"
+                    >
+                      <UserCheck size={13} /> Freigabe anfordern
+                    </button>
+                  )}
+
+                  {/* Freigabe erteilen (Admin/Moderator mit Berechtigung) */}
+                  {can('canApproveEpisodes') && (approvalStatus === 'angefragt' || approvalStatus === 'ausstehend') && (
+                    <button
+                      onClick={() => { setApprovalAction('approve'); setApprovalNotes(''); setShowApprovalModal(true); }}
+                      className="w-full btn-primary text-xs py-1.5 flex items-center justify-center gap-1.5 bg-accent-green hover:bg-accent-green/80 border-accent-green"
+                    >
+                      <CheckCircle size={13} /> Episode freigeben
+                    </button>
+                  )}
+
+                  {/* Ablehnen (Admin/Moderator mit Berechtigung) */}
+                  {can('canApproveEpisodes') && approvalStatus === 'angefragt' && (
+                    <button
+                      onClick={() => { setApprovalAction('reject'); setApprovalNotes(''); setShowApprovalModal(true); }}
+                      className="w-full btn-secondary text-xs py-1.5 flex items-center justify-center gap-1.5 border-accent-red/40 text-accent-red hover:bg-accent-red/10"
+                    >
+                      <X size={13} /> Zur Überarbeitung
+                    </button>
+                  )}
+
+                  {/* Freigabe zurücksetzen (Admin oder wer bearbeiten darf) */}
+                  {(can('canApproveEpisodes') || can('canEditEpisodes')) && (approvalStatus === 'freigegeben' || approvalStatus === 'abgelehnt') && (
+                    <button
+                      onClick={handleResetApproval}
+                      className="w-full btn-ghost text-xs py-1.5 flex items-center justify-center gap-1.5 text-text-muted hover:text-text-primary"
+                    >
+                      <RotateCcw size={12} /> Freigabe zurücksetzen
+                    </button>
+                  )}
+
+                  {/* Workflow deaktiviert – Hinweis */}
+                  {!workflowEnabled && (
+                    <p className="text-[10px] text-text-muted text-center">
+                      Freigabe-Workflow ist in den Einstellungen deaktiviert.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -1752,6 +1910,95 @@ export default function EpisodeDetailPage() {
             </button>
           </div>
         )}
+      </Modal>
+
+      {/* ── Freigabe-Modal ─────────────────────────────────────────── */}
+      <Modal
+        isOpen={showApprovalModal}
+        onClose={() => setShowApprovalModal(false)}
+        title={
+          approvalAction === 'request' ? 'Freigabe anfordern'
+          : approvalAction === 'approve' ? 'Episode freigeben'
+          : 'Zur Überarbeitung senden'
+        }
+      >
+        <div className="space-y-4">
+          {/* Status-Icon */}
+          <div className={`flex items-center gap-3 p-3 rounded-xl border ${
+            approvalAction === 'approve' ? 'bg-accent-green/10 border-accent-green/30'
+            : approvalAction === 'reject' ? 'bg-accent-red/10 border-accent-red/30'
+            : 'bg-accent-orange/10 border-accent-orange/30'
+          }`}>
+            {approvalAction === 'approve'
+              ? <CheckCircle size={20} className="text-accent-green flex-shrink-0" />
+              : approvalAction === 'reject'
+              ? <X size={20} className="text-accent-red flex-shrink-0" />
+              : <UserCheck size={20} className="text-accent-orange flex-shrink-0" />
+            }
+            <div>
+              <p className={`text-sm font-semibold ${
+                approvalAction === 'approve' ? 'text-accent-green'
+                : approvalAction === 'reject' ? 'text-accent-red'
+                : 'text-accent-orange'
+              }`}>
+                {approvalAction === 'request' ? 'Freigabe anfordern'
+                 : approvalAction === 'approve' ? 'Episode freigeben'
+                 : 'Zur Überarbeitung senden'}
+              </p>
+              <p className="text-xs text-text-muted mt-0.5">
+                {approvalAction === 'request'
+                  ? 'Die Episode wird zur Prüfung eingereicht. Berechtigte Nutzer werden benachrichtigt.'
+                  : approvalAction === 'approve'
+                  ? 'Die Episode wird als freigegeben markiert und kann veröffentlicht werden.'
+                  : 'Die Episode wird zur Überarbeitung zurückgegeben.'}
+              </p>
+            </div>
+          </div>
+
+          {/* Episode-Info */}
+          <div className="p-3 bg-obsidian-800 rounded-xl border border-surface-border">
+            <p className="text-xs text-text-muted mb-1">Episode</p>
+            <p className="text-sm font-semibold text-text-primary">{form.title || 'Unbenannte Episode'}</p>
+            {form.number && <p className="text-xs text-text-muted">#{form.number}</p>}
+          </div>
+
+          {/* Notiz */}
+          <div>
+            <label className="label">
+              {approvalAction === 'reject' ? 'Begründung / Hinweise für die Überarbeitung' : 'Optionale Notiz'}
+              {approvalAction === 'reject' && <span className="text-accent-red ml-1">*</span>}
+            </label>
+            <textarea
+              value={approvalNotes}
+              onChange={e => setApprovalNotes(e.target.value)}
+              className="textarea"
+              rows={3}
+              placeholder={
+                approvalAction === 'request' ? 'Optionale Notiz für den Prüfer...'
+                : approvalAction === 'approve' ? 'Optionale Freigabe-Notiz...'
+                : 'Was muss überarbeitet werden?'
+              }
+            />
+          </div>
+
+          {/* Aktions-Buttons */}
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setShowApprovalModal(false)} className="btn-ghost flex-1">Abbrechen</button>
+            <button
+              onClick={handleApprovalAction}
+              disabled={approvalAction === 'reject' && !approvalNotes.trim()}
+              className={`flex-1 btn-primary disabled:opacity-50 flex items-center justify-center gap-2 ${
+                approvalAction === 'approve' ? 'bg-accent-green hover:bg-accent-green/80 border-accent-green'
+                : approvalAction === 'reject' ? 'bg-accent-red hover:bg-accent-red/80 border-accent-red'
+                : ''
+              }`}
+            >
+              {approvalAction === 'approve' ? <><CheckCircle size={15} /> Freigeben</>
+               : approvalAction === 'reject' ? <><X size={15} /> Zur Überarbeitung</>
+               : <><UserCheck size={15} /> Freigabe anfordern</>}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Neuen Interview-Partner erstellen Modal */}

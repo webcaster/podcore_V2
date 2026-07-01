@@ -3,7 +3,7 @@ import {
   Upload, Search, Play, Pause, Volume2, Download, Trash2, Edit2,
   MessageSquare, Plus, Music, Mic2, Clock, HardDrive, X, Check,
   Library, SkipBack, SkipForward, Folder, FolderPlus, ChevronRight,
-  Scissors, Save, RotateCcw
+  Scissors, Save, RotateCcw, Grid, List
 } from 'lucide-react';
 import { mediaApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
@@ -22,6 +22,9 @@ const ASSET_TYPES = [
   { value: 'other', label: 'Sonstiges', color: 'text-text-muted' },
 ];
 
+// Audio-fähige Typen (alle außer rein visuelle Assets)
+const AUDIO_TYPES = ['intro', 'outro', 'jingle', 'segment', 'ad', 'interview', 'sfx', 'music', 'other'];
+
 function formatBytes(bytes?: number) {
   if (!bytes) return '—';
   if (bytes < 1024) return `${bytes} B`;
@@ -38,6 +41,7 @@ function formatDuration(seconds?: number) {
 
 export default function MediaLibraryPage() {
   const { can, showSuccess, showError } = useApp();
+  const [activeTab, setActiveTab] = useState<'library' | 'editor'>('library');
   const [assets, setAssets] = useState<any[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string>('root');
@@ -50,9 +54,14 @@ export default function MediaLibraryPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showFolderModal, setShowFolderModal] = useState(false);
-  const [showEditorModal, setShowEditorModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  
+
+  // Audio-Editor Tab State
+  const [editorAsset, setEditorAsset] = useState<any>(null);
+  const [editorSearch, setEditorSearch] = useState('');
+  const [editorAssets, setEditorAssets] = useState<any[]>([]);
+  const [isLoadingEditorAssets, setIsLoadingEditorAssets] = useState(false);
+
   const [editForm, setEditForm] = useState({ name: '', type: 'other', description: '', tags: [] as string[], tagInput: '', folderId: '' });
   const [commentText, setCommentText] = useState('');
   const [isAddingComment, setIsAddingComment] = useState(false);
@@ -71,7 +80,6 @@ export default function MediaLibraryPage() {
   const [volume, setVolume] = useState(1);
 
   // Editor state (v2.9.8)
-  // trimStart/trimEnd werden beim Öffnen des Audio-Editors gesetzt (für zukünftige Schnitt-Funktion)
   const [, setTrimStart] = useState(0);
   const [, setTrimEnd] = useState(0);
 
@@ -88,8 +96,31 @@ export default function MediaLibraryPage() {
     finally { setIsLoading(false); }
   };
 
+  const loadEditorAssets = async (searchTerm?: string) => {
+    setIsLoadingEditorAssets(true);
+    try {
+      const data = await mediaApi.list({ search: searchTerm || undefined });
+      const all = Array.isArray(data) ? data : (data as any)?.items || [];
+      setEditorAssets(all);
+    } catch (err: any) { showError(err.message); }
+    finally { setIsLoadingEditorAssets(false); }
+  };
+
   useEffect(() => { load(); }, [typeFilter, currentFolderId]);
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [search]);
+
+  useEffect(() => {
+    if (activeTab === 'editor' && editorAssets.length === 0) {
+      loadEditorAssets();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'editor') {
+      const t = setTimeout(() => loadEditorAssets(editorSearch), 300);
+      return () => clearTimeout(t);
+    }
+  }, [editorSearch]);
 
   // Audio player controls
   useEffect(() => {
@@ -99,7 +130,6 @@ export default function MediaLibraryPage() {
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
     const onDurationChange = () => {
       setDuration(audio.duration);
-      if (showEditorModal) setTrimEnd(audio.duration);
     };
     const onEnded = () => { setIsPlaying(false); setCurrentTime(0); };
 
@@ -111,7 +141,7 @@ export default function MediaLibraryPage() {
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('ended', onEnded);
     };
-  }, [playingAsset, showEditorModal]);
+  }, [playingAsset]);
 
   const playAsset = (asset: any) => {
     if (playingAsset?.id === asset.id) {
@@ -224,12 +254,12 @@ export default function MediaLibraryPage() {
     e.preventDefault();
     if (!selectedAsset) return;
     try {
-      await mediaApi.update(selectedAsset.id, { 
-        name: editForm.name, 
-        type: editForm.type, 
-        description: editForm.description, 
+      await mediaApi.update(selectedAsset.id, {
+        name: editForm.name,
+        type: editForm.type,
+        description: editForm.description,
         tags: editForm.tags,
-        folderId: editForm.folderId 
+        folderId: editForm.folderId
       });
       showSuccess('Asset aktualisiert');
       setShowEditModal(false);
@@ -243,9 +273,9 @@ export default function MediaLibraryPage() {
     if (!selectedAsset || !commentText.trim()) return;
     setIsAddingComment(true);
     try {
-      const comment = await mediaApi.addComment(selectedAsset.id, { 
-        content: commentText.trim(), 
-        timestamp: playingAsset?.id === selectedAsset.id ? Math.floor(currentTime) : undefined 
+      const comment = await mediaApi.addComment(selectedAsset.id, {
+        content: commentText.trim(),
+        timestamp: playingAsset?.id === selectedAsset.id ? Math.floor(currentTime) : undefined
       });
       setSelectedAsset((prev: any) => ({ ...prev, comments: [...(prev.comments || []), comment] }));
       setCommentText('');
@@ -262,6 +292,11 @@ export default function MediaLibraryPage() {
     } catch (err: any) { showError(err.message); }
   };
 
+  const openInEditor = (asset: any) => {
+    setEditorAsset(asset);
+    setActiveTab('editor');
+  };
+
   const typeInfo = (type: string) => ASSET_TYPES.find(t => t.value === type) || ASSET_TYPES[8];
 
   return (
@@ -272,269 +307,440 @@ export default function MediaLibraryPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title flex items-center gap-3"><Library size={24} className="text-accent-blue" />Media Library</h1>
-          <div className="flex items-center gap-2 mt-1 text-sm">
-            <button onClick={() => navigateToFolder('root')} className="text-text-muted hover:text-text-primary">Media</button>
-            {folderPath.map((f, i) => (
-              <React.Fragment key={f.id}>
-                <ChevronRight size={14} className="text-text-muted" />
-                <button onClick={() => {
-                  const newPath = folderPath.slice(0, i + 1);
-                  setFolderPath(newPath);
-                  setCurrentFolderId(f.id);
-                }} className="text-text-muted hover:text-text-primary">{f.name}</button>
-              </React.Fragment>
-            ))}
-          </div>
+          {activeTab === 'library' && (
+            <div className="flex items-center gap-2 mt-1 text-sm">
+              <button onClick={() => navigateToFolder('root')} className="text-text-muted hover:text-text-primary">Media</button>
+              {folderPath.map((f, i) => (
+                <React.Fragment key={f.id}>
+                  <ChevronRight size={14} className="text-text-muted" />
+                  <button onClick={() => {
+                    const newPath = folderPath.slice(0, i + 1);
+                    setFolderPath(newPath);
+                    setCurrentFolderId(f.id);
+                  }} className="text-text-muted hover:text-text-primary">{f.name}</button>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+          {activeTab === 'editor' && editorAsset && (
+            <p className="text-text-muted text-sm mt-1">
+              Bearbeite: <span className="text-text-primary font-medium">{editorAsset.name}</span>
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowFolderModal(true)} className="btn-secondary"><FolderPlus size={16} /><span>Ordner</span></button>
-          {can('canUploadMedia') && (
-            <button onClick={() => setShowUploadModal(true)} className="btn-primary"><Upload size={16} /><span>Asset hochladen</span></button>
+          {activeTab === 'library' && (
+            <>
+              <button onClick={() => setShowFolderModal(true)} className="btn-secondary"><FolderPlus size={16} /><span>Ordner</span></button>
+              {can('canUploadMedia') && (
+                <button onClick={() => setShowUploadModal(true)} className="btn-primary"><Upload size={16} /><span>Asset hochladen</span></button>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Assets suchen..." className="input pl-9" />
-        </div>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="select w-40">
-          <option value="">Alle Typen</option>
-          {ASSET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+      {/* Tab-Navigation */}
+      <div className="flex gap-1 bg-obsidian-800 p-1 rounded-lg w-fit">
+        <button
+          onClick={() => setActiveTab('library')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'library' ? 'bg-accent-blue text-white' : 'text-text-secondary hover:text-text-primary'}`}
+        >
+          <Grid size={15} /> Bibliothek
+        </button>
+        <button
+          onClick={() => setActiveTab('editor')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'editor' ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}
+        >
+          <Scissors size={15} /> Audio-Editor
+        </button>
       </div>
 
-      {/* Now Playing Bar */}
-      {playingAsset && (
-        <div className="card bg-obsidian-800 border-accent-purple/30">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-accent-purple/20 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Music size={18} className="text-accent-purple" />
+      {/* ── TAB: BIBLIOTHEK ─────────────────────────────────────────────── */}
+      {activeTab === 'library' && (
+        <>
+          {/* Filters */}
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Assets suchen..." className="input pl-9" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-text-primary font-medium text-sm truncate">{playingAsset.name}</p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-text-muted text-xs">{formatDuration(currentTime)}</span>
-                <input type="range" min={0} max={duration || 100} value={currentTime} onChange={handleSeek} className="flex-1 h-1 accent-purple-500 cursor-pointer" />
-                <span className="text-text-muted text-xs">{formatDuration(duration)}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.max(0, currentTime - 10); }} className="text-text-muted hover:text-text-primary"><SkipBack size={16} /></button>
-              <button onClick={() => playAsset(playingAsset)} className="w-9 h-9 bg-accent-purple rounded-full flex items-center justify-center text-white hover:bg-accent-purple-dark transition-colors">
-                {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-              </button>
-              <button onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.min(duration, currentTime + 10); }} className="text-text-muted hover:text-text-primary"><SkipForward size={16} /></button>
-              <div className="flex items-center gap-1 ml-2">
-                <Volume2 size={14} className="text-text-muted" />
-                <input type="range" min={0} max={1} step={0.1} value={volume} onChange={handleVolumeChange} className="w-16 h-1 accent-purple-500 cursor-pointer" />
-              </div>
-              <button onClick={() => { setPlayingAsset(null); audioRef.current?.pause(); setIsPlaying(false); }} className="text-text-muted hover:text-text-primary ml-1"><X size={16} /></button>
-            </div>
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="select w-40">
+              <option value="">Alle Typen</option>
+              {ASSET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
           </div>
-        </div>
-      )}
 
-      {/* Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Assets & Folders List */}
-        <div className="lg:col-span-2">
-          {isLoading ? (
-            <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" /></div>
-          ) : (assets.length === 0 && folders.length === 0) ? (
-            <div className="card text-center py-16">
-              <Library size={40} className="text-text-muted mx-auto mb-4" />
-              <p className="text-text-secondary font-medium">Dieser Ordner ist leer</p>
-              {can('canUploadMedia') && (
-                <button onClick={() => setShowUploadModal(true)} className="btn-primary mt-4 mx-auto"><Upload size={16} /><span>Asset hochladen</span></button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {/* Folders */}
-              {folders.map(folder => (
-                <div
-                  key={folder.id}
-                  onClick={() => navigateToFolder(folder)}
-                  className="card flex items-center gap-4 cursor-pointer hover:border-surface-border-light group py-3"
-                >
-                  <div className="w-10 h-10 bg-accent-blue/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Folder size={18} className="text-accent-blue" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-text-primary font-medium truncate">{folder.name}</p>
-                    <p className="text-text-muted text-xs">Ordner</p>
-                  </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={e => { e.stopPropagation(); handleDeleteFolder(folder.id, folder.name); }} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors">
-                      <Trash2 size={14} />
-                    </button>
+          {/* Now Playing Bar */}
+          {playingAsset && (
+            <div className="card bg-obsidian-800 border-accent-purple/30">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-accent-purple/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Music size={18} className="text-accent-purple" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-text-primary font-medium text-sm truncate">{playingAsset.name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-text-muted text-xs">{formatDuration(currentTime)}</span>
+                    <input type="range" min={0} max={duration || 100} value={currentTime} onChange={handleSeek} className="flex-1 h-1 accent-purple-500 cursor-pointer" />
+                    <span className="text-text-muted text-xs">{formatDuration(duration)}</span>
                   </div>
                 </div>
-              ))}
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.max(0, currentTime - 10); }} className="text-text-muted hover:text-text-primary"><SkipBack size={16} /></button>
+                  <button onClick={() => playAsset(playingAsset)} className="w-9 h-9 bg-accent-purple rounded-full flex items-center justify-center text-white hover:bg-accent-purple-dark transition-colors">
+                    {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                  </button>
+                  <button onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.min(duration, currentTime + 10); }} className="text-text-muted hover:text-text-primary"><SkipForward size={16} /></button>
+                  <div className="flex items-center gap-1 ml-2">
+                    <Volume2 size={14} className="text-text-muted" />
+                    <input type="range" min={0} max={1} step={0.1} value={volume} onChange={handleVolumeChange} className="w-16 h-1 accent-purple-500 cursor-pointer" />
+                  </div>
+                  <button onClick={() => { setPlayingAsset(null); audioRef.current?.pause(); setIsPlaying(false); }} className="text-text-muted hover:text-text-primary ml-1"><X size={16} /></button>
+                </div>
+              </div>
+            </div>
+          )}
 
-              {/* Assets */}
-              {assets.map(asset => {
-                const ti = typeInfo(asset.type);
-                const isSelected = selectedAsset?.id === asset.id;
-                const isCurrentlyPlaying = playingAsset?.id === asset.id && isPlaying;
-                return (
-                  <div
-                    key={asset.id}
-                    onClick={() => setSelectedAsset(isSelected ? null : asset)}
-                    className={`card flex items-center gap-4 cursor-pointer transition-all group ${isSelected ? 'border-accent-blue/50 bg-accent-blue/5' : 'hover:border-surface-border-light'}`}
-                  >
-                    <button
-                      onClick={e => { e.stopPropagation(); playAsset(asset); }}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${isCurrentlyPlaying ? 'bg-accent-purple text-white' : 'bg-surface-overlay text-text-muted hover:bg-accent-purple hover:text-white'}`}
+          {/* Content */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Assets & Folders List */}
+            <div className="lg:col-span-2">
+              {isLoading ? (
+                <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" /></div>
+              ) : (assets.length === 0 && folders.length === 0) ? (
+                <div className="card text-center py-16">
+                  <Library size={40} className="text-text-muted mx-auto mb-4" />
+                  <p className="text-text-secondary font-medium">Dieser Ordner ist leer</p>
+                  {can('canUploadMedia') && (
+                    <button onClick={() => setShowUploadModal(true)} className="btn-primary mt-4 mx-auto"><Upload size={16} /><span>Asset hochladen</span></button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {/* Folders */}
+                  {folders.map(folder => (
+                    <div
+                      key={folder.id}
+                      onClick={() => navigateToFolder(folder)}
+                      className="card flex items-center gap-4 cursor-pointer hover:border-surface-border-light group py-3"
                     >
-                      {isCurrentlyPlaying ? <Pause size={16} /> : <Play size={16} />}
-                    </button>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-text-primary font-medium truncate">{asset.name}</p>
-                        <span className={`badge bg-surface-overlay text-xs ${ti.color}`}>{ti.label}</span>
+                      <div className="w-10 h-10 bg-accent-blue/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Folder size={18} className="text-accent-blue" />
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-text-muted text-xs">
-                        <span className="flex items-center gap-1"><Clock size={11} />{formatDuration(asset.duration)}</span>
-                        <span className="flex items-center gap-1"><HardDrive size={11} />{formatBytes(asset.filesize)}</span>
-                        {asset.comments?.length > 0 && (
-                          <span className="flex items-center gap-1"><MessageSquare size={11} />{asset.comments.length}</span>
-                        )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-text-primary font-medium truncate">{folder.name}</p>
+                        <p className="text-text-muted text-xs">Ordner</p>
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {asset.type === 'audio' && (
-                        <button 
-                          onClick={e => { e.stopPropagation(); setSelectedAsset(asset); setTrimStart(0); setTrimEnd(asset.duration || 0); setShowEditorModal(true); }}
-                          className="p-2 text-accent-orange hover:bg-accent-orange/20 rounded-lg transition-colors"
-                          title="Audio Editor öffnen"
-                        >
-                          <Scissors size={14} />
-                        </button>
-                      )}
-                      <a href={mediaApi.getStreamUrl(asset.filename)} download={asset.filename} onClick={e => e.stopPropagation()} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
-                        <Download size={14} />
-                      </a>
-                      {can('canUploadMedia') && (
-                        <button onClick={e => { e.stopPropagation(); setSelectedAsset(asset); setEditForm({ name: asset.name, type: asset.type, description: asset.description || '', tags: asset.tags || [], tagInput: '', folderId: asset.folderId || '' }); setShowEditModal(true); }} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
-                          <Edit2 size={14} />
-                        </button>
-                      )}
-                      {can('canDeleteMedia') && (
-                        <button onClick={e => { e.stopPropagation(); handleDelete(asset); }} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors">
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={e => { e.stopPropagation(); handleDeleteFolder(folder.id, folder.name); }} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors">
                           <Trash2 size={14} />
                         </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Detail Panel */}
-        <div>
-          {selectedAsset ? (
-            <div className="card space-y-4 sticky top-0">
-              <div className="flex items-start justify-between">
-                <h3 className="font-semibold text-text-primary">{selectedAsset.name}</h3>
-                <button onClick={() => setSelectedAsset(null)} className="text-text-muted hover:text-text-primary"><X size={16} /></button>
-              </div>
-
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-text-muted">Typ</span>
-                  <span className={typeInfo(selectedAsset.type).color}>{typeInfo(selectedAsset.type).label}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-muted">Dauer</span>
-                  <span className="text-text-primary">{formatDuration(selectedAsset.duration)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-muted">Größe</span>
-                  <span className="text-text-primary">{formatBytes(selectedAsset.filesize)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-text-muted">Hochgeladen</span>
-                  <span className="text-text-primary">{new Date(selectedAsset.createdAt).toLocaleDateString('de-DE')}</span>
-                </div>
-              </div>
-
-              {selectedAsset.description && (
-                <p className="text-text-secondary text-sm">{selectedAsset.description}</p>
-              )}
-
-              {selectedAsset.tags?.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {selectedAsset.tags.map((tag: string) => (
-                    <span key={tag} className="badge bg-surface-overlay text-text-muted text-xs">{tag}</span>
                   ))}
-                </div>
-              )}
 
-              {/* Comments */}
-              <div className="border-t border-surface-border pt-4">
-                <h4 className="font-medium text-text-primary text-sm mb-3 flex items-center gap-2">
-                  <MessageSquare size={14} />
-                  Kommentare ({selectedAsset.comments?.length || 0})
-                </h4>
+                  {/* Assets */}
+                  {assets.map(asset => {
+                    const ti = typeInfo(asset.type);
+                    const isSelected = selectedAsset?.id === asset.id;
+                    const isCurrentlyPlaying = playingAsset?.id === asset.id && isPlaying;
+                    return (
+                      <div
+                        key={asset.id}
+                        onClick={() => setSelectedAsset(isSelected ? null : asset)}
+                        className={`card flex items-center gap-4 cursor-pointer transition-all group ${isSelected ? 'border-accent-blue/50 bg-accent-blue/5' : 'hover:border-surface-border-light'}`}
+                      >
+                        <button
+                          onClick={e => { e.stopPropagation(); playAsset(asset); }}
+                          className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${isCurrentlyPlaying ? 'bg-accent-purple text-white' : 'bg-surface-overlay text-text-muted hover:bg-accent-purple hover:text-white'}`}
+                        >
+                          {isCurrentlyPlaying ? <Pause size={16} /> : <Play size={16} />}
+                        </button>
 
-                <div className="space-y-3 max-h-60 overflow-y-auto mb-3">
-                  {selectedAsset.comments?.length === 0 ? (
-                    <p className="text-text-muted text-xs text-center py-2">Noch keine Kommentare</p>
-                  ) : (
-                    selectedAsset.comments?.map((comment: any) => (
-                      <div key={comment.id} className="bg-obsidian-800 rounded-lg p-3 group">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-text-secondary text-xs font-medium">{comment.userName || comment.displayName || comment.username || 'Unbekannt'}</span>
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            {comment.timestamp && (
-                              <span className="text-text-muted text-xs font-mono">{formatDuration(comment.timestamp)}</span>
-                            )}
-                            {can('canCommentMedia') && (
-                              <button onClick={() => handleDeleteComment(comment.id)} className="text-text-muted hover:text-accent-red opacity-0 group-hover:opacity-100 transition-opacity">
-                                <X size={12} />
-                              </button>
+                            <p className="text-text-primary font-medium truncate">{asset.name}</p>
+                            <span className={`badge bg-surface-overlay text-xs ${ti.color}`}>{ti.label}</span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 text-text-muted text-xs">
+                            <span className="flex items-center gap-1"><Clock size={11} />{formatDuration(asset.duration)}</span>
+                            <span className="flex items-center gap-1"><HardDrive size={11} />{formatBytes(asset.filesize)}</span>
+                            {asset.comments?.length > 0 && (
+                              <span className="flex items-center gap-1"><MessageSquare size={11} />{asset.comments.length}</span>
                             )}
                           </div>
                         </div>
-                        <p className="text-text-primary text-xs">{comment.content || comment.text}</p>
+
+                        <div className="flex items-center gap-1">
+                          {/* Audio-Editor öffnen – für alle Assets mit Audiodatei */}
+                          <button
+                            onClick={e => { e.stopPropagation(); openInEditor(asset); }}
+                            className="p-2 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10 rounded-lg transition-colors"
+                            title="Im Audio-Editor öffnen"
+                          >
+                            <Scissors size={14} />
+                          </button>
+                          <a href={mediaApi.getStreamUrl(asset.filename)} download={asset.filename} onClick={e => e.stopPropagation()} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
+                            <Download size={14} />
+                          </a>
+                          {can('canUploadMedia') && (
+                            <button onClick={e => { e.stopPropagation(); setSelectedAsset(asset); setEditForm({ name: asset.name, type: asset.type, description: asset.description || '', tags: asset.tags || [], tagInput: '', folderId: asset.folderId || '' }); setShowEditModal(true); }} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
+                              <Edit2 size={14} />
+                            </button>
+                          )}
+                          {can('canDeleteMedia') && (
+                            <button onClick={e => { e.stopPropagation(); handleDelete(asset); }} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    ))
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Detail Panel */}
+            <div>
+              {selectedAsset ? (
+                <div className="card space-y-4 sticky top-0">
+                  <div className="flex items-start justify-between">
+                    <h3 className="font-semibold text-text-primary">{selectedAsset.name}</h3>
+                    <button onClick={() => setSelectedAsset(null)} className="text-text-muted hover:text-text-primary"><X size={16} /></button>
+                  </div>
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">Typ</span>
+                      <span className={typeInfo(selectedAsset.type).color}>{typeInfo(selectedAsset.type).label}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">Dauer</span>
+                      <span className="text-text-primary">{formatDuration(selectedAsset.duration)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">Größe</span>
+                      <span className="text-text-primary">{formatBytes(selectedAsset.filesize)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">Hochgeladen</span>
+                      <span className="text-text-primary">{new Date(selectedAsset.createdAt).toLocaleDateString('de-DE')}</span>
+                    </div>
+                  </div>
+
+                  {selectedAsset.description && (
+                    <p className="text-text-secondary text-sm">{selectedAsset.description}</p>
                   )}
+
+                  {selectedAsset.tags?.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {selectedAsset.tags.map((tag: string) => (
+                        <span key={tag} className="badge bg-surface-overlay text-text-muted text-xs">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Audio-Editor-Button im Detail-Panel */}
+                  <button
+                    onClick={() => openInEditor(selectedAsset)}
+                    className="w-full btn-secondary flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Scissors size={14} /> Im Audio-Editor öffnen
+                  </button>
+
+                  {/* Comments */}
+                  <div className="border-t border-surface-border pt-4">
+                    <h4 className="font-medium text-text-primary text-sm mb-3 flex items-center gap-2">
+                      <MessageSquare size={14} />
+                      Kommentare ({selectedAsset.comments?.length || 0})
+                    </h4>
+
+                    <div className="space-y-3 max-h-60 overflow-y-auto mb-3">
+                      {selectedAsset.comments?.length === 0 ? (
+                        <p className="text-text-muted text-xs text-center py-2">Noch keine Kommentare</p>
+                      ) : (
+                        selectedAsset.comments?.map((comment: any) => (
+                          <div key={comment.id} className="bg-obsidian-800 rounded-lg p-3 group">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-text-secondary text-xs font-medium">{comment.userName || comment.displayName || comment.username || 'Unbekannt'}</span>
+                              <div className="flex items-center gap-2">
+                                {comment.timestamp && (
+                                  <span className="text-text-muted text-xs font-mono">{formatDuration(comment.timestamp)}</span>
+                                )}
+                                {can('canCommentMedia') && (
+                                  <button onClick={() => handleDeleteComment(comment.id)} className="text-text-muted hover:text-accent-red opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <X size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-text-primary text-xs">{comment.content || comment.text}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {can('canCommentMedia') && (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={commentText}
+                          onChange={e => setCommentText(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleAddComment()}
+                          placeholder="Kommentar..."
+                          className="input text-sm flex-1"
+                        />
+                        <button onClick={handleAddComment} disabled={!commentText.trim() || isAddingComment} className="btn-primary px-3">
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="card text-center py-12 text-text-muted">
+                  <Music size={32} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Asset auswählen für Details</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── TAB: AUDIO-EDITOR ──────────────────────────────────────────── */}
+      {activeTab === 'editor' && (
+        <div className="space-y-4">
+          {editorAsset ? (
+            /* Vollständiger Audio-Editor für das gewählte Asset */
+            <div className="space-y-3">
+              {/* Asset-Wechsel-Leiste */}
+              <div className="flex items-center gap-3 p-3 bg-obsidian-800 rounded-xl border border-surface-border">
+                <div className="w-8 h-8 bg-accent-purple/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Scissors size={15} className="text-accent-purple" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-text-primary truncate">{editorAsset.name}</p>
+                  <p className="text-[10px] text-text-muted uppercase">{typeInfo(editorAsset.type).label} · {formatDuration(editorAsset.duration)}</p>
+                </div>
+                <button
+                  onClick={() => setEditorAsset(null)}
+                  className="btn-ghost text-xs py-1 px-2 flex items-center gap-1"
+                  title="Anderes Asset wählen"
+                >
+                  <RotateCcw size={12} /> Wechseln
+                </button>
+              </div>
+
+              {/* AudioEditor-Komponente (inline, ohne Modal-Wrapper) */}
+              <AudioEditorInline
+                asset={editorAsset}
+                onSaved={() => { showSuccess('Änderungen gespeichert'); load(); }}
+              />
+            </div>
+          ) : (
+            /* Asset-Auswahl für den Editor */
+            <div className="space-y-4">
+              <div className="card">
+                <div className="mb-4">
+                  <h2 className="font-semibold text-text-primary flex items-center gap-2 mb-1">
+                    <Scissors size={16} className="text-accent-purple" /> Audio-Editor
+                  </h2>
+                  <p className="text-sm text-text-muted">
+                    Wähle eine Audio-Datei aus der Bibliothek, um Schnittmarken zu setzen, Kapitel zu definieren und Notizen für den Schnitt zu hinterlegen.
+                    Ideal für die Vorplanung von Interviews und komplexen Episoden.
+                  </p>
                 </div>
 
-                {can('canCommentMedia') && (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={commentText}
-                      onChange={e => setCommentText(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleAddComment()}
-                      placeholder="Kommentar..."
-                      className="input text-sm flex-1"
-                    />
-                    <button onClick={handleAddComment} disabled={!commentText.trim() || isAddingComment} className="btn-primary px-3">
-                      <Plus size={14} />
-                    </button>
+                {/* Suchfeld */}
+                <div className="relative mb-4">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <input
+                    type="text"
+                    value={editorSearch}
+                    onChange={e => setEditorSearch(e.target.value)}
+                    placeholder="Audio-Datei suchen..."
+                    className="input pl-9 text-sm"
+                  />
+                </div>
+
+                {/* Asset-Liste */}
+                {isLoadingEditorAssets ? (
+                  <div className="flex items-center justify-center py-10">
+                    <div className="w-6 h-6 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : editorAssets.length === 0 ? (
+                  <div className="text-center py-10 text-text-muted">
+                    <Music size={32} className="mx-auto mb-2 opacity-40" />
+                    <p className="text-sm">Keine Audio-Dateien gefunden</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    {editorAssets.map(asset => {
+                      const ti = typeInfo(asset.type);
+                      return (
+                        <button
+                          key={asset.id}
+                          onClick={() => setEditorAsset(asset)}
+                          className="w-full flex items-center gap-3 p-3 bg-obsidian-800 hover:bg-obsidian-700 rounded-xl border border-surface-border hover:border-accent-purple/40 transition-all text-left group"
+                        >
+                          <div className="w-10 h-10 bg-surface-overlay rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-accent-purple/20 transition-colors">
+                            <Music size={16} className="text-text-muted group-hover:text-accent-purple transition-colors" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-text-primary truncate">{asset.name}</p>
+                            <div className="flex items-center gap-3 mt-0.5 text-text-muted text-xs">
+                              <span className={ti.color}>{ti.label}</span>
+                              <span className="flex items-center gap-1"><Clock size={10} /> {formatDuration(asset.duration)}</span>
+                              <span className="flex items-center gap-1"><HardDrive size={10} /> {formatBytes(asset.filesize)}</span>
+                              {(asset.markers?.length > 0 || asset.markerCount > 0) && (
+                                <span className="flex items-center gap-1 text-accent-orange">
+                                  <Scissors size={10} /> {asset.markers?.length || asset.markerCount} Marker
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-xs text-accent-purple font-medium flex items-center gap-1">
+                              <Scissors size={12} /> Öffnen
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
-            </div>
-          ) : (
-            <div className="card text-center py-12 text-text-muted">
-              <Music size={32} className="mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Asset auswählen für Details</p>
+
+              {/* Hinweis-Karte */}
+              <div className="card bg-accent-purple/5 border-accent-purple/20">
+                <h3 className="text-sm font-semibold text-accent-purple mb-2 flex items-center gap-2">
+                  <Scissors size={14} /> Marker-Typen im Audio-Editor
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { icon: '✂', label: 'Schnittmarke', desc: 'Markiert Schnittpunkte', color: 'text-red-400' },
+                    { icon: '📖', label: 'Kapitel', desc: 'Kapitel-Beginn', color: 'text-accent-blue' },
+                    { icon: '▶', label: 'Start', desc: 'Nutzbare Startposition', color: 'text-accent-green' },
+                    { icon: '⏹', label: 'Ende', desc: 'Nutzbare Endposition', color: 'text-accent-orange' },
+                    { icon: '💬', label: 'Anmerkung', desc: 'Notiz für Produktion', color: 'text-accent-purple' },
+                  ].map(m => (
+                    <div key={m.label} className="flex items-start gap-2 p-2 bg-obsidian-800 rounded-lg">
+                      <span className={`text-base ${m.color}`}>{m.icon}</span>
+                      <div>
+                        <p className="text-xs font-medium text-text-primary">{m.label}</p>
+                        <p className="text-[10px] text-text-muted">{m.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
-      </div>
+      )}
 
       {/* Folder Modal */}
       <Modal isOpen={showFolderModal} onClose={() => setShowFolderModal(false)} title="Neuen Ordner erstellen">
@@ -549,15 +755,6 @@ export default function MediaLibraryPage() {
           </div>
         </form>
       </Modal>
-
-      {/* Audio Editor – vollständige Komponente mit WaveSurfer */}
-      {showEditorModal && selectedAsset && (
-        <AudioEditor
-          asset={selectedAsset}
-          onClose={() => setShowEditorModal(false)}
-          onSaved={() => { showSuccess('Änderungen gespeichert'); loadAssets(); }}
-        />
-      )}
 
       {/* Upload Modal */}
       <Modal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} title="Asset hochladen">
@@ -622,27 +819,8 @@ export default function MediaLibraryPage() {
             </select>
           </div>
           <div>
-            <label className="label">Ordner</label>
-            <select value={editForm.folderId} onChange={e => setEditForm(p => ({ ...p, folderId: e.target.value }))} className="select">
-              <option value="">Hauptverzeichnis</option>
-              {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-          </div>
-          <div>
             <label className="label">Beschreibung</label>
             <textarea value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} className="textarea" rows={2} />
-          </div>
-          <div>
-            <label className="label">Tags</label>
-            <div className="flex flex-wrap gap-1 mb-2">
-              {editForm.tags.map(tag => (
-                <span key={tag} className="badge bg-accent-purple/20 text-accent-purple flex items-center gap-1">
-                  {tag}
-                  <button type="button" onClick={() => setEditForm(p => ({ ...p, tags: p.tags.filter(t => t !== tag) }))} className="hover:text-accent-red">×</button>
-                </span>
-              ))}
-            </div>
-            <input type="text" value={editForm.tagInput} onChange={e => setEditForm(p => ({ ...p, tagInput: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && editForm.tagInput.trim()) { e.preventDefault(); if (!editForm.tags.includes(editForm.tagInput.trim())) setEditForm(p => ({ ...p, tags: [...p.tags, p.tagInput.trim()], tagInput: '' })); else setEditForm(p => ({ ...p, tagInput: '' })); } }} className="input" placeholder="Tag eingeben und Enter drücken..." />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowEditModal(false)} className="btn-secondary">Abbrechen</button>
@@ -650,6 +828,374 @@ export default function MediaLibraryPage() {
           </div>
         </form>
       </Modal>
+    </div>
+  );
+}
+
+// ── Inline Audio-Editor (ohne Modal-Wrapper) ──────────────────────────────────
+// Wrapper-Komponente, die den AudioEditor ohne den Fixed-Overlay rendert
+function AudioEditorInline({ asset, onSaved }: { asset: any; onSaved?: () => void }) {
+  // Wir nutzen den bestehenden AudioEditor, aber rendern ihn in einem Container
+  // statt im Fixed-Overlay. Dafür wrappen wir ihn in einen relativen Container.
+  return (
+    <div className="relative">
+      <AudioEditorEmbedded asset={asset} onSaved={onSaved} />
+    </div>
+  );
+}
+
+// Eingebettete Version des AudioEditors (ohne Fixed-Overlay und ohne Close-Button)
+import WaveSurfer from 'wavesurfer.js';
+import {
+  Play as PlayIcon, Pause as PauseIcon, Scissors as ScissorsIcon,
+  MessageSquare as MsgIcon, Trash2 as TrashIcon, Save as SaveIcon,
+  SkipBack as SkipBackIcon, SkipForward as SkipFwdIcon,
+  Volume2 as VolIcon, VolumeX as VolXIcon,
+  Flag as FlagIcon, Loader2 as LoaderIcon, Clock as ClockIcon,
+  ChevronDown as ChevDownIcon, ChevronUp as ChevUpIcon
+} from 'lucide-react';
+import { api } from '../lib/api';
+
+interface MarkerE {
+  id: string;
+  type: 'cut' | 'comment' | 'start' | 'end' | 'chapter';
+  time: number;
+  label: string;
+  color: string;
+  createdAt: string;
+  userId?: string;
+  userName?: string;
+}
+
+interface TimedCommentE {
+  id: string;
+  content: string;
+  text: string;
+  time: number | null;
+  userName?: string;
+  displayName?: string;
+  createdAt: string;
+}
+
+const MARKER_TYPES_E = [
+  { value: 'cut', label: 'Schnittmarke', color: '#ef4444', icon: '✂' },
+  { value: 'chapter', label: 'Kapitel', color: '#3b82f6', icon: '📖' },
+  { value: 'start', label: 'Start', color: '#22c55e', icon: '▶' },
+  { value: 'end', label: 'Ende', color: '#f97316', icon: '⏹' },
+  { value: 'comment', label: 'Anmerkung', color: '#a855f7', icon: '💬' },
+];
+
+function fmtTime(sec: number): string {
+  if (!isFinite(sec) || isNaN(sec)) return '0:00';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => void }) {
+  const waveformRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WaveSurfer | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(asset.duration || 0);
+  const [volume, setVolume] = useState(0.8);
+  const [zoom, setZoom] = useState(50);
+  const [markers, setMarkers] = useState<MarkerE[]>([]);
+  const [timedComments, setTimedComments] = useState<TimedCommentE[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [showMarkerForm, setShowMarkerForm] = useState(false);
+  const [showCommentForm, setShowCommentForm] = useState(false);
+  const [markerForm, setMarkerForm] = useState({ type: 'cut', label: '', time: 0 });
+  const [commentForm, setCommentForm] = useState({ text: '', time: 0 });
+  const [showMarkerList, setShowMarkerList] = useState(true);
+  const [showCommentList, setShowCommentList] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [mkrs, assetData] = await Promise.all([
+          api.get<any[]>(`/media/${asset.id}/markers`),
+          api.get<any>(`/media/${asset.id}`),
+        ]);
+        setMarkers(Array.isArray(mkrs) ? mkrs : []);
+        const comments = (assetData?.comments || []).filter((c: any) => c.time != null);
+        setTimedComments(comments);
+      } catch (e) { /* ignore */ }
+    };
+    loadData();
+  }, [asset.id]);
+
+  useEffect(() => {
+    if (!waveformRef.current) return;
+    const ws = WaveSurfer.create({
+      container: waveformRef.current,
+      waveColor: '#4f46e5',
+      progressColor: '#7c3aed',
+      cursorColor: '#a855f7',
+      barWidth: 2,
+      barGap: 1,
+      height: 80,
+      normalize: true,
+    });
+    wsRef.current = ws;
+    const { mediaApi: mApi } = require('../lib/api');
+    const url = mApi.getStreamUrl(asset.filename);
+    ws.load(url);
+    ws.on('ready', () => { setIsReady(true); setIsLoading(false); setDuration(ws.getDuration()); });
+    ws.on('audioprocess', () => setCurrentTime(ws.getCurrentTime()));
+    ws.on('seek', () => setCurrentTime(ws.getCurrentTime()));
+    ws.on('play', () => setIsPlaying(true));
+    ws.on('pause', () => setIsPlaying(false));
+    ws.on('error', (e: any) => { setLoadError(`Fehler beim Laden: ${e}`); setIsLoading(false); });
+    return () => { ws.destroy(); };
+  }, [asset.id, asset.filename]);
+
+  const seekToTime = (t: number) => { wsRef.current?.seekTo(t / (wsRef.current.getDuration() || 1)); };
+
+  const addMarker = async () => {
+    const t = markerForm.time ?? currentTime;
+    const typeInfo = MARKER_TYPES_E.find(m => m.value === markerForm.type);
+    try {
+      const saved = await api.post<any>(`/media/${asset.id}/markers/add`, {
+        type: markerForm.type, label: markerForm.label || typeInfo?.label || markerForm.type,
+        time: t, color: typeInfo?.color || '#ef4444',
+      });
+      setMarkers(prev => [...prev, saved].sort((a, b) => a.time - b.time));
+      setShowMarkerForm(false);
+      setMarkerForm({ type: 'cut', label: '', time: 0 });
+    } catch (e) { /* ignore */ }
+  };
+
+  const deleteMarker = async (id: string) => {
+    try {
+      await api.delete(`/media/${asset.id}/markers/${id}`);
+      setMarkers(prev => prev.filter(m => m.id !== id));
+    } catch (e) { /* ignore */ }
+  };
+
+  const addTimedComment = async () => {
+    const t = commentForm.time ?? currentTime;
+    try {
+      const saved = await api.post<any>(`/media/${asset.id}/timed-comments`, { text: commentForm.text, time: t });
+      setTimedComments(prev => [...prev, saved]);
+      setShowCommentForm(false);
+      setCommentForm({ text: '', time: 0 });
+    } catch (e) { /* ignore */ }
+  };
+
+  const deleteTimedComment = async (id: string) => {
+    try {
+      await api.delete(`/media/${asset.id}/timed-comments/${id}`);
+      setTimedComments(prev => prev.filter(c => c.id !== id));
+    } catch (e) { /* ignore */ }
+  };
+
+  const saveAll = async () => {
+    setIsSaving(true);
+    try {
+      await api.post(`/media/${asset.id}/markers`, { markers });
+      onSaved?.();
+    } catch (e) { /* ignore */ }
+    finally { setIsSaving(false); }
+  };
+
+  return (
+    <div className="card space-y-4">
+      {/* Speichern-Button */}
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-text-primary flex items-center gap-2">
+          <ScissorsIcon size={15} className="text-accent-purple" /> Schnittplanung & Marker
+        </h3>
+        <button onClick={saveAll} disabled={isSaving} className="btn-primary text-sm flex items-center gap-1.5">
+          {isSaving ? <LoaderIcon size={14} className="animate-spin" /> : <SaveIcon size={14} />}
+          Speichern
+        </button>
+      </div>
+
+      {/* Waveform */}
+      <div className="bg-obsidian-900 rounded-xl p-4 border border-obsidian-600">
+        {isLoading && (
+          <div className="flex items-center justify-center h-24 gap-2 text-text-muted">
+            <LoaderIcon size={18} className="animate-spin" />
+            <span className="text-sm">Audio wird geladen…</span>
+          </div>
+        )}
+        {loadError && (
+          <div className="flex items-center justify-center h-24 text-red-400 text-sm">{loadError}</div>
+        )}
+        <div ref={waveformRef} className={isLoading || loadError ? 'hidden' : ''} />
+
+        {isReady && duration > 0 && (
+          <div className="relative h-4 mt-1">
+            {markers.map(m => {
+              const pct = Math.min(100, Math.max(0, (m.time / duration) * 100));
+              const typeInfo = MARKER_TYPES_E.find(t => t.value === m.type);
+              return (
+                <button key={m.id} title={`${typeInfo?.label || m.type}: ${m.label} @ ${fmtTime(m.time)}`}
+                  onClick={() => seekToTime(m.time)}
+                  className="absolute top-0 -translate-x-1/2 text-xs hover:scale-125 transition-transform"
+                  style={{ left: `${pct}%`, color: m.color }}>
+                  {typeInfo?.icon || '●'}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Transport-Steuerung */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button onClick={() => wsRef.current?.skip(-10)} className="p-2 text-text-muted hover:text-text-primary hover:bg-obsidian-700 rounded-lg transition-colors" title="-10s">
+            <SkipBackIcon size={16} />
+          </button>
+          <button onClick={() => wsRef.current?.playPause()} className="w-10 h-10 bg-accent-purple rounded-full flex items-center justify-center text-white hover:bg-accent-purple/80 transition-colors">
+            {isPlaying ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
+          </button>
+          <button onClick={() => wsRef.current?.skip(10)} className="p-2 text-text-muted hover:text-text-primary hover:bg-obsidian-700 rounded-lg transition-colors" title="+10s">
+            <SkipFwdIcon size={16} />
+          </button>
+        </div>
+        <div className="flex items-center gap-1 text-sm text-text-muted font-mono">
+          <ClockIcon size={13} />
+          <span>{fmtTime(currentTime)}</span>
+          <span className="opacity-50">/</span>
+          <span>{fmtTime(duration)}</span>
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+          <button onClick={() => { const m = !isMuted; setIsMuted(m); wsRef.current?.setMuted(m); }} className="p-1.5 text-text-muted hover:text-text-primary rounded-lg transition-colors">
+            {isMuted ? <VolXIcon size={15} /> : <VolIcon size={15} />}
+          </button>
+          <input type="range" min={0} max={1} step={0.05} value={volume} onChange={e => { const v = parseFloat(e.target.value); setVolume(v); wsRef.current?.setVolume(v); }} className="w-20 h-1 cursor-pointer" />
+          <span className="text-xs text-text-muted w-8">Zoom</span>
+          <input type="range" min={10} max={200} value={zoom} onChange={e => { const z = parseInt(e.target.value); setZoom(z); wsRef.current?.zoom(z); }} className="w-20 h-1 cursor-pointer" />
+        </div>
+      </div>
+
+      {/* Aktions-Buttons */}
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={() => { setMarkerForm(f => ({ ...f, time: currentTime })); setShowMarkerForm(!showMarkerForm); setShowCommentForm(false); }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${showMarkerForm ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange' : 'border-surface-border text-text-muted hover:text-text-primary hover:border-accent-orange/40'}`}>
+          <ScissorsIcon size={13} /> Marker setzen @ {fmtTime(currentTime)}
+        </button>
+        <button onClick={() => { setCommentForm(f => ({ ...f, time: currentTime })); setShowCommentForm(!showCommentForm); setShowMarkerForm(false); }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${showCommentForm ? 'bg-accent-purple/20 border-accent-purple/50 text-accent-purple' : 'border-surface-border text-text-muted hover:text-text-primary hover:border-accent-purple/40'}`}>
+          <MsgIcon size={13} /> Anmerkung @ {fmtTime(currentTime)}
+        </button>
+      </div>
+
+      {/* Marker-Formular */}
+      {showMarkerForm && (
+        <div className="p-3 bg-obsidian-900 rounded-xl border border-accent-orange/30 space-y-3">
+          <p className="text-xs font-semibold text-accent-orange">Neuer Marker</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-text-muted uppercase mb-1 block">Typ</label>
+              <select value={markerForm.type} onChange={e => setMarkerForm(f => ({ ...f, type: e.target.value as any }))} className="input text-xs py-1">
+                {MARKER_TYPES_E.map(t => <option key={t.value} value={t.value}>{t.icon} {t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] text-text-muted uppercase mb-1 block">Zeit (s)</label>
+              <input type="number" value={markerForm.time} onChange={e => setMarkerForm(f => ({ ...f, time: parseFloat(e.target.value) || 0 }))} className="input text-xs py-1" step="0.1" min="0" max={duration} />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] text-text-muted uppercase mb-1 block">Beschriftung</label>
+            <input type="text" value={markerForm.label} onChange={e => setMarkerForm(f => ({ ...f, label: e.target.value }))} className="input text-xs py-1" placeholder="z.B. Intro-Ende, Werbung raus..." />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={addMarker} className="btn-primary text-xs py-1 flex-1">Marker hinzufügen</button>
+            <button onClick={() => setShowMarkerForm(false)} className="btn-ghost text-xs py-1">Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {/* Kommentar-Formular */}
+      {showCommentForm && (
+        <div className="p-3 bg-obsidian-900 rounded-xl border border-accent-purple/30 space-y-3">
+          <p className="text-xs font-semibold text-accent-purple">Neue Anmerkung</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <label className="text-[10px] text-text-muted uppercase mb-1 block">Anmerkung</label>
+              <input type="text" value={commentForm.text} onChange={e => setCommentForm(f => ({ ...f, text: e.target.value }))} className="input text-xs py-1" placeholder="z.B. Hier Pause kürzen..." />
+            </div>
+            <div>
+              <label className="text-[10px] text-text-muted uppercase mb-1 block">Zeit (s)</label>
+              <input type="number" value={commentForm.time} onChange={e => setCommentForm(f => ({ ...f, time: parseFloat(e.target.value) || 0 }))} className="input text-xs py-1" step="0.1" min="0" max={duration} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={addTimedComment} disabled={!commentForm.text.trim()} className="btn-primary text-xs py-1 flex-1 disabled:opacity-50">Anmerkung hinzufügen</button>
+            <button onClick={() => setShowCommentForm(false)} className="btn-ghost text-xs py-1">Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {/* Marker-Liste */}
+      <div>
+        <button onClick={() => setShowMarkerList(v => !v)} className="flex items-center gap-2 text-sm font-medium text-text-primary mb-2 w-full hover:text-accent-orange transition-colors">
+          {showMarkerList ? <ChevUpIcon size={14} /> : <ChevDownIcon size={14} />}
+          Schnittmarken ({markers.length})
+        </button>
+        {showMarkerList && (
+          <div className="space-y-1.5 max-h-64 overflow-y-auto">
+            {markers.length === 0 ? (
+              <p className="text-xs text-text-muted text-center py-4">Noch keine Marker gesetzt.</p>
+            ) : (
+              markers.sort((a, b) => a.time - b.time).map(m => {
+                const ti = MARKER_TYPES_E.find(t => t.value === m.type);
+                return (
+                  <div key={m.id} className="flex items-center gap-2 p-2 bg-obsidian-800 rounded-lg border border-surface-border group">
+                    <span className="text-sm w-5 text-center flex-shrink-0" style={{ color: m.color }}>{ti?.icon || '●'}</span>
+                    <button onClick={() => seekToTime(m.time)} className="text-xs font-mono text-accent-blue hover:underline w-12 flex-shrink-0">{fmtTime(m.time)}</button>
+                    <span className="text-xs text-text-muted flex-shrink-0">{ti?.label}</span>
+                    <span className="text-xs text-text-primary flex-1 truncate">{m.label}</span>
+                    {m.userName && <span className="text-[10px] text-text-muted hidden group-hover:block">{m.userName}</span>}
+                    <button onClick={() => deleteMarker(m.id)} className="p-1 text-text-muted hover:text-accent-red opacity-0 group-hover:opacity-100 transition-all rounded">
+                      <TrashIcon size={12} />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Zeitkommentare */}
+      <div>
+        <button onClick={() => setShowCommentList(v => !v)} className="flex items-center gap-2 text-sm font-medium text-text-primary mb-2 w-full hover:text-accent-purple transition-colors">
+          {showCommentList ? <ChevUpIcon size={14} /> : <ChevDownIcon size={14} />}
+          Anmerkungen ({timedComments.length})
+        </button>
+        {showCommentList && (
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            {timedComments.length === 0 ? (
+              <p className="text-xs text-text-muted text-center py-4">Noch keine Anmerkungen.</p>
+            ) : (
+              timedComments.filter(c => c.time != null).sort((a, b) => (a.time || 0) - (b.time || 0)).map(c => (
+                <div key={c.id} className="flex items-start gap-2 p-2 bg-obsidian-800 rounded-lg border border-surface-border group">
+                  <button onClick={() => seekToTime(c.time || 0)} className="text-xs font-mono text-accent-purple hover:underline w-12 flex-shrink-0 mt-0.5">{fmtTime(c.time || 0)}</button>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-text-primary">{c.content || c.text}</p>
+                    {(c.userName || c.displayName) && <p className="text-[10px] text-text-muted mt-0.5">{c.userName || c.displayName}</p>}
+                  </div>
+                  <button onClick={() => deleteTimedComment(c.id)} className="p-1 text-text-muted hover:text-accent-red opacity-0 group-hover:opacity-100 transition-all rounded flex-shrink-0">
+                    <TrashIcon size={12} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

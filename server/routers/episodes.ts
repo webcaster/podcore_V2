@@ -28,6 +28,13 @@ function parseEpisode(row: any) {
     scriptReadyBy: row.script_ready_by || null,
     showNotes: row.show_notes || '',
     altDuration: row.alt_duration ?? null,
+    // Freigabe-Workflow
+    approvalStatus: row.approval_status || 'ausstehend',
+    approvedBy: row.approved_by || null,
+    approvedAt: row.approved_at || null,
+    approvalNotes: row.approval_notes || null,
+    approvalRequestedBy: row.approval_requested_by || null,
+    approvalRequestedAt: row.approval_requested_at || null,
   };
 }
 
@@ -79,6 +86,16 @@ router.get('/', requirePermission('canViewEpisodes') as any, (req: AuthRequest, 
       totalPages: Math.ceil(total / pageSizeNum),
     },
   });
+});
+
+// GET /api/episodes/pending-approval — list episodes awaiting approval (MUST be before /:id)
+router.get('/pending-approval', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const episodes = db.all(
+    `SELECT * FROM episodes WHERE approval_status = 'angefragt' ORDER BY approval_requested_at ASC`,
+    []
+  ).map(parseEpisode);
+  return res.json({ success: true, data: episodes });
 });
 
 // GET /api/episodes/:id
@@ -534,18 +551,8 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
 });
 
 // ============================================================
-// EPISODE APPROVAL WORKFLOW
+// EPISODE APPROVAL WORKFLOW (continued)
 // ============================================================
-
-// GET /api/episodes/pending-approval — list episodes awaiting approval
-router.get('/pending-approval', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const episodes = db.all(
-    `SELECT * FROM episodes WHERE approval_status = 'angefragt' ORDER BY approval_requested_at ASC`,
-    []
-  ).map(parseEpisode);
-  return res.json({ success: true, data: episodes });
-});
 
 // POST /api/episodes/:id/request-approval — request approval for an episode
 router.post('/:id/request-approval', requirePermission('canRequestApproval') as any, (req: AuthRequest, res: Response) => {
