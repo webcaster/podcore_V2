@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings, User, FolderOpen, Save, Eye, EyeOff, Loader2, Mic2,
-  Palette, Radio, Sliders, Globe, Clock, Tag, Info
+  Palette, Radio, Sliders, Globe, Clock, Tag, Info, Download,
+  Upload, CheckCircle, XCircle, AlertTriangle, RefreshCw, Package
 } from 'lucide-react';
-import { adminApi, authApi } from '../lib/api';
-import { useApp } from '../contexts/AppContext';
+import { adminApi, authApi, updateApi } from '../lib/api';
+import { useApp, applyUserTheme } from '../contexts/AppContext';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function applyThemePreview(theme: { accentColor?: string; sidebarColor?: string; fontScale?: number }) {
-  const root = document.documentElement;
-  if (theme.accentColor) root.style.setProperty('--color-accent-primary', theme.accentColor);
-  if (theme.sidebarColor) root.style.setProperty('--color-sidebar-bg', theme.sidebarColor);
-  if (theme.fontScale) root.style.setProperty('--font-scale', String(theme.fontScale));
+  // Verwende die vollständige applyUserTheme Funktion aus dem AppContext
+  // damit alle CSS-Variablen (inkl. Light/Dark-Varianten, Surface-Farben) gesetzt werden
+  applyUserTheme(theme as any);
 }
 
 const ACCENT_PRESETS = [
@@ -38,11 +38,68 @@ const SIDEBAR_PRESETS = [
 export default function SettingsPage() {
   const { user, can, showSuccess, showError, refreshUser, refreshPodcastProfile } = useApp();
 
-  type TabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'app';
+  type TabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'app' | 'update';
   const [activeTab, setActiveTab] = useState<TabKey>('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+
+  // ── Update state ────────────────────────────────────────────────────────────
+  const [updateStatus, setUpdateStatus] = useState<any>(null);
+  const [isLoadingUpdateStatus, setIsLoadingUpdateStatus] = useState(false);
+  const [updateFile, setUpdateFile] = useState<File | null>(null);
+  const [updateUploadProgress, setUpdateUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyLog, setApplyLog] = useState<string[]>([]);
+  const [applyDone, setApplyDone] = useState(false);
+
+  const loadUpdateStatus = useCallback(async () => {
+    setIsLoadingUpdateStatus(true);
+    try { const s = await updateApi.getStatus(); setUpdateStatus(s); } catch {}
+    finally { setIsLoadingUpdateStatus(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'update') loadUpdateStatus();
+  }, [activeTab, loadUpdateStatus]);
+
+  const handleUpdateFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    setUpdateFile(f);
+    setUploadResult(null);
+    setApplyLog([]);
+    setApplyDone(false);
+  };
+
+  const handleUploadUpdate = async () => {
+    if (!updateFile) return;
+    setIsUploading(true);
+    setUpdateUploadProgress(0);
+    setUploadResult(null);
+    try {
+      const result = await updateApi.uploadZip(updateFile, pct => setUpdateUploadProgress(pct));
+      setUploadResult(result);
+    } catch (err: any) { showError(err.message); }
+    finally { setIsUploading(false); }
+  };
+
+  const handleApplyUpdate = async () => {
+    if (!uploadResult?.updateId) return;
+    setIsApplying(true);
+    setApplyLog(['Update wird angewendet...']);
+    try {
+      const result = await updateApi.applyUpdate(uploadResult.updateId);
+      setApplyLog(result.log || ['Update abgeschlossen']);
+      setApplyDone(true);
+      showSuccess('Update erfolgreich! Server wird neu gestartet...');
+    } catch (err: any) {
+      showError(err.message);
+      setApplyLog(prev => [...prev, `Fehler: ${err.message}`]);
+    }
+    finally { setIsApplying(false); }
+  };
 
   // ── Profile form ────────────────────────────────────────────────────────────
   const [profileForm, setProfileForm] = useState({
@@ -118,6 +175,28 @@ export default function SettingsPage() {
     interviewApprovalRequired: false,
   });
 
+  // ── Invoice number schema form ────────────────────────────────────────────
+  const [invoiceForm, setInvoiceForm] = useState({
+    prefix: 'RE',
+    separator: '-',
+    includeYear: true,
+    includeMonth: false,
+    paddingDigits: 3,
+    nextNumber: 1,
+  });
+
+  const buildInvoiceExample = (form: typeof invoiceForm): string => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const num = String(form.nextNumber || 1).padStart(form.paddingDigits, '0');
+    const parts: string[] = [form.prefix || 'RE'];
+    if (form.includeYear) parts.push(String(year));
+    if (form.includeMonth) parts.push(month);
+    parts.push(num);
+    return parts.join(form.separator || '-');
+  };
+
   // ── Load settings ───────────────────────────────────────────────────────────
   const loadSettings = useCallback(async () => {
     if (!can('canManageSettings')) { setIsLoadingSettings(false); return; }
@@ -161,6 +240,16 @@ export default function SettingsPage() {
       setWorkflowForm({
         episodeApprovalRequired: wf.episodeApprovalRequired ?? false,
         interviewApprovalRequired: wf.interviewApprovalRequired ?? false,
+      });
+      // Invoice number schema
+      const inv = data.invoiceSchema || {};
+      setInvoiceForm({
+        prefix: inv.prefix || 'RE',
+        separator: inv.separator || '-',
+        includeYear: inv.includeYear ?? true,
+        includeMonth: inv.includeMonth ?? false,
+        paddingDigits: inv.paddingDigits || 3,
+        nextNumber: inv.nextNumber || 1,
       });
       // Technical defaults
       const t = data.technicalDefaults || {};
@@ -228,8 +317,14 @@ export default function SettingsPage() {
   const handleSaveTheme = async () => {
     setIsSaving(true);
     try {
+      // Theme zuerst anwenden (sofortiges visuelles Feedback)
+      applyThemePreview(themeForm);
       await authApi.updateProfile({ theme: themeForm });
+      // refreshUser NACH dem Speichern aufrufen, damit applyUserTheme das neue Theme aus der DB lädt
+      // Kurze Verzögerung damit die DB-Änderung propagiert ist
+      await new Promise(r => setTimeout(r, 100));
       await refreshUser();
+      // Theme nochmals anwenden falls refreshUser es überschrieben hat
       applyThemePreview(themeForm);
       showSuccess('Design-Einstellungen gespeichert');
     } catch (err: any) { showError(err.message); }
@@ -243,7 +338,9 @@ export default function SettingsPage() {
     setIsSaving(true);
     try {
       await authApi.updateProfile({ theme: defaultTheme });
+      await new Promise(r => setTimeout(r, 100));
       await refreshUser();
+      applyThemePreview(defaultTheme);
       showSuccess('Design zurückgesetzt');
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
@@ -276,7 +373,7 @@ export default function SettingsPage() {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const payload: any = { ...appForm, pdf: pdfForm, workflow: workflowForm };
+      const payload: any = { ...appForm, pdf: pdfForm, workflow: workflowForm, invoiceSchema: invoiceForm };
       if (!payload.sessionSecret) delete payload.sessionSecret;
       await adminApi.updateSettings(payload);
       showSuccess('Einstellungen gespeichert');
@@ -293,6 +390,7 @@ export default function SettingsPage() {
       { key: 'podcast' as TabKey, label: 'Podcast-Profil', icon: <Mic2 size={15} />, adminOnly: true },
       { key: 'technical' as TabKey, label: 'Technische Daten', icon: <Sliders size={15} />, adminOnly: true },
       { key: 'app' as TabKey, label: 'App-Einstellungen', icon: <Settings size={15} />, adminOnly: true },
+      { key: 'update' as TabKey, label: 'App-Update', icon: <Download size={15} />, adminOnly: true },
     ] : []),
   ];
 
@@ -830,6 +928,62 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              {/* Invoice Number Schema */}
+              <div className="card">
+                <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
+                  <Tag size={16} /> Rechnungsnummern-Schema
+                </h3>
+                <p className="text-text-muted text-sm mb-4">Lege fest, wie Rechnungsnummern automatisch vergeben werden. Die nächste Nummer wird beim Erstellen einer Platzierung automatisch eingetragen.</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="label">Präfix</label>
+                    <input type="text" value={invoiceForm.prefix} onChange={e => setInvoiceForm(p => ({ ...p, prefix: e.target.value }))} className="input font-mono" placeholder="RE" maxLength={10} />
+                    <p className="text-text-muted text-xs mt-1">z.B. RE, INV, RG</p>
+                  </div>
+                  <div>
+                    <label className="label">Trennzeichen</label>
+                    <select value={invoiceForm.separator} onChange={e => setInvoiceForm(p => ({ ...p, separator: e.target.value }))} className="input">
+                      <option value="-">Bindestrich  (RE-2025-001)</option>
+                      <option value="/">Schrägstrich (RE/2025/001)</option>
+                      <option value=".">Punkt        (RE.2025.001)</option>
+                      <option value="_">Unterstrich  (RE_2025_001)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Stellen (Nummer)</label>
+                    <select value={invoiceForm.paddingDigits} onChange={e => setInvoiceForm(p => ({ ...p, paddingDigits: parseInt(e.target.value) }))} className="input">
+                      <option value={2}>2 Stellen (01)</option>
+                      <option value={3}>3 Stellen (001)</option>
+                      <option value={4}>4 Stellen (0001)</option>
+                      <option value={5}>5 Stellen (00001)</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3 pt-4">
+                    <button type="button" onClick={() => setInvoiceForm(p => ({ ...p, includeYear: !p.includeYear }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${invoiceForm.includeYear ? 'bg-accent-purple' : 'bg-surface-border'}`}>
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${invoiceForm.includeYear ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                    <span className="text-text-secondary text-sm">Jahr einschließen</span>
+                  </div>
+                  <div className="flex items-center gap-3 pt-4">
+                    <button type="button" onClick={() => setInvoiceForm(p => ({ ...p, includeMonth: !p.includeMonth }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${invoiceForm.includeMonth ? 'bg-accent-purple' : 'bg-surface-border'}`}>
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${invoiceForm.includeMonth ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                    <span className="text-text-secondary text-sm">Monat einschließen</span>
+                  </div>
+                  <div>
+                    <label className="label">Nächste Nummer</label>
+                    <input type="number" value={invoiceForm.nextNumber} onChange={e => setInvoiceForm(p => ({ ...p, nextNumber: parseInt(e.target.value) || 1 }))} className="input" min={1} />
+                    <p className="text-text-muted text-xs mt-1">Zähler für die nächste Rechnung</p>
+                  </div>
+                </div>
+                <div className="mt-4 p-3 bg-obsidian-800 rounded-lg border border-surface-border flex items-center gap-3">
+                  <span className="text-text-muted text-sm">Vorschau:</span>
+                  <span className="font-mono text-accent-purple font-bold text-base">{buildInvoiceExample(invoiceForm)}</span>
+                </div>
+              </div>
+
               {/* Workflow Settings */}
               <div className="card">
                 <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
@@ -881,6 +1035,161 @@ export default function SettingsPage() {
             </>
           )}
         </form>
+      )}
+      {/* ── UPDATE TAB ──────────────────────────────────────────────────────────── */}
+      {activeTab === 'update' && can('canManageSettings') && (
+        <div className="max-w-2xl space-y-6">
+          {/* System-Info */}
+          <div className="card">
+            <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
+              <Package size={16} /> System-Informationen
+            </h3>
+            {isLoadingUpdateStatus ? (
+              <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" /></div>
+            ) : updateStatus ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-surface-raised rounded-lg p-3">
+                  <div className="text-text-muted text-xs mb-1">Aktuelle Version</div>
+                  <div className="font-mono font-bold text-accent-purple text-lg">v{updateStatus.currentVersion}</div>
+                </div>
+                <div className="bg-surface-raised rounded-lg p-3">
+                  <div className="text-text-muted text-xs mb-1">Node.js</div>
+                  <div className="font-mono text-text-primary">{updateStatus.nodeVersion}</div>
+                </div>
+                <div className="bg-surface-raised rounded-lg p-3">
+                  <div className="text-text-muted text-xs mb-1">Plattform</div>
+                  <div className="text-text-primary">{updateStatus.platform} ({updateStatus.arch})</div>
+                </div>
+                <div className="bg-surface-raised rounded-lg p-3">
+                  <div className="text-text-muted text-xs mb-1">Ausstehende Updates</div>
+                  <div className={updateStatus.pendingUpdates > 0 ? 'text-amber-400 font-semibold' : 'text-text-muted'}>
+                    {updateStatus.pendingUpdates > 0 ? `${updateStatus.pendingUpdates} Datei(en)` : 'Keine'}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-text-muted text-sm">Status konnte nicht geladen werden.</p>
+            )}
+            <button onClick={loadUpdateStatus} disabled={isLoadingUpdateStatus} className="btn-secondary mt-3">
+              <RefreshCw size={14} className={isLoadingUpdateStatus ? 'animate-spin' : ''} />
+              Aktualisieren
+            </button>
+          </div>
+
+          {/* ZIP Upload */}
+          <div className="card">
+            <h3 className="font-semibold text-text-primary mb-2 flex items-center gap-2">
+              <Upload size={16} /> Update-ZIP hochladen
+            </h3>
+            <p className="text-text-muted text-sm mb-4">
+              Lade eine PodCore-Update-ZIP-Datei hoch. Die Datei wird geprüft, bevor das Update angewendet wird.
+              Datenbank und Uploads bleiben erhalten.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="label">Update-Datei auswählen (.zip)</label>
+                <input type="file" accept=".zip" onChange={handleUpdateFileChange}
+                  className="block w-full text-sm text-text-secondary file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-accent-purple/20 file:text-accent-purple hover:file:bg-accent-purple/30 cursor-pointer" />
+              </div>
+
+              {updateFile && !uploadResult && (
+                <div className="flex items-center gap-3">
+                  <button onClick={handleUploadUpdate} disabled={isUploading} className="btn-primary">
+                    {isUploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                    {isUploading ? `Hochladen... ${updateUploadProgress}%` : 'Hochladen & Prüfen'}
+                  </button>
+                  {isUploading && (
+                    <div className="flex-1 bg-surface-raised rounded-full h-2">
+                      <div className="h-2 bg-accent-purple rounded-full transition-all" style={{ width: `${updateUploadProgress}%` }} />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Prüfergebnis */}
+              {uploadResult && (
+                <div className="space-y-3">
+                  <div className="bg-surface-raised rounded-lg p-4 border border-surface-border">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-semibold text-text-primary">Prüfergebnis</span>
+                      <span className="font-mono text-accent-purple font-bold">v{uploadResult.updateVersion}</span>
+                    </div>
+                    <div className="text-text-muted text-xs mb-3">
+                      {uploadResult.fileCount} Dateien • {(uploadResult.size / 1024 / 1024).toFixed(1)} MB
+                    </div>
+                    <div className="space-y-2">
+                      {uploadResult.checks?.map((c: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2">
+                          {c.ok
+                            ? <CheckCircle size={14} className="text-green-400 shrink-0" />
+                            : c.required
+                              ? <XCircle size={14} className="text-red-400 shrink-0" />
+                              : <AlertTriangle size={14} className="text-amber-400 shrink-0" />}
+                          <span className={`text-sm ${c.ok ? 'text-text-primary' : c.required ? 'text-red-400' : 'text-amber-400'}`}>{c.name}</span>
+                          {!c.ok && c.required && <span className="text-red-400 text-xs">(Pflicht)</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {uploadResult.canApply && !applyDone && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle size={15} className="text-amber-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-amber-400 font-semibold text-sm">Update anwenden</p>
+                          <p className="text-text-muted text-xs mt-1">Der Server wird nach dem Update automatisch neu gestartet. Alle Nutzer werden kurz getrennt.</p>
+                        </div>
+                      </div>
+                      <button onClick={handleApplyUpdate} disabled={isApplying} className="btn-primary mt-3">
+                        {isApplying ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                        {isApplying ? 'Update wird angewendet...' : `Update auf v${uploadResult.updateVersion} anwenden`}
+                      </button>
+                    </div>
+                  )}
+
+                  {!uploadResult.canApply && (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <XCircle size={15} className="text-red-400" />
+                        <p className="text-red-400 text-sm font-semibold">Update kann nicht angewendet werden</p>
+                      </div>
+                      <p className="text-text-muted text-xs mt-1">Bitte prüfe die fehlgeschlagenen Anforderungen oben.</p>
+                    </div>
+                  )}
+
+                  {applyLog.length > 0 && (
+                    <div className="bg-obsidian-800 rounded-lg p-3 font-mono text-xs text-text-secondary space-y-1 max-h-40 overflow-y-auto">
+                      {applyLog.map((line, i) => <div key={i}>{line}</div>)}
+                    </div>
+                  )}
+
+                  {applyDone && (
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 flex items-center gap-2">
+                      <CheckCircle size={15} className="text-green-400" />
+                      <p className="text-green-400 text-sm font-semibold">Update erfolgreich! Seite in 5 Sekunden neu laden...</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Hinweis */}
+          <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-4">
+            <div className="flex items-start gap-2">
+              <Info size={15} className="text-accent-blue mt-0.5 shrink-0" />
+              <div>
+                <p className="text-accent-blue font-semibold text-sm">Hinweis zum Update-Prozess</p>
+                <p className="text-text-muted text-xs mt-1">
+                  Updates werden als ZIP-Dateien bereitgestellt und enthalten nur die geänderten Programmdateien.
+                  Datenbank, Uploads, Branding und alle persönlichen Einstellungen bleiben vollständig erhalten.
+                  Nach dem Update startet der Server automatisch neu.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

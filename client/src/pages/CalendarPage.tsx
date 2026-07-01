@@ -4,6 +4,7 @@ import {
   ChevronLeft, ChevronRight, Download, Calendar, Radio, FileText, RefreshCw,
 } from 'lucide-react';
 import { editorialApi } from '../lib/api';
+import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
 import { useApp } from '../contexts/AppContext';
 
 const MONTH_NAMES = [
@@ -30,6 +31,8 @@ export default function CalendarPage() {
   const [calendarData, setCalendarData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'month' | 'year'>('month');
+  const [pdfLayoutId, setPdfLayoutId] = useState('');
+  const [pdfFileName, setPdfFileName] = useState('');
 
   const loadCalendar = async () => {
     setIsLoading(true);
@@ -115,8 +118,28 @@ export default function CalendarPage() {
           <button onClick={loadCalendar} className="btn-secondary text-sm" disabled={isLoading}>
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>
+          <input
+            type="text"
+            value={pdfFileName}
+            onChange={e => setPdfFileName(e.target.value)}
+            placeholder={`Redaktionskalender_${year}_${month}.pdf`}
+            className="input text-xs w-48"
+            title="Eigener Dateiname für den PDF-Export"
+          />
+          <PdfLayoutPicker exportType="calendar" value={pdfLayoutId} onChange={setPdfLayoutId} />
           <button
-            onClick={() => editorialApi.downloadCalendarPdf(year, month)}
+            onClick={async () => {
+              try {
+                const blob = await editorialApi.downloadCalendarPdf(year, month, pdfLayoutId || undefined);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const defaultName = `Redaktionskalender_${year}_${month}`;
+                a.href = url;
+                a.download = pdfFileName ? `${pdfFileName.replace(/\.pdf$/i, '')}.pdf` : `${defaultName}.pdf`;
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (err: any) { addToast('error', err.message); }
+            }}
             className="btn-primary text-sm"
           >
             <Download size={14} />

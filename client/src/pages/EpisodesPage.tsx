@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, Mic2, Calendar, Clock, Copy, Trash2, ChevronRight } from 'lucide-react';
+import { Plus, Search, Filter, Mic2, Calendar, Clock, Copy, Trash2, ChevronRight, CheckSquare, LayoutList } from 'lucide-react';
 import { episodesApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
@@ -119,12 +119,18 @@ export default function EpisodesPage() {
           <h1 className="page-title">Episoden</h1>
           <p className="text-text-secondary text-sm mt-1">{total} Episode{total !== 1 ? 'n' : ''} gesamt</p>
         </div>
-        {can('canCreateEpisodes') && (
-          <button onClick={() => setShowCreateModal(true)} className="btn-primary">
-            <Plus size={16} />
-            <span>Neue Episode</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <Link to="/episodes/schedule" className="btn-secondary flex items-center gap-2">
+            <LayoutList size={16} />
+            <span className="hidden sm:inline">Planungsübersicht</span>
+          </Link>
+          {can('canCreateEpisodes') && (
+            <button onClick={() => setShowCreateModal(true)} className="btn-primary">
+              <Plus size={16} />
+              <span>Neue Episode</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -188,6 +194,11 @@ export default function EpisodesPage() {
                   <span className={`badge ${STATUS_BADGE[ep.status] || 'bg-surface-overlay text-text-muted'}`}>
                     {STATUS_OPTIONS.find(s => s.value === ep.status)?.label || ep.status}
                   </span>
+                  {ep.scriptReady && (
+                    <span className="badge bg-accent-green/20 text-accent-green flex items-center gap-1" title="Script fertig">
+                      <CheckSquare size={10} /> Script ✓
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 mt-1 text-text-muted text-xs">
                   {ep.recordingDate && (

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Shield, Users, Plus, Edit2, Trash2, Key, Check, X, Eye, EyeOff,
-  Server, Database, HardDrive, Activity, RefreshCw, Loader2, Lock, Tag, Save
+  Server, Database, HardDrive, Activity, RefreshCw, Loader2, Lock, Tag, Save,
+  UserX, ArrowRight, AlertTriangle, ToggleLeft, ToggleRight, Layers, RotateCcw
 } from 'lucide-react';
 import { adminApi } from '../lib/api';
-import { useApp } from '../contexts/AppContext';
+import { useApp, useFeatures } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
 
 const ALL_PERMISSIONS = [
@@ -36,6 +37,25 @@ const ALL_PERMISSIONS = [
   { key: 'canManageSettings', label: 'Einstellungen verwalten', group: 'Administration' },
   { key: 'canViewErrorLogs', label: 'Logs ansehen', group: 'Administration' },
   { key: 'canExport', label: 'Daten exportieren', group: 'Administration' },
+  { key: 'canManagePdfLayouts', label: 'PDF-Layouts verwalten', group: 'Administration' },
+  // Sponsoring-Erweiterungen (v2.7.x)
+  { key: 'canManageSponsors', label: 'Sponsoren vollständig verwalten', group: 'Sponsoring' },
+  { key: 'canViewInvoices', label: 'Rechnungen ansehen', group: 'Sponsoring' },
+  { key: 'canCreateInvoices', label: 'Rechnungen erstellen', group: 'Sponsoring' },
+  { key: 'canEditInvoices', label: 'Rechnungen bearbeiten', group: 'Sponsoring' },
+  { key: 'canExportPricelist', label: 'Preisliste exportieren', group: 'Sponsoring' },
+  // Episoden-Editor-Erweiterungen (v2.7.x)
+  { key: 'canManageBlocks', label: 'Skript-Blöcke verwalten', group: 'Episoden' },
+  { key: 'canUseMediaLibraryInEditor', label: 'Media Library im Editor nutzen', group: 'Episoden' },
+  // Abnahme-Workflow
+  { key: 'canApproveEpisodes', label: 'Episoden freigeben / abnehmen', group: 'Episoden' },
+  { key: 'canRequestApproval', label: 'Freigabe anfordern', group: 'Episoden' },
+  { key: 'canApproveInterviewQuestions', label: 'Interview-Fragen freigeben', group: 'Redaktions-Hub' },
+  // v2.9.0 – neue Berechtigungen
+  { key: 'canEditShowNotes', label: 'Show-Notes bearbeiten', group: 'Episoden' },
+  { key: 'canManageInterviewBlocks', label: 'Interview-Fragen-Blöcke verwalten', group: 'Episoden' },
+  // PDF-Layouts
+  { key: 'canManagePdfLayouts', label: 'PDF-Layouts verwalten', group: 'Administration' },
 ];
 
 const PERMISSION_GROUPS = [...new Set(ALL_PERMISSIONS.map(p => p.group))];
@@ -48,7 +68,19 @@ export default function AdminPage() {
   const [roles, setRoles] = useState<any[]>([]);
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'system' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'modules' | 'system' | 'database' | 'logs'>('users');
+
+  // Database Migration State
+  const [dbStatus, setDbStatus] = useState<any>(null);
+  const [mysqlForm, setMysqlForm] = useState({ host: '', port: '3306', database: '', user: '', password: '' });
+  const [dbTestResult, setDbTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationLog, setMigrationLog] = useState<string[]>([]);
+  const [migrationDone, setMigrationDone] = useState(false);
+  const { features } = useFeatures();
+  const [featureForm, setFeatureForm] = useState<Record<string, boolean>>({});
+  const [isSavingFeatures, setIsSavingFeatures] = useState(false);
 
   // User modal
   const [showUserModal, setShowUserModal] = useState(false);
@@ -66,6 +98,40 @@ export default function AdminPage() {
   const [editingRole, setEditingRole] = useState<any>(null);
   const [roleForm, setRoleForm] = useState({ name: '', label: '', description: '', color: '#7c3aed' });
   const [rolePermissions, setRolePermissions] = useState<Record<string, boolean>>(emptyPermissions());
+
+  // Delete with transfer modal
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<any>(null);
+  const [deleteLinkedData, setDeleteLinkedData] = useState<any>(null);
+  const [transferToUserId, setTransferToUserId] = useState<string>('global');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Password reset modal (Admin resets another user's password without knowing the old one)
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetTargetUser, setResetTargetUser] = useState<any>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
+  const [showResetPw, setShowResetPw] = useState(false);
+
+  const openResetPassword = (u: any) => {
+    setResetTargetUser(u);
+    setResetPassword('');
+    setResetPasswordConfirm('');
+    setShowResetModal(true);
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (resetPassword.length < 6) { showError('Passwort muss mindestens 6 Zeichen haben'); return; }
+    if (resetPassword !== resetPasswordConfirm) { showError('Passwörter stimmen nicht überein'); return; }
+    setIsSaving(true);
+    try {
+      await adminApi.resetPassword(resetTargetUser.id, resetPassword);
+      showSuccess(`Passwort für ${resetTargetUser.displayName} wurde zurückgesetzt`);
+      setShowResetModal(false);
+    } catch (err: any) { showError(err.message); }
+    finally { setIsSaving(false); }
+  };
 
   const [logs, setLogs] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -123,13 +189,31 @@ export default function AdminPage() {
     finally { setIsSaving(false); }
   };
 
-  const handleDeleteUser = async (id: string, name: string) => {
-    if (!confirm(`Benutzer "${name}" löschen?`)) return;
+  const openDeleteUser = async (u: any) => {
+    setDeleteTargetUser(u);
+    setTransferToUserId('global');
+    setDeleteLinkedData(null);
+    // Verknüpfte Daten laden
     try {
-      await adminApi.deleteUser(id);
-      showSuccess('Benutzer gelöscht');
+      const data = await adminApi.getLinkedData(u.id);
+      setDeleteLinkedData(data);
+    } catch (_) {
+      setDeleteLinkedData({ episodeCount: 0, ideaCount: 0, sponsorCount: 0, assetCount: 0, noteCount: 0, total: 0 });
+    }
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteTargetUser) return;
+    setIsDeleting(true);
+    try {
+      const hasLinked = deleteLinkedData?.total > 0;
+      await adminApi.deleteUser(deleteTargetUser.id, hasLinked ? transferToUserId : undefined);
+      showSuccess(`Benutzer "${deleteTargetUser.displayName}" gelöscht${hasLinked ? ` — Inhalte übertragen` : ''}`);
+      setShowDeleteModal(false);
       load();
     } catch (err: any) { showError(err.message); }
+    finally { setIsDeleting(false); }
   };
 
   const openCreateUser = () => {
@@ -259,11 +343,13 @@ export default function AdminPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit">
+      <div className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit flex-wrap">
         {[
           { key: 'users', label: 'Benutzer', icon: <Users size={14} /> },
           { key: 'roles', label: 'Rollen', icon: <Tag size={14} /> },
+          { key: 'modules', label: 'Module', icon: <Layers size={14} /> },
           { key: 'system', label: 'System', icon: <Server size={14} /> },
+          { key: 'database', label: 'Datenbank', icon: <Database size={14} /> },
           { key: 'logs', label: 'Logs', icon: <Activity size={14} /> },
         ].map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
@@ -314,7 +400,12 @@ export default function AdminPage() {
                         <Edit2 size={14} />
                       </button>
                       {!isCurrentUser && (
-                        <button onClick={() => handleDeleteUser(u.id, u.displayName)} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors" title="Benutzer löschen">
+                        <button onClick={() => openResetPassword(u)} className="p-2 text-text-muted hover:text-accent-green hover:bg-accent-green/10 rounded-lg transition-colors" title="Passwort zurücksetzen">
+                          <Lock size={14} />
+                        </button>
+                      )}
+                      {!isCurrentUser && (
+                        <button onClick={() => openDeleteUser(u)} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors" title="Benutzer löschen">
                           <Trash2 size={14} />
                         </button>
                       )}
@@ -334,7 +425,24 @@ export default function AdminPage() {
             <div>
               <p className="text-text-secondary text-sm">{roles.length} Rollen — System-Rollen können nicht gelöscht, aber bearbeitet werden</p>
             </div>
-            <button onClick={openCreateRole} className="btn-primary"><Plus size={16} /><span>Neue Rolle</span></button>
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  if (!window.confirm('Alle System-Rollen auf Standard-Berechtigungen zurücksetzen?')) return;
+                  try {
+                    const result = await adminApi.resetRolePermissions();
+                    showSuccess(result?.message || 'Rollen zurückgesetzt');
+                    const rolesData = await adminApi.listRoles();
+                    setRoles(rolesData);
+                  } catch (err: any) { showError(err.message || 'Fehler beim Zurücksetzen'); }
+                }}
+                className="btn-secondary text-sm"
+                title="Alle System-Rollen auf Standard-Berechtigungen zurücksetzen"
+              >
+                <RotateCcw size={14} /><span>Standard-Berechtigungen</span>
+              </button>
+              <button onClick={openCreateRole} className="btn-primary"><Plus size={16} /><span>Neue Rolle</span></button>
+            </div>
           </div>
 
           {isLoading ? (
@@ -478,6 +586,338 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* ── MODULES TAB ─────────────────────────────────────── */}
+      {activeTab === 'modules' && (
+        <div className="space-y-4">
+          <div className="card">
+            <h3 className="font-semibold text-text-primary mb-1 flex items-center gap-2">
+              <Layers size={16} className="text-accent-purple" />
+              App-Module aktivieren / deaktivieren
+            </h3>
+            <p className="text-text-muted text-sm mb-5">Deaktivierte Module werden aus der Navigation ausgeblendet. Die Daten bleiben erhalten und können jederzeit wieder aktiviert werden.</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[
+                { key: 'editorial', label: 'Redaktions-Hub', desc: 'Ideen, Redaktionsplan, Interview-Partner, Recherche', icon: '📝' },
+                { key: 'sponsoring', label: 'Sponsoring', desc: 'Sponsoren, Werbekategorien, Platzierungen, Abrechnung', icon: '📢' },
+                { key: 'mediaLibrary', label: 'Media Library', desc: 'Asset-Verwaltung, Audio- und Bild-Uploads', icon: '🗂️' },
+                { key: 'statistics', label: 'Statistiken & Analytics', desc: 'Podcast-Statistiken und Podigee-Analytics', icon: '📊' },
+                { key: 'chat', label: 'Team-Chat', desc: 'Internes Kommunikationstool zwischen Nutzern', icon: '💬' },
+                { key: 'seasons', label: 'Staffeln', desc: 'Staffel-Verwaltung und Episoden-Gruppierung', icon: '🗂️' },
+                { key: 'wiki', label: 'Wiki', desc: 'Internes Wissens- und Dokumentationssystem', icon: '📖' },
+                { key: 'branding', label: 'Branding & Backup', desc: 'Logo, CI-Farben, Speicher-Konfiguration, Backup', icon: '🎨' },
+                { key: 'podigee', label: 'Podigee-Sync', desc: 'Synchronisation mit Podigee-Podcast-Hosting', icon: '🔄' },
+              ].map(mod => {
+                const isActive = featureForm[mod.key] !== undefined ? featureForm[mod.key] : features[mod.key as keyof typeof features];
+                return (
+                  <div key={mod.key}
+                    className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                      isActive ? 'border-accent-green/40 bg-accent-green/5' : 'border-surface-border bg-obsidian-800/50 opacity-70'
+                    }`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{mod.icon}</span>
+                      <div>
+                        <p className="text-text-primary font-medium text-sm">{mod.label}</p>
+                        <p className="text-text-muted text-xs mt-0.5">{mod.desc}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFeatureForm(prev => ({ ...prev, [mod.key]: !isActive }))}
+                      className={`flex-shrink-0 ml-4 transition-colors ${
+                        isActive ? 'text-accent-green' : 'text-text-muted'
+                      }`}
+                      title={isActive ? 'Modul deaktivieren' : 'Modul aktivieren'}
+                    >
+                      {isActive
+                        ? <ToggleRight size={32} />
+                        : <ToggleLeft size={32} />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 pt-4 border-t border-surface-border flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  setIsSavingFeatures(true);
+                  try {
+                    const merged = { ...features, ...featureForm };
+                    await adminApi.updateSettings({ features: merged });
+                    // Reload public settings to update context
+                    window.location.reload();
+                  } catch (err: any) { showError(err.message); }
+                  finally { setIsSavingFeatures(false); }
+                }}
+                disabled={isSavingFeatures || Object.keys(featureForm).length === 0}
+                className="btn-primary"
+              >
+                {isSavingFeatures ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                <span>Module-Einstellungen speichern</span>
+              </button>
+              {Object.keys(featureForm).length > 0 && (
+                <span className="text-text-muted text-sm">{Object.keys(featureForm).length} Änderung(en) ausstehend</span>
+              )}
+            </div>
+          </div>
+
+          <div className="card bg-accent-orange/5 border-accent-orange/30">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={18} className="text-accent-orange flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-text-primary font-medium text-sm">Hinweis</p>
+                <p className="text-text-muted text-sm mt-1">Das Deaktivieren eines Moduls blendet es nur aus der Navigation aus. Vorhandene Daten (z.B. Sponsoren, Ideen) bleiben vollständig erhalten und werden beim Reaktivieren wieder angezeigt. Direkte URL-Aufrufe der deaktivierten Module sind weiterhin möglich.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DATABASE TAB ─────────────────────────────────────── */}
+      {activeTab === 'database' && (
+        <div className="space-y-4">
+          {/* Aktueller DB-Status */}
+          <div className="card">
+            <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
+              <Database size={16} className="text-accent-green" />
+              Aktueller Datenbankstatus
+            </h3>
+            <div className="flex gap-3 mb-4">
+              <button
+                onClick={async () => {
+                  try {
+                    const data = await adminApi.getDbStatus();
+                    setDbStatus(data);
+                  } catch (err: any) { showError(err.message); }
+                }}
+                className="btn-secondary"
+              >
+                <RefreshCw size={14} /> Status laden
+              </button>
+            </div>
+            {dbStatus && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${
+                    dbStatus.type === 'mysql' ? 'bg-accent-blue/20 text-accent-blue' : 'bg-accent-green/20 text-accent-green'
+                  }`}>
+                    <Database size={12} />
+                    {dbStatus.type === 'mysql' ? 'MySQL / MariaDB' : 'SQLite (lokal)'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(dbStatus.stats || {}).map(([table, count]) => (
+                    <div key={table} className="bg-obsidian-800 rounded-lg p-3 border border-surface-border">
+                      <p className="text-text-muted text-xs mb-1">{table}</p>
+                      <p className="text-text-primary font-bold text-lg">{count as number}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* MySQL-Migration */}
+          <div className="card">
+            <h3 className="font-semibold text-text-primary mb-1 flex items-center gap-2">
+              <ArrowRight size={16} className="text-accent-orange" />
+              Migration: SQLite → MySQL / MariaDB
+            </h3>
+            <p className="text-text-secondary text-sm mb-4">
+              Übertrage alle Daten aus der lokalen SQLite-Datenbank in eine externe MySQL- oder MariaDB-Datenbank.
+              Ideal wenn das Podcast-Projekt wächst und mehrere Nutzer gleichzeitig arbeiten.
+            </p>
+
+            <div className="bg-accent-orange/5 border border-accent-orange/30 rounded-xl p-4 mb-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="text-accent-orange mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <p className="text-text-primary font-medium">Wichtige Hinweise vor der Migration</p>
+                  <ul className="text-text-muted mt-2 space-y-1 list-disc list-inside">
+                    <li>Erstelle zuerst ein Backup (System-Tab → Backup exportieren)</li>
+                    <li>Die Ziel-Datenbank muss bereits existieren (leere MySQL-Datenbank)</li>
+                    <li>Der MySQL-Benutzer benötigt CREATE, DROP, INSERT, SELECT Rechte</li>
+                    <li>Vorhandene Tabellen in der Ziel-DB werden überschrieben</li>
+                    <li>Nach der Migration muss der Server neu konfiguriert werden (mysql2 installieren)</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Provider-Hinweis */}
+            <div className="bg-accent-blue/5 border border-accent-blue/20 rounded-lg p-3 mb-4 text-xs text-text-muted">
+              <p className="font-medium text-text-secondary mb-1">💡 Lokale oder externe Datenbank?</p>
+              <p>Für <strong className="text-text-primary">lokale Installationen</strong> verwende <code className="bg-obsidian-800 px-1 rounded">localhost</code> als Host.</p>
+              <p className="mt-1">Für <strong className="text-text-primary">externe Provider</strong> (z.B. IONOS, Strato, All-Inkl, AWS RDS, DigitalOcean) trage den vollständigen Hostnamen ein, z.B. <code className="bg-obsidian-800 px-1 rounded">database-123.webspace-host.com</code>. Stelle sicher, dass dein Hoster den externen Zugriff auf Port 3306 erlaubt und deine Server-IP freigegeben ist.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="md:col-span-2">
+                <label className="block text-xs text-text-muted mb-1">Host <span className="text-text-muted/60">(Hostname oder IP-Adresse)</span></label>
+                <input
+                  type="text"
+                  value={mysqlForm.host}
+                  onChange={e => setMysqlForm(prev => ({ ...prev, host: e.target.value }))}
+                  placeholder="localhost, 192.168.1.100 oder database-123.webspace-host.com"
+                  className="w-full bg-obsidian-800 border border-surface-border rounded px-3 py-2 text-sm text-text-primary"
+                />
+              </div>
+              {[
+                { key: 'port', label: 'Port', placeholder: '3306', type: 'number' },
+                { key: 'database', label: 'Datenbank', placeholder: 'podcore_db', type: 'text' },
+                { key: 'user', label: 'Benutzer', placeholder: 'podcore_user', type: 'text' },
+              ].map(field => (
+                <div key={field.key}>
+                  <label className="block text-xs text-text-muted mb-1">{field.label}</label>
+                  <input
+                    type={field.type}
+                    value={mysqlForm[field.key as keyof typeof mysqlForm]}
+                    onChange={e => setMysqlForm(prev => ({ ...prev, [field.key]: e.target.value }))}
+                    placeholder={field.placeholder}
+                    className="w-full bg-obsidian-800 border border-surface-border rounded px-3 py-2 text-sm text-text-primary"
+                  />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Passwort</label>
+                <input
+                  type="password"
+                  value={mysqlForm.password}
+                  onChange={e => setMysqlForm(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="MySQL-Passwort"
+                  className="w-full bg-obsidian-800 border border-surface-border rounded px-3 py-2 text-sm text-text-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 flex-wrap">
+              <button
+                onClick={async () => {
+                  setIsTesting(true);
+                  setDbTestResult(null);
+                  try {
+                    const res = await adminApi.testMysql(mysqlForm);
+                    // res is already the data part because of the request<T> wrapper
+                    setDbTestResult({ success: true, message: (res as any)?.message || 'Verbindung erfolgreich' });
+                  } catch (err: any) { 
+                    setDbTestResult({ success: false, message: err.message || 'Verbindung fehlgeschlagen' }); 
+                  }
+                  finally { setIsTesting(false); }
+                }}
+                disabled={isTesting || !mysqlForm.host || !mysqlForm.database || !mysqlForm.user}
+                className="btn-secondary"
+              >
+                {isTesting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                Verbindung testen
+              </button>
+
+              <button
+                onClick={async () => {
+                  if (!window.confirm('Alle Daten von SQLite nach MySQL migrieren? Vorhandene Tabellen in der Ziel-DB werden überschrieben!')) return;
+                  setIsMigrating(true);
+                  setMigrationLog([]);
+                  setMigrationDone(false);
+                  try {
+                    const res = await adminApi.migrateToMysql(mysqlForm);
+                    // Support both shapes: { data: { log, success } } and { log, success }
+                    const logData = (res as any)?.log || (res as any)?.data?.log || [];
+                    const isSuccess = (res as any)?.success !== false;
+                    
+                    setMigrationLog(logData);
+                    setMigrationDone(isSuccess);
+                    
+                    if (isSuccess) showSuccess((res as any)?.message || 'Migration erfolgreich');
+                    else showError((res as any)?.error || 'Migration fehlgeschlagen');
+                  } catch (err: any) { showError(err.message); }
+                  finally { setIsMigrating(false); }
+                }}
+                disabled={isMigrating || !dbTestResult?.success}
+                className="btn-primary"
+              >
+                {isMigrating ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+                Migration starten
+              </button>
+
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await adminApi.getMigrationLog();
+                    setMigrationLog(res || []);
+                  } catch (err: any) { showError(err.message); }
+                }}
+                className="btn-secondary"
+              >
+                <Activity size={14} /> Letztes Migrations-Log laden
+              </button>
+            </div>
+
+            {dbTestResult && (
+              <div className={`mt-3 px-3 py-2 rounded-lg text-sm ${
+                dbTestResult.success ? 'bg-accent-green/10 text-accent-green border border-accent-green/30' : 'bg-accent-red/10 text-accent-red border border-accent-red/30'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {dbTestResult.success ? <Check size={14} /> : <X size={14} />}
+                  <span>{dbTestResult.message}</span>
+                </div>
+                {!dbTestResult.success && (
+                  <div className="mt-2 text-xs opacity-80 space-y-1">
+                    {dbTestResult.message?.includes('ENETUNREACH') || dbTestResult.message?.includes('ECONNREFUSED') || dbTestResult.message?.includes('ETIMEDOUT') ? (
+                      <>
+                        <p>⚠️ Der Host ist nicht erreichbar. Mögliche Ursachen:</p>
+                        <ul className="list-disc list-inside space-y-0.5 ml-1">
+                          <li>Externer Zugriff beim Hoster nicht aktiviert (Port 3306 gesperrt)</li>
+                          <li>Die IP dieses Servers ({window.location.hostname}) ist nicht in der Hoster-Firewall freigegeben</li>
+                          <li>Falscher Hostname – prüfe ob dein Hoster einen separaten externen Hostnamen bereitstellt</li>
+                          <li>Bei IONOS Shared Hosting: externer DB-Zugriff ist nicht möglich, nur über eigene Cloud-Datenbank</li>
+                        </ul>
+                      </>
+                    ) : dbTestResult.message?.includes('Access denied') ? (
+                      <p>⚠️ Zugriff verweigert – prüfe Benutzername, Passwort und ob der Benutzer Remote-Zugriff hat.</p>
+                    ) : dbTestResult.message?.includes('Unknown database') ? (
+                      <p>⚠️ Datenbank nicht gefunden – stelle sicher, dass die Datenbank im Hoster-Panel bereits angelegt wurde.</p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {migrationLog.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-text-muted mb-2">Migrations-Log</p>
+                <div className="bg-obsidian-900 border border-surface-border rounded-lg p-3 max-h-64 overflow-y-auto font-mono text-xs space-y-0.5">
+                  {migrationLog.map((line, i) => (
+                    <p key={i} className={line.includes('✓') ? 'text-accent-green' : line.includes('✗') ? 'text-accent-red' : line.includes('Abgeschlossen') ? 'text-accent-blue font-bold' : 'text-text-muted'}>
+                      {line}
+                    </p>
+                  ))}
+                </div>
+                {migrationDone && (
+                  <div className="mt-3 p-3 bg-accent-green/10 border border-accent-green/30 rounded-lg">
+                    <p className="text-accent-green text-sm font-medium">✓ Migration erfolgreich abgeschlossen</p>
+                    <p className="text-text-muted text-xs mt-1">Nächste Schritte: Installiere mysql2 im Server-Verzeichnis (<code className="bg-obsidian-800 px-1 rounded">npm install mysql2</code>) und konfiguriere die Datenbankverbindung in der Server-Konfiguration.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Hinweis-Box */}
+          <div className="card bg-accent-blue/5 border-accent-blue/30">
+            <div className="flex items-start gap-3">
+              <Database size={18} className="text-accent-blue shrink-0 mt-0.5" />
+              <div>
+                <p className="text-text-primary font-medium text-sm">Wann sollte ich migrieren?</p>
+                <div className="text-text-muted text-sm mt-2 space-y-1">
+                  <p><strong className="text-text-primary">SQLite (Standard)</strong> – ideal für kleine Teams (1–5 Personen), Einzelnutzer, Raspberry Pi oder lokale Installation. Keine Konfiguration nötig.</p>
+                  <p><strong className="text-text-primary">MySQL / MariaDB</strong> – empfohlen ab 5+ gleichzeitigen Nutzern, bei hohem Dateivolumen, für Produktionsserver oder wenn eine bestehende MySQL-Infrastruktur vorhanden ist.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── LOGS TAB ───────────────────────────────────────── */}
       {activeTab === 'logs' && (
         <div className="space-y-4">
@@ -538,6 +978,99 @@ export default function AdminPage() {
           )}
         </div>
       )}
+
+      {/* ── Delete with Transfer Modal ────────────────────────── */}
+      <Modal isOpen={showDeleteModal} onClose={() => !isDeleting && setShowDeleteModal(false)} title="Benutzer löschen">
+        <div className="space-y-5">
+          {/* Benutzer-Info */}
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-obsidian-800">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ backgroundColor: deleteTargetUser?.avatarColor || '#7c3aed' }}>
+              {deleteTargetUser?.displayName?.[0]?.toUpperCase()}
+            </div>
+            <div>
+              <p className="text-text-primary font-medium">{deleteTargetUser?.displayName}</p>
+              <p className="text-text-muted text-xs">@{deleteTargetUser?.username}</p>
+            </div>
+          </div>
+
+          {/* Verknüpfte Daten */}
+          {deleteLinkedData === null ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 size={20} className="animate-spin text-text-muted" />
+              <span className="text-text-muted text-sm ml-2">Verknüpfte Inhalte werden geprüft...</span>
+            </div>
+          ) : deleteLinkedData.total === 0 ? (
+            <div className="p-3 rounded-xl bg-accent-green/10 border border-accent-green/30">
+              <p className="text-accent-green text-sm flex items-center gap-2">
+                <Check size={16} /> Keine verknüpften Inhalte — Benutzer kann direkt gelöscht werden.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-accent-orange/10 border border-accent-orange/30">
+                <p className="text-accent-orange text-sm font-medium flex items-center gap-2 mb-2">
+                  <AlertTriangle size={16} /> Dieser Benutzer hat noch {deleteLinkedData.total} verknüpfte Inhalte:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {deleteLinkedData.episodeCount > 0 && <span className="badge bg-accent-blue/20 text-accent-blue text-xs">{deleteLinkedData.episodeCount} Episode(n)</span>}
+                  {deleteLinkedData.ideaCount > 0 && <span className="badge bg-accent-purple/20 text-accent-purple text-xs">{deleteLinkedData.ideaCount} Idee(n)</span>}
+                  {deleteLinkedData.sponsorCount > 0 && <span className="badge bg-accent-green/20 text-accent-green text-xs">{deleteLinkedData.sponsorCount} Sponsor(en)</span>}
+                  {deleteLinkedData.assetCount > 0 && <span className="badge bg-accent-cyan/20 text-accent-cyan text-xs">{deleteLinkedData.assetCount} Media-Asset(s)</span>}
+                  {deleteLinkedData.noteCount > 0 && <span className="badge bg-accent-orange/20 text-accent-orange text-xs">{deleteLinkedData.noteCount} Notiz(en)</span>}
+                </div>
+              </div>
+
+              {/* Übergabe-Option */}
+              <div>
+                <label className="label flex items-center gap-2">
+                  <ArrowRight size={14} className="text-accent-blue" />
+                  Inhalte übertragen an
+                </label>
+                <select
+                  value={transferToUserId}
+                  onChange={e => setTransferToUserId(e.target.value)}
+                  className="select"
+                >
+                  <option value="global">Aktiver Admin (globale Übernahme)</option>
+                  {users
+                    .filter(u => u.id !== deleteTargetUser?.id)
+                    .map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.displayName} (@{u.username})
+                      </option>
+                    ))
+                  }
+                </select>
+                <p className="text-text-muted text-xs mt-1">
+                  {transferToUserId === 'global'
+                    ? 'Alle Inhalte werden dem aktuell eingeloggten Admin zugewiesen.'
+                    : 'Alle Inhalte werden auf den gewählten Benutzer übertragen.'
+                  }
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Warnung */}
+          <div className="p-3 rounded-xl bg-accent-red/10 border border-accent-red/30">
+            <p className="text-accent-red text-sm flex items-center gap-2">
+              <UserX size={16} /> Diese Aktion kann nicht rückgängig gemacht werden.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-1">
+            <button type="button" onClick={() => setShowDeleteModal(false)} disabled={isDeleting} className="btn-secondary">Abbrechen</button>
+            <button
+              onClick={handleDeleteUser}
+              disabled={isDeleting || deleteLinkedData === null}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent-red text-white font-medium hover:bg-red-600 disabled:opacity-50 transition-colors"
+            >
+              {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+              <span>{isDeleting ? 'Wird gelöscht...' : 'Benutzer löschen'}</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── User Modal ─────────────────────────────────────── */}
       <Modal isOpen={showUserModal} onClose={() => setShowUserModal(false)} title={editingUser ? 'Benutzer bearbeiten' : 'Neuer Benutzer'}>
@@ -668,6 +1201,54 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* ── Password Reset Modal ─────────────────────────── */}
+      <Modal isOpen={showResetModal} onClose={() => setShowResetModal(false)} title={`Passwort zurücksetzen: ${resetTargetUser?.displayName}`}>
+        <form onSubmit={handleResetPassword} className="space-y-4">
+          <div className="p-3 rounded-lg bg-accent-orange/10 border border-accent-orange/30 text-accent-orange text-sm">
+            Als Administrator kannst du das Passwort ohne das alte Passwort zurücksetzen. Der Benutzer wird aus allen aktiven Sitzungen abgemeldet.
+          </div>
+          <div>
+            <label className="label">Neues Passwort *</label>
+            <div className="relative">
+              <input
+                type={showResetPw ? 'text' : 'password'}
+                value={resetPassword}
+                onChange={e => setResetPassword(e.target.value)}
+                className="input pr-10"
+                required
+                minLength={6}
+                autoFocus
+                placeholder="Mindestens 6 Zeichen"
+              />
+              <button type="button" onClick={() => setShowResetPw(!showResetPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary">
+                {showResetPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="label">Passwort bestätigen *</label>
+            <input
+              type={showResetPw ? 'text' : 'password'}
+              value={resetPasswordConfirm}
+              onChange={e => setResetPasswordConfirm(e.target.value)}
+              className="input"
+              required
+              placeholder="Passwort wiederholen"
+            />
+            {resetPasswordConfirm && resetPassword !== resetPasswordConfirm && (
+              <p className="text-accent-red text-xs mt-1">Passwörter stimmen nicht überein</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setShowResetModal(false)} className="btn-secondary">Abbrechen</button>
+            <button type="submit" disabled={isSaving || resetPassword !== resetPasswordConfirm} className="btn-primary">
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
+              <span>Passwort zurücksetzen</span>
+            </button>
+          </div>
+        </form>
       </Modal>
 
       {/* ── Role Editor Modal ──────────────────────────────── */}

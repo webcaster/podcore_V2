@@ -6,12 +6,12 @@ import {
   Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle,
   Layers, Archive, BarChart2, Calendar, MessageSquare, Radio
 } from 'lucide-react';
-import { useApp, usePermissions, useBranding } from '../../contexts/AppContext';
+import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
 import { api } from '../../lib/api';
 
 // Injected at build time by vite.config.ts
 declare const __APP_VERSION__: string;
-const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.6.0';
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.7.0';
 
 interface NavItem {
   to: string;
@@ -26,6 +26,8 @@ export default function Layout() {
   const { user, logout } = useApp();
   const { can } = usePermissions();
   const { branding } = useBranding();
+  const { features } = useFeatures();
+  const { onlineUsers } = useOnlineUsers();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -70,10 +72,26 @@ export default function Layout() {
     { to: '/stats', icon: <BarChart2 size={18} />, label: 'Podcast-Statistiken', permission: 'canViewEpisodes' },
     { to: '/branding', icon: <Image size={18} />, label: 'Branding & Backup', permission: 'canManageSettings' },
     { to: '/admin', icon: <Shield size={18} />, label: 'Administration', permission: 'canManageUsers', dividerBefore: true },
+    { to: '/pdf-layouts', icon: <FileText size={18} />, label: 'PDF-Layouts', permission: 'canManageSettings' },
     { to: '/settings', icon: <Settings size={18} />, label: 'Einstellungen', permission: 'canManageSettings' },
   ];
 
-  const visibleItems = navItems.filter(item => !item.permission || can(item.permission));
+  // Feature-Flag-basierte Filterung der Navigation
+  const featureFilteredItems = navItems.filter(item => {
+    // Zuerst Berechtigungen prüfen
+    if (item.permission && !can(item.permission)) return false;
+    // Dann Feature-Flags prüfen
+    const path = item.to;
+    if ((path === '/editorial' || path === '/calendar') && !features.editorial) return false;
+    if ((path === '/sponsors' || path === '/sponsors/reports') && !features.sponsoring) return false;
+    if (path === '/media' && !features.mediaLibrary) return false;
+    if (path === '/chat' && !features.chat) return false;
+    if ((path === '/analytics' || path === '/stats') && !features.statistics) return false;
+    if (path === '/seasons' && !features.seasons) return false;
+    if (path === '/branding' && !features.branding) return false;
+    return true;
+  });
+  const visibleItems = featureFilteredItems;
 
   const avatarInitials = user?.displayName
     ? user.displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
@@ -185,6 +203,7 @@ export default function Layout() {
           <LogOut size={16} />
           {(!collapsed || mobile) && <span>Abmelden</span>}
         </button>
+
         {(!collapsed || mobile) ? (
           <div className="flex items-center gap-1 mt-1">
             <NavLink

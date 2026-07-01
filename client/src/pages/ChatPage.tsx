@@ -101,8 +101,15 @@ export default function ChatPage() {
     }
   };
 
+  const normalizeDate = (dateStr: string): Date => {
+    if (!dateStr) return new Date();
+    // SQLite datetime('now') returns UTC without 'Z' suffix—add it so JS parses correctly
+    const normalized = /Z|[+-]\d{2}:?\d{2}$/.test(dateStr) ? dateStr : dateStr + 'Z';
+    return new Date(normalized);
+  };
+
   const formatTime = (dateStr: string) => {
-    const d = new Date(dateStr);
+    const d = normalizeDate(dateStr);
     const now = new Date();
     const isToday = d.toDateString() === now.toDateString();
     if (isToday) return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -211,7 +218,7 @@ export default function ChatPage() {
               const prevMsg = messages[idx - 1];
               const isSameUser = prevMsg && prevMsg.senderId === msg.senderId;
               const timeDiff = prevMsg
-                ? (new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime()) / 60000
+                ? (normalizeDate(msg.createdAt).getTime() - normalizeDate(prevMsg.createdAt).getTime()) / 60000
                 : 999;
               const showHeader = !isSameUser || timeDiff > 5;
 

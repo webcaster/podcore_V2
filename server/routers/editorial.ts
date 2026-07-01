@@ -231,80 +231,117 @@ router.get('/ideas/:id/export-pdf', requirePermission('canViewIdeas') as any, (r
 
   try {
     const PDFDocument = require('pdfkit');
-    const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    const path = require('path');
+    const fs = require('fs');
+    const { DATA_DIR } = require('../database');
+    const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderSectionHeading, renderWatermark } = require('../pdfLayouts');
+
+    const layoutId = req.query.layoutId as string | undefined;
+    const layout = layoutId ? (getLayoutById(layoutId) || getDefaultLayoutForType('idea')) : getDefaultLayoutForType('idea');
+    const m = layout.pageMargin;
+
+    // Anpassbarer Dokumententitel
+    const customDocTitle = req.query.documentTitle as string | undefined;
+    const documentTitle = customDocTitle ? decodeURIComponent(customDocTitle) : 'Ideenmappe';
+
+    const doc = new PDFDocument({ margin: m, size: layout.pageSize, layout: layout.pageOrientation === 'landscape' ? 'landscape' : 'portrait', autoFirstPage: true });
     const filename = `Ideenmappe_${idea.title.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     doc.pipe(res);
 
-    // Title
-    doc.fontSize(24).font('Helvetica-Bold').text(idea.title, { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(10).font('Helvetica').fillColor('#666').text(`Erstellt: ${new Date(idea.created_at).toLocaleDateString('de-DE')}`, { align: 'center' });
-    doc.moveDown(1);
+    // Branding
+    const brandingDir = path.join(DATA_DIR, 'branding');
+    let logoPath: string | null = null;
+    if (fs.existsSync(brandingDir)) {
+      const lf = fs.readdirSync(brandingDir).find((f: string) => f.startsWith('logo.'));
+      if (lf) logoPath = path.join(brandingDir, lf);
+    }
+    const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+    const appSettings = settingsRow ? JSON.parse(settingsRow.value) : {};
+    const podcastName = appSettings?.branding?.podcastName || appSettings?.general?.podcastName || 'PodCore';
 
-    // Description
-    if (idea.description) {
-      doc.fontSize(12).font('Helvetica-Bold').fillColor('#000').text('Beschreibung');
-      doc.fontSize(10).font('Helvetica').text(idea.description);
+    // Header
+    renderPdfHeader(doc, layout, { podcastName, documentTitle, logoPath });
+
+    // Titel
+    doc.fontSize(layout.typography.subtitleSize + 2).font(`${layout.typography.fontFamily}-Bold`)
+      .fillColor(layout.colors.primary).text(idea.title, { align: 'center' });
+    doc.fontSize(layout.typography.smallSize).font(layout.typography.fontFamily)
+      .fillColor(layout.colors.muted)
+      .text(`Erstellt: ${new Date(idea.created_at).toLocaleDateString('de-DE')}`, { align: 'center' });
+    doc.moveDown(0.8);
+
+    // Beschreibung
+    if (layout.sections.showIdeaDescription && idea.description) {
+      renderSectionHeading(doc, layout, 'Beschreibung');
+      doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily)
+        .fillColor(layout.colors.text).text(idea.description);
       doc.moveDown(0.5);
     }
 
-    // Metadata
-    doc.fontSize(12).font('Helvetica-Bold').text('Informationen');
-    doc.fontSize(10).font('Helvetica');
+    // Metadaten
+    renderSectionHeading(doc, layout, 'Informationen');
+    doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily).fillColor(layout.colors.text);
     doc.text(`Status: ${idea.status}`);
     doc.text(`Priorität: ${idea.priority}`);
     if (idea.assigned_to) doc.text(`Zugewiesen an: ${idea.assigned_to}`);
     if (idea.tags && idea.tags !== '[]') doc.text(`Tags: ${JSON.parse(idea.tags).join(', ')}`);
     doc.moveDown(0.5);
 
-    // Research sources
-    const sources = db.all('SELECT title, url, description FROM research_sources WHERE related_idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
-    if (sources.length > 0) {
-      doc.fontSize(12).font('Helvetica-Bold').text('Recherche-Quellen');
-      doc.fontSize(10).font('Helvetica');
-      sources.forEach((s: any) => {
-        doc.text(`• ${s.title}${s.url ? ` (${s.url})` : ''}`);
-        if (s.description) doc.text(`  ${s.description}`, { indent: 20 });
-      });
-      doc.moveDown(0.5);
+    // Recherche-Quellen
+    if (layout.sections.showIdeaResearch) {
+      const sources = db.all('SELECT title, url, description FROM research_sources WHERE related_idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
+      if (sources.length > 0) {
+        renderSectionHeading(doc, layout, 'Recherche-Quellen');
+        doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily).fillColor(layout.colors.text);
+        sources.forEach((s: any) => {
+          doc.text(`• ${s.title}${s.url ? ` — ${s.url}` : ''}`);
+          if (s.description) doc.text(`  ${s.description}`, { indent: 15 });
+        });
+        doc.moveDown(0.5);
+      }
     }
 
-    // Interview partners and questions
-    const questions = db.all('SELECT * FROM interview_questions WHERE idea_id = ? ORDER BY sort_order ASC', [req.params.id]) as any[];
-    if (questions.length > 0) {
-      doc.fontSize(12).font('Helvetica-Bold').text('Interview-Fragen');
-      doc.fontSize(10).font('Helvetica');
-      questions.forEach((q: any) => {
-        doc.text(`• ${q.question}${q.category ? ` (${q.category})` : ''}`);
-      });
-      doc.moveDown(0.5);
+    // Interview-Fragen
+    if (layout.sections.showIdeaQuestions) {
+      const questions = db.all('SELECT * FROM interview_questions WHERE idea_id = ? ORDER BY sort_order ASC', [req.params.id]) as any[];
+      if (questions.length > 0) {
+        renderSectionHeading(doc, layout, 'Interview-Fragen');
+        doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily).fillColor(layout.colors.text);
+        questions.forEach((q: any) => {
+          doc.text(`• ${q.question}${q.category ? ` (${q.category})` : ''}`);
+        });
+        doc.moveDown(0.5);
+      }
     }
 
-    // Notes
-    const notes = db.all('SELECT content FROM idea_notes WHERE idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
-    if (notes.length > 0) {
-      doc.fontSize(12).font('Helvetica-Bold').text('Notizen');
-      doc.fontSize(10).font('Helvetica');
-      notes.forEach((n: any) => {
-        doc.text(`• ${n.content}`);
-      });
-      doc.moveDown(0.5);
+    // Notizen
+    if (layout.sections.showIdeaNotes) {
+      const notes = db.all('SELECT content FROM idea_notes WHERE idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
+      if (notes.length > 0) {
+        renderSectionHeading(doc, layout, 'Notizen');
+        doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily).fillColor(layout.colors.text);
+        notes.forEach((n: any) => { doc.text(`• ${n.content}`); });
+        doc.moveDown(0.5);
+      }
     }
 
-    // Checklists
-    const checklists = db.all('SELECT * FROM idea_checklists WHERE idea_id = ? ORDER BY sort_order ASC', [req.params.id]) as any[];
-    if (checklists.length > 0) {
-      doc.fontSize(12).font('Helvetica-Bold').text('Checkliste');
-      doc.fontSize(10).font('Helvetica');
-      checklists.forEach((item: any) => {
-        const checkbox = item.is_done ? '☑' : '☐';
-        doc.text(`${checkbox} ${item.title}`);
-      });
+    // Checkliste
+    if (layout.sections.showIdeaChecklist) {
+      const checklists = db.all('SELECT * FROM idea_checklists WHERE idea_id = ? ORDER BY sort_order ASC', [req.params.id]) as any[];
+      if (checklists.length > 0) {
+        renderSectionHeading(doc, layout, 'Checkliste');
+        doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily).fillColor(layout.colors.text);
+        checklists.forEach((item: any) => {
+          doc.text(`${item.is_done ? '[x]' : '[ ]'} ${item.title}`);
+        });
+      }
     }
 
+    renderWatermark(doc, layout);
+    renderPdfFooter(doc, layout, { podcastName, pageNum: 1 });
     doc.end();
   } catch (err: any) {
     console.error('[ERROR] PDF export failed:', err);
@@ -931,6 +968,104 @@ router.delete('/research/:id', requirePermission('canDeleteIdeas') as any, (req:
   if (!existing) return res.status(404).json({ success: false, error: 'Quelle nicht gefunden' });
   db.run('DELETE FROM research_sources WHERE id = ?', [req.params.id]);
   return res.json({ success: true, message: 'Quelle gelöscht' });
+});
+
+// ============================================================
+// EPISODEN-EDITOR INTEGRATION: Ideen-Suche & Übernahme
+// ============================================================
+
+// GET /editorial/ideas-for-episode - Ideen mit allen Sub-Ressourcen für Episoden-Editor
+router.get('/ideas-for-episode', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { search, status } = req.query as any;
+  let query = 'SELECT * FROM ideas WHERE 1=1';
+  const params: any[] = [];
+  if (search) {
+    query += ' AND (title LIKE ? OR description LIKE ?)';
+    params.push(`%${search}%`, `%${search}%`);
+  }
+  if (status) {
+    query += ' AND status = ?';
+    params.push(status);
+  }
+  query += ' ORDER BY updated_at DESC LIMIT 50';
+  const ideas = db.all(query, params) as any[];
+  const result = ideas.map((idea: any) => {
+    const notes = db.all('SELECT * FROM idea_notes WHERE idea_id = ? ORDER BY created_at ASC', [idea.id]) as any[];
+    const checklists = db.all('SELECT * FROM idea_checklists WHERE idea_id = ? ORDER BY sort_order ASC', [idea.id]) as any[];
+    const partners = db.all('SELECT * FROM interview_partners WHERE idea_id = ? ORDER BY created_at ASC', [idea.id]) as any[];
+    const uploads = db.all('SELECT * FROM idea_uploads WHERE idea_id = ? ORDER BY created_at ASC', [idea.id]) as any[];
+    return {
+      ...idea,
+      tags: JSON.parse(idea.tags || '[]'),
+      createdAt: idea.created_at, updatedAt: idea.updated_at, createdBy: idea.created_by,
+      assignedTo: idea.assigned_to, episodeId: idea.episode_id,
+      targetAudience: idea.target_audience, episodeFormat: idea.episode_format,
+      targetDuration: idea.target_duration, targetDate: idea.target_date,
+      notes: notes.map((n: any) => ({ ...n, ideaId: n.idea_id, createdAt: n.created_at })),
+      checklists: checklists.map((c: any) => ({ ...c, isDone: c.is_done === 1, ideaId: c.idea_id })),
+      interviewPartners: partners.map((p: any) => ({ ...p, guestIntro: p.guest_intro, ideaId: p.idea_id })),
+      uploads: uploads.map((u: any) => ({ ...u, ideaId: u.idea_id, createdAt: u.created_at })),
+    };
+  });
+  return res.json({ success: true, data: result });
+});
+
+// GET /editorial/ideas/:id/full - Vollständige Idee mit allen Sub-Ressourcen
+router.get('/ideas/:id/full', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const idea = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
+  if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+  const notes = db.all('SELECT * FROM idea_notes WHERE idea_id = ? ORDER BY created_at ASC', [idea.id]) as any[];
+  const checklists = db.all('SELECT * FROM idea_checklists WHERE idea_id = ? ORDER BY sort_order ASC', [idea.id]) as any[];
+  const partners = db.all('SELECT * FROM interview_partners WHERE idea_id = ? ORDER BY created_at ASC', [idea.id]) as any[];
+  const questions = db.all(
+    'SELECT q.*, p.name as partner_name FROM interview_questions q LEFT JOIN interview_partners p ON q.partner_id = p.id WHERE q.idea_id = ? ORDER BY q.sort_order ASC',
+    [idea.id]
+  ) as any[];
+  const uploads = db.all('SELECT * FROM idea_uploads WHERE idea_id = ? ORDER BY created_at ASC', [idea.id]) as any[];
+  return res.json({
+    success: true,
+    data: {
+      ...idea,
+      tags: JSON.parse(idea.tags || '[]'),
+      createdAt: idea.created_at, updatedAt: idea.updated_at, createdBy: idea.created_by,
+      assignedTo: idea.assigned_to, episodeId: idea.episode_id,
+      targetAudience: idea.target_audience, episodeFormat: idea.episode_format,
+      targetDuration: idea.target_duration, targetDate: idea.target_date,
+      notes: notes.map((n: any) => ({ ...n, ideaId: n.idea_id, createdAt: n.created_at })),
+      checklists: checklists.map((c: any) => ({ ...c, isDone: c.is_done === 1, ideaId: c.idea_id })),
+      interviewPartners: partners.map((p: any) => ({ ...p, guestIntro: p.guest_intro, ideaId: p.idea_id })),
+      interviewQuestions: questions.map((q: any) => ({ ...q, ideaId: q.idea_id, partnerId: q.partner_id, partnerName: q.partner_name })),
+      uploads: uploads.map((u: any) => ({ ...u, ideaId: u.idea_id, createdAt: u.created_at })),
+    },
+  });
+});
+
+// GET /editorial/interviews/for-episode - Interview-Partner für Episoden-Editor
+router.get('/interviews/for-episode', requirePermission('canViewInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const partners = db.all('SELECT * FROM interview_partners ORDER BY name ASC') as any[];
+  const result = partners.map((p: any) => {
+    const approvedQuestions = db.all(
+      'SELECT * FROM interview_questions WHERE partner_id = ? AND approved = 1 ORDER BY sort_order ASC',
+      [p.id]
+    ) as any[];
+    const allQuestions = db.all(
+      'SELECT * FROM interview_questions WHERE partner_id = ? ORDER BY sort_order ASC',
+      [p.id]
+    ) as any[];
+    return {
+      ...p,
+      guestIntro: p.guest_intro,
+      ideaId: p.idea_id,
+      approvedQuestions,
+      allQuestions,
+      questionCount: allQuestions.length,
+      approvedCount: approvedQuestions.length,
+    };
+  });
+  return res.json({ success: true, data: result });
 });
 
 export default router;

@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Upload, Search, Play, Pause, Volume2, Download, Trash2, Edit2,
   MessageSquare, Plus, Music, Mic2, Clock, HardDrive, X, Check,
-  Library, SkipBack, SkipForward
+  Library, SkipBack, SkipForward, Folder, FolderPlus, ChevronRight,
+  Scissors, Save, RotateCcw
 } from 'lucide-react';
 import { mediaApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
+import AudioEditor from '../components/AudioEditor';
 
 const ASSET_TYPES = [
   { value: 'intro', label: 'Intro', color: 'text-accent-cyan' },
@@ -37,6 +39,9 @@ function formatDuration(seconds?: number) {
 export default function MediaLibraryPage() {
   const { can, showSuccess, showError } = useApp();
   const [assets, setAssets] = useState<any[]>([]);
+  const [folders, setFolders] = useState<any[]>([]);
+  const [currentFolderId, setCurrentFolderId] = useState<string>('root');
+  const [folderPath, setFolderPath] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -44,13 +49,17 @@ export default function MediaLibraryPage() {
   const [playingAsset, setPlayingAsset] = useState<any>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', type: 'other', description: '', tags: [] as string[], tagInput: '' });
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [showEditorModal, setShowEditorModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  
+  const [editForm, setEditForm] = useState({ name: '', type: 'other', description: '', tags: [] as string[], tagInput: '', folderId: '' });
   const [commentText, setCommentText] = useState('');
   const [isAddingComment, setIsAddingComment] = useState(false);
 
   // Upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadForm, setUploadForm] = useState({ name: '', type: 'other', description: '' });
+  const [uploadForm, setUploadForm] = useState({ name: '', type: 'other', description: '', folderId: '' });
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,18 +70,25 @@ export default function MediaLibraryPage() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
 
+  // Editor state (v2.9.8)
+  // trimStart/trimEnd werden beim Öffnen des Audio-Editors gesetzt (für zukünftige Schnitt-Funktion)
+  const [, setTrimStart] = useState(0);
+  const [, setTrimEnd] = useState(0);
+
   const load = async () => {
     setIsLoading(true);
     try {
-      const data = await mediaApi.list({ type: typeFilter || undefined, search: search || undefined });
-      // Backend returns paginated object { items: [...], total: N }
-      const items = Array.isArray(data) ? data : (data as any)?.items || [];
-      setAssets(items);
+      const [assetsData, foldersData] = await Promise.all([
+        mediaApi.list({ type: typeFilter || undefined, search: search || undefined, folderId: currentFolderId }),
+        mediaApi.listFolders({ parentId: currentFolderId })
+      ]);
+      setAssets(Array.isArray(assetsData) ? assetsData : (assetsData as any)?.items || []);
+      setFolders(foldersData);
     } catch (err: any) { showError(err.message); }
     finally { setIsLoading(false); }
   };
 
-  useEffect(() => { load(); }, [typeFilter]);
+  useEffect(() => { load(); }, [typeFilter, currentFolderId]);
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [search]);
 
   // Audio player controls
@@ -81,7 +97,10 @@ export default function MediaLibraryPage() {
     if (!audio) return;
 
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const onDurationChange = () => setDuration(audio.duration);
+    const onDurationChange = () => {
+      setDuration(audio.duration);
+      if (showEditorModal) setTrimEnd(audio.duration);
+    };
     const onEnded = () => { setIsPlaying(false); setCurrentTime(0); };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
@@ -92,7 +111,7 @@ export default function MediaLibraryPage() {
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('ended', onEnded);
     };
-  }, [playingAsset]);
+  }, [playingAsset, showEditorModal]);
 
   const playAsset = (asset: any) => {
     if (playingAsset?.id === asset.id) {
@@ -138,16 +157,56 @@ export default function MediaLibraryPage() {
       formData.append('file', uploadFile);
       formData.append('name', uploadForm.name || uploadFile.name.replace(/\.[^/.]+$/, ''));
       formData.append('type', uploadForm.type);
+      formData.append('folderId', currentFolderId === 'root' ? '' : currentFolderId);
       if (uploadForm.description) formData.append('description', uploadForm.description);
 
       await mediaApi.upload(formData);
       showSuccess('Asset hochgeladen');
       setShowUploadModal(false);
       setUploadFile(null);
-      setUploadForm({ name: '', type: 'other', description: '' });
+      setUploadForm({ name: '', type: 'other', description: '', folderId: '' });
       load();
     } catch (err: any) { showError(err.message); }
     finally { setIsUploading(false); }
+  };
+
+  const handleCreateFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+    try {
+      await mediaApi.createFolder({ name: newFolderName.trim(), parentId: currentFolderId === 'root' ? null : currentFolderId });
+      showSuccess('Ordner erstellt');
+      setNewFolderName('');
+      setShowFolderModal(false);
+      load();
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const handleDeleteFolder = async (id: string, name: string) => {
+    if (!confirm(`Ordner "${name}" löschen? Enthaltene Dateien werden in das Hauptverzeichnis verschoben.`)) return;
+    try {
+      await mediaApi.deleteFolder(id);
+      showSuccess('Ordner gelöscht');
+      load();
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const navigateToFolder = (folder: any) => {
+    if (folder === 'root') {
+      setCurrentFolderId('root');
+      setFolderPath([]);
+    } else {
+      setCurrentFolderId(folder.id);
+      setFolderPath(prev => [...prev, folder]);
+    }
+  };
+
+  const navigateBack = () => {
+    if (folderPath.length === 0) return;
+    const newPath = [...folderPath];
+    newPath.pop();
+    setFolderPath(newPath);
+    setCurrentFolderId(newPath.length > 0 ? newPath[newPath.length - 1].id : 'root');
   };
 
   const handleDelete = async (asset: any) => {
@@ -165,11 +224,16 @@ export default function MediaLibraryPage() {
     e.preventDefault();
     if (!selectedAsset) return;
     try {
-      await mediaApi.update(selectedAsset.id, { name: editForm.name, type: editForm.type, description: editForm.description, tags: editForm.tags });
+      await mediaApi.update(selectedAsset.id, { 
+        name: editForm.name, 
+        type: editForm.type, 
+        description: editForm.description, 
+        tags: editForm.tags,
+        folderId: editForm.folderId 
+      });
       showSuccess('Asset aktualisiert');
       setShowEditModal(false);
       load();
-      // Refresh selected
       const updated = await mediaApi.get(selectedAsset.id);
       setSelectedAsset(updated);
     } catch (err: any) { showError(err.message); }
@@ -179,7 +243,10 @@ export default function MediaLibraryPage() {
     if (!selectedAsset || !commentText.trim()) return;
     setIsAddingComment(true);
     try {
-      const comment = await mediaApi.addComment(selectedAsset.id, { content: commentText.trim(), timestamp: playingAsset?.id === selectedAsset.id ? Math.floor(currentTime) : undefined });
+      const comment = await mediaApi.addComment(selectedAsset.id, { 
+        content: commentText.trim(), 
+        timestamp: playingAsset?.id === selectedAsset.id ? Math.floor(currentTime) : undefined 
+      });
       setSelectedAsset((prev: any) => ({ ...prev, comments: [...(prev.comments || []), comment] }));
       setCommentText('');
       showSuccess('Kommentar hinzugefügt');
@@ -199,18 +266,32 @@ export default function MediaLibraryPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Hidden audio element */}
       <audio ref={audioRef} />
 
       {/* Header */}
       <div className="page-header">
         <div>
           <h1 className="page-title flex items-center gap-3"><Library size={24} className="text-accent-blue" />Media Library</h1>
-          <p className="text-text-secondary text-sm mt-1">{assets.length} Assets</p>
+          <div className="flex items-center gap-2 mt-1 text-sm">
+            <button onClick={() => navigateToFolder('root')} className="text-text-muted hover:text-text-primary">Media</button>
+            {folderPath.map((f, i) => (
+              <React.Fragment key={f.id}>
+                <ChevronRight size={14} className="text-text-muted" />
+                <button onClick={() => {
+                  const newPath = folderPath.slice(0, i + 1);
+                  setFolderPath(newPath);
+                  setCurrentFolderId(f.id);
+                }} className="text-text-muted hover:text-text-primary">{f.name}</button>
+              </React.Fragment>
+            ))}
+          </div>
         </div>
-        {can('canUploadMedia') && (
-          <button onClick={() => setShowUploadModal(true)} className="btn-primary"><Upload size={16} /><span>Asset hochladen</span></button>
-        )}
+        <div className="flex gap-2">
+          <button onClick={() => setShowFolderModal(true)} className="btn-secondary"><FolderPlus size={16} /><span>Ordner</span></button>
+          {can('canUploadMedia') && (
+            <button onClick={() => setShowUploadModal(true)} className="btn-primary"><Upload size={16} /><span>Asset hochladen</span></button>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -258,20 +339,43 @@ export default function MediaLibraryPage() {
 
       {/* Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Assets List */}
+        {/* Assets & Folders List */}
         <div className="lg:col-span-2">
           {isLoading ? (
             <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" /></div>
-          ) : assets.length === 0 ? (
+          ) : (assets.length === 0 && folders.length === 0) ? (
             <div className="card text-center py-16">
               <Library size={40} className="text-text-muted mx-auto mb-4" />
-              <p className="text-text-secondary font-medium">Keine Assets gefunden</p>
+              <p className="text-text-secondary font-medium">Dieser Ordner ist leer</p>
               {can('canUploadMedia') && (
                 <button onClick={() => setShowUploadModal(true)} className="btn-primary mt-4 mx-auto"><Upload size={16} /><span>Asset hochladen</span></button>
               )}
             </div>
           ) : (
             <div className="space-y-2">
+              {/* Folders */}
+              {folders.map(folder => (
+                <div
+                  key={folder.id}
+                  onClick={() => navigateToFolder(folder)}
+                  className="card flex items-center gap-4 cursor-pointer hover:border-surface-border-light group py-3"
+                >
+                  <div className="w-10 h-10 bg-accent-blue/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Folder size={18} className="text-accent-blue" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-text-primary font-medium truncate">{folder.name}</p>
+                    <p className="text-text-muted text-xs">Ordner</p>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={e => { e.stopPropagation(); handleDeleteFolder(folder.id, folder.name); }} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Assets */}
               {assets.map(asset => {
                 const ti = typeInfo(asset.type);
                 const isSelected = selectedAsset?.id === asset.id;
@@ -282,7 +386,6 @@ export default function MediaLibraryPage() {
                     onClick={() => setSelectedAsset(isSelected ? null : asset)}
                     className={`card flex items-center gap-4 cursor-pointer transition-all group ${isSelected ? 'border-accent-blue/50 bg-accent-blue/5' : 'hover:border-surface-border-light'}`}
                   >
-                    {/* Play button */}
                     <button
                       onClick={e => { e.stopPropagation(); playAsset(asset); }}
                       className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${isCurrentlyPlaying ? 'bg-accent-purple text-white' : 'bg-surface-overlay text-text-muted hover:bg-accent-purple hover:text-white'}`}
@@ -290,7 +393,6 @@ export default function MediaLibraryPage() {
                       {isCurrentlyPlaying ? <Pause size={16} /> : <Play size={16} />}
                     </button>
 
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-text-primary font-medium truncate">{asset.name}</p>
@@ -305,13 +407,21 @@ export default function MediaLibraryPage() {
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1">
+                      {asset.type === 'audio' && (
+                        <button 
+                          onClick={e => { e.stopPropagation(); setSelectedAsset(asset); setTrimStart(0); setTrimEnd(asset.duration || 0); setShowEditorModal(true); }}
+                          className="p-2 text-accent-orange hover:bg-accent-orange/20 rounded-lg transition-colors"
+                          title="Audio Editor öffnen"
+                        >
+                          <Scissors size={14} />
+                        </button>
+                      )}
                       <a href={mediaApi.getStreamUrl(asset.filename)} download={asset.filename} onClick={e => e.stopPropagation()} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
                         <Download size={14} />
                       </a>
                       {can('canUploadMedia') && (
-                        <button onClick={e => { e.stopPropagation(); setSelectedAsset(asset); setEditForm({ name: asset.name, type: asset.type, description: asset.description || '', tags: asset.tags || [], tagInput: '' }); setShowEditModal(true); }} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
+                        <button onClick={e => { e.stopPropagation(); setSelectedAsset(asset); setEditForm({ name: asset.name, type: asset.type, description: asset.description || '', tags: asset.tags || [], tagInput: '', folderId: asset.folderId || '' }); setShowEditModal(true); }} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
                           <Edit2 size={14} />
                         </button>
                       )}
@@ -382,7 +492,7 @@ export default function MediaLibraryPage() {
                     selectedAsset.comments?.map((comment: any) => (
                       <div key={comment.id} className="bg-obsidian-800 rounded-lg p-3 group">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-text-secondary text-xs font-medium">{comment.userName}</span>
+                          <span className="text-text-secondary text-xs font-medium">{comment.userName || comment.displayName || comment.username || 'Unbekannt'}</span>
                           <div className="flex items-center gap-2">
                             {comment.timestamp && (
                               <span className="text-text-muted text-xs font-mono">{formatDuration(comment.timestamp)}</span>
@@ -394,7 +504,7 @@ export default function MediaLibraryPage() {
                             )}
                           </div>
                         </div>
-                        <p className="text-text-primary text-xs">{comment.content}</p>
+                        <p className="text-text-primary text-xs">{comment.content || comment.text}</p>
                       </div>
                     ))
                   )}
@@ -426,10 +536,32 @@ export default function MediaLibraryPage() {
         </div>
       </div>
 
+      {/* Folder Modal */}
+      <Modal isOpen={showFolderModal} onClose={() => setShowFolderModal(false)} title="Neuen Ordner erstellen">
+        <form onSubmit={handleCreateFolder} className="space-y-4">
+          <div>
+            <label className="label">Ordnername</label>
+            <input type="text" value={newFolderName} onChange={e => setNewFolderName(e.target.value)} className="input" placeholder="z.B. Interviews 2024" autoFocus />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setShowFolderModal(false)} className="btn-secondary">Abbrechen</button>
+            <button type="submit" disabled={!newFolderName.trim()} className="btn-primary">Erstellen</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Audio Editor – vollständige Komponente mit WaveSurfer */}
+      {showEditorModal && selectedAsset && (
+        <AudioEditor
+          asset={selectedAsset}
+          onClose={() => setShowEditorModal(false)}
+          onSaved={() => { showSuccess('Änderungen gespeichert'); loadAssets(); }}
+        />
+      )}
+
       {/* Upload Modal */}
       <Modal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} title="Asset hochladen">
         <form onSubmit={handleUpload} className="space-y-4">
-          {/* Drop zone */}
           <div
             onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${uploadFile ? 'border-accent-green/50 bg-accent-green/5' : 'border-surface-border hover:border-accent-purple/50 hover:bg-accent-purple/5'}`}
@@ -487,6 +619,13 @@ export default function MediaLibraryPage() {
             <label className="label">Typ</label>
             <select value={editForm.type} onChange={e => setEditForm(p => ({ ...p, type: e.target.value }))} className="select">
               {ASSET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Ordner</label>
+            <select value={editForm.folderId} onChange={e => setEditForm(p => ({ ...p, folderId: e.target.value }))} className="select">
+              <option value="">Hauptverzeichnis</option>
+              {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
           </div>
           <div>

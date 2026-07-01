@@ -810,6 +810,790 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-9-11',
+        title: 'v2.9.11 — Vollständiger Audit & Stabilitäts-Update',
+        summary: 'Vollständiger Code-Audit aller Features: Audio-Editor Datenbank-Fix, Werbung löschen repariert, Berechtigungen der Produktion-Rolle erweitert, Online-Nutzer Widget im Dashboard.',
+        icon: <Package size={18} />,
+        tags: ['bugfix', 'audio-editor', 'berechtigungen', 'dashboard'],
+        content: [
+          {
+            heading: 'Bugfixes',
+            list: [
+              'Audio-Editor: Fehlende markers-Spalte in der Datenbank-Migration ergänzt – Schnittmarken und Kommentare werden jetzt korrekt gespeichert',
+              'Werbung löschen: DELETE-Route gibt nun korrektes Antwortformat zurück – Löschen-Button im Episoden-Editor funktioniert',
+              'Online-Nutzer: last_seen-Spalte für Sessions wird automatisch beim Start angelegt',
+            ],
+          },
+          {
+            heading: 'Berechtigungen',
+            list: [
+              'Rolle Produktion: canCreateEpisodes, canEditSponsors, canDeleteMedia, canViewSponsorReports, canExportPricelist hinzugefügt',
+              'Alle Rollen wurden auf Vollständigkeit geprüft und angepasst',
+            ],
+          },
+          {
+            heading: 'Features',
+            list: [
+              'Online-Nutzer Widget im Dashboard (statt Sidebar-Footer)',
+              'Werbung im Script-Editor frei platzierbar und mit Buchungen verknüpfbar',
+              'Werbebuchungen im Episoden-Editor löschbar',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-10',
+        title: 'v2.9.10 — Audio-Editor, Werbung & Online-Nutzer',
+        summary: 'Audio-Editor mit WaveSurfer.js vollständig implementiert, Werbung im Script frei platzierbar, Online-Nutzer Widget ins Dashboard verschoben.',
+        icon: <Package size={18} />,
+        tags: ['feature', 'audio-editor', 'werbung', 'dashboard'],
+        content: [
+          {
+            heading: 'Audio-Editor (WaveSurfer.js)',
+            list: [
+              'Wellenform-Visualisierung mit WaveSurfer.js',
+              'Transport-Controls: Play, Pause, Stop, Skip',
+              'Schnittmarken setzen (5 Typen: Schnitt, Kapitel, Start, Ende, Anmerkung)',
+              'Zeitbezogene Kommentare für Freigabe-Workflow',
+              'Marker-Liste mit Zeitstempel und Farb-Kodierung',
+              'Öffnen per Schere-Button beim Hover über Audio-Asset',
+            ],
+          },
+          {
+            heading: 'Werbung im Episoden-Editor',
+            list: [
+              'Ad-Blöcke im Script-Editor (Pro) frei positionierbar',
+              'Verknüpfung mit vorhandenen Buchungen per Dropdown',
+              'Löschen-Button für Buchungen im Werbung-Tab',
+            ],
+          },
+          {
+            heading: 'Online-Nutzer',
+            list: [
+              'Widget aus Sidebar-Footer entfernt und als Dashboard-Widget integriert',
+              'Zeigt alle aktiven Nutzer mit Avatar, Name, Rolle und Online-Punkt',
+              'Heartbeat alle 60 Sekunden, Timeout nach 5 Minuten',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-9',
+        title: 'v2.9.9 — MySQL Migration Fix & Robustheit',
+        summary: 'MySQL-Migration vollständig repariert: TEXT-Spalten ohne DEFAULT, VARCHAR für Primary Keys. Migrations-UI für externe Provider verbessert.',
+        icon: <Package size={18} />,
+        tags: ['bugfix', 'mysql', 'migration', 'admin'],
+        content: [
+          {
+            heading: 'MySQL Migration Fixes',
+            list: [
+              'TEXT/LONGTEXT-Spalten ohne DEFAULT-Werte (MySQL-Kompatibilität)',
+              'Primary Keys als VARCHAR(255) statt LONGTEXT',
+              'SQLite-spezifische DEFAULT-Werte werden gefiltert',
+              'Alle 26 Tabellen werden fehlerfrei übertragen',
+            ],
+          },
+          {
+            heading: 'Migrations-UI',
+            list: [
+              'Unterstützung für externe DB-Provider (nicht nur lokal)',
+              'Detaillierte Fehlerdiagnose: ENETUNREACH, Access denied, Unknown database',
+              'Hinweise für IONOS und andere Shared-Hosting-Anbieter',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-8',
+        title: 'v2.9.8 — Media Library Pro & Audio Editor',
+        summary: 'Umfangreiches Update der Media Library mit Ordnerstrukturen und integriertem Audio-Editor für Kommentare und Schnittmarken.',
+        icon: <Package size={18} />,
+        tags: ['feature', 'media-library', 'audio-editor', 'folders'],
+        content: [
+          {
+            heading: 'Media Library Features',
+            list: [
+              'Ordnerstrukturen zur besseren Organisation von Assets',
+              'Audio-Dauer Erfassung via ffprobe optimiert und gefixt',
+              'Neuer Audio-Editor zum Setzen von Schnittmarken und zeitbezogenen Kommentaren',
+              'Kommentar-Funktion für die finale Freigabe von Audio-Dateien',
+            ],
+          },
+          {
+            heading: 'Technische Verbesserungen',
+            list: [
+              'Datenbank-Schema um Ordner-Unterstützung erweitert',
+              'ffprobe Logging zur Fehlerdiagnose hinzugefügt',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-7',
+        title: 'v2.9.7 — MySQL Migration Robustheit',
+        summary: 'Fehler in der Datenbank-Migration behoben und Anleitung für SQLite zu MySQL Wechsel hinzugefügt.',
+        icon: <Package size={18} />,
+        tags: ['bugfix', 'admin', 'mysql', 'migration'],
+        content: [
+          {
+            heading: 'Bugfixes',
+            list: [
+              'Fehler "Cannot read properties of undefined (reading success)" beim Testen der MySQL-Verbindung behoben',
+              'Bessere Fehlerbehandlung bei Netzwerkproblemen während der Migration',
+            ],
+          },
+          {
+            heading: 'Dokumentation',
+            list: [
+              'Detaillierte Schritt-für-Schritt Anleitung für den Wechsel von SQLite zu MySQL / MariaDB erstellt',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-6',
+        title: 'v2.9.6 — Status-Änderung Fix',
+        summary: 'Fehler behoben, bei dem der Episoden-Status im Editor nicht angepasst werden konnte.',
+        icon: <Package size={18} />,
+        tags: ['bugfix', 'episoden-editor', 'status'],
+        content: [
+          {
+            heading: 'Episoden-Status',
+            list: [
+              'Status-Dropdown im Metadaten-Tab des Episoden-Editors hinzugefügt',
+              'Alle Status-Optionen (Idee, Entwurf, Aufnahme, Produktion, Geplant, Veröffentlicht, Archiviert) sind jetzt direkt im Editor wählbar',
+              'Änderungen werden beim Speichern korrekt in die Datenbank übernommen',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-5',
+        title: 'v2.9.5 — Bugfixes & Werbeplanung',
+        summary: 'Bearbeitungsformulare erscheinen wieder als Overlay-Modal. Werbekategorien-PDF im Querformat. Zeitposition für Werbebuchungen mit Timeline-Visualisierung. Impressum-Logo aktualisiert.',
+        icon: <Package size={18} />,
+        tags: ['bugfix', 'modal', 'pdf', 'werbung', 'timeline', 'impressum'],
+        content: [
+          {
+            heading: 'Bugfixes',
+            list: [
+              'Bearbeitungsformulare (Overlays/Modals) erscheinen wieder korrekt als zentriertes Modal mit Hintergrund-Overlay – CSS-Klassen (modal-overlay, modal, modal-header, modal-body) waren durch den CSS-Variablen-Umbau verloren gegangen',
+              'Werbekategorien-PDF wird jetzt im Querformat (Landscape) exportiert – alle Spalten (Kategorie, Position, Dauer, Basispreis, Preis/Folge, Exklusiv) sind sichtbar',
+            ],
+          },
+          {
+            heading: 'Werbeplanung im Episoden-Editor',
+            list: [
+              'Neues Feld "Zeitposition in der Folge" im Buchungs-Modal (Format: MM:SS oder Sekunden)',
+              'Visuelle Timeline-Visualisierung im Werbebuchungs-Tab zeigt alle Buchungen mit Zeitmarker auf der Folgen-Länge',
+              'Pre-Roll (orange), Mid-Roll (lila), Post-Roll (blau) farblich unterschieden',
+              'Zeitposition wird in der Buchungsliste als Zeitstempel angezeigt',
+            ],
+          },
+          {
+            heading: 'Impressum',
+            list: [
+              'Logo von Maximilian Hartwich – Medien der Sinne wird jetzt direkt von medien-der-sinne.de geladen',
+              'Logo ist als klickbarer Link zur Website gestaltet',
+              'Fallback auf lokale Datei wenn externe URL nicht erreichbar',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-4',
+        title: 'v2.9.4 — Interview-Fragen im PDF-Export',
+        summary: 'Redaktionshub-Blöcke (Interview-Fragen) werden jetzt vollständig im Episoden-PDF-Export gerendert. Jede Frage erscheint mit Nummer, Text, Kategorie und Antwortzeit. Alle Block-Typen haben jetzt korrektes Rendering.',
+        icon: <Package size={18} />,
+        tags: ['update', 'pdf', 'interview', 'redaktionshub', 'bugfix'],
+        content: [
+          {
+            heading: 'Interview-Fragen im PDF-Export',
+            list: [
+              'Redaktionshub-Blöcke vom Typ "Interview-Fragen" werden jetzt vollständig im PDF gerendert',
+              'Jede Frage erscheint mit Fragen-Nummer (F1, F2, ...), Fragetext, Kategorie und Antwortzeit',
+              'Moderationshinweise werden ebenfalls ausgegeben (sofern nicht als intern markiert)',
+              'Neuer Block-Typ "Moderation" mit eigenem Rendering ergänzt',
+              'Alle Block-Typen zeigen jetzt "(kein Inhalt)" wenn kein Text vorhanden ist (außer Jingle/Werbung)',
+            ],
+          },
+          {
+            heading: 'Technische Details',
+            text: 'Der interview_questions-Block speichert Fragen als strukturiertes questions-Array (nicht als HTML-Content). Das PDF-Rendering wurde um einen eigenen Rendering-Pfad für diesen Block-Typ erweitert, der das Array direkt auswertet.',
+          },
+        ],
+      },
+      {
+        id: 'v2-9-3',
+        title: 'v2.9.3 — PDF-Layouts erweitert, Berechtigungen vervollständigt & SQLite→MySQL-Migration',
+        summary: 'Umfangreiche Erweiterung des PDF-Layout-Systems: Wasserzeichen, Zeilenabstand, Trennlinien-Stil, Header-Höhe, neue Sektionen (Show-Notes, Alt. Episodenlänge, Preisliste). Berechtigungen vollständig abgeglichen. Neues Datenbank-Migrations-Tool (SQLite → MySQL) in der Administration.',
+        icon: <Package size={18} />,
+        tags: ['update', 'pdf', 'layout', 'berechtigungen', 'datenbank', 'mysql', 'wasserzeichen'],
+        content: [
+          {
+            heading: 'PDF-Layout-Einstellungen erweitert',
+            list: [
+              'Wasserzeichen: Text (z.B. ENTWURF, VERTRAULICH), Farbe, Deckkraft, Position (Mitte/diagonal, Oben, Unten), Schriftgröße',
+              'Zeilenabstand: Kompakt (1.2), Normal (1.5), Weit (2.0) – wirkt auf alle Textblöcke',
+              'Trennlinien-Stil: Durchgezogen, Gestrichelt, Gepunktet, Doppellinie, Keine',
+              'Header-Höhe: Einstellbar von 40–150 pt (Standard: 70 pt)',
+              'Abstände: Header-Abstand unten, Footer-Abstand oben, Abstand zwischen Sektionen',
+            ],
+          },
+          {
+            heading: 'Neue PDF-Sektionen',
+            list: [
+              'Episoden-PDF: Show-Notes (neu v2.9.0) und Alternative Episodenlänge (Sonderfolge)',
+              'Episoden-PDF: Sponsoren-Platzierungen werden jetzt tatsächlich gerendert (war bisher nur ein Flag)',
+              'Rechnung-PDF: showInvoiceDetails und showInvoiceSummary werden jetzt ausgewertet',
+              'Preisliste-PDF: showPricelistDescriptions und showPricelistExclusive steuerbar',
+              'Kalender-PDF: Notizen je Eintrag (showCalendarNotes)',
+            ],
+          },
+          {
+            heading: 'Berechtigungen vollständig abgeglichen',
+            list: [
+              'Neue Berechtigungen in der AdminPage: canApproveEpisodes, canRequestApproval, canApproveInterviewQuestions',
+              'canManagePdfLayouts: eigene Berechtigung für PDF-Layout-Verwaltung (bisher: canManageSettings)',
+              'PDF-Layout-Router nutzt jetzt canManagePdfLayouts statt canManageSettings',
+              'Alle Berechtigungen sind jetzt in der Rollen-Verwaltung sichtbar und editierbar',
+            ],
+          },
+          {
+            heading: 'Datenbank-Migration (SQLite → MySQL)',
+            list: [
+              'Neuer Tab „Datenbank“ in der Administration',
+              'Verbindungstest: MySQL-Verbindung prüfen bevor die Migration startet',
+              'Vollständige Datenmigration: alle Tabellen, Benutzer, Episoden, Ideen, Sponsoren, Einstellungen',
+              'Fortschrittsanzeige während der Migration',
+              'Empfohlen wenn das Podcast-Projekt wächst und SQLite an seine Grenzen stößt',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-2',
+        title: 'v2.9.2 — Admin-Module-Toggle, Werbekategorien-PDF & SFTP-Speicher',
+        summary: 'Administratoren können jetzt einzelne App-Module (Redaktion, Sponsoring, Chat, etc.) aktivieren und deaktivieren. Werbekategorien können als PDF exportiert werden. Der Speicher-Bereich wurde um SFTP/SSH-Unterstützung erweitert.',
+        icon: <Package size={18} />,
+        tags: ['update', 'admin', 'module', 'pdf', 'speicher', 'sftp'],
+        content: [
+          {
+            heading: 'Admin: Module aktivieren / deaktivieren',
+            list: [
+              'Neuer Tab „Module“ in der Administration',
+              'Jedes Modul (Redaktions-Hub, Sponsoring, Media Library, Statistiken, Chat, Staffeln, Wiki, Branding, Podigee) kann einzeln per Toggle deaktiviert werden',
+              'Deaktivierte Module werden aus der Navigation ausgeblendet – Daten bleiben erhalten',
+              'Änderungen werden sofort gespeichert und nach Seiten-Reload aktiv',
+            ],
+          },
+          {
+            heading: 'Werbekategorien-PDF-Export',
+            list: [
+              'Neuer PDF-Export-Button im Werbekategorien-Tab der Sponsoring-Seite',
+              'Tabelle mit Kategorie, Position, Dauer, Basispreis, Preis/Folge und Exklusiv-Status',
+              'Kategorie-Farbe wird als farbiger Punkt vor dem Namen dargestellt',
+              'Dokumententitel im PDF ist anpassbar (Eingabefeld neben den Export-Buttons)',
+            ],
+          },
+          {
+            heading: 'SFTP/SSH-Speicher-Backend',
+            list: [
+              'Neuer Speicher-Typ „SFTP / SSH“ in den Branding & Backup-Einstellungen',
+              'Kompatibel mit Hetzner Storage Box, eigenen Linux-Servern, NAS-Systemen (Synology, QNAP), Raspberry Pi, Uberspace',
+              'Felder: Hostname, Port, Benutzername, Passwort, Remote-Pfad, Public-URL',
+              'Hinweis: Für Google Drive oder OneDrive kann Rclone als SFTP-Gateway eingerichtet werden',
+              'WebDAV-Hinweis korrigiert: OneDrive (Consumer) und Google Drive unterstützen kein WebDAV',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-1',
+        title: 'v2.9.1 — Audio-Länge in Media Library & PDF-Dokumententitel',
+        summary: 'Audio-Dateien zeigen jetzt ihre Länge in der Media Library an. ffprobe ermittelt die Dauer automatisch beim Upload. An allen PDF-Export-Stellen kann jetzt ein eigener Dokumententitel vergeben werden.',
+        icon: <Package size={18} />,
+        tags: ['update', 'media-library', 'audio', 'pdf', 'dokumententitel'],
+        content: [
+          {
+            heading: 'Audio-Länge in der Media Library',
+            list: [
+              'Audio-Dateien zeigen ihre Dauer (z.B. 1:23:45) in der Kachel-Ansicht an',
+              'Die Dauer wird beim Upload automatisch via ffprobe ermittelt',
+              'Bestehende Audio-Assets ohne Dauer werden beim Server-Start automatisch nachträglich verarbeitet',
+              'ffprobe (Teil von ffmpeg) muss auf dem Server installiert sein',
+            ],
+          },
+          {
+            heading: 'Anpassbarer PDF-Dokumententitel',
+            list: [
+              'Episoden-Export: Neues Feld „Dokumententitel“ neben dem Dateinamen-Feld',
+              'Sponsoring-Abrechnung: Neues Feld „Dokumententitel im PDF“ im Abrechnung-Tab',
+              'Ideenmappe: Neues Feld „Dokumententitel“ neben dem Dateinamen-Feld',
+              'Bleibt das Feld leer, wird der Standard-Titel verwendet (z.B. „Sponsoring-Abrechnung“)',
+              'Der Titel erscheint im PDF-Header oben links unter dem Podcast-Namen',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-0',
+        title: 'v2.9.0 — Interview-Fragen-Block, Show-Notes & Alternative Episodenlänge',
+        summary: 'Neuer Interview-Fragen-Block im Script-Editor mit strukturierter Zeitberechnung. Show-Notes-Tab für öffentliche Folgen-Inhalte. Alternative Episodenlänge für Sonderfolgen. Neue Berechtigungen canEditShowNotes und canManageInterviewBlocks.',
+        icon: <Package size={18} />,
+        tags: ['update', 'episoden-editor', 'interview', 'show-notes', 'zeiterfassung', 'berechtigungen'],
+        content: [
+          {
+            heading: 'Interview-Fragen-Block (interview_questions)',
+            text: 'Neuer Block-Typ im Script-Editor speziell für Fragen aus dem Redaktionshub. Fragen werden strukturiert angezeigt – nicht mehr als einfacher Text.',
+            list: [
+              'Jede Frage einzeln mit Nummer, Text und Kategorie',
+              'Individuelle Antwortzeit pro Frage einstellbar (Standard: 90 Sekunden)',
+              'Interne Moderations-Notizen pro Frage',
+              'Automatische Dauerberechnung: Sprechzeit der Frage + Antwortzeit',
+              'Berechtigung: canManageInterviewBlocks'
+            ]
+          },
+          {
+            heading: 'Show-Notes-Tab',
+            text: 'Neuer Tab „Show-Notes" im Episoden-Editor für öffentliche Inhalte einer Folge (Links, Zeitmarken, Quellen). Getrennt von der kurzen Beschreibung im Metadaten-Tab.',
+            list: [
+              'Eigener Rich-Text-Editor für Show-Notes',
+              'Hinweis-Box erklärt den Unterschied zur Episoden-Beschreibung',
+              'Berechtigung: canEditShowNotes'
+            ]
+          },
+          {
+            heading: 'Alternative Episodenlänge',
+            text: 'In den Technischen Daten kann eine zweite Ziel-Episodenlänge (in Minuten) für Sonderfolgen (FAQ, Kurzfolgen) hinterlegt werden.',
+            list: [
+              'Neues Feld „Alternative Ziel-Länge" in Technischen Daten',
+              'Sidebar zeigt orangefarbenen Sonderfolge-Hinweis wenn gesetzt',
+              'Für FAQ-Folgen, Kurzfolgen und Sonderformate'
+            ]
+          },
+          {
+            heading: 'Neue Berechtigungen',
+            list: [
+              'canEditShowNotes: Berechtigung zum Bearbeiten von Show-Notes (Standard: alle Rollen außer Viewer)',
+              'canManageInterviewBlocks: Berechtigung zur Verwaltung von Interview-Fragen-Blöcken (Standard: alle Rollen außer Viewer)'
+            ]
+          },
+          {
+            heading: 'CSS/Design-Fix',
+            text: 'Alle Farben nutzen jetzt CSS-Variablen mit Fallback-Werten. Theme-Änderungen wirken sich sofort auf alle Elemente aus. Tailwind @apply-Direktiven mit Opacity-Modifikatoren wurden durch natives CSS ersetzt.'
+          }
+        ]
+      },
+      {
+        id: 'v2-8-2',
+        title: 'v2.8.2 — Redaktionshub-Integration & Script-fertig-Fix',
+        summary: 'Redaktionshub-Tab im Episoden-Editor: Ideen suchen, vollständig übernehmen, Interview-Partner einplanen. Bugfix für Script-fertig-Button (SQL-Fehler).',
+        icon: <Package size={18} />,
+        tags: ['update', 'episoden-editor', 'redaktionshub', 'interview', 'bugfix'],
+        content: [
+          {
+            heading: 'Fix: Script-fertig-Button',
+            text: 'Der interne Serverfehler beim Klick auf „Script fertig" ist behoben. Ursache war ein SQL-Parameter-Zählfehler (column index out of range) in der UPDATE-Query.'
+          },
+          {
+            heading: 'Neuer Tab: Redaktionshub im Episoden-Editor',
+            text: 'Im Episoden-Editor gibt es jetzt den Tab „Redaktionshub" mit zwei Bereichen:',
+            list: [
+              'Ideen-Suche: Alle Ideen aus dem Redaktionshub sind direkt im Editor durchsuchbar – nach Freitext und Status filterbar',
+              'Vollständige Übernahme: Titel, Beschreibung, Tags, Gäste, Notizen, Checkliste und Interview-Blöcke direkt ins Script übernehmen',
+              'Interview-Partner: Alle Partner aus dem Redaktionshub anzeigen und als Script-Block einplanen',
+              'Neuen Interview-Partner direkt im Episoden-Editor erstellen – wird im Redaktionshub gespeichert',
+              'Freigegebene Interview-Fragen werden automatisch in den Block-Inhalt übernommen'
+            ]
+          }
+        ]
+      },
+      {
+        id: 'v2-8-0',
+        title: 'v2.8.0 — Script-Status, Episodenplanung & Dashboard',
+        summary: 'Script-fertig-Status im Episoden-Editor, neue Planungsübersicht mit Kalender/Liste/Export, anpassbares Dashboard pro Nutzer und Chat-Datum-Fix.',
+        icon: <Package size={18} />,
+        tags: ['update', 'episoden-editor', 'dashboard', 'planung', 'bugfix'],
+        content: [
+          {
+            heading: 'Script-fertig-Status',
+            text: 'Im Episoden-Editor gibt es jetzt einen „Script fertig“-Button in der Kopfzeile. Nach dem Klick erscheint ein grünes Badge im Editor und in der Episodenübersicht – der Produktionsstand ist damit auf einen Blick erkennbar.'
+          },
+          {
+            heading: 'Episodenplanung-Übersicht',
+            text: 'Über den neuen „Planung“-Button in der Episodenübersicht öffnet sich eine Planungsseite mit Listenansicht (sortierbare Tabelle) und Kalenderansicht (Monatskalender). Beide Ansichten sind filterbar und können als PDF oder CSV exportiert werden.'
+          },
+          {
+            heading: 'Anpassbares Dashboard',
+            text: 'Über das Zahnrad-Symbol im Dashboard kann jeder Nutzer sein Layout individuell konfigurieren: Blöcke ein-/ausblenden und neu anordnen. Das Layout wird pro Nutzer gespeichert.'
+          },
+          {
+            heading: 'Fix: Chat-Datum/Zeit',
+            text: 'Nachrichten im Team-Chat wurden mit falscher Uhrzeit angezeigt (2 Stunden Abweichung bei UTC+2). Der UTC-Offset-Bug ist behoben.'
+          }
+        ]
+      },
+      {
+        id: 'v2-7-9',
+        title: 'v2.7.9 — Einnahmen-Dashboard, Design-Fix & In-App-Update',
+        summary: 'Neues Einnahmen-Dashboard für alle Sponsoring-Einnahmen, In-App-Update-Dialog mit ZIP-Upload und Fix für das persönliche Design.',
+        icon: <Package size={18} />,
+        tags: ['update', 'sponsoring', 'einnahmen', 'design', 'update-funktion'],
+        content: [
+          {
+            heading: 'Einnahmen-Dashboard',
+            text: 'Über den neuen „Einnahmen“-Button in der Sponsoring-Übersicht öffnet sich das Einnahmen-Dashboard mit vier Ansichten: Pro Sponsor, Alle Platzierungen, Monatlich (Balkendiagramm) und Kategorien. Filter nach Zeitraum und Status sowie CSV-Export sind integriert.'
+          },
+          {
+            heading: 'In-App-Update-Dialog',
+            text: 'Unter Einstellungen → App-Update (nur Administratoren) kann PodCore direkt über die Benutzeroberfläche aktualisiert werden. Eine ZIP-Datei wird hochgeladen, auf Vollständigkeit geprüft und nach Bestätigung angewendet. Datenbank und Uploads bleiben erhalten.'
+          },
+          {
+            heading: 'Fix: Persönliches Design',
+            text: 'Der Bug, bei dem Akzentfarbe, Sidebar-Farbe und Schriftgröße nach dem Speichern nicht übernommen wurden, ist behoben.'
+          }
+        ]
+      },
+      {
+        id: 'v2-7-8',
+        title: 'v2.7.8 — Benutzer-Übergabe beim Löschen',
+        summary: 'Beim Löschen von Benutzern mit verknüpften Inhalten erscheint jetzt ein Übergabe-Dialog. Alle Inhalte können auf einen anderen Benutzer übertragen werden.',
+        icon: <Package size={18} />,
+        tags: ['update', 'benutzerverwaltung', 'admin'],
+        content: [
+          {
+            heading: 'Benutzer-Übergabe beim Löschen',
+            text: 'Das Löschen von Benutzern mit verknüpften Inhalten funktioniert jetzt vollständig. Statt einer Fehlermeldung öffnet sich ein Übergabe-Dialog.',
+            list: [
+              'Anzeige der verknüpften Inhalte: Episoden, Ideen, Sponsoren, Assets und Notizen',
+              'Übergabe-Ziel wählen: Aktiver Admin oder beliebiger anderer Benutzer',
+              'Benutzer ohne Inhalte können direkt gelöscht werden',
+              'Vollständige Übergabe aller Datenbankfelder inkl. Recherche-Quellen und Staffeln'
+            ]
+          }
+        ]
+      },
+  {
+        id: 'v2-7-7',
+        title: 'v2.7.7 — Platzierungs-Laufzeit & Abrechnungstool',
+        summary: 'Laufzeit-Felder für Werbeplatzierungen (Startdatum, Enddatum, Kampagnenname), vollständiges Abrechnungstool mit editierbarer Leistungsübersicht, Filterung nach Rechnungs-Status, Einleitungs- und Schlusstext sowie CSV/PDF-Export.',
+        icon: <FileText size={18} />,
+        tags: ['update', 'sponsoring', 'abrechnung', 'platzierungen'],
+        content: [
+          {
+            heading: 'Laufzeit der Platzierung',
+            text: 'Im Modal "Neue Werbeplatzierung" / "Platzierung bearbeiten" gibt es jetzt einen eigenen Bereich für die Laufzeit der Platzierung. Dieser ist unabhängig von der Vertragslaufzeit des Sponsors und beschreibt den Zeitraum einer konkreten Schaltung.',
+            list: [
+              'Kampagnenname / Bezeichnung: z.B. "Frühjahrskampagne 2025" oder "Q2-Schaltung"',
+              'Laufzeit von / bis: Datumsfelder für Start und Ende der Platzierung',
+              'Automatische Laufzeit-Berechnung: Die Dauer in Tagen, Wochen oder Monaten wird direkt angezeigt',
+              'Anzeige in der Platzierungs-Liste: Laufzeit und Kampagnenname werden als blaue Badges dargestellt'
+            ]
+          },
+          {
+            heading: 'Erweitertes Abrechnungstool',
+            text: 'Der Tab "Abrechnung" wurde vollständig überarbeitet. Statt einer einfachen Rechnungsansicht gibt es jetzt ein vollständiges Leistungsübersicht-Tool, das als Grundlage für die Rechnungserstellung in der internen Software dient.',
+            list: [
+              'Einleitungstext: Frei editierbarer Text für die Leistungsübersicht',
+              'Schlusstext / Zahlungshinweis: Frei editierbarer Abschlusstext',
+              'Filter nach Rechnungs-Status: Alle, Offen, Versendet oder Bezahlt',
+              'Rechnungs-Status direkt änderbar: Dropdown in der Platzierungs-Liste ohne Modal',
+              'Summen-Anzeige: Gesamtbetrag und davon bezahlt für den aktuellen Filter',
+              'CSV-Export: Alle Felder inkl. Laufzeit, Kampagnenname und Performance-Notizen',
+              'PDF-Export: Leistungsübersicht mit Layout-Auswahl und eigenem Dateinamen'
+            ]
+          },
+          {
+            heading: 'Performance-Notizen',
+            text: 'Jede Platzierung kann jetzt Performance-Notizen erhalten, die in der Leistungsübersicht erscheinen. Ideal für Reichweiten-Angaben, Hörer-Feedback oder besondere Leistungen der Schaltung.'
+          }
+        ]
+      },
+      {
+        id: 'v2-7-6',
+        title: 'v2.7.6 — Eigener PDF-Dateiname, Highlights-Block & Episodenplanung',
+        summary: 'Eigener Dokumentenname für alle PDF-Exporte, neuer Highlights-Block im Episoden-Editor, Preis im Platzierungs-Modal editierbar, Episodenplanung in der Sponsor-Übersicht und Bugfixes beim Sponsor-Speichern.',
+        icon: <FileText size={18} />,
+        tags: ['update', 'pdf', 'episoden-editor', 'sponsoring', 'bugfix'],
+        content: [
+          {
+            heading: 'Eigener PDF-Dokumentenname',
+            text: 'An allen PDF-Export-Stellen kann jetzt vor dem Download ein eigener Dateiname vergeben werden. Das Textfeld erscheint neben dem Layout-Picker und zeigt den Standard-Dateinamen als Platzhalter. Die .pdf-Endung wird automatisch ergänzt.',
+            list: [
+              'Episoden-Script-Export: Textfeld im Header neben dem Layout-Picker',
+              'Sponsor-Abrechnung: Textfeld im Tab „Abrechnung“',
+              'Ideenmappe-Export: Textfeld im Header neben dem Layout-Picker',
+              'Redaktionskalender-Export: Textfeld in der Toolbar'
+            ]
+          },
+          {
+            heading: 'Highlights-Block im Episoden-Editor',
+            text: 'Ein neuer Block-Typ „Highlights“ steht im Episoden-Script-Editor zur Verfügung. Er erscheint in Gelb/Amber und wird im PDF-Export entsprechend farblich hervorgehoben. Ideal für Zusammenfassungen, Key-Takeaways oder besondere Momente der Episode.'
+          },
+          {
+            heading: 'Preis im Platzierungs-Modal editierbar',
+            text: 'Im Modal „Neue Werbeplatzierung“ / „Platzierung bearbeiten“ ist das Preisfeld jetzt direkt bearbeitbar. Bisher wurde der Preis nur aus der Kategorie übernommen und konnte nicht manuell angepasst werden. Jetzt kann der Preis frei eingetragen oder der Kategorievorschlag überschrieben werden.'
+          },
+          {
+            heading: 'Episodenplanung in der Sponsor-Übersicht',
+            text: 'Im Tab „Übersicht“ eines Sponsors werden jetzt alle eingeplanten Episoden angezeigt. Jede Buchung zeigt Episodentitel, Position, Slot-/Kategoriename, Dauer und Bestätigungsstatus.'
+          },
+          {
+            heading: 'Bugfixes',
+            list: [
+              'Sponsor-Speichern: adDelivery und color werden jetzt korrekt gespeichert',
+              'PDF-Export: Bessere Fehlerbehandlung mit aussagekräftiger Fehlermeldung',
+              'handleSave: Kein doppeltes Budget-Feld mehr'
+            ]
+          }
+        ]
+      },
+      {
+        id: 'v2-7-5',
+        title: 'v2.7.5 — Sonderbuchung, PDF-Layouts, Querformat & Sponsoring-Fixes',
+        summary: 'Sonderbuchungen im Episoden-Editor, Hoch-/Querformat in PDF-Layouts, Inhalts-Konfiguration pro Export-Typ, System-Layout-Deaktivierung, Budget-Feld entfernt und Werbebuchungen für Entwurfs-Episoden ohne Datum.',
+        icon: <Megaphone size={18} />,
+        tags: ['update', 'werbung', 'episoden-editor', 'sponsoring', 'pdf-layouts', 'media-library', 'bugfix'],
+        content: [
+          {
+            heading: 'Sonderbuchung im Episoden-Editor',
+            text: 'Im Werbebuchungs-Dialog gibt es jetzt zwei Modi: "Gebuchter Werbeplatz" (wie bisher) und "Sonderbuchung". Mit einer Sonderbuchung kann direkt ein Sponsor und eine Werbekategorie ausgewählt werden, ohne dass vorher ein Werbeplatz angelegt wurde – ideal für spontane Kooperationen.',
+            list: [
+              'Sponsor direkt aus allen aktiven Sponsoren auswählen',
+              'Werbekategorie optional zuweisen',
+              'Interne Notiz für die Sonderbuchung hinterlegen',
+              'Exklusivitäts-Check wird auch bei Sonderbuchungen durchgeführt'
+            ]
+          },
+          {
+            heading: 'Korrigierte Verfügbarkeitslogik',
+            text: 'Die Abfrage für verfügbare Werbeplätze wurde grundlegend überarbeitet. Die Vertragslaufzeit des Sponsors wird jetzt korrekt berücksichtigt: Ein Werbeplatz ist verfügbar, wenn das Episodendatum innerhalb der Vertragslaufzeit liegt. Außerdem werden jetzt alle Slots außer "abgelehnt", "archiviert" und "storniert" als buchbar angezeigt – nicht mehr nur "bestätigt" und "aktiv". Bei leeren Slots wird ein hilfreicher Hinweis mit Tipps angezeigt.'
+          },
+          {
+            heading: 'Media Library: Kommentare werden angezeigt',
+            text: 'Kommentare in der Media Library wurden nicht angezeigt, weil das Backend den Kommentartext im Feld "text" speicherte, das Frontend aber "content" erwartete. Beide Felder werden jetzt unterstützt. Auch der Benutzername wurde nicht korrekt übertragen – dies ist ebenfalls behoben.'
+          },
+          {
+            heading: 'PDF-Layouts: Hoch- und Querformat',
+            text: 'Im PDF-Layout-Manager kann jetzt für jedes Layout das Seitenformat gewählt werden: Hochformat (Portrait) oder Querformat (Landscape). Die Auswahl erfolgt über zwei visuelle Schaltflächen mit Seiten-Icon.'
+          },
+          {
+            heading: 'PDF-Layouts: Inhalts-Konfiguration pro Export-Typ',
+            text: 'Die Sektionen-Einstellungen im PDF-Layout-Manager sind jetzt nach Export-Typ gruppiert. Bei einem Episoden-Layout werden nur die relevanten Episoden-Sektionen angezeigt, bei einem Rechnungs-Layout nur die Rechnungs-Sektionen usw. Bei Export-Typ "Alle" werden alle Gruppen angezeigt.',
+            list: [
+              'Episoden: Meta, Beschreibung, Blöcke, Produktionsinfos, Technik, Notizen, Sponsoren',
+              'Ideen: Beschreibung, Notizen, Recherche, Fragen, Checkliste',
+              'Kalender: Legende',
+              'Rechnung: Details, Zusammenfassung'
+            ]
+          },
+          {
+            heading: 'PDF-Layouts: System-Layouts deaktivieren',
+            text: 'System-Layouts (Standard und Minimal) können jetzt deaktiviert werden. Ein deaktiviertes System-Layout wird nicht mehr als Fallback verwendet. Die Fallback-Reihenfolge ist: (1) Eigenes Standard-Layout für den Export-Typ, (2) beliebiges eigenes Layout für den Typ, (3) eigenes "Alle"-Layout, (4) System-Layout (wenn aktiviert), (5) absoluter Fallback.'
+          },
+          {
+            heading: 'Sponsoring: Budget-Feld entfernt',
+            text: 'Das Budget-Feld im Sponsoring wurde entfernt, da die Abrechnung nach Platzierungen in Folgen erfolgt. Die Gesamteinnahmen werden jetzt automatisch aus den angelegten Platzierungen berechnet und angezeigt.'
+          },
+          {
+            heading: 'Werbebuchungen bei Entwurfs-Episoden',
+            text: 'Werbeplatzierungen werden jetzt auch für Episoden im Entwurfs-Status angezeigt, die noch kein Veröffentlichungsdatum haben. Der Datum-Filter wird übersprungen, wenn die Episode kein Datum besitzt.'
+          }
+        ]
+      },
+      {
+        id: 'v2-7-4',
+        title: 'v2.7.4 — Werbemarker im Script, Benutzer-Löschschutz & Sponsoring-Fixes',
+        summary: 'Werbeplatzierungen (Pre-/Mid-/Post-Roll) werden jetzt direkt im Episoden-Script als visuelle Marker angezeigt. Benutzer können nicht mehr gelöscht werden, wenn noch Daten verknüpft sind. Sponsoring-Preise und Zeiträume werden korrekt gespeichert.',
+        icon: <Megaphone size={18} />,
+        tags: ['update', 'werbung', 'episoden-editor', 'sponsoring', 'benutzer', 'bugfix'],
+        content: [
+          {
+            heading: 'Werbemarker im Episoden-Script',
+            text: 'Werbebuchungen werden jetzt direkt im Script-Ablauf des Episoden-Editors als farbige Trennlinien angezeigt. Pre-Roll erscheint vor dem ersten Block, Mid-Roll nach der Block-Liste und Post-Roll am Ende. Beim Buchen einer Werbung kann die Position (Pre-Roll, Mid-Roll, Post-Roll) direkt im Buchungs-Dialog gewählt werden.'
+          },
+          {
+            heading: 'Benutzer-Löschschutz',
+            text: 'Benutzer können nicht mehr gelöscht werden, wenn noch Daten mit ihnen verknüpft sind. Das System prüft Episoden, Ideen, Sponsoren, Media-Assets und Notizen. Im Fehlerfall wird eine detaillierte Meldung mit der Anzahl der verknüpften Datensätze angezeigt.',
+            list: [
+              'Prüfung auf verknüpfte Episoden, Ideen, Sponsoren, Assets und Notizen',
+              'Detaillierte Fehlermeldung mit Anzahl der betroffenen Datensätze',
+              'Empfehlung: Inhalte zuerst einem anderen Benutzer zuweisen'
+            ]
+          },
+          {
+            heading: 'Sponsoring-Fixes',
+            text: 'Mehrere Fehler im Sponsoring-Bereich wurden behoben: Preise werden jetzt korrekt aus der Werbekategorie übernommen, Vertragszeiträume und Kontaktdaten werden zuverlässig gespeichert, und Datenbankmigrationen für fehlende Spalten wurden hinzugefügt.'
+          }
+        ]
+      },
+      {
+        id: 'v2-7-3',
+        title: 'v2.7.3 — Kundennummern, Sponsoring-Preise aus Kategorien & Monats-Export',
+        summary: 'Kundennummern für Sponsoren, automatische Preisübernahme aus Werbekategorien, Monats-Export aller Sponsoren als CSV und bereinigtes Platzierungs-Formular.',
+        icon: <Package size={18} />,
+        tags: ['update', 'sponsoring', 'kundennummer', 'preise', 'export'],
+        content: [
+          {
+            heading: 'Kundennummern',
+            text: 'Sponsoren können jetzt mit einer individuellen Kundennummer versehen werden (z.B. KD-10001). Diese wird in allen Exporten und der Übersicht angezeigt.'
+          },
+          {
+            heading: 'Preise aus Werbekategorien',
+            text: 'Der Preis einer Platzierung wird automatisch aus der gewählten Werbekategorie übernommen. Ein manuelles Preis-Eingabefeld ist nicht mehr nötig.'
+          },
+          {
+            heading: 'Monats-Export',
+            text: 'Auf der Sponsoring-Hauptseite können alle Sponsoren als CSV-Datei exportiert werden — ideal für die monatliche Buchhaltung.'
+          }
+        ]
+      },
+      {
+        id: 'v2-7-2',
+        title: 'v2.7.2 — Abrechnungsmodul, Preislisten-Export & Rechnungsnummern-Schema',
+        summary: 'Separates Abrechnungsmodul im Sponsoring, automatische Rechnungsnummern-Vergabe mit konfigurierbarem Schema, Preislisten-Export, Sponsor-Hinweisfeld und neue Berechtigungen für alle Rollen.',
+        icon: <Package size={18} />,
+        tags: ['update', 'sponsoring', 'abrechnung', 'rechnungsnummer', 'preisliste', 'rollen', 'berechtigungen'],
+        content: [
+          {
+            heading: 'Abrechnungsmodul',
+            list: [
+              'Neuer Tab „Abrechnung“ in der Sponsor-Detailseite mit vollständigem Rechnungs-Workflow',
+              'Rechnungen können direkt aus Platzierungen erstellt, bearbeitet und als PDF exportiert werden',
+              'Status-Verwaltung: Offen, Versendet, Bezahlt, Überfällig',
+              'Preise werden automatisch aus der Werbeplatzierungs-Kategorie übernommen wenn eine Kategorie ausgewählt wird',
+            ],
+          },
+          {
+            heading: 'Automatische Rechnungsnummern',
+            list: [
+              'Beim Erstellen einer Platzierung wird automatisch eine Rechnungsnummer vergeben',
+              'Schema konfigurierbar in den Einstellungen unter „Rechnungsnummern-Schema“',
+              'Präfix frei wählbar (z.B. RE, INV, RG)',
+              'Trennzeichen: Bindestrich, Schrägstrich, Punkt oder Unterstrich',
+              'Jahr und Monat optional einschließen',
+              'Stellenanzahl der laufenden Nummer konfigurierbar (2–5 Stellen)',
+              'Live-Vorschau des Schemas direkt in den Einstellungen',
+              'Zähler wird automatisch hochgezählt und in den Einstellungen gespeichert',
+            ],
+          },
+          {
+            heading: 'Preislisten-Export',
+            list: [
+              'Preisliste als PDF und CSV exportierbar über den Kategorien-Tab im Sponsoring',
+              'Enthält alle aktiven Werbekategorien mit Preisen, Beschreibungen und Konditionen',
+              'Berechtigung „Preisliste exportieren“ separat steuerbar',
+            ],
+          },
+          {
+            heading: 'Sponsor-Hinweisfeld',
+            list: [
+              'Im Kontakt-Tab der Sponsor-Detailseite kann ein internes Hinweisfeld hinterlegt werden',
+              'Ideal für persönliche Notizen, Besonderheiten oder Erinnerungen zum Sponsor',
+            ],
+          },
+          {
+            heading: 'Neue Berechtigungen (v2.7.x)',
+            table: {
+              headers: ['Berechtigung', 'Beschreibung', 'Standard-Rollen'],
+              rows: [
+                ['canManageSponsors', 'Vollständige Sponsor-Verwaltung', 'Admin'],
+                ['canViewInvoices', 'Rechnungen ansehen', 'Admin, Redakteur, Moderator, Produktion'],
+                ['canCreateInvoices', 'Rechnungen erstellen', 'Admin'],
+                ['canEditInvoices', 'Rechnungen bearbeiten', 'Admin'],
+                ['canExportPricelist', 'Preisliste exportieren', 'Admin, Redakteur, Moderator'],
+                ['canManagePdfLayouts', 'PDF-Layouts verwalten', 'Admin'],
+                ['canManageBlocks', 'Skript-Blöcke verwalten', 'Admin, Redakteur, Moderator, Produktion'],
+                ['canUseMediaLibraryInEditor', 'Media Library im Editor nutzen', 'Admin, Redakteur, Moderator, Produktion'],
+              ],
+            },
+          },
+        ],
+      },
+      {
+        id: 'v2-7-1',
+        title: 'v2.7.1 — Block-Collapse, Regieanweisungen & PDF-Layout-Vorschau',
+        summary: 'Blöcke im Episoden-Editor können zugeklappt werden. Regieanweisungen in [eckigen Klammern] werden aus der Sprechzeit-Berechnung ausgeschlossen. PDF-Layout-Manager erhält eine Live-Vorschau.',
+        icon: <Package size={18} />,
+        tags: ['update', 'episoden-editor', 'regieanweisungen', 'pdf-layouts', 'vorschau'],
+        content: [
+          {
+            heading: 'Episoden-Editor: Blöcke zuklappen',
+            list: [
+              'Jeder Block hat einen Collapse-Toggle (Pfeil-Button) im Header',
+              'Zugeklappte Blöcke zeigen Titel, Typ und Dauer an',
+              'Schaltflächen „Alle aufklappen“ und „Alle zuklappen“ über der Block-Liste',
+            ],
+          },
+          {
+            heading: 'Regieanweisungen in [eckigen Klammern]',
+            list: [
+              'Text in [eckigen Klammern] wird als Regieanweisung behandelt',
+              'Regieanweisungen fließen NICHT in die automatische Sprechzeit-Berechnung ein',
+              'Beispiele: [Pause 3 Sekunden], [Einspieler starten], [lachen], [Musik einblenden]',
+              'Im Block-Header werden Sprecher-Wörter (W) und Regieanweisungen (R) getrennt angezeigt',
+              'Alle Regieanweisungen werden als farbige Chips am unteren Rand des Blocks aufgelistet',
+            ],
+          },
+          {
+            heading: 'PDF-Layout-Manager: Live-Vorschau',
+            list: [
+              'Vorschau-Button in der Kopfzeile jedes Layouts',
+              'Eingebetteter PDF-Viewer direkt in der Seite mit 2-seitigem Musterdokument',
+              'Aktualisieren-Button generiert Vorschau neu — auch mit ungespeicherten Änderungen',
+              'Vollbild-Button öffnet das PDF in einem neuen Tab',
+              'Hinweis bei ungespeicherten Änderungen',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-7-0',
+        title: 'v2.7.0 — Custom PDF-Layouts, Media Library Dauer & Sponsoring-Automatik',
+        summary: 'Eigene PDF-Layouts für alle Export-Optionen, automatische Dauer-Erkennung in der Media Library, zeitgesteuerte Werbebuchungen ohne Folgenverknüpfung und Exklusivitäts-Check.',
+        icon: <Package size={18} />,
+        tags: ['update', 'pdf-layouts', 'media-library', 'sponsoring', 'automatik'],
+        content: [
+          {
+            heading: 'Custom PDF-Layouts',
+            list: [
+              'Neuer Bereich „PDF-Layouts“ in der Navigation',
+              'Eigene Layouts für alle vier Export-Typen: Episode, Idee, Kalender, Rechnung',
+              'Konfigurierbar: Farben, Typografie, Header-Stil, Footer, Sektionen',
+              'Layout-Auswahl an jedem PDF-Export-Button',
+              'Standard-Layout wird automatisch verwendet wenn kein Layout gewählt',
+            ],
+          },
+          {
+            heading: 'Media Library: Automatische Dauer-Erkennung',
+            list: [
+              'Beim Upload wird die Dauer von Audio- und Video-Dateien automatisch erkannt (via ffprobe)',
+              'Dauer wird in der Media Library als mm:ss angezeigt',
+              'Dauer wird beim Einfügen in den Episoden-Editor übernommen',
+            ],
+          },
+          {
+            heading: 'Sponsoring-Automatik',
+            list: [
+              'Werbebuchungen können ohne verknüpfte Folge angelegt werden (nur Zeitraum)',
+              'Beim Erstellen oder Aktualisieren einer Episode wird automatisch geprüft ob eine Buchung für den Zeitraum vorliegt',
+              'Exklusivitäts-Check: Nur eine Buchung mit is_exclusive=true pro Episode möglich',
+              'Automatisch zugewiesene Buchungen erscheinen im Sponsoren-Tab der Episode',
+            ],
+          },
+          {
+            heading: 'Episoden-Editor Pro',
+            list: [
+              'Automatische Zeitberechnung aus Wortanzahl (150 Wörter/Minute)',
+              'Media Library Integration: Intros, Outros und Jingles direkt auswählbar',
+              'Platzhalter-Blöcke: Wenn keine Datei verknüpft ist, wird der Block als Platzhalter mit Dauer angezeigt',
+              'PDF-Export: Technische Marker ([INTRO] etc.) und HTML-Formatierungen entfernt',
+            ],
+          },
+        ],
+      },
+      {
         id: 'v2-6-0',
         title: 'v2.6.0 — Erweitertes Sponsoring-System & Werbung im Episoden-Editor',
         summary: 'Preislisten für Werbekategorien, Präsentations-Kategorien (z.B. „Der Pfotenabdruck der Woche präsentiert von...“), automatische Werbe-Integration im Episoden-Editor mit Bestätigungs-Workflow.',
@@ -1065,6 +1849,62 @@ const wikiData: WikiCategory[] = [
           },
           {
             tip: 'Der Freigabe-Workflow für Episoden ist optional und kann in Einstellungen → Workflow deaktiviert werden. Wenn deaktiviert, können Episoden ohne Freigabe veröffentlicht werden.',
+          },
+        ],
+      },
+      {
+        id: 'v2-9-12',
+        title: 'v2.9.12 — Bugfix: Rollen, Audio-Editor, DB-Migration',
+        summary: 'Rollen-Berechtigungen werden jetzt beim Server-Start automatisch aktualisiert. Audio-Editor-Button dauerhaft sichtbar.',
+        icon: <Package size={18} />,
+        tags: ['bugfix', 'v2.9.12'],
+        content: [
+          {
+            heading: 'Behobene Fehler',
+            list: [
+              'Rollen-Berechtigungen (Produktion, Redakteur, Moderator) werden jetzt beim Server-Start automatisch auf den neuesten Stand gebracht – auch bei bestehenden Installationen.',
+              'Audio-Editor-Button (Schere) ist jetzt dauerhaft sichtbar (nicht mehr nur bei Hover) und orange eingefärbt.',
+              'DB-Fehler presentation_text in episode_ad_bookings behoben.',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-13',
+        title: 'v2.9.13 — Bugfix: Werbebuchung & Browser-Cache',
+        summary: 'Standard-Buchungsmodus auf Sonderbuchung gesetzt. Browser-Cache-Problem durch neuen Build behoben.',
+        icon: <Package size={18} />,
+        tags: ['bugfix', 'v2.9.13'],
+        content: [
+          {
+            heading: 'Behobene Fehler',
+            list: [
+              'Buchungs-Modal öffnet jetzt standardmäßig die Sonderbuchung (kein vorhandener Ad-Slot erforderlich).',
+              'Browser-Cache-Problem behoben: Neuer Build erzwingt Laden des aktuellen JavaScript-Bundles.',
+              'Werbung löschen im Episoden-Editor funktioniert nun zuverlässig.',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-9-14',
+        title: 'v2.9.14 — Kritischer Fix: Berechtigungssystem, Werbung & Audio-Editor',
+        summary: 'Root-Cause-Fix für das Berechtigungssystem: Auth-Middleware lädt jetzt automatisch Rollen-Berechtigungen aus der roles-Tabelle. Reset-Button für System-Rollen im Admin-Panel.',
+        icon: <Package size={18} />,
+        tags: ['bugfix', 'v2.9.14'],
+        content: [
+          {
+            heading: 'Kritische Fehler behoben',
+            list: [
+              'Berechtigungssystem (Root Cause Fix): Die Auth-Middleware las bisher nur die permissions-Spalte der users-Tabelle. Diese war bei bestehenden Nutzern leer {}. Jetzt wird automatisch auf die roles-Tabelle zurückgegriffen, wenn keine individuellen Berechtigungen gesetzt sind.',
+              'Alle Rollen (Redakteur, Moderator, Produktion) haben jetzt korrekte Berechtigungen ohne manuelle DB-Eingriffe.',
+              'Werbung löschen: Funktioniert korrekt, sobald Berechtigungen (canEditSponsors) korrekt gesetzt sind.',
+              'Audio-Editor: Sichtbar und funktional für alle Nutzer mit canViewMedia-Berechtigung.',
+            ],
+          },
+          {
+            heading: 'Neue Funktion: Standard-Berechtigungen zurücksetzen',
+            text: 'Im Admin-Panel unter Rollen gibt es jetzt den Button „Standard-Berechtigungen“. Damit können alle System-Rollen (Admin, Redakteur, Moderator, Produktion, Leser) auf die definierten Standardwerte zurückgesetzt werden.',
           },
         ],
       },

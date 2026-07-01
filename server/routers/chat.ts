@@ -33,7 +33,9 @@ router.get('/channels', (req: AuthRequest, res: Response) => {
     // Note: users table uses display_name not name
       [ch.id]
     ) as any;
-    return { ...ch, unread, lastMessage: lastMsg?.message || null, lastMessageTime: lastMsg?.created_at || null, lastMessageSender: lastMsg?.sender_name || null };
+    const rawTime = lastMsg?.created_at || null;
+    const lastMessageTime = rawTime ? (rawTime.endsWith('Z') ? rawTime : rawTime.replace(' ', 'T') + 'Z') : null;
+    return { ...ch, unread, lastMessage: lastMsg?.message || null, lastMessageTime, lastMessageSender: lastMsg?.sender_name || null };
   });
 
   return res.json({ success: true, data: channelsWithUnread });
@@ -77,7 +79,7 @@ router.get('/messages/:channel', (req: AuthRequest, res: Response) => {
       senderName: m.sender_name,
       senderRole: m.sender_role,
       isRead: m.is_read === 1,
-      createdAt: m.created_at,
+      createdAt: m.created_at.endsWith('Z') ? m.created_at : m.created_at.replace(' ', 'T') + 'Z',
     }))
   });
 });
@@ -98,8 +100,8 @@ router.post('/messages', (req: AuthRequest, res: Response) => {
 
   const id = uuidv4();
   db.run(
-    `INSERT INTO chat_messages (id, sender_id, channel, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, datetime('now'))`,
-    [id, req.user!.id, channel, message.trim()]
+    `INSERT INTO chat_messages (id, sender_id, channel, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, ?)`,
+    [id, req.user!.id, channel, message.trim(), new Date().toISOString()]
   );
 
   const msg = db.get(
@@ -112,7 +114,7 @@ router.post('/messages', (req: AuthRequest, res: Response) => {
     data: {
       id: msg.id, message: msg.message, channel: msg.channel,
       senderId: msg.sender_id, senderName: msg.sender_name, senderRole: msg.sender_role,
-      isRead: false, createdAt: msg.created_at,
+      isRead: false, createdAt: msg.created_at.endsWith('Z') ? msg.created_at : msg.created_at.replace(' ', 'T') + 'Z',
     }
   });
 });

@@ -39,6 +39,14 @@ export default function BrandingPage() {
     s3AccessKey: '',
     s3SecretKey: '',
     s3Endpoint: '',
+    // SFTP
+    sftpHost: '',
+    sftpPort: '22',
+    sftpUser: '',
+    sftpPassword: '',
+    sftpPrivateKey: '',
+    sftpRemotePath: '',
+    sftpPublicUrl: '',
   });
 
   const load = async () => {
@@ -66,6 +74,13 @@ export default function BrandingPage() {
             s3AccessKey: s.storage.s3AccessKey || '',
             s3SecretKey: '',
             s3Endpoint: s.storage.s3Endpoint || '',
+            sftpHost: s.storage.sftpHost || '',
+            sftpPort: s.storage.sftpPort || '22',
+            sftpUser: s.storage.sftpUser || '',
+            sftpPassword: '',
+            sftpPrivateKey: '',
+            sftpRemotePath: s.storage.sftpRemotePath || '',
+            sftpPublicUrl: s.storage.sftpPublicUrl || '',
           });
         }
         if (s?.podigee) {
@@ -370,11 +385,12 @@ export default function BrandingPage() {
         <div className="max-w-2xl space-y-6">
           <div className="card">
             <h3 className="font-semibold text-text-primary mb-4">Speicher-Backend</h3>
-            <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               {[
                 { value: 'local', label: 'Lokal', icon: <HardDrive size={20} />, desc: 'Auf diesem Server' },
-                { value: 'webdav', label: 'WebDAV', icon: <Cloud size={20} />, desc: 'Nextcloud, OneDrive...' },
-                { value: 's3', label: 'S3-kompatibel', icon: <Server size={20} />, desc: 'AWS, Minio, Backblaze...' },
+                { value: 'webdav', label: 'WebDAV', icon: <Cloud size={20} />, desc: 'Nextcloud, ownCloud...' },
+                { value: 's3', label: 'S3-kompatibel', icon: <Server size={20} />, desc: 'AWS, Backblaze B2, R2...' },
+                { value: 'sftp', label: 'SFTP / SSH', icon: <Server size={20} />, desc: 'Hetzner, eigener Server...' },
               ].map(opt => (
                 <button key={opt.value} type="button" onClick={() => setStorageForm(p => ({ ...p, type: opt.value }))}
                   className={`p-4 rounded-xl border-2 text-center transition-all ${storageForm.type === opt.value ? 'border-accent-purple bg-accent-purple/10' : 'border-surface-border hover:border-surface-border-light'}`}>
@@ -414,7 +430,47 @@ export default function BrandingPage() {
                   </div>
                 </div>
                 <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-3 text-sm text-accent-blue">
-                  Kompatibel mit Nextcloud, ownCloud, OneDrive (Business), SharePoint und anderen WebDAV-Servern.
+                  Kompatibel mit Nextcloud und ownCloud. <strong>Hinweis:</strong> OneDrive (Consumer), Google Drive und Dropbox unterstützen kein WebDAV. Für diese Dienste bitte SFTP oder S3-kompatibel verwenden.
+                </div>
+              </div>
+            )}
+
+            {/* SFTP */}
+            {storageForm.type === 'sftp' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2">
+                    <label className="label">Hostname / IP *</label>
+                    <input type="text" value={storageForm.sftpHost} onChange={e => setStorageForm(p => ({ ...p, sftpHost: e.target.value }))} className="input" placeholder="storage.example.com oder 192.168.1.100" />
+                  </div>
+                  <div>
+                    <label className="label">Port</label>
+                    <input type="number" value={storageForm.sftpPort} onChange={e => setStorageForm(p => ({ ...p, sftpPort: e.target.value }))} className="input" placeholder="22" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Benutzername *</label>
+                    <input type="text" value={storageForm.sftpUser} onChange={e => setStorageForm(p => ({ ...p, sftpUser: e.target.value }))} className="input" />
+                  </div>
+                  <div>
+                    <label className="label">Passwort</label>
+                    <input type="password" value={storageForm.sftpPassword} onChange={e => setStorageForm(p => ({ ...p, sftpPassword: e.target.value }))} className="input" placeholder="Leer = unverändert" />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Remote-Pfad *</label>
+                  <input type="text" value={storageForm.sftpRemotePath} onChange={e => setStorageForm(p => ({ ...p, sftpRemotePath: e.target.value }))} className="input font-mono text-sm" placeholder="/home/user/podcore-assets" />
+                  <p className="text-text-muted text-xs mt-1">Absoluter Pfad auf dem Remote-Server, in dem Assets gespeichert werden.</p>
+                </div>
+                <div>
+                  <label className="label">Public-URL (für Asset-Links)</label>
+                  <input type="url" value={storageForm.sftpPublicUrl} onChange={e => setStorageForm(p => ({ ...p, sftpPublicUrl: e.target.value }))} className="input" placeholder="https://cdn.example.com/podcore-assets" />
+                  <p className="text-text-muted text-xs mt-1">Basis-URL unter der die hochgeladenen Dateien öffentlich erreichbar sind (z.B. über nginx/Apache). Leer lassen wenn kein öffentlicher Zugriff benötigt wird.</p>
+                </div>
+                <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-3 text-sm text-accent-blue space-y-1">
+                  <p><strong>Kompatibel mit:</strong> Hetzner Storage Box, eigene Linux-Server, NAS-Systeme (Synology, QNAP), Raspberry Pi, Uberspace.</p>
+                  <p><strong>Tipp:</strong> Für Google Drive oder OneDrive kann Rclone als SFTP-Gateway auf dem Server eingerichtet werden.</p>
                 </div>
               </div>
             )}
@@ -445,7 +501,7 @@ export default function BrandingPage() {
                 <div>
                   <label className="label">Endpoint (optional, für S3-kompatible Dienste)</label>
                   <input type="url" value={storageForm.s3Endpoint} onChange={e => setStorageForm(p => ({ ...p, s3Endpoint: e.target.value }))} className="input" placeholder="https://s3.eu-central-1.amazonaws.com" />
-                  <p className="text-text-muted text-xs mt-1">Für Backblaze B2, Minio, Cloudflare R2 etc. Leer lassen für AWS S3.</p>
+                  <p className="text-text-muted text-xs mt-1">Für Backblaze B2, Minio, Cloudflare R2 etc. Leer lassen für AWS S3. Google Drive und OneDrive können über Rclone als S3-Gateway eingebunden werden.</p>
                 </div>
               </div>
             )}

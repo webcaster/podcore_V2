@@ -4,9 +4,10 @@ import {
   ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, Mail, Phone,
   Globe, Building2, Calendar, Clock, Tag, CheckCircle, XCircle,
   AlertCircle, Megaphone, BarChart3, FileText, Package, Mic2,
-  ExternalLink, Download
+  ExternalLink, Download, FileSpreadsheet, CalendarRange, Info
 } from 'lucide-react';
 import { sponsorsApi, episodesApi } from '../lib/api';
+import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
 import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
 
@@ -20,6 +21,19 @@ const AD_STATUS = [
   { value: 'abgerechnet', label: 'Abgerechnet', color: 'bg-surface-overlay text-text-muted' },
 ];
 
+// Berechne Laufzeit in Tagen/Wochen/Monaten
+function calcRuntime(start: string, end: string): string {
+  if (!start || !end) return '';
+  const s = new Date(start);
+  const e = new Date(end);
+  const days = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return 'Ungültiger Zeitraum';
+  if (days === 0) return '1 Tag';
+  if (days < 7) return `${days} Tage`;
+  if (days < 31) return `${Math.round(days / 7)} Woche(n)`;
+  return `${Math.round(days / 30)} Monat(e)`;
+}
+
 export default function SponsorDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -28,6 +42,7 @@ export default function SponsorDetailPage() {
   const [placements, setPlacements] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [episodes, setEpisodes] = useState<any[]>([]);
+  const [episodeBookings, setEpisodeBookings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -39,10 +54,25 @@ export default function SponsorDetailPage() {
     episodeId: '', categoryId: '', position: 'pre-roll', duration: 30,
     status: 'geplant', deliveryType: 'self', price: '', notes: '',
     adTitle: '', adScript: '', airDate: '',
+    // Laufzeit der Platzierung
+    placementStart: '', placementEnd: '', placementLabel: '',
+    // Performance / Lieferung
+    performanceNotes: '', deliveryConfirmed: false,
+    // Abrechnung
     invoiceNumber: '', invoiceDate: '', invoiceStatus: 'offen', invoiceNotes: '', currency: 'EUR',
   });
   const [billingData, setBillingData] = useState<any>(null);
   const [isExportingInvoice, setIsExportingInvoice] = useState(false);
+  const [pdfLayoutId, setPdfLayoutId] = useState('');
+  const [pdfFileName, setPdfFileName] = useState('');
+  const [pdfDocTitle, setPdfDocTitle] = useState('');
+  const [showPriceHint, setShowPriceHint] = useState(false);
+
+  // Leistungsübersicht: editierbare Texte
+  const [leistungIntro, setLeistungIntro] = useState('');
+  const [leistungOutro, setLeistungOutro] = useState('');
+  const [leistungFilter, setLeistungFilter] = useState<'alle' | 'offen' | 'bezahlt' | 'versendet'>('alle');
+  const [isExportingLeistung, setIsExportingLeistung] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -55,19 +85,24 @@ export default function SponsorDetailPage() {
         episodesApi.list({ pageSize: 200 }),
       ]);
       setSponsor(spData);
+      setEpisodeBookings(spData.episodeBookings || []);
       setForm({
         name: spData.name || '',
         company: spData.company || '',
-        email: spData.email || '',
-        phone: spData.phone || '',
+        email: spData.contactEmail || spData.email || '',
+        phone: spData.contactPhone || spData.phone || '',
+        contactName: spData.contactName || '',
         website: spData.website || '',
         status: spData.status || 'aktiv',
-        adDelivery: spData.adDelivery || 'self',
+        adDelivery: spData.adDelivery || spData.ad_delivery || 'self',
         notes: spData.notes || '',
-        contractStart: spData.contractStart?.slice(0, 10) || '',
-        contractEnd: spData.contractEnd?.slice(0, 10) || '',
-        budget: spData.budget || '',
+        contractStart: spData.contractStart ? spData.contractStart.slice(0, 10) : '',
+        contractEnd: spData.contractEnd ? spData.contractEnd.slice(0, 10) : '',
+        budget: spData.totalBudget || spData.budget || '',
         color: spData.color || '#059669',
+        customerNumber: spData.customerNumber || '',
+        contactHint: spData.contactHint || '',
+        currency: spData.currency || 'EUR',
       });
       setPlacements(plData);
       setCategories(catData);
@@ -83,10 +118,25 @@ export default function SponsorDetailPage() {
     setIsSaving(true);
     try {
       const updated = await sponsorsApi.update(id, {
-        ...form,
-        budget: form.budget ? parseFloat(form.budget) : null,
+        name: form.name,
+        company: form.company,
+        contactName: form.contactName,
+        contactEmail: form.email,
+        contactPhone: form.phone,
+        website: form.website,
+        status: form.status,
+        notes: form.notes,
+        adDelivery: form.adDelivery,
+        contractStart: form.contractStart || null,
+        contractEnd: form.contractEnd || null,
+        totalBudget: form.budget ? parseFloat(form.budget) : null,
+        currency: form.currency,
+        color: form.color,
+        customerNumber: form.customerNumber || null,
+        contactHint: form.contactHint || null,
       });
       setSponsor(updated);
+      setEpisodeBookings(updated.episodeBookings || []);
       setIsDirty(false);
       showSuccess('Sponsor gespeichert');
     } catch (err: any) { showError(err.message); }
@@ -103,7 +153,14 @@ export default function SponsorDetailPage() {
     try {
       const payload = {
         ...placementForm,
+        name: placementForm.adTitle,
+        category: placementForm.categoryId,
         price: placementForm.price ? parseFloat(placementForm.price) : undefined,
+        placementStart: placementForm.placementStart || null,
+        placementEnd: placementForm.placementEnd || null,
+        placementLabel: placementForm.placementLabel || null,
+        performanceNotes: placementForm.performanceNotes || null,
+        deliveryConfirmed: placementForm.deliveryConfirmed,
       };
       if (editingPlacement) {
         await sponsorsApi.updateSlot(editingPlacement.id, payload);
@@ -133,50 +190,102 @@ export default function SponsorDetailPage() {
     } catch (err: any) { showError(err.message); }
   };
 
-  const openCreatePlacement = () => {
-    setEditingPlacement(null);
-    setPlacementForm({ episodeId: '', categoryId: '', position: 'pre-roll', duration: 30, status: 'geplant', deliveryType: sponsor?.adDelivery || 'self', price: '', notes: '', adTitle: '', adScript: '', airDate: '', invoiceNumber: '', invoiceDate: '', invoiceStatus: 'offen', invoiceNotes: '', currency: 'EUR' });
-    setShowPlacementModal(true);
-  };
-
-  const openEditPlacement = (pl: any) => {
-    setEditingPlacement(pl);
-    setPlacementForm({
-      episodeId: pl.episodeId || '',
-      categoryId: pl.categoryId || '',
-      position: pl.position || 'pre-roll',
-      duration: pl.duration || 30,
-      status: pl.status || 'geplant',
-      deliveryType: pl.deliveryType || 'self',
-      price: pl.price || '',
-      notes: pl.notes || '',
-      adTitle: pl.adTitle || '',
-      adScript: pl.adScript || '',
-      airDate: pl.airDate?.slice(0, 10) || '',
-      invoiceNumber: pl.invoiceNumber || '',
-      invoiceDate: pl.invoiceDate?.slice(0, 10) || '',
-      invoiceStatus: pl.invoiceStatus || 'offen',
-      invoiceNotes: pl.invoiceNotes || '',
-      currency: pl.currency || 'EUR',
-    });
-    setShowPlacementModal(true);
-  };
-
-  const handleExportInvoice = async () => {
-    if (!id) return;
-    setIsExportingInvoice(true);
+  const handleUpdateInvoiceStatus = async (placementId: string, invoiceStatus: string) => {
     try {
-      const token = document.cookie.match(/token=([^;]+)/)?.[1] || localStorage.getItem('token') || '';
-      const res = await fetch(`/api/sponsors/${id}/invoice-pdf`, {
+      await sponsorsApi.updateSlot(placementId, { invoiceStatus });
+      load();
+      loadBilling();
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const handleExportSponsorPlacements = async (format: 'pdf' | 'csv') => {
+    try {
+      if (format === 'csv') {
+        const filtered = leistungFilter === 'alle' ? placements :
+          placements.filter(p => p.invoiceStatus === leistungFilter);
+        const rows = [
+          ['Laufzeit von', 'Laufzeit bis', 'Laufzeit-Bezeichnung', 'Titel', 'Episode', 'Position', 'Dauer', 'Preis', 'Rechnungs-Status', 'Rechnungs-Nr.', 'Notizen'],
+          ...filtered.map((p: any) => [
+            p.placementStart ? new Date(p.placementStart).toLocaleDateString('de-DE') : '—',
+            p.placementEnd ? new Date(p.placementEnd).toLocaleDateString('de-DE') : '—',
+            p.placementLabel || '—',
+            p.adTitle || 'Werbung',
+            p.episodeTitle || '—',
+            p.position || '—',
+            `${p.duration}s`,
+            p.price ? `${p.price.toFixed(2)} €` : '—',
+            p.invoiceStatus || 'offen',
+            p.invoiceNumber || '—',
+            p.performanceNotes || p.notes || '—',
+          ])
+        ];
+        const csv = rows.map(r => r.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `leistungsuebersicht-${sponsor?.company || 'sponsor'}-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showSuccess('Leistungsübersicht als CSV exportiert');
+      }
+    } catch (err: any) { showError(err.message); }
+  };
+
+  // Leistungsübersicht als PDF exportieren
+  const handleExportLeistungPdf = async () => {
+    if (!id) return;
+    setIsExportingLeistung(true);
+    try {
+      const params = new URLSearchParams();
+      if (pdfLayoutId) params.set('layoutId', pdfLayoutId);
+      if (leistungFilter !== 'alle') params.set('filter', leistungFilter);
+      if (leistungIntro) params.set('intro', leistungIntro);
+      if (leistungOutro) params.set('outro', leistungOutro);
+      if (pdfDocTitle) params.set('documentTitle', encodeURIComponent(pdfDocTitle));
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const res = await fetch(`/api/sponsors/${id}/invoice-pdf${qs}`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!res.ok) throw new Error('PDF-Export fehlgeschlagen');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `PDF-Export fehlgeschlagen (${res.status})`);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `abrechnung-${sponsor?.name?.replace(/\s+/g, '-').toLowerCase() || id}.pdf`;
+      const defaultName = `leistungsuebersicht-${sponsor?.name?.replace(/\s+/g, '-').toLowerCase() || id}`;
+      a.download = pdfFileName ? `${pdfFileName.replace(/\.pdf$/i, '')}.pdf` : `${defaultName}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showSuccess('Leistungsübersicht exportiert');
+    } catch (err: any) { showError(err.message); }
+    finally { setIsExportingLeistung(false); }
+  };
+
+  // Abrechnung als PDF exportieren
+  const handleExportInvoice = async () => {
+    if (!id) return;
+    setIsExportingInvoice(true);
+    try {
+      const params = new URLSearchParams();
+      if (pdfLayoutId) params.set('layoutId', pdfLayoutId);
+      if (pdfDocTitle) params.set('documentTitle', encodeURIComponent(pdfDocTitle));
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const res = await fetch(`/api/sponsors/${id}/invoice-pdf${qs}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `PDF-Export fehlgeschlagen (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const defaultName = `abrechnung-${sponsor?.name?.replace(/\s+/g, '-').toLowerCase() || id}`;
+      a.download = pdfFileName ? `${pdfFileName.replace(/\.pdf$/i, '')}.pdf` : `${defaultName}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       showSuccess('Abrechnung exportiert');
@@ -192,10 +301,92 @@ export default function SponsorDetailPage() {
     } catch {}
   };
 
+  // Preis aus Kategorie automatisch übernehmen
+  const handleCategoryChange = (categoryId: string) => {
+    const cat = categories.find((c: any) => c.id === categoryId);
+    if (cat) {
+      const suggestedPrice = cat.pricePerEpisode || cat.basePrice || '';
+      const newPosition = cat.defaultPosition || placementForm.position;
+      const newDuration = cat.defaultDuration || placementForm.duration;
+      setPlacementForm(p => ({
+        ...p,
+        categoryId,
+        position: newPosition,
+        duration: newDuration,
+        price: suggestedPrice ? String(suggestedPrice) : p.price,
+      }));
+      if (suggestedPrice && !placementForm.price) setShowPriceHint(true);
+    } else {
+      setPlacementForm(p => ({ ...p, categoryId }));
+    }
+  };
+
+  const openCreatePlacement = () => {
+    setEditingPlacement(null);
+    setShowPriceHint(false);
+    setPlacementForm({
+      episodeId: '',
+      categoryId: '',
+      position: 'pre-roll',
+      duration: 30,
+      status: 'geplant',
+      deliveryType: sponsor?.adDelivery || 'self',
+      price: '',
+      notes: '',
+      adTitle: `Platzierung ${new Date().toLocaleDateString('de-DE')}`,
+      adScript: '',
+      airDate: '',
+      placementStart: '',
+      placementEnd: '',
+      placementLabel: '',
+      performanceNotes: '',
+      deliveryConfirmed: false,
+      invoiceNumber: '',
+      invoiceDate: '',
+      invoiceStatus: 'offen',
+      invoiceNotes: '',
+      currency: 'EUR',
+    });
+    setShowPlacementModal(true);
+  };
+
+  const openEditPlacement = (pl: any) => {
+    setEditingPlacement(pl);
+    setShowPriceHint(false);
+    setPlacementForm({
+      episodeId: pl.episodeId || '',
+      categoryId: pl.categoryId || '',
+      position: pl.position || 'pre-roll',
+      duration: pl.duration || 30,
+      status: pl.status || 'geplant',
+      deliveryType: pl.deliveryType || 'self',
+      price: pl.price ? String(pl.price) : '',
+      notes: pl.notes || '',
+      adTitle: pl.adTitle || '',
+      adScript: pl.adScript || '',
+      airDate: pl.airDate ? pl.airDate.slice(0, 10) : '',
+      placementStart: pl.placementStart ? pl.placementStart.slice(0, 10) : '',
+      placementEnd: pl.placementEnd ? pl.placementEnd.slice(0, 10) : '',
+      placementLabel: pl.placementLabel || '',
+      performanceNotes: pl.performanceNotes || '',
+      deliveryConfirmed: pl.deliveryConfirmed || false,
+      invoiceNumber: pl.invoiceNumber || '',
+      invoiceDate: pl.invoiceDate?.slice(0, 10) || '',
+      invoiceStatus: pl.invoiceStatus || 'offen',
+      invoiceNotes: pl.invoiceNotes || '',
+      currency: pl.currency || 'EUR',
+    });
+    setShowPlacementModal(true);
+  };
+
   const adStatusInfo = (val: string) => AD_STATUS.find(s => s.value === val) || AD_STATUS[0];
 
   const totalRevenue = placements.filter(p => p.price).reduce((s, p) => s + (p.price || 0), 0);
   const airedCount = placements.filter(p => p.status === 'ausgestrahlt' || p.status === 'abgerechnet').length;
+
+  // Gefilterte Platzierungen für Leistungsübersicht
+  const filteredPlacements = leistungFilter === 'alle' ? placements :
+    placements.filter(p => p.invoiceStatus === leistungFilter);
 
   if (isLoading) {
     return <div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" /></div>;
@@ -241,8 +432,8 @@ export default function SponsorDetailPage() {
           <p className="text-text-muted text-xs">Ausgestrahlt</p>
         </div>
         <div className="card text-center py-3">
-          <p className="text-2xl font-bold text-text-primary">{totalRevenue > 0 ? `${totalRevenue.toFixed(0)} €` : '—'}</p>
-          <p className="text-text-muted text-xs">Gesamtbudget</p>
+          <p className="text-2xl font-bold text-accent-green">{totalRevenue > 0 ? `${totalRevenue.toFixed(0)} €` : '—'}</p>
+          <p className="text-text-muted text-xs">Gesamteinnahmen</p>
         </div>
         <div className="card text-center py-3">
           <p className="text-2xl font-bold text-text-primary">
@@ -282,6 +473,10 @@ export default function SponsorDetailPage() {
                   <label className="label">Unternehmen</label>
                   <input type="text" value={form.company} onChange={e => updateForm('company', e.target.value)} className="input" disabled={!can('canEditSponsors')} />
                 </div>
+                <div>
+                  <label className="label">Kundennummer</label>
+                  <input type="text" value={form.customerNumber} onChange={e => updateForm('customerNumber', e.target.value)} className="input" placeholder="z.B. KD-10001" disabled={!can('canEditSponsors')} />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="label">Status</label>
@@ -298,6 +493,17 @@ export default function SponsorDetailPage() {
                       <input type="color" value={form.color} onChange={e => updateForm('color', e.target.value)} className="w-10 h-10 rounded-lg border border-surface-border cursor-pointer bg-transparent" disabled={!can('canEditSponsors')} />
                       <input type="text" value={form.color} onChange={e => updateForm('color', e.target.value)} className="input flex-1 font-mono text-sm" disabled={!can('canEditSponsors')} />
                     </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Vertragsstart</label>
+                    <input type="date" value={form.contractStart} onChange={e => updateForm('contractStart', e.target.value)} className="input" disabled={!can('canEditSponsors')} />
+                  </div>
+                  <div>
+                    <label className="label">Vertragsende</label>
+                    <input type="date" value={form.contractEnd} onChange={e => updateForm('contractEnd', e.target.value)} className="input" disabled={!can('canEditSponsors')} />
                   </div>
                 </div>
               </div>
@@ -326,12 +532,9 @@ export default function SponsorDetailPage() {
 
           <div className="space-y-4">
             <div className="card">
-              <h3 className="font-semibold text-text-primary mb-4">Vertrag & Budget</h3>
+              <h3 className="font-semibold text-text-primary mb-4">Vertragslaufzeit</h3>
               <div className="space-y-3">
-                <div>
-                  <label className="label">Budget (€)</label>
-                  <input type="number" value={form.budget} onChange={e => updateForm('budget', e.target.value)} className="input" placeholder="0.00" min="0" step="0.01" disabled={!can('canEditSponsors')} />
-                </div>
+                <p className="text-xs text-text-muted">Definiert den Zeitraum, in dem Werbebuchungen für diesen Sponsor möglich sind.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="label">Vertrag von</label>
@@ -342,6 +545,11 @@ export default function SponsorDetailPage() {
                     <input type="date" value={form.contractEnd} onChange={e => updateForm('contractEnd', e.target.value)} className="input" disabled={!can('canEditSponsors')} />
                   </div>
                 </div>
+                {form.contractStart && form.contractEnd && (
+                  <p className="text-xs text-accent-blue flex items-center gap-1">
+                    <CalendarRange size={12} /> Laufzeit: {calcRuntime(form.contractStart, form.contractEnd)}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -349,6 +557,39 @@ export default function SponsorDetailPage() {
               <h3 className="font-semibold text-text-primary mb-3">Notizen</h3>
               <textarea value={form.notes} onChange={e => updateForm('notes', e.target.value)} className="textarea" rows={5} placeholder="Interne Notizen, Vereinbarungen, Besonderheiten..." disabled={!can('canEditSponsors')} />
             </div>
+
+            {/* Episodenplanung */}
+            {episodeBookings.length > 0 && (
+              <div className="card">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-text-primary flex items-center gap-2">
+                    <Megaphone size={14} className="text-accent-orange" />
+                    Eingeplante Episoden ({episodeBookings.length})
+                  </h3>
+                </div>
+                <div className="space-y-2">
+                  {episodeBookings.slice(0, 5).map((b: any) => (
+                    <div key={b.id} className="flex items-center gap-3 text-sm p-2 rounded-lg bg-obsidian-800">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${b.confirmed ? 'bg-accent-green' : 'bg-accent-orange'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-text-primary text-xs font-medium truncate">{b.episode_title || 'Unbekannte Episode'}</p>
+                        <p className="text-text-muted text-[10px]">
+                          {b.position?.toUpperCase()} · {b.slot_name || b.category_name || '—'}
+                          {b.duration ? ` · ${b.duration}s` : ''}
+                          {b.publish_date ? ` · ${new Date(b.publish_date).toLocaleDateString('de-DE')}` : ''}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${b.confirmed ? 'bg-accent-green/20 text-accent-green' : 'bg-accent-orange/20 text-accent-orange'}`}>
+                        {b.confirmed ? 'Bestätigt' : 'Geplant'}
+                      </span>
+                    </div>
+                  ))}
+                  {episodeBookings.length > 5 && (
+                    <p className="text-text-muted text-xs text-center">+{episodeBookings.length - 5} weitere Buchungen</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Recent Placements Preview */}
             {placements.length > 0 && (
@@ -363,7 +604,7 @@ export default function SponsorDetailPage() {
                     return (
                       <div key={pl.id} className="flex items-center gap-3 text-sm">
                         <span className={`badge text-xs ${si.color}`}>{si.label}</span>
-                        <span className="text-text-primary flex-1 truncate">{pl.episodeTitle || 'Keine Episode'}</span>
+                        <span className="text-text-primary flex-1 truncate">{pl.episodeTitle || pl.adTitle || 'Keine Episode'}</span>
                         <span className="text-text-muted text-xs capitalize">{pl.position?.replace('-', ' ')}</span>
                       </div>
                     );
@@ -398,10 +639,10 @@ export default function SponsorDetailPage() {
               {placements.map(pl => {
                 const si = adStatusInfo(pl.status);
                 const cat = categories.find(c => c.id === pl.categoryId);
+                const runtime = calcRuntime(pl.placementStart, pl.placementEnd);
                 return (
                   <div key={pl.id} className="card group">
                     <div className="flex items-start gap-4">
-                      {/* Status indicator */}
                       <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
                         pl.status === 'ausgestrahlt' || pl.status === 'abgerechnet' ? 'bg-accent-green' :
                         pl.status === 'bereit' ? 'bg-accent-cyan' :
@@ -416,6 +657,9 @@ export default function SponsorDetailPage() {
                           <h4 className="text-text-primary font-medium">{pl.adTitle || 'Unbenannte Werbung'}</h4>
                           <span className={`badge text-xs ${si.color}`}>{si.label}</span>
                           {cat && <span className="badge text-xs" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>{cat.name}</span>}
+                          {pl.placementLabel && (
+                            <span className="badge text-xs bg-accent-blue/20 text-accent-blue">{pl.placementLabel}</span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-4 text-xs text-text-muted flex-wrap">
@@ -427,7 +671,7 @@ export default function SponsorDetailPage() {
                           )}
                           <span className="capitalize">{pl.position?.replace('-', ' ')}</span>
                           <span className="flex items-center gap-1"><Clock size={11} />{pl.duration}s</span>
-                          {pl.price && <span>{pl.price.toFixed(2)} €</span>}
+                          {pl.price && <span className="font-medium text-accent-green">{pl.price.toFixed(2)} €</span>}
                           {pl.deliveryType === 'produced' ? (
                             <span className="flex items-center gap-1 text-accent-purple"><Mic2 size={11} />Produziert</span>
                           ) : (
@@ -436,9 +680,26 @@ export default function SponsorDetailPage() {
                           {pl.airDate && <span className="flex items-center gap-1"><Calendar size={11} />{new Date(pl.airDate).toLocaleDateString('de-DE')}</span>}
                         </div>
 
-                        {pl.notes && <p className="text-text-muted text-xs mt-1">{pl.notes}</p>}
+                        {/* Laufzeit-Anzeige */}
+                        {(pl.placementStart || pl.placementEnd) && (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <CalendarRange size={11} className="text-accent-blue flex-shrink-0" />
+                            <span className="text-xs text-accent-blue">
+                              {pl.placementStart ? new Date(pl.placementStart).toLocaleDateString('de-DE') : '?'}
+                              {' → '}
+                              {pl.placementEnd ? new Date(pl.placementEnd).toLocaleDateString('de-DE') : '?'}
+                              {runtime && ` (${runtime})`}
+                            </span>
+                          </div>
+                        )}
 
-                        {/* Status progression */}
+                        {pl.notes && <p className="text-text-muted text-xs mt-1">{pl.notes}</p>}
+                        {pl.performanceNotes && (
+                          <p className="text-text-muted text-xs mt-1 italic flex items-center gap-1">
+                            <Info size={10} />{pl.performanceNotes}
+                          </p>
+                        )}
+
                         {can('canEditSponsors') && (
                           <div className="flex items-center gap-2 mt-2">
                             <span className="text-text-muted text-xs">Status:</span>
@@ -453,7 +714,6 @@ export default function SponsorDetailPage() {
                         )}
                       </div>
 
-                      {/* Actions */}
                       {can('canEditSponsors') && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => openEditPlacement(pl)} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg"><Edit2 size={14} /></button>
@@ -471,89 +731,245 @@ export default function SponsorDetailPage() {
 
       {/* BILLING TAB */}
       {activeTab === 'billing' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-text-secondary text-sm">Abrechnungsübersicht und Rechnungs-PDF für den Kunden</p>
-            {can('canEditSponsors') && (
-              <button onClick={handleExportInvoice} disabled={isExportingInvoice} className="btn-primary">
-                {isExportingInvoice ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                <span>Abrechnung als PDF</span>
-              </button>
-            )}
+        <div className="space-y-6">
+
+          {/* Kennzahlen */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="card text-center py-3">
+              <p className="text-xl font-bold text-text-primary">{placements.length}</p>
+              <p className="text-text-muted text-xs">Platzierungen gesamt</p>
+            </div>
+            <div className="card text-center py-3">
+              <p className="text-xl font-bold text-accent-green">{placements.filter((p: any) => p.invoiceStatus === 'bezahlt').length}</p>
+              <p className="text-text-muted text-xs">Bezahlt</p>
+            </div>
+            <div className="card text-center py-3">
+              <p className="text-xl font-bold text-text-primary">
+                {placements.filter((p: any) => p.price).reduce((s: number, p: any) => s + (p.price || 0), 0).toFixed(2)} €
+              </p>
+              <p className="text-text-muted text-xs">Gesamtbetrag</p>
+            </div>
+            <div className="card text-center py-3">
+              <p className="text-xl font-bold text-accent-orange">
+                {placements.filter((p: any) => p.price && p.invoiceStatus !== 'bezahlt' && p.invoiceStatus !== 'storniert').reduce((s: number, p: any) => s + (p.price || 0), 0).toFixed(2)} €
+              </p>
+              <p className="text-text-muted text-xs">Offen</p>
+            </div>
           </div>
 
-          {/* Billing Summary */}
-          {billingData?.summary && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="card text-center py-3">
-                <p className="text-2xl font-bold text-text-primary">{billingData.summary.totalPlacements}</p>
-                <p className="text-text-muted text-xs">Platzierungen gesamt</p>
+          {/* Leistungsübersicht erstellen */}
+          <div className="card space-y-4">
+            <div className="flex items-center gap-2">
+              <FileText size={16} className="text-accent-purple" />
+              <h3 className="font-semibold text-text-primary">Leistungsübersicht erstellen</h3>
+            </div>
+
+            <p className="text-text-muted text-xs flex items-center gap-1">
+              <Info size={12} />
+              Die Leistungsübersicht dient als Grundlage für die Rechnungserstellung in eurer internen Software. Texte und Filterung können angepasst werden.
+            </p>
+
+            {/* Einleitungstext */}
+            <div>
+              <label className="label">Einleitungstext (optional)</label>
+              <textarea
+                value={leistungIntro}
+                onChange={e => setLeistungIntro(e.target.value)}
+                className="textarea"
+                rows={3}
+                placeholder={`z.B. Sehr geehrte Damen und Herren,\nhiermit übersenden wir Ihnen die Leistungsübersicht für Ihre Werbeschaltungen im Zeitraum...`}
+              />
+            </div>
+
+            {/* Filter */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">Platzierungen filtern</label>
+                <select value={leistungFilter} onChange={e => setLeistungFilter(e.target.value as any)} className="select">
+                  <option value="alle">Alle Platzierungen ({placements.length})</option>
+                  <option value="offen">Nur offene ({placements.filter(p => !p.invoiceStatus || p.invoiceStatus === 'offen').length})</option>
+                  <option value="versendet">Nur versendet ({placements.filter(p => p.invoiceStatus === 'versendet').length})</option>
+                  <option value="bezahlt">Nur bezahlt ({placements.filter(p => p.invoiceStatus === 'bezahlt').length})</option>
+                </select>
               </div>
-              <div className="card text-center py-3">
-                <p className="text-2xl font-bold text-accent-green">{billingData.summary.confirmedPlacements}</p>
-                <p className="text-text-muted text-xs">Abgerechnet</p>
-              </div>
-              <div className="card text-center py-3">
-                <p className="text-2xl font-bold text-text-primary">{billingData.summary.totalRevenue?.toFixed(2)} €</p>
-                <p className="text-text-muted text-xs">Gesamtumsatz</p>
-              </div>
-              <div className="card text-center py-3">
-                <p className="text-2xl font-bold text-accent-orange">{billingData.summary.openRevenue?.toFixed(2)} €</p>
-                <p className="text-text-muted text-xs">Offen</p>
+              <div>
+                <label className="label">Dateiname</label>
+                <input
+                  type="text"
+                  value={pdfFileName}
+                  onChange={e => setPdfFileName(e.target.value)}
+                  placeholder={`leistungsuebersicht-${sponsor?.name?.replace(/\s+/g, '-').toLowerCase() || 'sponsor'}.pdf`}
+                  className="input text-xs"
+                  title="Eigener Dateiname für den PDF-Export"
+                />
               </div>
             </div>
-          )}
 
-          {/* Placements with invoice info */}
+            {/* Dokumententitel im PDF */}
+            <div>
+              <label className="label">Dokumententitel im PDF <span className="text-text-muted font-normal">(oben links unter dem Podcast-Namen)</span></label>
+              <input
+                type="text"
+                value={pdfDocTitle}
+                onChange={e => setPdfDocTitle(e.target.value)}
+                placeholder="Sponsoring-Abrechnung"
+                className="input text-sm"
+                title="Dieser Titel erscheint im PDF-Header unter dem Podcast-Namen"
+              />
+            </div>
+
+            {/* Schlusstext */}
+            <div>
+              <label className="label">Schlusstext / Zahlungshinweis (optional)</label>
+              <textarea
+                value={leistungOutro}
+                onChange={e => setLeistungOutro(e.target.value)}
+                className="textarea"
+                rows={2}
+                placeholder="z.B. Zahlbar innerhalb von 14 Tagen ohne Abzug. Bei Fragen stehen wir gerne zur Verfügung."
+              />
+            </div>
+
+            {/* Export-Buttons */}
+            <div className="flex flex-wrap gap-3 pt-1">
+              <div className="flex items-center gap-2">
+                <PdfLayoutPicker exportType="invoice" value={pdfLayoutId} onChange={setPdfLayoutId} />
+                <button onClick={handleExportLeistungPdf} disabled={isExportingLeistung} className="btn-primary">
+                  {isExportingLeistung ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                  <span>Leistungsübersicht (PDF)</span>
+                </button>
+              </div>
+              <button onClick={() => handleExportSponsorPlacements('csv')} className="btn-secondary">
+                <FileSpreadsheet size={16} />
+                <span>Als CSV exportieren</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Platzierungs-Liste mit Rechnungs-Status */}
           <div className="space-y-3">
-            {placements.map(pl => {
-              const si = adStatusInfo(pl.status);
-              return (
-                <div key={pl.id} className="card">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <h4 className="text-text-primary font-medium">{pl.adTitle || 'Unbenannte Werbung'}</h4>
-                        <span className={`badge text-xs ${si.color}`}>{si.label}</span>
-                        {pl.invoiceStatus && (
-                          <span className={`badge text-xs ${
-                            pl.invoiceStatus === 'bezahlt' ? 'bg-accent-green/20 text-accent-green' :
-                            pl.invoiceStatus === 'storniert' ? 'bg-accent-red/20 text-accent-red' :
-                            'bg-accent-orange/20 text-accent-orange'
-                          }`}>
-                            Rechnung: {pl.invoiceStatus === 'bezahlt' ? 'Bezahlt' : pl.invoiceStatus === 'storniert' ? 'Storniert' : 'Offen'}
-                          </span>
-                        )}
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-text-primary flex items-center gap-2">
+                <Clock size={16} className="text-accent-blue" />
+                Platzierungs-Übersicht
+                {leistungFilter !== 'alle' && (
+                  <span className="text-xs text-text-muted font-normal">— gefiltert: {leistungFilter}</span>
+                )}
+              </h3>
+              <span className="text-text-muted text-xs">{filteredPlacements.length} Einträge · {filteredPlacements.filter(p => p.price).reduce((s, p) => s + (p.price || 0), 0).toFixed(2)} €</span>
+            </div>
+
+            {filteredPlacements.length === 0 ? (
+              <div className="card text-center py-8">
+                <p className="text-text-muted text-sm">Keine Platzierungen für diesen Filter</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredPlacements.map(pl => {
+                  const si = adStatusInfo(pl.status);
+                  const runtime = calcRuntime(pl.placementStart, pl.placementEnd);
+                  return (
+                    <div key={pl.id} className="card">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <h4 className="text-text-primary font-medium text-sm">{pl.adTitle || 'Unbenannte Werbung'}</h4>
+                            {pl.placementLabel && (
+                              <span className="badge text-xs bg-accent-blue/20 text-accent-blue">{pl.placementLabel}</span>
+                            )}
+                            <span className={`badge text-xs ${si.color}`}>{si.label}</span>
+                            <span className={`badge text-xs ${
+                              pl.invoiceStatus === 'bezahlt' ? 'bg-accent-green/20 text-accent-green' :
+                              pl.invoiceStatus === 'versendet' ? 'bg-accent-orange/20 text-accent-orange' :
+                              pl.invoiceStatus === 'storniert' ? 'bg-accent-red/20 text-accent-red' :
+                              'bg-surface-overlay text-text-muted'
+                            }`}>
+                              {pl.invoiceStatus === 'bezahlt' ? '✓ Bezahlt' :
+                               pl.invoiceStatus === 'versendet' ? '→ Versendet' :
+                               pl.invoiceStatus === 'storniert' ? '✕ Storniert' : '○ Offen'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mt-2">
+                            {/* Laufzeit */}
+                            <div>
+                              <p className="text-text-muted text-xs">Laufzeit</p>
+                              {pl.placementStart || pl.placementEnd ? (
+                                <p className="text-text-primary text-xs">
+                                  {pl.placementStart ? new Date(pl.placementStart).toLocaleDateString('de-DE') : '?'}
+                                  {' – '}
+                                  {pl.placementEnd ? new Date(pl.placementEnd).toLocaleDateString('de-DE') : '?'}
+                                  {runtime && <span className="text-text-muted ml-1">({runtime})</span>}
+                                </p>
+                              ) : (
+                                <p className="text-text-muted text-xs">—</p>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-text-muted text-xs">Episode / Position</p>
+                              <p className="text-text-primary text-xs">{pl.episodeTitle || '—'} {pl.position ? `· ${pl.position}` : ''}</p>
+                            </div>
+                            <div>
+                              <p className="text-text-muted text-xs">Preis</p>
+                              <p className="text-text-primary font-medium">{pl.price ? `${pl.price.toFixed(2)} €` : '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-text-muted text-xs">Rechnungs-Nr.</p>
+                              <p className="text-text-primary text-xs">{pl.invoiceNumber || '—'}</p>
+                            </div>
+                          </div>
+
+                          {pl.performanceNotes && (
+                            <p className="text-text-muted text-xs mt-1.5 italic">{pl.performanceNotes}</p>
+                          )}
+                          {pl.invoiceNotes && (
+                            <p className="text-text-muted text-xs mt-1 italic">{pl.invoiceNotes}</p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-1 flex-shrink-0">
+                          {can('canEditSponsors') && (
+                            <>
+                              <select
+                                value={pl.invoiceStatus || 'offen'}
+                                onChange={e => handleUpdateInvoiceStatus(pl.id, e.target.value)}
+                                className="text-xs bg-obsidian-800 border border-surface-border rounded-lg px-2 py-1 text-text-secondary focus:outline-none hover:border-surface-border-light"
+                                title="Rechnungs-Status ändern"
+                              >
+                                <option value="offen">Offen</option>
+                                <option value="versendet">Versendet</option>
+                                <option value="bezahlt">Bezahlt</option>
+                                <option value="storniert">Storniert</option>
+                              </select>
+                              <button onClick={() => openEditPlacement(pl)} className="p-1.5 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg text-center">
+                                <Edit2 size={13} />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mt-2">
-                        <div>
-                          <p className="text-text-muted text-xs">Preis</p>
-                          <p className="text-text-primary font-medium">{pl.price ? `${pl.price.toFixed(2)} €` : '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-text-muted text-xs">Rechnungsnr.</p>
-                          <p className="text-text-primary">{pl.invoiceNumber || '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-text-muted text-xs">Rechnungsdatum</p>
-                          <p className="text-text-primary">{pl.invoiceDate ? new Date(pl.invoiceDate).toLocaleDateString('de-DE') : '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-text-muted text-xs">Ausstrahlungsdatum</p>
-                          <p className="text-text-primary">{pl.airDate ? new Date(pl.airDate).toLocaleDateString('de-DE') : '—'}</p>
-                        </div>
-                      </div>
-                      {pl.invoiceNotes && <p className="text-text-muted text-xs mt-2 italic">{pl.invoiceNotes}</p>}
                     </div>
-                    {can('canEditSponsors') && (
-                      <button onClick={() => openEditPlacement(pl)} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg flex-shrink-0">
-                        <Edit2 size={14} />
-                      </button>
-                    )}
-                  </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Summe */}
+            {filteredPlacements.length > 0 && (
+              <div className="flex justify-end">
+                <div className="bg-obsidian-800 rounded-xl px-4 py-3 text-right">
+                  <p className="text-text-muted text-xs mb-1">Summe ({leistungFilter === 'alle' ? 'alle' : leistungFilter})</p>
+                  <p className="text-xl font-bold text-text-primary">
+                    {filteredPlacements.filter(p => p.price).reduce((s, p) => s + (p.price || 0), 0).toFixed(2)} €
+                  </p>
+                  {leistungFilter !== 'bezahlt' && (
+                    <p className="text-xs text-accent-green mt-0.5">
+                      davon bezahlt: {filteredPlacements.filter(p => p.price && p.invoiceStatus === 'bezahlt').reduce((s, p) => s + (p.price || 0), 0).toFixed(2)} €
+                    </p>
+                  )}
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -581,6 +997,22 @@ export default function SponsorDetailPage() {
                   </a>
                 )}
               </div>
+            </div>
+            {/* Hinweisfeld zum Sponsor */}
+            <div>
+              <label className="label flex items-center gap-1">
+                <AlertCircle size={12} className="text-accent-orange" />
+                Interner Hinweis
+              </label>
+              <textarea
+                value={form.contactHint || ''}
+                onChange={e => updateForm('contactHint', e.target.value)}
+                className="textarea"
+                rows={4}
+                placeholder="Interne Hinweise zum Sponsor, z.B. bevorzugte Kontaktzeiten, besondere Vereinbarungen, Vorsichtsmaßnahmen..."
+                disabled={!can('canEditSponsors')}
+              />
+              <p className="text-text-muted text-xs mt-1">Nur für interne Zwecke — erscheint nicht im PDF-Export</p>
             </div>
           </div>
 
@@ -620,19 +1052,71 @@ export default function SponsorDetailPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Episode</label>
+              <label className="label">Episode (Optional)</label>
               <select value={placementForm.episodeId} onChange={e => setPlacementForm(p => ({ ...p, episodeId: e.target.value }))} className="select">
-                <option value="">Keine Episode zugeordnet</option>
+                <option value="">Keine feste Folge (Zeitraum-Buchung)</option>
                 {episodes.map(ep => <option key={ep.id} value={ep.id}>{ep.number ? `#${ep.number} — ` : ''}{ep.title}</option>)}
               </select>
             </div>
             <div>
               <label className="label">Werbekategorie</label>
-              <select value={placementForm.categoryId} onChange={e => setPlacementForm(p => ({ ...p, categoryId: e.target.value }))} className="select">
+              <select value={placementForm.categoryId} onChange={e => handleCategoryChange(e.target.value)} className="select">
                 <option value="">Keine Kategorie</option>
-                {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                {categories.map((cat: any) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}{cat.pricePerEpisode ? ` — ${cat.pricePerEpisode} €/Folge` : cat.basePrice ? ` — ab ${cat.basePrice} €` : ''}
+                  </option>
+                ))}
               </select>
+              {showPriceHint && (
+                <p className="text-xs text-accent-green mt-1 flex items-center gap-1">
+                  <CheckCircle size={11} /> Preis aus Kategorie übernommen
+                </p>
+              )}
             </div>
+          </div>
+
+          {/* Laufzeit der Platzierung */}
+          <div className="bg-obsidian-800 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <CalendarRange size={14} className="text-accent-blue" />
+              <label className="label mb-0 text-accent-blue">Laufzeit der Platzierung</label>
+            </div>
+            <div>
+              <label className="label text-xs">Bezeichnung / Kampagnenname (optional)</label>
+              <input
+                type="text"
+                value={placementForm.placementLabel}
+                onChange={e => setPlacementForm(p => ({ ...p, placementLabel: e.target.value }))}
+                className="input"
+                placeholder="z.B. Frühjahrskampagne 2025, Q2-Schaltung..."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label text-xs">Laufzeit von</label>
+                <input
+                  type="date"
+                  value={placementForm.placementStart}
+                  onChange={e => setPlacementForm(p => ({ ...p, placementStart: e.target.value }))}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label text-xs">Laufzeit bis</label>
+                <input
+                  type="date"
+                  value={placementForm.placementEnd}
+                  onChange={e => setPlacementForm(p => ({ ...p, placementEnd: e.target.value }))}
+                  className="input"
+                />
+              </div>
+            </div>
+            {placementForm.placementStart && placementForm.placementEnd && (
+              <p className="text-xs text-accent-blue flex items-center gap-1">
+                <CheckCircle size={11} /> Laufzeit: {calcRuntime(placementForm.placementStart, placementForm.placementEnd)}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -651,22 +1135,29 @@ export default function SponsorDetailPage() {
               <input type="number" value={placementForm.duration} onChange={e => setPlacementForm(p => ({ ...p, duration: parseInt(e.target.value) || 30 }))} className="input" min="5" max="600" />
             </div>
             <div>
-              <label className="label">Preis (€)</label>
-              <input type="number" value={placementForm.price} onChange={e => setPlacementForm(p => ({ ...p, price: e.target.value }))} className="input" placeholder="0.00" min="0" step="0.01" />
+              <label className="label">Preis ({placementForm.currency || 'EUR'})</label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={placementForm.price}
+                  onChange={e => setPlacementForm(p => ({ ...p, price: e.target.value }))}
+                  className="input"
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                />
+                {showPriceHint && (
+                  <span title="Preis aus Kategorie" className="text-accent-green flex-shrink-0"><CheckCircle size={14} /></span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Status</label>
-              <select value={placementForm.status} onChange={e => setPlacementForm(p => ({ ...p, status: e.target.value }))} className="select">
-                {AD_STATUS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Ausstrahlungsdatum</label>
-              <input type="date" value={placementForm.airDate} onChange={e => setPlacementForm(p => ({ ...p, airDate: e.target.value }))} className="input" />
-            </div>
+          <div>
+            <label className="label">Status</label>
+            <select value={placementForm.status} onChange={e => setPlacementForm(p => ({ ...p, status: e.target.value }))} className="select">
+              {AD_STATUS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
           </div>
 
           {/* Delivery Type */}
@@ -686,6 +1177,20 @@ export default function SponsorDetailPage() {
             </div>
           </div>
 
+          {/* Lieferung bestätigt */}
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="deliveryConfirmed"
+              checked={placementForm.deliveryConfirmed}
+              onChange={e => setPlacementForm(p => ({ ...p, deliveryConfirmed: e.target.checked }))}
+              className="w-4 h-4 rounded accent-accent-purple"
+            />
+            <label htmlFor="deliveryConfirmed" className="text-text-primary text-sm cursor-pointer">
+              Werbemittel-Lieferung bestätigt
+            </label>
+          </div>
+
           {/* Script (for produced ads) */}
           {placementForm.deliveryType === 'produced' && (
             <div>
@@ -695,40 +1200,29 @@ export default function SponsorDetailPage() {
           )}
 
           <div>
-            <label className="label">Notizen</label>
+            <label className="label">Notizen (intern)</label>
             <textarea value={placementForm.notes} onChange={e => setPlacementForm(p => ({ ...p, notes: e.target.value }))} className="textarea" rows={2} />
           </div>
 
-          {/* Invoice / Billing Section */}
-          <hr className="border-surface-border" />
-          <h4 className="font-medium text-text-primary text-sm flex items-center gap-2"><FileText size={14} /> Abrechnung / Rechnung</h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Rechnungsnummer</label>
-              <input type="text" value={placementForm.invoiceNumber} onChange={e => setPlacementForm(p => ({ ...p, invoiceNumber: e.target.value }))} className="input" placeholder="z.B. RE-2025-001" />
-            </div>
-            <div>
-              <label className="label">Rechnungsdatum</label>
-              <input type="date" value={placementForm.invoiceDate} onChange={e => setPlacementForm(p => ({ ...p, invoiceDate: e.target.value }))} className="input" />
-            </div>
+          <div>
+            <label className="label">Performance-Notizen (für Leistungsübersicht)</label>
+            <textarea
+              value={placementForm.performanceNotes}
+              onChange={e => setPlacementForm(p => ({ ...p, performanceNotes: e.target.value }))}
+              className="textarea"
+              rows={2}
+              placeholder="z.B. Reichweite, Hörer-Feedback, besondere Leistungen..."
+            />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Rechnungsstatus</label>
-              <select value={placementForm.invoiceStatus} onChange={e => setPlacementForm(p => ({ ...p, invoiceStatus: e.target.value }))} className="select">
-                <option value="offen">Offen</option>
-                <option value="bezahlt">Bezahlt</option>
-                <option value="storniert">Storniert</option>
-              </select>
-            </div>
-            <div>
-              <label className="label">Währung</label>
-              <select value={placementForm.currency} onChange={e => setPlacementForm(p => ({ ...p, currency: e.target.value }))} className="select">
-                <option value="EUR">EUR (€)</option>
-                <option value="USD">USD ($)</option>
-                <option value="CHF">CHF</option>
-              </select>
-            </div>
+
+          {/* Währung */}
+          <div>
+            <label className="label">Währung</label>
+            <select value={placementForm.currency} onChange={e => setPlacementForm(p => ({ ...p, currency: e.target.value }))} className="select">
+              <option value="EUR">EUR (€)</option>
+              <option value="USD">USD ($)</option>
+              <option value="CHF">CHF</option>
+            </select>
           </div>
           <div>
             <label className="label">Rechnungsnotiz</label>
@@ -737,7 +1231,7 @@ export default function SponsorDetailPage() {
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowPlacementModal(false)} className="btn-secondary">Abbrechen</button>
-            <button type="submit" className="btn-primary">{editingPlacement ? 'Speichern' : 'Platzierung erstellen'}</button>
+            <button type="submit" className="btn-primary">{editingPlacement ? 'Aktualisieren' : 'Erstellen'}</button>
           </div>
         </form>
       </Modal>

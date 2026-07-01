@@ -171,7 +171,16 @@ function initializeSchema(db: any): void {
       used_in_episodes TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      uploaded_by TEXT NOT NULL
+      uploaded_by TEXT NOT NULL,
+      folder_id TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS media_folders (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      parent_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS sponsors (
@@ -368,8 +377,33 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE ad_placements ADD COLUMN invoice_date TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE ad_placements ADD COLUMN invoice_status TEXT NOT NULL DEFAULT \'offen\''); } catch (_) {}
   try { db.exec('ALTER TABLE ad_placements ADD COLUMN invoice_notes TEXT DEFAULT NULL'); } catch (_) {}
+  // Ad placements: add runtime/period fields (v2.7.7)
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN placement_start TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN placement_end TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN placement_label TEXT DEFAULT NULL'); } catch (_) {}
+  // Ad placements: add performance/delivery notes (v2.7.7)
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN performance_notes TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN delivery_confirmed INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
   // Ad slots: add invoice_notes
   try { db.exec('ALTER TABLE ad_slots ADD COLUMN invoice_notes TEXT DEFAULT NULL'); } catch (_) {}
+  // Sponsors: add customer number
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN customer_number TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN folder_id TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec("ALTER TABLE assets ADD COLUMN markers TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}
+  try { db.exec('ALTER TABLE sessions ADD COLUMN last_seen TEXT'); } catch (_) {}
+  try { db.exec(`CREATE TABLE IF NOT EXISTS media_folders (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, parent_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
+  // Sponsors: add contract dates and contact hint
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN contract_start TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN contract_end TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN contact_hint TEXT DEFAULT NULL'); } catch (_) {}
+  // Sponsors: add color field
+  try { db.exec("ALTER TABLE sponsors ADD COLUMN color TEXT DEFAULT '#059669'"); } catch (_) {}
+  // Sponsors: add ad_delivery field
+  try { db.exec("ALTER TABLE sponsors ADD COLUMN ad_delivery TEXT DEFAULT 'self'"); } catch (_) {}
   // research_sources table migration for existing DBs
   try { db.exec("CREATE TABLE IF NOT EXISTS research_sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT, type TEXT NOT NULL DEFAULT 'link', description TEXT, content TEXT, tags TEXT NOT NULL DEFAULT '[]', related_idea_id TEXT, related_episode_id TEXT, status TEXT NOT NULL DEFAULT 'unread', created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))"); } catch (_) {}
   // Ideas: add extended fields for episode preparation workspace
@@ -427,8 +461,8 @@ function initializeSchema(db: any): void {
     color TEXT NOT NULL DEFAULT '#7c3aed',
     default_position TEXT NOT NULL DEFAULT 'mid-roll',
     default_duration INTEGER NOT NULL DEFAULT 30,
-    presentation_text TEXT,
     presentation_template TEXT NOT NULL DEFAULT 'präsentiert von',
+    is_exclusive INTEGER NOT NULL DEFAULT 0,
     base_price REAL,
     price_per_episode REAL,
     price_per_1000_listens REAL,
@@ -458,6 +492,64 @@ function initializeSchema(db: any): void {
 
   // Ad slots: add category_id reference
   try { db.exec('ALTER TABLE ad_slots ADD COLUMN category_id TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_slots ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_categories ADD COLUMN is_exclusive INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+
+  // episode_ad_bookings: add presentation_text (migration for existing DBs)
+  try { db.exec('ALTER TABLE episode_ad_bookings ADD COLUMN presentation_text TEXT DEFAULT NULL'); } catch (_) {}
+
+  // Episodes: add script_ready flag (v2.8.0)
+  try { db.exec('ALTER TABLE episodes ADD COLUMN script_ready INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN script_ready_at TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN script_ready_by TEXT DEFAULT NULL'); } catch (_) {}
+
+  // episode_ad_bookings: add time_position for ad placement planning (v2.9.5)
+  try { db.exec('ALTER TABLE episode_ad_bookings ADD COLUMN time_position INTEGER DEFAULT NULL'); } catch (_) {}
+  // time_position = seconds from episode start (e.g. 300 = 5:00)
+
+  // Episodes: add show_notes and alt_duration (v2.9.0)
+  try { db.exec('ALTER TABLE episodes ADD COLUMN show_notes TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN alt_duration INTEGER DEFAULT NULL'); } catch (_) {}
+
+  // PDF Layouts: neue Spalten für v2.9.3 (header_height, line_spacing, divider_style, watermark)
+  try { db.exec("ALTER TABLE pdf_layouts ADD COLUMN header_height INTEGER DEFAULT 70"); } catch (_) {}
+  try { db.exec("ALTER TABLE pdf_layouts ADD COLUMN line_spacing TEXT DEFAULT 'normal'"); } catch (_) {}
+  try { db.exec("ALTER TABLE pdf_layouts ADD COLUMN divider_style TEXT DEFAULT 'line'"); } catch (_) {}
+  try { db.exec("ALTER TABLE pdf_layouts ADD COLUMN watermark TEXT DEFAULT NULL"); } catch (_) {}
+
+  // Assets: backfill duration for existing audio files without duration (v2.9.1)
+  // Runs asynchronously after DB init to avoid blocking startup
+  setImmediate(async () => {
+    try {
+      const { execFile } = require('child_process');
+      const assetsWithoutDuration = db.all(
+        "SELECT id, filepath FROM assets WHERE type = 'audio' AND (duration IS NULL OR duration = 0)"
+      ) as any[];
+      for (const asset of assetsWithoutDuration) {
+        if (!asset.filepath) continue;
+        const fs = require('fs');
+        if (!fs.existsSync(asset.filepath)) continue;
+        await new Promise<void>((resolve) => {
+          execFile('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_format', asset.filepath],
+            { timeout: 15000 }, (err: any, stdout: string) => {
+              if (!err) {
+                try {
+                  const data = JSON.parse(stdout);
+                  const dur = parseFloat(data?.format?.duration);
+                  if (!isNaN(dur) && dur > 0) {
+                    db.run('UPDATE assets SET duration = ? WHERE id = ?', [Math.round(dur), asset.id]);
+                  }
+                } catch (_) {}
+              }
+              resolve();
+            });
+        });
+      }
+      if (assetsWithoutDuration.length > 0) {
+        console.log(`[DB] Audio duration backfill: ${assetsWithoutDuration.length} assets processed`);
+      }
+    } catch (_) {}
+  });
 
   // Chat messages table migration for existing DBs
   try { db.exec('CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, recipient_id TEXT, channel TEXT, message TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime("now")), FOREIGN KEY (sender_id) REFERENCES users(id), FOREIGN KEY (recipient_id) REFERENCES users(id))'); } catch (_) {}
@@ -511,6 +603,25 @@ function initializeSchema(db: any): void {
     db.run('INSERT INTO settings (key, value) VALUES (?, ?)', ['app', JSON.stringify(defaultSettings)]);
   }
 
+  // Roles migration: update existing roles to latest permissions (v2.9.12)
+  // This runs on every startup to ensure roles are always up-to-date
+  try {
+    const existingRoles = db.all('SELECT id, name FROM roles') as any[];
+    for (const role of existingRoles) {
+      const latestPerms = getDefaultPermissions(role.name);
+      // Merge: keep any extra custom permissions, update known ones
+      const currentRow = db.get('SELECT permissions FROM roles WHERE id = ?', [role.id]) as any;
+      let currentPerms: Record<string, boolean> = {};
+      try { currentPerms = JSON.parse(currentRow?.permissions || '{}'); } catch (_) {}
+      const merged = { ...latestPerms, ...currentPerms, ...latestPerms };
+      // For system roles, always use latest defaults
+      const isSystem = (db.get('SELECT is_system FROM roles WHERE id = ?', [role.id]) as any)?.is_system;
+      const finalPerms = isSystem ? latestPerms : merged;
+      db.run('UPDATE roles SET permissions = ? WHERE id = ?', [JSON.stringify(finalPerms), role.id]);
+    }
+    if (existingRoles.length > 0) console.log('[DB] Roles permissions updated to latest defaults (v2.9.12)');
+  } catch (e) { console.error('[DB] Roles migration error:', e); }
+
   // Default roles
   const rolesCount = db.get('SELECT COUNT(*) as count FROM roles') as any;
   if (!rolesCount || rolesCount.count === 0) {
@@ -549,6 +660,17 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
     canManageUsers: false, canViewErrorLogs: false, canExport: false, canManageSettings: false,
     canApproveEpisodes: false, canRequestApproval: false,
     canApproveInterviewQuestions: false,
+    // Sponsoring-Erweiterungen (v2.7.x)
+    canManageSponsors: false,
+    canViewInvoices: false, canCreateInvoices: false, canEditInvoices: false,
+    canExportPricelist: false,
+    canManagePdfLayouts: false,
+    // Episoden-Editor-Erweiterungen (v2.7.x)
+    canManageBlocks: false,
+    canUseMediaLibraryInEditor: false,
+    // v2.9.0 – neue Berechtigungen
+    canEditShowNotes: false,
+    canManageInterviewBlocks: false,
   };
 
   switch (role) {
@@ -564,9 +686,15 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canViewEpisodes: true, canCreateEpisodes: true, canEditEpisodes: true,
         canEditScript: true,
         canViewMedia: true, canUploadMedia: true, canCommentMedia: true,
-        canViewSponsors: true, canViewSponsorReports: true,
+        canViewSponsors: true, canEditSponsors: true, canViewSponsorReports: true,
         canExport: true,
         canRequestApproval: true,
+        canViewInvoices: true,
+        canExportPricelist: true,
+        canManageBlocks: true,
+        canUseMediaLibraryInEditor: true,
+        canEditShowNotes: true,
+        canManageInterviewBlocks: true,
       };
     case 'moderator':
       return {
@@ -574,19 +702,32 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canViewIdeas: true, canViewEditorialPlan: true, canViewInterviews: true, canViewNotes: true,
         canViewEpisodes: true, canEditEpisodes: true, canEditScript: true,
         canViewMedia: true, canCommentMedia: true,
-        canViewSponsors: true, canViewSponsorReports: true,
+        canViewSponsors: true, canEditSponsors: true, canViewSponsorReports: true,
         canExport: true,
         canApproveEpisodes: true,
         canRequestApproval: true,
         canApproveInterviewQuestions: true,
+        canViewInvoices: true,
+        canExportPricelist: true,
+        canManageBlocks: true,
+        canUseMediaLibraryInEditor: true,
+        canEditShowNotes: true,
+        canManageInterviewBlocks: true,
       };
     case 'produktion':
       return {
         ...base,
-        canViewEpisodes: true,
-        canViewMedia: true, canCommentMedia: true,
-        canViewSponsors: true,
+        canViewEpisodes: true, canCreateEpisodes: true, canEditEpisodes: true,
+        canEditScript: true,
+        canViewMedia: true, canUploadMedia: true, canDeleteMedia: true, canCommentMedia: true,
+        canViewSponsors: true, canEditSponsors: true, canViewSponsorReports: true,
         canExport: true,
+        canManageBlocks: true,
+        canUseMediaLibraryInEditor: true,
+        canEditShowNotes: true,
+        canManageInterviewBlocks: true,
+        canViewInvoices: true,
+        canExportPricelist: true,
       };
     default:
       return base;

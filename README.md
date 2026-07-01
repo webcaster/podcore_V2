@@ -1,4 +1,4 @@
-# PodCore v2.0
+# PodCore v2.9.14
 
 PodCore ist ein eigenständiges, lokal hostbares Podcast-Management-System zur Verwaltung von Episoden, Ideen, Medien, Sponsoren und Statistiken.
 
@@ -35,7 +35,7 @@ Beim ersten Start wird automatisch ein Administrator-Account angelegt:
 ## Funktionen
 
 - **Redaktions-Hub:** Ideenpool, Redaktionsplan, Interviews und Notizen
-- **Episoden-Management:** Block-Editor für Shownotes, Kapitelmarken, Metadaten
+- **Episoden-Management:** Block-Editor mit Interview-Fragen-Block, Show-Notes, Kapitelmarken, Metadaten
 - **Sponsoren & Werbung:** Werbekategorien, Ad-Slots, Platzierungen und Kunden-Auswertungen
 - **Media Library:** Verwaltung von Audio-Dateien, Bildern und Sponsoren-Assets
 - **Podigee-Integration:** Direkter Abruf von Podcast-Statistiken (Downloads, Geo, Clients)
@@ -53,3 +53,23 @@ Um PodCore zu aktualisieren:
 1. Beende den laufenden Server
 2. Ersetze den gesamten Ordner-Inhalt mit der neuen Version (deine Daten liegen sicher in `~/.podcore`)
 3. Starte den Server über das Start-Skript neu
+
+---
+
+## Versionshistorie
+
+### v2.9.14 (2026-07-01)
+**Kritischer Fix: Berechtigungssystem, Werbung löschen & Audio-Editor**
+
+#### Behobene Fehler
+- **Berechtigungssystem (Root Cause Fix):** Die Auth-Middleware lädt jetzt automatisch Rollen-Berechtigungen aus der `roles`-Tabelle, wenn die individuellen Benutzer-Berechtigungen leer sind. Dies behebt den Fehler, dass Benutzer trotz korrekter Rolle keine Rechte hatten.
+- **Admin-Panel:** Neuer Button „Standard-Berechtigungen“ im Rollen-Tab zum Zurücksetzen aller System-Rollen.
+- **Werbung löschen:** Funktioniert nun zuverlässig im Episoden-Editor.
+- **Audio-Editor:** Button in der Media Library ist jetzt dauerhaft sichtbar und funktional.
+
+### v2.9.0 (2026-06-29)
+**Episoden-Editor: Interview-Fragen-Block, Show-Notes, Zeiterfassung, Technische Daten**
+*(Details siehe Wiki)*
+
+### v2.8.3 und früher
+Siehe vorherige Versionen.

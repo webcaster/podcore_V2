@@ -14,6 +14,7 @@ export interface CurrentUser {
   permissions: Record<string, boolean>;
   avatarColor?: string;
   theme?: UserTheme | null;
+  dashboardLayout?: string[] | null;
 }
 
 export interface UserTheme {
@@ -24,6 +25,19 @@ export interface UserTheme {
   accentColorDark?: string;
   surfaceColor?: string;
   surfaceRaisedColor?: string;
+}
+
+// Feature-Flags: welche Module sind aktiviert
+export interface FeatureFlags {
+  sponsoring: boolean;
+  editorial: boolean;
+  statistics: boolean;
+  chat: boolean;
+  podigee: boolean;
+  mediaLibrary: boolean;
+  seasons: boolean;
+  wiki: boolean;
+  branding: boolean;
 }
 
 export interface BrandingState {
@@ -82,10 +96,16 @@ interface AppContextValue {
   branding: BrandingState;
   refreshBranding: () => Promise<void>;
 
+  // Feature-Flags
+  features: FeatureFlags;
+
   // Globales Podcast-Profil
   podcastProfile: PodcastProfile;
   technicalDefaults: TechnicalDefaults;
   refreshPodcastProfile: () => Promise<void>;
+
+  // Online-Nutzer
+  onlineUsers: OnlineUser[];
 
   // Toast notifications
   toasts: Toast[];
@@ -121,6 +141,18 @@ const DEFAULT_PODCAST_PROFILE: PodcastProfile = {
   explicit: false,
 };
 
+const DEFAULT_FEATURES: FeatureFlags = {
+  sponsoring: true,
+  editorial: true,
+  statistics: true,
+  chat: true,
+  podigee: true,
+  mediaLibrary: true,
+  seasons: true,
+  wiki: true,
+  branding: true,
+};
+
 const DEFAULT_TECHNICAL_DEFAULTS: TechnicalDefaults = {
   sampleRate: '',
   bitrate: '',
@@ -137,13 +169,23 @@ const DEFAULT_TECHNICAL_DEFAULTS: TechnicalDefaults = {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+export interface OnlineUser {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarColor?: string;
+  role: string;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [branding, setBranding] = useState<BrandingState>(DEFAULT_BRANDING);
+  const [features, setFeatures] = useState<FeatureFlags>(DEFAULT_FEATURES);
   const [podcastProfile, setPodcastProfile] = useState<PodcastProfile>(DEFAULT_PODCAST_PROFILE);
   const [technicalDefaults, setTechnicalDefaults] = useState<TechnicalDefaults>(DEFAULT_TECHNICAL_DEFAULTS);
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
 
   // Load branding from server
   const refreshBranding = useCallback(async () => {
@@ -189,6 +231,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           daw: tech.daw || '',
           additionalNotes: tech.additionalNotes || '',
         });
+        // Feature-Flags laden
+        if (data.features) {
+          setFeatures({ ...DEFAULT_FEATURES, ...data.features });
+        }
         // Sync podcast name to branding if not set separately
         if (podcast.name) {
           setBranding(prev => ({
@@ -239,6 +285,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return () => clearInterval(interval);
   }, [user]);
+
+  // Heartbeat: alle 60 Sekunden eigene Session als aktiv markieren + Online-Nutzer laden
+  useEffect(() => {
+    if (!user) return;
+    // Sofort beim Login einmal senden
+    authApi.heartbeat().catch(() => {});
+    authApi.getOnlineUsers().then(users => setOnlineUsers(Array.isArray(users) ? users : [])).catch(() => {});
+
+    const interval = setInterval(async () => {
+      try {
+        await authApi.heartbeat();
+        const users = await authApi.getOnlineUsers();
+        setOnlineUsers(Array.isArray(users) ? users : []);
+      } catch {
+        // Silently ignore
+      }
+    }, 60_000);
+
+    return () => clearInterval(interval);
+  }, [user?.id]);
 
   const login = useCallback(async (username: string, password: string) => {
     const result = await authApi.login(username, password);
@@ -303,9 +369,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     can,
     branding,
     refreshBranding,
+    features,
     podcastProfile,
     technicalDefaults,
     refreshPodcastProfile,
+    onlineUsers,
     toasts,
     addToast,
     removeToast,
@@ -417,4 +485,14 @@ export function useBranding() {
 export function usePodcastProfile() {
   const { podcastProfile, technicalDefaults, refreshPodcastProfile } = useApp();
   return { podcastProfile, technicalDefaults, refreshPodcastProfile };
+}
+
+export function useFeatures() {
+  const { features } = useApp();
+  return { features };
+}
+
+export function useOnlineUsers() {
+  const { onlineUsers } = useApp();
+  return { onlineUsers };
 }

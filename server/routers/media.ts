@@ -82,10 +82,13 @@ function parseAsset(row: any) {
     tags: JSON.parse(row.tags || '[]'),
     comments: JSON.parse(row.comments || '[]'),
     usedInEpisodes: JSON.parse(row.used_in_episodes || '[]'),
+    folderId: row.folder_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     uploadedBy: row.uploaded_by,
     mimeType: row.mime_type,
+    duration: row.duration ?? null,
+    filesize: row.filesize ?? null,
   };
 }
 
@@ -183,16 +186,64 @@ router.delete('/branding/:type', requirePermission('canManageSettings') as any, 
 
 router.get('/', requirePermission('canViewMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { type, search } = req.query;
+  const { type, search, folderId } = req.query;
   let query = 'SELECT * FROM assets WHERE 1=1';
   const params: any[] = [];
 
   if (type) { query += ' AND type = ?'; params.push(type); }
   if (search) { query += ' AND (name LIKE ? OR description LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
+  if (folderId) {
+    if (folderId === 'root') {
+      query += ' AND (folder_id IS NULL OR folder_id = \'\')';
+    } else {
+      query += ' AND folder_id = ?';
+      params.push(folderId);
+    }
+  }
+
   query += ' ORDER BY created_at DESC';
 
   const assets = db.all(query, params).map(parseAsset);
   return res.json({ success: true, data: assets });
+});
+
+router.get('/folders', requirePermission('canViewMedia') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { parentId } = req.query;
+  let query = 'SELECT * FROM media_folders WHERE 1=1';
+  const params: any[] = [];
+
+  if (parentId) {
+    if (parentId === 'root') {
+      query += ' AND (parent_id IS NULL OR parent_id = \'\')';
+    } else {
+      query += ' AND parent_id = ?';
+      params.push(parentId);
+    }
+  }
+
+  query += ' ORDER BY name ASC';
+  const folders = db.all(query, params);
+  return res.json({ success: true, data: folders });
+});
+
+router.post('/folders', requirePermission('canUploadMedia') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { name, parentId } = req.body;
+  if (!name) return res.status(400).json({ success: false, error: 'Name erforderlich' });
+
+  const id = uuidv4();
+  db.run('INSERT INTO media_folders (id, name, parent_id) VALUES (?, ?, ?)', [id, name, parentId || null]);
+  const folder = db.get('SELECT * FROM media_folders WHERE id = ?', [id]);
+  return res.status(201).json({ success: true, data: folder });
+});
+
+router.delete('/folders/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  // Move assets to root or parent? For simplicity, we just delete the folder reference in assets
+  db.run('UPDATE assets SET folder_id = NULL WHERE folder_id = ?', [req.params.id]);
+  db.run('DELETE FROM media_folders WHERE id = ?', [req.params.id]);
+  return res.json({ success: true, message: 'Ordner gelöscht' });
 });
 
 router.get('/stream/:filename', (req: AuthRequest, res: Response) => {
@@ -238,6 +289,54 @@ router.get('/stream/:filename', (req: AuthRequest, res: Response) => {
   }
 });
 
+// Stream by asset ID (used by AudioEditor)
+router.get('/:id/stream', (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
+
+  let filePath = asset.filepath;
+  if (!filePath || !fs.existsSync(filePath)) {
+    const uploadDir = resolveUploadDir();
+    const candidate = path.join(uploadDir, asset.filename);
+    if (fs.existsSync(candidate)) filePath = candidate;
+    else {
+      const fallback = path.join(ASSETS_DIR, asset.filename);
+      if (fs.existsSync(fallback)) filePath = fallback;
+      else return res.status(404).json({ success: false, error: 'Datei nicht gefunden' });
+    }
+  }
+
+  const stat = fs.statSync(filePath);
+  const fileSize = stat.size;
+  const ext = path.extname(asset.filename).toLowerCase();
+  const mimeMap: Record<string, string> = {
+    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
+    '.aac': 'audio/aac', '.flac': 'audio/flac', '.m4a': 'audio/mp4',
+    '.mp4': 'video/mp4', '.webm': 'audio/webm',
+  };
+  const contentType = mimeMap[ext] || 'audio/mpeg';
+  const range = req.headers.range;
+
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const chunksize = end - start + 1;
+    const file = fs.createReadStream(filePath, { start, end });
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunksize,
+      'Content-Type': contentType,
+    });
+    file.pipe(res);
+  } else {
+    res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': contentType, 'Accept-Ranges': 'bytes' });
+    fs.createReadStream(filePath).pipe(res);
+  }
+});
+
 router.get('/:id', requirePermission('canViewMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]);
@@ -245,8 +344,32 @@ router.get('/:id', requirePermission('canViewMedia') as any, (req: AuthRequest, 
   return res.json({ success: true, data: parseAsset(asset) });
 });
 
+// Helper: extract audio duration via ffprobe
+function getAudioDuration(filePath: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const { execFile } = require('child_process');
+    console.log(`[Media] Probing duration for: ${filePath}`);
+    execFile('ffprobe', [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      filePath
+    ], { timeout: 15000 }, (err: any, stdout: string, stderr: string) => {
+      if (err) { 
+        console.error(`[Media] ffprobe error for ${filePath}:`, err.message);
+        console.error(`[Media] stderr:`, stderr);
+        resolve(null); 
+        return; 
+      }
+      const dur = parseFloat(stdout.trim());
+      console.log(`[Media] Detected duration: ${dur}s`);
+      resolve(isNaN(dur) ? null : Math.round(dur));
+    });
+  });
+}
+
 router.post('/upload', requirePermission('canUploadMedia') as any, (req: AuthRequest, res: Response) => {
-  uploadMedia.single('file')(req as any, res as any, (err: any) => {
+  uploadMedia.single('file')(req as any, res as any, async (err: any) => {
     if (err) return res.status(400).json({ success: false, error: err.message });
 
     const db = getDb();
@@ -254,11 +377,14 @@ router.post('/upload', requirePermission('canUploadMedia') as any, (req: AuthReq
     if (!file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
 
     const id = uuidv4();
-    const { name, type = 'audio', description, tags } = req.body;
+    const { name, type = 'audio', description, tags, folderId } = req.body;
     const assetName = name || path.basename(file.originalname, path.extname(file.originalname));
 
-    db.run('INSERT INTO assets (id, name, type, filename, filepath, filesize, mime_type, description, tags, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, assetName, type, file.filename, file.path, file.size, file.mimetype, description || null, tags ? JSON.stringify(JSON.parse(tags)) : '[]', req.user!.id]);
+    // Detect duration via ffprobe
+    const detectedDuration = await getAudioDuration(file.path);
+
+    db.run('INSERT INTO assets (id, name, type, filename, filepath, filesize, duration, mime_type, description, tags, uploaded_by, folder_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, assetName, type, file.filename, file.path, file.size, detectedDuration, file.mimetype, description || null, tags ? JSON.stringify(JSON.parse(tags)) : '[]', req.user!.id, folderId || null]);
 
     const asset = parseAsset(db.get('SELECT * FROM assets WHERE id = ?', [id]));
     return res.status(201).json({ success: true, data: asset });
@@ -267,10 +393,10 @@ router.post('/upload', requirePermission('canUploadMedia') as any, (req: AuthReq
 
 router.put('/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { name, type, description, tags } = req.body;
+  const { name, type, description, tags, folderId } = req.body;
 
-  db.run(`UPDATE assets SET name = COALESCE(?, name), type = COALESCE(?, type), description = ?, tags = COALESCE(?, tags), updated_at = datetime('now') WHERE id = ?`,
-    [name ?? null, type ?? null, description ?? null, tags ? JSON.stringify(tags) : null, req.params.id]);
+  db.run(`UPDATE assets SET name = COALESCE(?, name), type = COALESCE(?, type), description = ?, tags = COALESCE(?, tags), folder_id = ?, updated_at = datetime('now') WHERE id = ?`,
+    [name ?? null, type ?? null, description ?? null, tags ? JSON.stringify(tags) : null, folderId ?? null, req.params.id]);
 
   const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]);
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
@@ -302,8 +428,10 @@ router.post('/:id/comments', requirePermission('canCommentMedia') as any, (req: 
   const comments = JSON.parse(asset.comments || '[]');
   const comment = {
     id: uuidv4(),
+    content: commentText,
     text: commentText,
     userId: req.user!.id,
+    userName: req.user!.displayName || req.user!.username,
     username: req.user!.username,
     displayName: req.user!.displayName,
     createdAt: new Date().toISOString(),
@@ -322,6 +450,110 @@ router.delete('/:id/comments/:commentId', requirePermission('canCommentMedia') a
   const comments = JSON.parse(asset.comments || '[]').filter((c: any) => c.id !== req.params.commentId);
   db.run(`UPDATE assets SET comments = ?, updated_at = datetime('now') WHERE id = ?`, [JSON.stringify(comments), req.params.id]);
   return res.json({ success: true, message: 'Kommentar gelöscht' });
+});
+
+// ─── Audio Editor: Markers (Schnittmarken) ───────────────────────────────────
+
+// GET /api/media/:id/markers — Alle Marker eines Assets laden
+router.get('/:id/markers', (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
+  const markers = JSON.parse(asset.markers || '[]');
+  return res.json({ success: true, data: markers });
+});
+
+// POST /api/media/:id/markers — Marker speichern (ersetzt alle)
+router.post('/:id/markers', requirePermission('canEditMedia') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
+
+  const { markers } = req.body;
+  if (!Array.isArray(markers)) return res.status(400).json({ success: false, error: 'markers muss ein Array sein' });
+
+  // Ensure schema: { id, type (cut|comment|start|end), time, label, color, createdAt, userId }
+  const validated = markers.map((m: any) => ({
+    id: m.id || uuidv4(),
+    type: m.type || 'cut',
+    time: typeof m.time === 'number' ? m.time : parseFloat(m.time) || 0,
+    label: m.label || '',
+    color: m.color || '#7c3aed',
+    createdAt: m.createdAt || new Date().toISOString(),
+    userId: m.userId || req.user!.id,
+    userName: m.userName || req.user!.displayName || req.user!.username,
+  }));
+
+  // Ensure assets table has markers column (migration safety)
+  try {
+    db.run('ALTER TABLE assets ADD COLUMN markers TEXT NOT NULL DEFAULT \'[]\'');
+  } catch (_) { /* column already exists */ }
+
+  db.run(`UPDATE assets SET markers = ?, updated_at = datetime('now') WHERE id = ?`, [JSON.stringify(validated), req.params.id]);
+  return res.json({ success: true, data: validated });
+});
+
+// POST /api/media/:id/markers/add — Einzelnen Marker hinzufügen
+router.post('/:id/markers/add', requirePermission('canEditMedia') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
+
+  try {
+    db.run('ALTER TABLE assets ADD COLUMN markers TEXT NOT NULL DEFAULT \'[]\'');
+  } catch (_) { /* column already exists */ }
+
+  const markers = JSON.parse(asset.markers || '[]');
+  const marker = {
+    id: uuidv4(),
+    type: req.body.type || 'cut',
+    time: typeof req.body.time === 'number' ? req.body.time : parseFloat(req.body.time) || 0,
+    label: req.body.label || '',
+    color: req.body.color || '#7c3aed',
+    createdAt: new Date().toISOString(),
+    userId: req.user!.id,
+    userName: req.user!.displayName || req.user!.username,
+  };
+  markers.push(marker);
+  db.run(`UPDATE assets SET markers = ?, updated_at = datetime('now') WHERE id = ?`, [JSON.stringify(markers), req.params.id]);
+  return res.status(201).json({ success: true, data: marker });
+});
+
+// DELETE /api/media/:id/markers/:markerId — Einzelnen Marker löschen
+router.delete('/:id/markers/:markerId', requirePermission('canEditMedia') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
+
+  const markers = JSON.parse(asset.markers || '[]').filter((m: any) => m.id !== req.params.markerId);
+  db.run(`UPDATE assets SET markers = ?, updated_at = datetime('now') WHERE id = ?`, [JSON.stringify(markers), req.params.id]);
+  return res.json({ success: true, message: 'Marker gelöscht' });
+});
+
+// POST /api/media/:id/timed-comments — Zeitbezogenen Kommentar hinzufügen
+router.post('/:id/timed-comments', requirePermission('canCommentMedia') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
+
+  const { text, time } = req.body;
+  if (!text?.trim()) return res.status(400).json({ success: false, error: 'Kommentartext erforderlich' });
+
+  const comments = JSON.parse(asset.comments || '[]');
+  const comment = {
+    id: uuidv4(),
+    content: text.trim(),
+    text: text.trim(),
+    time: typeof time === 'number' ? time : (parseFloat(time) || null),
+    userId: req.user!.id,
+    userName: req.user!.displayName || req.user!.username,
+    username: req.user!.username,
+    displayName: req.user!.displayName,
+    createdAt: new Date().toISOString(),
+  };
+  comments.push(comment);
+  db.run(`UPDATE assets SET comments = ?, updated_at = datetime('now') WHERE id = ?`, [JSON.stringify(comments), req.params.id]);
+  return res.status(201).json({ success: true, data: comment });
 });
 
 export default router;

@@ -7,6 +7,7 @@ import {
   User, AlertCircle, Loader2, RefreshCw, Play, Mic, List, Globe,
 } from 'lucide-react';
 import { editorialApi } from '../lib/api';
+import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
 import { useApp } from '../contexts/AppContext';
 
 type IdeaTab = 'overview' | 'research' | 'interview' | 'notes' | 'checklist' | 'episode';
@@ -35,6 +36,9 @@ export default function IdeaDetailPage() {
   const [activeTab, setActiveTab] = useState<IdeaTab>('overview');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [pdfLayoutId, setPdfLayoutId] = useState('');
+  const [pdfFileName, setPdfFileName] = useState('');
+  const [pdfDocTitle, setPdfDocTitle] = useState('');
 
   // Overview edit form
   const [form, setForm] = useState({
@@ -402,9 +406,45 @@ export default function IdeaDetailPage() {
           </div>
         </div>
         <div className="flex gap-2 flex-shrink-0">
-          <button onClick={() => editorialApi.downloadIdeaPdf(id!)} className="btn-secondary text-sm">
-            <Download size={14} /><span>PDF exportieren</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="text"
+              value={pdfDocTitle}
+              onChange={e => setPdfDocTitle(e.target.value)}
+              placeholder="Dokumententitel (z.B. Ideenmappe)"
+              className="input text-xs w-48"
+              title="Dokumententitel im PDF (oben links unter dem Podcast-Namen)"
+            />
+            <input
+              type="text"
+              value={pdfFileName}
+              onChange={e => setPdfFileName(e.target.value)}
+              placeholder={`ideenmappe-${idea?.title?.replace(/\s+/g, '-').toLowerCase().slice(0, 20) || 'export'}.pdf`}
+              className="input text-xs w-44"
+              title="Eigener Dateiname für den PDF-Export"
+            />
+            <PdfLayoutPicker exportType="idea" value={pdfLayoutId} onChange={setPdfLayoutId} />
+            <button onClick={async () => {
+              try {
+                const params = new URLSearchParams();
+                if (pdfLayoutId) params.set('layoutId', pdfLayoutId);
+                if (pdfDocTitle) params.set('documentTitle', encodeURIComponent(pdfDocTitle));
+                const qs = params.toString() ? `?${params.toString()}` : '';
+                const res = await fetch(`/api/editorial/ideas/${id}/export-pdf${qs}`, { credentials: 'include' });
+                if (!res.ok) throw new Error('PDF-Export fehlgeschlagen');
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const defaultName = `ideenmappe-${idea?.title?.replace(/\s+/g, '-').toLowerCase().slice(0, 30) || 'export'}`;
+                a.download = pdfFileName ? `${pdfFileName.replace(/\.pdf$/i, '')}.pdf` : `${defaultName}.pdf`;
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (err: any) { showError(err.message); }
+            }} className="btn-secondary text-sm">
+              <Download size={14} /><span>PDF exportieren</span>
+            </button>
+          </div>
           {can('canEditIdeas') && (
             <>
               {isEditing ? (

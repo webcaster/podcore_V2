@@ -49,6 +49,13 @@ cp -r server/dist/public ../podcore-release/server/dist/public
 sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"${VERSION}\"/" ../podcore-release/package.json 2>/dev/null || true
 echo "    Release folder updated ✓"
 
+# 5b. Sync new dependencies to release folder
+echo "[5b] Syncing dependencies..."
+cp server/package.json ../podcore-release/server/package.json 2>/dev/null || true
+cd ../podcore-release/server && npm install --production --silent 2>&1 | tail -2
+cd - > /dev/null
+echo "    Dependencies synced ✓"
+
 # 6. Restart server
 echo "[6/6] Restarting server..."
 kill $(lsof -t -i:3001) 2>/dev/null || true

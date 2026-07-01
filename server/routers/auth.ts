@@ -6,6 +6,24 @@ import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+function resolveUserPermissions(user: any): Record<string, boolean> {
+  if (user.role === 'admin') return {};
+  try {
+    const userPerms = JSON.parse(user.permissions || '{}');
+    if (userPerms && Object.keys(userPerms).length > 0) return userPerms;
+  } catch { /* ignore */ }
+  // Fallback: Berechtigungen aus der roles-Tabelle laden
+  try {
+    const db = getDb();
+    const roleRow = db.get('SELECT permissions FROM roles WHERE name = ?', [user.role]) as any;
+    if (roleRow?.permissions) {
+      const rolePerms = JSON.parse(roleRow.permissions);
+      if (rolePerms && Object.keys(rolePerms).length > 0) return rolePerms;
+    }
+  } catch { /* ignore */ }
+  return {};
+}
+
 function formatUser(user: any) {
   return {
     id: user.id,
@@ -13,7 +31,7 @@ function formatUser(user: any) {
     displayName: user.display_name,
     email: user.email,
     role: user.role,
-    permissions: JSON.parse(user.permissions || '{}'),
+    permissions: resolveUserPermissions(user),
     avatarColor: user.avatar_color,
     theme: user.theme ? JSON.parse(user.theme) : null,
     dashboardLayout: user.dashboard_layout ? JSON.parse(user.dashboard_layout) : null,
@@ -139,6 +157,38 @@ router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
     success: true,
     data: formatUser(updated),
   });
+});
+
+// POST /api/auth/heartbeat — Aktuelle Session als "online" markieren
+router.post('/heartbeat', requireAuth as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const token = req.cookies?.podcore_session || req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ success: false });
+  try {
+    db.run('ALTER TABLE sessions ADD COLUMN last_seen TEXT');
+  } catch (_) { /* column already exists */ }
+  db.run(`UPDATE sessions SET last_seen = datetime('now') WHERE token = ?`, [token]);
+  return res.json({ success: true });
+});
+
+// GET /api/auth/online-users — Alle Nutzer mit aktiver Session in den letzten 5 Minuten
+router.get('/online-users', requireAuth as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  try {
+    db.run('ALTER TABLE sessions ADD COLUMN last_seen TEXT');
+  } catch (_) { /* column already exists */ }
+  const rows = db.all(`
+    SELECT DISTINCT u.id, u.username, u.display_name as displayName, u.avatar_color as avatarColor, u.role
+    FROM sessions s
+    JOIN users u ON s.user_id = u.id
+    WHERE u.is_active = 1
+      AND s.expires_at > datetime('now')
+      AND (
+        s.last_seen >= datetime('now', '-5 minutes')
+        OR s.created_at >= datetime('now', '-5 minutes')
+      )
+  `) as any[];
+  return res.json({ success: true, data: rows || [] });
 });
 
 // GET /api/auth/setup-status — Check if the system has been used before (hide default credentials hint)

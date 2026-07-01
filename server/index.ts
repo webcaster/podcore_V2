@@ -23,6 +23,7 @@ import storageRouter from './routers/storage';
 import seasonsRouter from './routers/seasons';
 import statsRouter from './routers/stats';
 import chatRouter from './routers/chat';
+import pdfLayoutsRouter from './routers/pdfLayouts';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -118,6 +119,7 @@ app.use('/api/storage', storageRouter);
 app.use('/api/seasons', seasonsRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/pdf-layouts', pdfLayoutsRouter);
 
 // Serve branding assets publicly (no auth needed for display)
 const brandingDir = path.join(DATA_DIR, 'branding');
@@ -128,7 +130,7 @@ app.get('/api/health', (req, res) => {
   const ips = getLocalNetworkIPs();
   res.json({
     status: 'ok',
-    version: '2.6.2',
+    version: '2.9.14',
     timestamp: new Date().toISOString(),
     dataDir: DATA_DIR,
     networkIPs: ips,
@@ -175,7 +177,7 @@ if (fs.existsSync(publicDir)) {
 } else {
   app.get('/', (req, res) => {
     res.json({
-      message: 'PodCore API Server v2.6.2',
+      message: 'PodCore API Server v2.9.14',
       note: 'Frontend build not found. Run: npm run build:client',
       api: '/api',
     });
@@ -215,7 +217,7 @@ app.listen(PORT, HOST, () => {
 
   console.log('');
   console.log('╔══════════════════════════════════════════════╗');
-  console.log('║           PodCore v2.6.2 Server              ║');
+  console.log('║           PodCore v2.9.14 Server              ║');
   console.log('╠══════════════════════════════════════════════╣');
   console.log(`║  Lokal:   http://localhost:${PORT}               ║`);
   if (ips.length > 0) {

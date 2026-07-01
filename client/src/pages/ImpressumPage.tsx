@@ -9,11 +9,14 @@ export default function ImpressumPage() {
 
       {/* Header with Logo */}
       <div className="card flex flex-col sm:flex-row items-center sm:items-start gap-6">
-        <img
-          src="/assets/logo-medien-der-sinne.png"
-          alt="Maximilian Hartwich – Medien der Sinne"
-          className="h-24 w-auto object-contain flex-shrink-0"
-        />
+        <a href="https://www.medien-der-sinne.de" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 hover:opacity-80 transition-opacity">
+          <img
+            src="https://www.medien-der-sinne.de/fileadmin/MDS_Logos/Logo_V1_medienDerSinne_OhneURL.png"
+            alt="Maximilian Hartwich – Medien der Sinne"
+            className="h-24 w-auto object-contain"
+            onError={(e) => { (e.target as HTMLImageElement).src = '/assets/logo-medien-der-sinne.png'; }}
+          />
+        </a>
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Impressum</h1>
           <p className="text-text-secondary mt-1">Angaben gemäß § 5 DDG</p>
@@ -161,11 +164,14 @@ export default function ImpressumPage() {
       {/* Footer */}
       <div className="text-center text-text-muted text-xs pb-4">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <img
-            src="/assets/logo-medien-der-sinne.png"
-            alt="Medien der Sinne"
-            className="h-6 w-auto object-contain opacity-60"
-          />
+          <a href="https://www.medien-der-sinne.de" target="_blank" rel="noopener noreferrer">
+            <img
+              src="https://www.medien-der-sinne.de/fileadmin/MDS_Logos/Logo_V1_medienDerSinne_OhneURL.png"
+              alt="Medien der Sinne"
+              className="h-6 w-auto object-contain opacity-60 hover:opacity-100 transition-opacity"
+              onError={(e) => { (e.target as HTMLImageElement).src = '/assets/logo-medien-der-sinne.png'; }}
+            />
+          </a>
         </div>
         <p>
           © {currentYear} Maximilian Hartwich – Medien der Sinne ·{' '}

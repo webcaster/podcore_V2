@@ -14,6 +14,7 @@ const MediaLibraryPage = lazy(() => import('./pages/MediaLibraryPage'));
 const SponsorsPage = lazy(() => import('./pages/SponsorsPage'));
 const SponsorDetailPage = lazy(() => import('./pages/SponsorDetailPage'));
 const SponsorReportsPage = lazy(() => import('./pages/SponsorReportsPage'));
+const SponsorRevenuePage = lazy(() => import('./pages/SponsorRevenuePage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const PodigeePage = lazy(() => import('./pages/PodigeePage'));
@@ -27,6 +28,8 @@ const IdeaDetailPage = lazy(() => import('./pages/IdeaDetailPage'));
 const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 const ChatPage = lazy(() => import('./pages/ChatPage'));
 const EpisodesDashboardPage = lazy(() => import('./pages/EpisodesDashboardPage'));
+const EpisodeSchedulePage = lazy(() => import('./pages/EpisodeSchedulePage'));
+const PdfLayoutManagerPage = lazy(() => import('./pages/PdfLayoutManagerPage'));
 
 function LoadingSpinner() {
   return (
@@ -76,6 +79,7 @@ function AppRoutes() {
       >
         <Route index element={<Suspense fallback={<LoadingSpinner />}><Dashboard /></Suspense>} />
         <Route path="episodes" element={<Suspense fallback={<LoadingSpinner />}><EpisodesPage /></Suspense>} />
+        <Route path="episodes/schedule" element={<Suspense fallback={<LoadingSpinner />}><EpisodeSchedulePage /></Suspense>} />
         <Route path="episodes/:id" element={<Suspense fallback={<LoadingSpinner />}><EpisodeDetailPage /></Suspense>} />
         <Route path="editorial" element={<Suspense fallback={<LoadingSpinner />}><EditorialHubPage /></Suspense>} />
         <Route path="editorial/ideas/:id" element={<Suspense fallback={<LoadingSpinner />}><IdeaDetailPage /></Suspense>} />
@@ -83,6 +87,7 @@ function AppRoutes() {
         <Route path="sponsors" element={<Suspense fallback={<LoadingSpinner />}><SponsorsPage /></Suspense>} />
         <Route path="sponsors/:id" element={<Suspense fallback={<LoadingSpinner />}><SponsorDetailPage /></Suspense>} />
         <Route path="sponsors/reports" element={<Suspense fallback={<LoadingSpinner />}><SponsorReportsPage /></Suspense>} />
+        <Route path="sponsors/revenue" element={<Suspense fallback={<LoadingSpinner />}><SponsorRevenuePage /></Suspense>} />
         <Route path="analytics" element={<Suspense fallback={<LoadingSpinner />}><PodigeePage /></Suspense>} />
         <Route path="branding" element={<Suspense fallback={<LoadingSpinner />}><BrandingPage /></Suspense>} />
         <Route path="admin" element={<Suspense fallback={<LoadingSpinner />}><AdminPage /></Suspense>} />
@@ -95,6 +100,7 @@ function AppRoutes() {
         <Route path="calendar" element={<Suspense fallback={<LoadingSpinner />}><CalendarPage /></Suspense>} />
         <Route path="chat" element={<Suspense fallback={<LoadingSpinner />}><ChatPage /></Suspense>} />
         <Route path="episodes-dashboard" element={<Suspense fallback={<LoadingSpinner />}><EpisodesDashboardPage /></Suspense>} />
+        <Route path="pdf-layouts" element={<Suspense fallback={<LoadingSpinner />}><PdfLayoutManagerPage /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

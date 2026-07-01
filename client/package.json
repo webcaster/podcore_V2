@@ -1,6 +1,6 @@
 {
   "name": "podcore-client",
-  "version": "2.6.2",
+  "version": "2.9.14",
   "description": "PodCore Frontend",
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.3",
     "recharts": "^2.10.3",
+    "wavesurfer.js": "^7.12.8",
     "zod": "^3.22.4"
   },
   "devDependencies": {
