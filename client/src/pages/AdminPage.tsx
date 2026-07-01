@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   Shield, Users, Plus, Edit2, Trash2, Key, Check, X, Eye, EyeOff,
   Server, Database, HardDrive, Activity, RefreshCw, Loader2, Lock, Tag, Save,
-  UserX, ArrowRight, AlertTriangle, ToggleLeft, ToggleRight, Layers, RotateCcw
+  UserX, ArrowRight, AlertTriangle, ToggleLeft, ToggleRight, Layers, RotateCcw,
+  Upload, FileText, Download, Info, CheckCircle2, XCircle
 } from 'lucide-react';
-import { adminApi } from '../lib/api';
+import { adminApi, backupApi } from '../lib/api';
 import { useApp, useFeatures } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
 
@@ -111,6 +112,66 @@ export default function AdminPage() {
   const [deleteLinkedData, setDeleteLinkedData] = useState<any>(null);
   const [transferToUserId, setTransferToUserId] = useState<string>('global');
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // ── Backup Import State ──────────────────────────────────
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importMode, setImportMode] = useState<'merge' | 'overwrite'>('merge');
+  const [importPreview, setImportPreview] = useState<any>(null);
+  const [importResult, setImportResult] = useState<any>(null);
+  const [isImportPreviewing, setIsImportPreviewing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleImportPreview = async () => {
+    if (!importFile) return;
+    setIsImportPreviewing(true);
+    setImportError(null);
+    setImportPreview(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', importFile);
+      const result = await backupApi.preview(fd);
+      setImportPreview(result);
+    } catch (err: any) {
+      setImportError(err.message || 'Vorschau fehlgeschlagen');
+    } finally {
+      setIsImportPreviewing(false);
+    }
+  };
+
+  const handleImportExecute = async () => {
+    if (!importFile) return;
+    setIsImporting(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', importFile);
+      fd.append('mode', importMode);
+      const result = await backupApi.importFull(fd);
+      setImportResult(result);
+      setShowImportConfirm(false);
+      setImportPreview(null);
+      setImportFile(null);
+      showSuccess(`Import abgeschlossen: ${result.summary?.totalImported || 0} neue Einträge importiert`);
+    } catch (err: any) {
+      setImportError(err.message || 'Import fehlgeschlagen');
+      setShowImportConfirm(false);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const TABLE_LABELS: Record<string, string> = {
+    episodes: 'Episoden', ideas: 'Ideen', editorial_plan: 'Redaktionsplan',
+    editorial_notes: 'Redaktionsnotizen', interview_partners: 'Interview-Partner',
+    interview_questions: 'Interview-Fragen', sponsors: 'Sponsoren',
+    ad_slots: 'Werbe-Slots', ad_placements: 'Werbe-Platzierungen',
+    ad_categories: 'Werbe-Kategorien', episode_ad_bookings: 'Episoden-Buchungen',
+    seasons: 'Staffeln', assets: 'Media-Assets', media_folders: 'Media-Ordner',
+    research_sources: 'Recherche-Quellen', roles: 'Rollen',
+  };
 
   // Password reset modal (Admin resets another user's password without knowing the old one)
   const [showResetModal, setShowResetModal] = useState(false);
@@ -585,6 +646,212 @@ export default function AdminPage() {
                   }} className="btn-secondary">
                     <HardDrive size={16} /><span>Backup exportieren</span>
                   </button>
+                </div>
+              </div>
+
+              {/* ── BACKUP IMPORT ── */}
+              <div className="card">
+                <h3 className="font-semibold text-text-primary mb-1 flex items-center gap-2">
+                  <Upload size={16} className="text-accent-orange" />
+                  Backup importieren
+                </h3>
+                <p className="text-text-secondary text-sm mb-4">Stellen Sie Daten aus einem PodCore-Backup wieder her. Unterstützte Formate: <code className="bg-obsidian-800 px-1 rounded text-xs">full</code>, <code className="bg-obsidian-800 px-1 rounded text-xs">episodes</code>, <code className="bg-obsidian-800 px-1 rounded text-xs">editorial</code>.</p>
+
+                {/* Schritt 1: Datei wählen */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">Backup-Datei (.json)</label>
+                    <div
+                      className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
+                        importFile ? 'border-accent-green/50 bg-accent-green/5' : 'border-surface-border hover:border-accent-purple/50'
+                      }`}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const file = e.dataTransfer.files[0];
+                        if (file && (file.name.endsWith('.json') || file.type === 'application/json')) {
+                          setImportFile(file);
+                          setImportPreview(null);
+                          setImportResult(null);
+                          setImportError(null);
+                        } else {
+                          showError('Nur JSON-Dateien sind erlaubt');
+                        }
+                      }}
+                    >
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setImportFile(file);
+                            setImportPreview(null);
+                            setImportResult(null);
+                            setImportError(null);
+                          }
+                        }}
+                      />
+                      {importFile ? (
+                        <div className="flex items-center justify-center gap-3">
+                          <FileText size={24} className="text-accent-green" />
+                          <div className="text-left">
+                            <p className="text-sm font-medium text-text-primary">{importFile.name}</p>
+                            <p className="text-xs text-text-muted">{(importFile.size / 1024).toFixed(1)} KB</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setImportFile(null); setImportPreview(null); setImportResult(null); setImportError(null); }}
+                            className="ml-2 p-1 text-text-muted hover:text-accent-red rounded transition-colors"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <Upload size={28} className="mx-auto mb-2 text-text-muted opacity-50" />
+                          <p className="text-sm text-text-muted">JSON-Datei hier ablegen oder klicken</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Import-Modus */}
+                  {importFile && (
+                    <div>
+                      <label className="block text-sm font-medium text-text-secondary mb-2">Import-Modus</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setImportMode('merge')}
+                          className={`p-3 rounded-xl border-2 text-left transition-all ${
+                            importMode === 'merge'
+                              ? 'border-accent-green/60 bg-accent-green/10'
+                              : 'border-surface-border hover:border-surface-border/80'
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
+                            <Check size={14} className="text-accent-green" /> Zusammenführen
+                          </p>
+                          <p className="text-xs text-text-muted mt-1">Neue Einträge werden hinzugefügt, vorhandene IDs werden übersprungen.</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImportMode('overwrite')}
+                          className={`p-3 rounded-xl border-2 text-left transition-all ${
+                            importMode === 'overwrite'
+                              ? 'border-accent-orange/60 bg-accent-orange/10'
+                              : 'border-surface-border hover:border-surface-border/80'
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
+                            <AlertTriangle size={14} className="text-accent-orange" /> Überschreiben
+                          </p>
+                          <p className="text-xs text-text-muted mt-1">Vorhandene Einträge mit gleicher ID werden aktualisiert.</p>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vorschau-Button */}
+                  {importFile && !importPreview && (
+                    <button
+                      onClick={handleImportPreview}
+                      disabled={isImportPreviewing}
+                      className="btn-secondary w-full flex items-center justify-center gap-2"
+                    >
+                      {isImportPreviewing ? <Loader2 size={16} className="animate-spin" /> : <Info size={16} />}
+                      {isImportPreviewing ? 'Analysiere…' : 'Backup analysieren (Vorschau)'}
+                    </button>
+                  )}
+
+                  {/* Fehler-Anzeige */}
+                  {importError && (
+                    <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                      <XCircle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-red-400">{importError}</p>
+                    </div>
+                  )}
+
+                  {/* Vorschau-Ergebnis */}
+                  {importPreview && (
+                    <div className="space-y-3">
+                      <div className="p-3 bg-obsidian-800 rounded-xl border border-surface-border">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText size={14} className="text-accent-purple" />
+                          <span className="text-sm font-semibold text-text-primary">Backup-Analyse</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                            importPreview.type === 'full' ? 'bg-accent-purple/20 text-accent-purple' :
+                            importPreview.type === 'episodes' ? 'bg-accent-blue/20 text-accent-blue' :
+                            'bg-accent-green/20 text-accent-green'
+                          }`}>{importPreview.type}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 text-xs">
+                          {importPreview.exportedAt && (
+                            <><span className="text-text-muted">Erstellt am:</span><span className="text-text-primary">{new Date(importPreview.exportedAt).toLocaleString('de-DE')}</span></>
+                          )}
+                          {importPreview.exportedBy && (
+                            <><span className="text-text-muted">Erstellt von:</span><span className="text-text-primary">{importPreview.exportedBy}</span></>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-text-muted uppercase tracking-wide">Enthaltene Daten</p>
+                        {Object.entries(importPreview.preview || {}).filter(([, v]: any) => v.total > 0).map(([table, counts]: any) => (
+                          <div key={table} className="flex items-center justify-between px-3 py-2 bg-obsidian-800 rounded-lg border border-surface-border">
+                            <span className="text-sm text-text-primary">{TABLE_LABELS[table] || table}</span>
+                            <div className="flex items-center gap-3 text-xs">
+                              <span className="text-text-muted">{counts.total} gesamt</span>
+                              <span className="text-accent-green font-medium">{counts.new} neu</span>
+                              {counts.existing > 0 && <span className="text-accent-orange font-medium">{counts.existing} vorhanden</span>}
+                            </div>
+                          </div>
+                        ))}
+                        {Object.entries(importPreview.preview || {}).filter(([, v]: any) => v.total > 0).length === 0 && (
+                          <p className="text-sm text-text-muted text-center py-3">Keine importierbaren Daten gefunden.</p>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => setShowImportConfirm(true)}
+                        className="btn-primary w-full flex items-center justify-center gap-2"
+                      >
+                        <Upload size={16} /> Import starten
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Import-Ergebnis */}
+                  {importResult && (
+                    <div className="p-4 bg-accent-green/10 border border-accent-green/30 rounded-xl space-y-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 size={18} className="text-accent-green" />
+                        <p className="text-sm font-semibold text-accent-green">Import erfolgreich abgeschlossen</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="bg-obsidian-800 rounded-lg p-2">
+                          <p className="text-lg font-bold text-accent-green">{importResult.summary?.totalImported || 0}</p>
+                          <p className="text-xs text-text-muted">Importiert</p>
+                        </div>
+                        <div className="bg-obsidian-800 rounded-lg p-2">
+                          <p className="text-lg font-bold text-accent-orange">{importResult.summary?.totalUpdated || 0}</p>
+                          <p className="text-xs text-text-muted">Überschrieben</p>
+                        </div>
+                        <div className="bg-obsidian-800 rounded-lg p-2">
+                          <p className="text-lg font-bold text-text-muted">{importResult.summary?.totalSkipped || 0}</p>
+                          <p className="text-xs text-text-muted">Übersprungen</p>
+                        </div>
+                      </div>
+                      {importResult.preImportBackup && (
+                        <p className="text-xs text-text-muted flex items-center gap-1">
+                          <Info size={11} /> Vor-Import-Backup gespeichert: <code className="text-accent-purple">{importResult.preImportBackup}</code>
+                        </p>
+                      )}
+                      <button onClick={() => setImportResult(null)} className="btn-secondary text-sm w-full">Schließen</button>
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -1365,6 +1632,56 @@ export default function AdminPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* ── IMPORT BESTÄTIGUNGS-MODAL ── */}
+      <Modal
+        isOpen={showImportConfirm}
+        onClose={() => setShowImportConfirm(false)}
+        title="Import bestätigen"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-4 bg-accent-orange/10 border border-accent-orange/30 rounded-xl">
+            <AlertTriangle size={20} className="text-accent-orange flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-text-primary mb-1">Achtung: Daten werden verändert</p>
+              <p className="text-sm text-text-secondary">
+                {importMode === 'merge'
+                  ? 'Neue Einträge werden hinzugefügt. Vorhandene Einträge mit gleicher ID bleiben unverändert.'
+                  : 'Vorhandene Einträge mit gleicher ID werden überschrieben. Diese Aktion kann nicht rückgängig gemacht werden.'}
+              </p>
+            </div>
+          </div>
+
+          {importPreview && (
+            <div className="p-3 bg-obsidian-800 rounded-xl border border-surface-border">
+              <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">Zusammenfassung</p>
+              <div className="space-y-1">
+                {Object.entries(importPreview.preview || {}).filter(([, v]: any) => v.total > 0).map(([table, counts]: any) => (
+                  <div key={table} className="flex justify-between text-xs">
+                    <span className="text-text-secondary">{TABLE_LABELS[table] || table}</span>
+                    <span className="text-accent-green font-medium">{counts.new} neu</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2 border-t border-surface-border">
+            <button type="button" onClick={() => setShowImportConfirm(false)} className="btn-secondary">Abbrechen</button>
+            <button
+              type="button"
+              onClick={handleImportExecute}
+              disabled={isImporting}
+              className={`btn-primary ${
+                importMode === 'overwrite' ? 'bg-accent-orange hover:bg-accent-orange/80' : ''
+              }`}
+            >
+              {isImporting ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+              <span>{isImporting ? 'Importiere…' : 'Jetzt importieren'}</span>
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

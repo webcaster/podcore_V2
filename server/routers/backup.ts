@@ -184,6 +184,250 @@ router.post('/import/ideas', requirePermission('canManageSettings') as any, uplo
 });
 
 // ============================================================
+// IMPORT – VORSCHAU (kein Schreiben, nur Analyse)
+// ============================================================
+
+router.post('/import/preview', requirePermission('canManageSettings') as any, uploadBackup.single('file'), (req: AuthRequest, res: Response) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
+
+  try {
+    const content = fs.readFileSync(req.file.path, 'utf-8');
+    const importData = JSON.parse(content);
+    fs.unlinkSync(req.file.path);
+
+    const validTypes = ['full', 'episodes', 'editorial'];
+    if (!validTypes.includes(importData.type)) {
+      return res.status(400).json({ success: false, error: `Unbekannter Backup-Typ: "${importData.type}"` });
+    }
+
+    const db = getDb();
+    const preview: Record<string, { total: number; new: number; existing: number }> = {};
+
+    const countTable = (table: string, items: any[]) => {
+      if (!items || !Array.isArray(items)) return;
+      let newCount = 0, existingCount = 0;
+      for (const item of items) {
+        if (!item.id) { newCount++; continue; }
+        const exists = db.get(`SELECT id FROM ${table} WHERE id = ?`, [item.id]);
+        if (exists) existingCount++; else newCount++;
+      }
+      preview[table] = { total: items.length, new: newCount, existing: existingCount };
+    };
+
+    if (importData.type === 'full') {
+      const d = importData.data || {};
+      countTable('episodes', d.episodes);
+      countTable('ideas', d.ideas);
+      countTable('editorial_plan', d.editorialPlan);
+      countTable('editorial_notes', d.editorialNotes);
+      countTable('interview_partners', d.interviewPartners);
+      countTable('interview_questions', d.interviewQuestions);
+      countTable('sponsors', d.sponsors);
+      countTable('ad_slots', d.adSlots);
+      countTable('ad_placements', d.adPlacements);
+      countTable('ad_categories', d.adCategories);
+      countTable('episode_ad_bookings', d.episodeAdBookings);
+      countTable('seasons', d.seasons);
+      countTable('assets', d.assets);
+      countTable('media_folders', d.mediaFolders);
+      countTable('research_sources', d.researchSources);
+      countTable('roles', d.roles);
+    } else if (importData.type === 'episodes') {
+      countTable('episodes', importData.data);
+    } else if (importData.type === 'editorial') {
+      const d = importData.data || {};
+      countTable('ideas', d.ideas);
+      countTable('editorial_notes', d.notes);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        type: importData.type,
+        exportedAt: importData.exportedAt,
+        exportedBy: importData.exportedBy,
+        version: importData.version,
+        preview,
+      },
+    });
+  } catch (err: any) {
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(400).json({ success: false, error: `Vorschau fehlgeschlagen: ${err.message}` });
+  }
+});
+
+// ============================================================
+// IMPORT – VOLLSTÄNDIG (Full Backup)
+// ============================================================
+
+router.post('/import/full', requirePermission('canManageSettings') as any, uploadBackup.single('file'), (req: AuthRequest, res: Response) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
+
+  // mode: 'merge' (Standard) = vorhandene IDs überspringen | 'overwrite' = vorhandene überschreiben
+  const mode = (req.body.mode as string) || 'merge';
+
+  try {
+    const content = fs.readFileSync(req.file.path, 'utf-8');
+    const importData = JSON.parse(content);
+    fs.unlinkSync(req.file.path);
+
+    const validTypes = ['full', 'episodes', 'editorial'];
+    if (!validTypes.includes(importData.type)) {
+      return res.status(400).json({ success: false, error: `Unbekannter Backup-Typ: "${importData.type}"` });
+    }
+
+    const db = getDb();
+    const stats: Record<string, { imported: number; updated: number; skipped: number }> = {};
+
+    const upsert = (table: string, items: any[], insertFn: (item: any) => void, updateFn?: (item: any) => void) => {
+      if (!items || !Array.isArray(items)) return;
+      let imported = 0, updated = 0, skipped = 0;
+      for (const item of items) {
+        if (!item.id) { try { insertFn(item); imported++; } catch (_) { skipped++; } continue; }
+        const exists = db.get(`SELECT id FROM ${table} WHERE id = ?`, [item.id]);
+        if (exists) {
+          if (mode === 'overwrite' && updateFn) { try { updateFn(item); updated++; } catch (_) { skipped++; } }
+          else skipped++;
+        } else {
+          try { insertFn(item); imported++; } catch (_) { skipped++; }
+        }
+      }
+      stats[table] = { imported, updated, skipped };
+    };
+
+    const d = importData.type === 'full' ? (importData.data || {}) : {};
+    const episodes = importData.type === 'episodes' ? (importData.data || []) : (d.episodes || []);
+    const ideas = importData.type === 'editorial' ? (importData.data?.ideas || []) : (d.ideas || []);
+    const editorialNotes = importData.type === 'editorial' ? (importData.data?.notes || []) : (d.editorialNotes || []);
+
+    // ── Episoden ──
+    upsert('episodes', episodes,
+      (ep) => db.run(`INSERT INTO episodes (id, number, title, subtitle, description, status, recording_date, publish_date, duration, hosts, guests, tags, blocks, sponsors, notes, created_at, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [ep.id || uuidv4(), ep.number||null, ep.title||'Importierte Episode', ep.subtitle||null, ep.description||null, ep.status||'entwurf', ep.recording_date||null, ep.publish_date||null, ep.duration||null, JSON.stringify(ep.hosts||[]), JSON.stringify(ep.guests||[]), JSON.stringify(ep.tags||[]), JSON.stringify(ep.blocks||[]), JSON.stringify(ep.sponsors||[]), ep.notes||null, ep.created_at||new Date().toISOString(), ep.updated_at||new Date().toISOString(), ep.created_by||req.user!.id]),
+      (ep) => db.run(`UPDATE episodes SET number=?,title=?,subtitle=?,description=?,status=?,recording_date=?,publish_date=?,duration=?,hosts=?,guests=?,tags=?,blocks=?,sponsors=?,notes=?,updated_at=? WHERE id=?`,
+        [ep.number||null, ep.title||'Importierte Episode', ep.subtitle||null, ep.description||null, ep.status||'entwurf', ep.recording_date||null, ep.publish_date||null, ep.duration||null, JSON.stringify(ep.hosts||[]), JSON.stringify(ep.guests||[]), JSON.stringify(ep.tags||[]), JSON.stringify(ep.blocks||[]), JSON.stringify(ep.sponsors||[]), ep.notes||null, new Date().toISOString(), ep.id])
+    );
+
+    // ── Ideen ──
+    upsert('ideas', ideas,
+      (i) => db.run(`INSERT INTO ideas (id, title, description, status, priority, tags, assigned_to, episode_id, created_at, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [i.id||uuidv4(), i.title||'Importierte Idee', i.description||null, i.status||'neu', i.priority||'mittel', JSON.stringify(i.tags||[]), i.assigned_to||null, i.episode_id||null, i.created_at||new Date().toISOString(), i.updated_at||new Date().toISOString(), i.created_by||req.user!.id]),
+      (i) => db.run(`UPDATE ideas SET title=?,description=?,status=?,priority=?,tags=?,updated_at=? WHERE id=?`,
+        [i.title, i.description||null, i.status||'neu', i.priority||'mittel', JSON.stringify(i.tags||[]), new Date().toISOString(), i.id])
+    );
+
+    // ── Redaktionsnotizen ──
+    upsert('editorial_notes', editorialNotes,
+      (n) => db.run(`INSERT INTO editorial_notes (id, title, content, category, tags, is_pinned, episode_id, created_at, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [n.id||uuidv4(), n.title, n.content||'', n.category||null, JSON.stringify(n.tags||[]), n.is_pinned||0, n.episode_id||null, n.created_at||new Date().toISOString(), n.updated_at||new Date().toISOString(), n.created_by||req.user!.id])
+    );
+
+    if (importData.type === 'full') {
+      // ── Redaktionsplan ──
+      upsert('editorial_plan', d.editorialPlan || [],
+        (p) => db.run(`INSERT OR IGNORE INTO editorial_plan (id, episode_id, planned_date, status, notes, created_at, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?)`,
+          [p.id||uuidv4(), p.episode_id||null, p.planned_date||null, p.status||'geplant', p.notes||null, p.created_at||new Date().toISOString(), p.updated_at||new Date().toISOString(), p.created_by||req.user!.id])
+      );
+
+      // ── Interview-Partner ──
+      upsert('interview_partners', d.interviewPartners || [],
+        (p) => db.run(`INSERT INTO interview_partners (id, name, role, bio, contact, tags, episodes, notes, created_at, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          [p.id||uuidv4(), p.name, p.role||null, p.bio||null, p.contact||null, JSON.stringify(p.tags||[]), JSON.stringify(p.episodes||[]), p.notes||null, p.created_at||new Date().toISOString(), p.updated_at||new Date().toISOString(), p.created_by||req.user!.id])
+      );
+
+      // ── Interview-Fragen ──
+      upsert('interview_questions', d.interviewQuestions || [],
+        (q) => db.run(`INSERT INTO interview_questions (id, partner_id, question, answer, category, order_index, status, notes, created_at, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          [q.id||uuidv4(), q.partner_id||null, q.question, q.answer||null, q.category||null, q.order_index||0, q.status||'offen', q.notes||null, q.created_at||new Date().toISOString(), q.updated_at||new Date().toISOString(), q.created_by||req.user!.id])
+      );
+
+      // ── Sponsoren ──
+      upsert('sponsors', d.sponsors || [],
+        (s) => db.run(`INSERT INTO sponsors (id, name, company, email, phone, website, description, logo_url, status, tags, notes, created_at, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [s.id||uuidv4(), s.name, s.company||null, s.email||null, s.phone||null, s.website||null, s.description||null, s.logo_url||null, s.status||'aktiv', JSON.stringify(s.tags||[]), s.notes||null, s.created_at||new Date().toISOString(), s.updated_at||new Date().toISOString(), s.created_by||req.user!.id])
+      );
+
+      // ── Werbe-Kategorien ──
+      upsert('ad_categories', d.adCategories || [],
+        (c) => db.run(`INSERT OR IGNORE INTO ad_categories (id, name, description, color, price_per_slot, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`,
+          [c.id||uuidv4(), c.name, c.description||null, c.color||'#f97316', c.price_per_slot||0, c.created_at||new Date().toISOString(), c.updated_at||new Date().toISOString()])
+      );
+
+      // ── Werbe-Slots ──
+      upsert('ad_slots', d.adSlots || [],
+        (s) => db.run(`INSERT OR IGNORE INTO ad_slots (id, name, description, position, duration, price, sponsor_id, booked_episodes, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          [s.id||uuidv4(), s.name, s.description||null, s.position||'mid-roll', s.duration||30, s.price||0, s.sponsor_id||null, JSON.stringify(s.booked_episodes||[]), s.notes||null, s.created_at||new Date().toISOString(), s.updated_at||new Date().toISOString()])
+      );
+
+      // ── Episoden-Werbebuchungen ──
+      upsert('episode_ad_bookings', d.episodeAdBookings || [],
+        (b) => db.run(`INSERT OR IGNORE INTO episode_ad_bookings (id, episode_id, sponsor_id, ad_slot_id, ad_category_id, position, script_text, presentation_text, duration, confirmed, time_position, note, created_at, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [b.id||uuidv4(), b.episode_id||null, b.sponsor_id||null, b.ad_slot_id||null, b.ad_category_id||null, b.position||'mid-roll', b.script_text||null, b.presentation_text||null, b.duration||null, b.confirmed||0, b.time_position||null, b.note||null, b.created_at||new Date().toISOString(), b.updated_at||new Date().toISOString(), b.created_by||req.user!.id])
+      );
+
+      // ── Staffeln ──
+      upsert('seasons', d.seasons || [],
+        (s) => db.run(`INSERT OR IGNORE INTO seasons (id, number, title, description, cover_url, status, start_date, end_date, created_at, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          [s.id||uuidv4(), s.number||1, s.title, s.description||null, s.cover_url||null, s.status||'aktiv', s.start_date||null, s.end_date||null, s.created_at||new Date().toISOString(), s.updated_at||new Date().toISOString(), s.created_by||req.user!.id])
+      );
+
+      // ── Media-Ordner ──
+      upsert('media_folders', d.mediaFolders || [],
+        (f) => db.run(`INSERT OR IGNORE INTO media_folders (id, name, parent_id, created_at, created_by) VALUES (?,?,?,?,?)`,
+          [f.id||uuidv4(), f.name, f.parent_id||null, f.created_at||new Date().toISOString(), f.created_by||req.user!.id])
+      );
+
+      // ── Assets (Metadaten, ohne Dateien) ──
+      upsert('assets', d.assets || [],
+        (a) => db.run(`INSERT OR IGNORE INTO assets (id, name, filename, type, size, duration, folder_id, tags, description, notes, created_at, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [a.id||uuidv4(), a.name, a.filename||'', a.type||'audio', a.size||0, a.duration||null, a.folder_id||null, JSON.stringify(a.tags||[]), a.description||null, a.notes||null, a.created_at||new Date().toISOString(), a.updated_at||new Date().toISOString(), a.created_by||req.user!.id])
+      );
+
+      // ── Recherche-Quellen ──
+      upsert('research_sources', d.researchSources || [],
+        (r) => db.run(`INSERT OR IGNORE INTO research_sources (id, title, url, type, description, content, tags, related_idea_id, related_episode_id, status, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [r.id||uuidv4(), r.title, r.url||null, r.type||'link', r.description||null, r.content||null, JSON.stringify(r.tags||[]), r.related_idea_id||null, r.related_episode_id||null, r.status||'unread', r.created_by||req.user!.id, r.created_at||new Date().toISOString(), r.updated_at||new Date().toISOString()])
+      );
+    }
+
+    // Backup der aktuellen Datenbank vor dem Import anlegen
+    const backupPath = path.join(BACKUPS_DIR, `pre-import-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`);
+    try {
+      const currentData = {
+        version: '2.0.0', type: 'full',
+        exportedAt: new Date().toISOString(),
+        exportedBy: 'system (pre-import-backup)',
+        data: {
+          episodes: db.all('SELECT * FROM episodes', []),
+          ideas: db.all('SELECT * FROM ideas', []),
+          editorialPlan: db.all('SELECT * FROM editorial_plan', []),
+          editorialNotes: db.all('SELECT * FROM editorial_notes', []),
+          sponsors: db.all('SELECT * FROM sponsors', []),
+        },
+      };
+      fs.writeFileSync(backupPath, JSON.stringify(currentData, null, 2));
+    } catch (_) { /* Pre-Import-Backup optional */ }
+
+    const totalImported = Object.values(stats).reduce((s, v) => s + v.imported, 0);
+    const totalUpdated = Object.values(stats).reduce((s, v) => s + v.updated, 0);
+    const totalSkipped = Object.values(stats).reduce((s, v) => s + v.skipped, 0);
+
+    return res.json({
+      success: true,
+      data: {
+        mode,
+        stats,
+        summary: { totalImported, totalUpdated, totalSkipped },
+        preImportBackup: path.basename(backupPath),
+      },
+    });
+  } catch (err: any) {
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(400).json({ success: false, error: `Import fehlgeschlagen: ${err.message}` });
+  }
+});
+
+// ============================================================
 // BACKUP LIST
 // ============================================================
 

@@ -334,6 +334,10 @@ export const backupApi = {
   export: (type: 'episodes' | 'ideas' | 'full') => requestRaw('GET', `/backup/export/${type}`),
   import: (type: 'episodes' | 'ideas', formData: FormData) =>
     api.upload<any>(`/backup/import/${type}`, formData),
+  importFull: (formData: FormData) =>
+    api.upload<any>('/backup/import/full', formData),
+  preview: (formData: FormData) =>
+    api.upload<any>('/backup/import/preview', formData),
   list: () => api.get<any[]>('/backup/list'),
   delete: (filename: string) => api.delete(`/backup/${encodeURIComponent(filename)}`),
 };
