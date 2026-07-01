@@ -89,6 +89,25 @@ function parseAsset(row: any) {
     mimeType: row.mime_type,
     duration: row.duration ?? null,
     filesize: row.filesize ?? null,
+    // Extended metadata (v2.9.16)
+    artist: row.artist ?? null,
+    album: row.album ?? null,
+    year: row.year ?? null,
+    genre: row.genre ?? null,
+    bpm: row.bpm ?? null,
+    bitrate: row.bitrate ?? null,
+    sampleRate: row.sample_rate ?? null,
+    channels: row.channels ?? null,
+    language: row.language ?? null,
+    copyright: row.copyright ?? null,
+    license: row.license ?? null,
+    mood: row.mood ?? null,
+    energy: row.energy ?? null,
+    notes: row.notes ?? null,
+    sourceUrl: row.source_url ?? null,
+    recordingDate: row.recording_date ?? null,
+    location: row.location ?? null,
+    customMetadata: row.custom_metadata ? JSON.parse(row.custom_metadata) : [],
   };
 }
 
@@ -393,10 +412,53 @@ router.post('/upload', requirePermission('canUploadMedia') as any, (req: AuthReq
 
 router.put('/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { name, type, description, tags, folderId } = req.body;
+  const {
+    name, type, description, tags, folderId,
+    // Extended metadata
+    artist, album, year, genre, bpm, bitrate, sampleRate, channels,
+    language, copyright, license, mood, energy, notes,
+    sourceUrl, recordingDate, location, customMetadata,
+  } = req.body;
 
-  db.run(`UPDATE assets SET name = COALESCE(?, name), type = COALESCE(?, type), description = ?, tags = COALESCE(?, tags), folder_id = ?, updated_at = datetime('now') WHERE id = ?`,
-    [name ?? null, type ?? null, description ?? null, tags ? JSON.stringify(tags) : null, folderId ?? null, req.params.id]);
+  db.run(
+    `UPDATE assets SET
+      name = COALESCE(?, name),
+      type = COALESCE(?, type),
+      description = ?,
+      tags = COALESCE(?, tags),
+      folder_id = ?,
+      artist = ?,
+      album = ?,
+      year = ?,
+      genre = ?,
+      bpm = ?,
+      bitrate = ?,
+      sample_rate = ?,
+      channels = ?,
+      language = ?,
+      copyright = ?,
+      license = ?,
+      mood = ?,
+      energy = ?,
+      notes = ?,
+      source_url = ?,
+      recording_date = ?,
+      location = ?,
+      custom_metadata = ?,
+      updated_at = datetime('now')
+    WHERE id = ?`,
+    [
+      name ?? null, type ?? null, description ?? null,
+      tags ? JSON.stringify(tags) : null, folderId ?? null,
+      artist ?? null, album ?? null, year ?? null, genre ?? null,
+      bpm ?? null, bitrate ?? null, sampleRate ?? null, channels ?? null,
+      language ?? null, copyright ?? null, license ?? null,
+      mood ?? null, energy ?? null, notes ?? null,
+      sourceUrl ?? null, recordingDate ?? null, location ?? null,
+      customMetadata ? JSON.stringify(customMetadata) : null,
+      req.params.id,
+    ]
+  );
 
   const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]);
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });

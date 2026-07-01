@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "==================================================="
-echo "PodCore v2.9.14 - Podcast Management System"
+echo "PodCore v2.9.16 - Podcast Management System"
 echo "==================================================="
 echo ""
 
@@ -16,6 +16,15 @@ fi
 if [ ! -d "server/node_modules" ]; then
     echo "[INFO] Installiere Server-Abhängigkeiten..."
     cd server && npm install --production && cd ..
+fi
+
+# Build server if dist/index.js doesn't exist
+if [ ! -f "server/dist/index.js" ]; then
+    echo "[INFO] Kompiliere Server (TypeScript → JavaScript)..."
+    cd server && npx tsc && cd ..
+    rm -rf server/dist/public
+    cp -r server/public server/dist/public
+    echo "[INFO] Server kompiliert ✓"
 fi
 
 echo ""

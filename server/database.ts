@@ -551,6 +551,26 @@ function initializeSchema(db: any): void {
     } catch (_) {}
   });
 
+  // Media assets: extended metadata fields (v2.9.16)
+  try { db.exec('ALTER TABLE assets ADD COLUMN artist TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN album TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN year INTEGER DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN genre TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN bpm INTEGER DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN bitrate INTEGER DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN sample_rate INTEGER DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN channels INTEGER DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN language TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN copyright TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN license TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN mood TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN energy TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN notes TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN source_url TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN recording_date TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN location TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN custom_metadata TEXT DEFAULT NULL'); } catch (_) {}
+
   // Chat messages table migration for existing DBs
   try { db.exec('CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, recipient_id TEXT, channel TEXT, message TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime("now")), FOREIGN KEY (sender_id) REFERENCES users(id), FOREIGN KEY (recipient_id) REFERENCES users(id))'); } catch (_) {}
 

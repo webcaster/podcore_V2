@@ -62,7 +62,15 @@ export default function MediaLibraryPage() {
   const [editorAssets, setEditorAssets] = useState<any[]>([]);
   const [isLoadingEditorAssets, setIsLoadingEditorAssets] = useState(false);
 
-  const [editForm, setEditForm] = useState({ name: '', type: 'other', description: '', tags: [] as string[], tagInput: '', folderId: '' });
+  const [editForm, setEditForm] = useState({
+    name: '', type: 'other', description: '', tags: [] as string[], tagInput: '', folderId: '',
+    // Metadaten
+    artist: '', album: '', year: '', genre: '', bpm: '', bitrate: '', sampleRate: '',
+    channels: '', language: '', copyright: '', license: '', mood: '', energy: '',
+    notes: '', sourceUrl: '', recordingDate: '', location: '',
+    customMetadata: [] as { key: string; value: string }[],
+    customMetaKey: '', customMetaValue: '',
+  });
   const [commentText, setCommentText] = useState('');
   const [isAddingComment, setIsAddingComment] = useState(false);
 
@@ -259,7 +267,26 @@ export default function MediaLibraryPage() {
         type: editForm.type,
         description: editForm.description,
         tags: editForm.tags,
-        folderId: editForm.folderId
+        folderId: editForm.folderId,
+        // Metadaten
+        artist: editForm.artist || null,
+        album: editForm.album || null,
+        year: editForm.year ? parseInt(editForm.year) : null,
+        genre: editForm.genre || null,
+        bpm: editForm.bpm ? parseInt(editForm.bpm) : null,
+        bitrate: editForm.bitrate ? parseInt(editForm.bitrate) : null,
+        sampleRate: editForm.sampleRate ? parseInt(editForm.sampleRate) : null,
+        channels: editForm.channels ? parseInt(editForm.channels) : null,
+        language: editForm.language || null,
+        copyright: editForm.copyright || null,
+        license: editForm.license || null,
+        mood: editForm.mood || null,
+        energy: editForm.energy || null,
+        notes: editForm.notes || null,
+        sourceUrl: editForm.sourceUrl || null,
+        recordingDate: editForm.recordingDate || null,
+        location: editForm.location || null,
+        customMetadata: editForm.customMetadata.length > 0 ? editForm.customMetadata : null,
       });
       showSuccess('Asset aktualisiert');
       setShowEditModal(false);
@@ -485,7 +512,21 @@ export default function MediaLibraryPage() {
                             <Download size={14} />
                           </a>
                           {can('canUploadMedia') && (
-                            <button onClick={e => { e.stopPropagation(); setSelectedAsset(asset); setEditForm({ name: asset.name, type: asset.type, description: asset.description || '', tags: asset.tags || [], tagInput: '', folderId: asset.folderId || '' }); setShowEditModal(true); }} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
+                            <button onClick={e => { e.stopPropagation(); setSelectedAsset(asset); setEditForm({
+                              name: asset.name, type: asset.type, description: asset.description || '',
+                              tags: asset.tags || [], tagInput: '', folderId: asset.folderId || '',
+                              artist: asset.artist || '', album: asset.album || '',
+                              year: asset.year ? String(asset.year) : '', genre: asset.genre || '',
+                              bpm: asset.bpm ? String(asset.bpm) : '', bitrate: asset.bitrate ? String(asset.bitrate) : '',
+                              sampleRate: asset.sampleRate ? String(asset.sampleRate) : '',
+                              channels: asset.channels ? String(asset.channels) : '',
+                              language: asset.language || '', copyright: asset.copyright || '',
+                              license: asset.license || '', mood: asset.mood || '', energy: asset.energy || '',
+                              notes: asset.notes || '', sourceUrl: asset.sourceUrl || '',
+                              recordingDate: asset.recordingDate || '', location: asset.location || '',
+                              customMetadata: asset.customMetadata || [],
+                              customMetaKey: '', customMetaValue: '',
+                            }); setShowEditModal(true); }} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
                               <Edit2 size={14} />
                             </button>
                           )}
@@ -539,6 +580,49 @@ export default function MediaLibraryPage() {
                       {selectedAsset.tags.map((tag: string) => (
                         <span key={tag} className="badge bg-surface-overlay text-text-muted text-xs">{tag}</span>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Metadaten-Anzeige im Detail-Panel */}
+                  {(selectedAsset.artist || selectedAsset.album || selectedAsset.genre || selectedAsset.year ||
+                    selectedAsset.bpm || selectedAsset.language || selectedAsset.copyright ||
+                    selectedAsset.license || selectedAsset.mood || selectedAsset.energy ||
+                    selectedAsset.recordingDate || selectedAsset.location || selectedAsset.notes ||
+                    selectedAsset.sourceUrl || (selectedAsset.customMetadata?.length > 0)) && (
+                    <div className="border-t border-surface-border pt-3">
+                      <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">Metadaten</p>
+                      <div className="space-y-1.5 text-xs">
+                        {selectedAsset.artist && <div className="flex justify-between"><span className="text-text-muted">Künstler</span><span className="text-text-primary truncate ml-2">{selectedAsset.artist}</span></div>}
+                        {selectedAsset.album && <div className="flex justify-between"><span className="text-text-muted">Album</span><span className="text-text-primary truncate ml-2">{selectedAsset.album}</span></div>}
+                        {selectedAsset.genre && <div className="flex justify-between"><span className="text-text-muted">Genre</span><span className="text-text-primary">{selectedAsset.genre}</span></div>}
+                        {selectedAsset.year && <div className="flex justify-between"><span className="text-text-muted">Jahr</span><span className="text-text-primary">{selectedAsset.year}</span></div>}
+                        {selectedAsset.bpm && <div className="flex justify-between"><span className="text-text-muted">BPM</span><span className="text-text-primary">{selectedAsset.bpm}</span></div>}
+                        {selectedAsset.language && <div className="flex justify-between"><span className="text-text-muted">Sprache</span><span className="text-text-primary">{selectedAsset.language}</span></div>}
+                        {selectedAsset.mood && <div className="flex justify-between"><span className="text-text-muted">Stimmung</span><span className="text-text-primary capitalize">{selectedAsset.mood}</span></div>}
+                        {selectedAsset.energy && <div className="flex justify-between"><span className="text-text-muted">Energie</span><span className="text-text-primary capitalize">{selectedAsset.energy}</span></div>}
+                        {selectedAsset.license && <div className="flex justify-between"><span className="text-text-muted">Lizenz</span><span className="text-text-primary">{selectedAsset.license}</span></div>}
+                        {selectedAsset.copyright && <div className="flex justify-between"><span className="text-text-muted">Copyright</span><span className="text-text-primary truncate ml-2">{selectedAsset.copyright}</span></div>}
+                        {selectedAsset.recordingDate && <div className="flex justify-between"><span className="text-text-muted">Aufnahme</span><span className="text-text-primary">{new Date(selectedAsset.recordingDate).toLocaleDateString('de-DE')}</span></div>}
+                        {selectedAsset.location && <div className="flex justify-between"><span className="text-text-muted">Ort</span><span className="text-text-primary truncate ml-2">{selectedAsset.location}</span></div>}
+                        {selectedAsset.bitrate && <div className="flex justify-between"><span className="text-text-muted">Bitrate</span><span className="text-text-primary">{selectedAsset.bitrate} kbps</span></div>}
+                        {selectedAsset.sampleRate && <div className="flex justify-between"><span className="text-text-muted">Sample Rate</span><span className="text-text-primary">{selectedAsset.sampleRate} Hz</span></div>}
+                        {selectedAsset.channels && <div className="flex justify-between"><span className="text-text-muted">Kanäle</span><span className="text-text-primary">{selectedAsset.channels === 1 ? 'Mono' : selectedAsset.channels === 2 ? 'Stereo' : `${selectedAsset.channels} ch`}</span></div>}
+                        {selectedAsset.notes && (
+                          <div className="pt-1">
+                            <p className="text-text-muted mb-1">Notizen</p>
+                            <p className="text-text-secondary bg-obsidian-800 p-2 rounded text-xs">{selectedAsset.notes}</p>
+                          </div>
+                        )}
+                        {selectedAsset.sourceUrl && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-text-muted">Quelle</span>
+                            <a href={selectedAsset.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-accent-blue hover:underline truncate ml-2 max-w-[120px]">Link</a>
+                          </div>
+                        )}
+                        {selectedAsset.customMetadata?.map((m: any, i: number) => (
+                          <div key={i} className="flex justify-between"><span className="text-text-muted">{m.key}</span><span className="text-text-primary truncate ml-2">{m.value}</span></div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -806,29 +890,253 @@ export default function MediaLibraryPage() {
       </Modal>
 
       {/* Edit Modal */}
-      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Asset bearbeiten">
-        <form onSubmit={handleEditSave} className="space-y-4">
-          <div>
-            <label className="label">Name</label>
-            <input type="text" value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} className="input" />
-          </div>
-          <div>
-            <label className="label">Typ</label>
-            <select value={editForm.type} onChange={e => setEditForm(p => ({ ...p, type: e.target.value }))} className="select">
-              {ASSET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">Beschreibung</label>
-            <textarea value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} className="textarea" rows={2} />
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={() => setShowEditModal(false)} className="btn-secondary">Abbrechen</button>
-            <button type="submit" className="btn-primary">Speichern</button>
-          </div>
-        </form>
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Asset bearbeiten" size="lg">
+        <AssetEditForm
+          editForm={editForm}
+          setEditForm={setEditForm}
+          onSubmit={handleEditSave}
+          onClose={() => setShowEditModal(false)}
+        />
       </Modal>
     </div>
+  );
+}
+
+// ── AssetEditForm-Komponente (mit eigenem Tab-State) ──────────────────────────
+function AssetEditForm({ editForm, setEditForm, onSubmit, onClose }: {
+  editForm: any;
+  setEditForm: (fn: (p: any) => any) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onClose: () => void;
+}) {
+  const [metaTab, setMetaTab] = useState<'basis' | 'audio' | 'rechte' | 'custom'>('basis');
+  return (
+    <form onSubmit={onSubmit} className="space-y-0">
+      <div className="flex gap-1 mb-4 bg-obsidian-800 p-1 rounded-lg">
+        {(['basis', 'audio', 'rechte', 'custom'] as const).map(t => (
+          <button key={t} type="button" onClick={() => setMetaTab(t)}
+            className={`flex-1 py-1.5 px-2 rounded text-xs font-medium transition-all ${
+              metaTab === t ? 'bg-accent-blue text-white' : 'text-text-secondary hover:text-text-primary'
+            }`}>
+            {t === 'basis' ? 'Basis' : t === 'audio' ? 'Audio-Info' : t === 'rechte' ? 'Rechte & Lizenz' : 'Eigene Felder'}
+          </button>
+        ))}
+      </div>
+
+                {/* Basis-Tab */}
+                {metaTab === 'basis' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="label">Name</label>
+                      <input type="text" value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} className="input" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Typ</label>
+                        <select value={editForm.type} onChange={e => setEditForm(p => ({ ...p, type: e.target.value }))} className="select">
+                          {ASSET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Sprache</label>
+                        <input type="text" value={editForm.language} onChange={e => setEditForm(p => ({ ...p, language: e.target.value }))} className="input" placeholder="z.B. de, en" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="label">Beschreibung</label>
+                      <textarea value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} className="textarea" rows={2} />
+                    </div>
+                    <div>
+                      <label className="label">Notizen (intern)</label>
+                      <textarea value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} className="textarea" rows={2} placeholder="Interne Produktionsnotizen..." />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Aufnahmedatum</label>
+                        <input type="date" value={editForm.recordingDate} onChange={e => setEditForm(p => ({ ...p, recordingDate: e.target.value }))} className="input" />
+                      </div>
+                      <div>
+                        <label className="label">Aufnahmeort</label>
+                        <input type="text" value={editForm.location} onChange={e => setEditForm(p => ({ ...p, location: e.target.value }))} className="input" placeholder="Studio, Ort..." />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="label">Quelle / URL</label>
+                      <input type="url" value={editForm.sourceUrl} onChange={e => setEditForm(p => ({ ...p, sourceUrl: e.target.value }))} className="input" placeholder="https://..." />
+                    </div>
+                    {/* Tags */}
+                    <div>
+                      <label className="label">Tags</label>
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {editForm.tags.map((tag, i) => (
+                          <span key={i} className="badge bg-surface-overlay text-text-muted text-xs flex items-center gap-1">
+                            {tag}
+                            <button type="button" onClick={() => setEditForm(p => ({ ...p, tags: p.tags.filter((_, j) => j !== i) }))} className="hover:text-accent-red"><X size={10} /></button>
+                          </span>
+                        ))}
+                      </div>
+                      <input
+                        type="text"
+                        value={editForm.tagInput}
+                        onChange={e => setEditForm(p => ({ ...p, tagInput: e.target.value }))}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const t = editForm.tagInput.trim();
+                            if (t && !editForm.tags.includes(t)) setEditForm(p => ({ ...p, tags: [...p.tags, t], tagInput: '' }));
+                          }
+                        }}
+                        className="input text-sm"
+                        placeholder="Tag eingeben und Enter drücken..."
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Audio-Info-Tab */}
+                {metaTab === 'audio' && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Künstler / Sprecher</label>
+                        <input type="text" value={editForm.artist} onChange={e => setEditForm(p => ({ ...p, artist: e.target.value }))} className="input" placeholder="Name..." />
+                      </div>
+                      <div>
+                        <label className="label">Album / Projekt</label>
+                        <input type="text" value={editForm.album} onChange={e => setEditForm(p => ({ ...p, album: e.target.value }))} className="input" placeholder="Album..." />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Genre</label>
+                        <input type="text" value={editForm.genre} onChange={e => setEditForm(p => ({ ...p, genre: e.target.value }))} className="input" placeholder="z.B. Podcast, Jingle" />
+                      </div>
+                      <div>
+                        <label className="label">Jahr</label>
+                        <input type="number" value={editForm.year} onChange={e => setEditForm(p => ({ ...p, year: e.target.value }))} className="input" placeholder="2024" min="1900" max="2099" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="label">BPM</label>
+                        <input type="number" value={editForm.bpm} onChange={e => setEditForm(p => ({ ...p, bpm: e.target.value }))} className="input" placeholder="120" min="1" max="999" />
+                      </div>
+                      <div>
+                        <label className="label">Bitrate (kbps)</label>
+                        <input type="number" value={editForm.bitrate} onChange={e => setEditForm(p => ({ ...p, bitrate: e.target.value }))} className="input" placeholder="320" />
+                      </div>
+                      <div>
+                        <label className="label">Sample Rate (Hz)</label>
+                        <input type="number" value={editForm.sampleRate} onChange={e => setEditForm(p => ({ ...p, sampleRate: e.target.value }))} className="input" placeholder="44100" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Kanäle</label>
+                        <select value={editForm.channels} onChange={e => setEditForm(p => ({ ...p, channels: e.target.value }))} className="select">
+                          <option value="">—</option>
+                          <option value="1">1 (Mono)</option>
+                          <option value="2">2 (Stereo)</option>
+                          <option value="6">6 (5.1 Surround)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Stimmung / Mood</label>
+                        <select value={editForm.mood} onChange={e => setEditForm(p => ({ ...p, mood: e.target.value }))} className="select">
+                          <option value="">—</option>
+                          <option value="energetic">Energetisch</option>
+                          <option value="calm">Ruhig</option>
+                          <option value="dramatic">Dramatisch</option>
+                          <option value="uplifting">Aufbauend</option>
+                          <option value="dark">Dunkel</option>
+                          <option value="neutral">Neutral</option>
+                          <option value="funny">Humorvoll</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="label">Energie-Level</label>
+                      <select value={editForm.energy} onChange={e => setEditForm(p => ({ ...p, energy: e.target.value }))} className="select">
+                        <option value="">—</option>
+                        <option value="low">Niedrig</option>
+                        <option value="medium">Mittel</option>
+                        <option value="high">Hoch</option>
+                        <option value="very-high">Sehr hoch</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rechte & Lizenz-Tab */}
+                {metaTab === 'rechte' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="label">Copyright</label>
+                      <input type="text" value={editForm.copyright} onChange={e => setEditForm(p => ({ ...p, copyright: e.target.value }))} className="input" placeholder="© 2024 Mein Podcast" />
+                    </div>
+                    <div>
+                      <label className="label">Lizenz</label>
+                      <select value={editForm.license} onChange={e => setEditForm(p => ({ ...p, license: e.target.value }))} className="select">
+                        <option value="">—</option>
+                        <option value="all-rights-reserved">Alle Rechte vorbehalten</option>
+                        <option value="cc-by">CC BY 4.0</option>
+                        <option value="cc-by-sa">CC BY-SA 4.0</option>
+                        <option value="cc-by-nc">CC BY-NC 4.0</option>
+                        <option value="cc-by-nc-sa">CC BY-NC-SA 4.0</option>
+                        <option value="cc0">CC0 (Public Domain)</option>
+                        <option value="royalty-free">Royalty Free</option>
+                        <option value="licensed">Lizenziert</option>
+                        <option value="custom">Eigene Lizenz</option>
+                      </select>
+                    </div>
+                    <div className="p-3 bg-obsidian-800 rounded-lg border border-surface-border">
+                      <p className="text-xs text-text-muted">
+                        Die Lizenz-Information wird im Asset gespeichert und kann bei der Produktion und im Export berücksichtigt werden.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Eigene Felder-Tab */}
+                {metaTab === 'custom' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-text-muted">Füge beliebige eigene Schlüssel-Wert-Paare hinzu.</p>
+                    {editForm.customMetadata.map((item, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={item.key}
+                          onChange={e => setEditForm(p => ({ ...p, customMetadata: p.customMetadata.map((m, j) => j === i ? { ...m, key: e.target.value } : m) }))}
+                          className="input text-sm flex-1"
+                          placeholder="Schlüssel"
+                        />
+                        <input
+                          type="text"
+                          value={item.value}
+                          onChange={e => setEditForm(p => ({ ...p, customMetadata: p.customMetadata.map((m, j) => j === i ? { ...m, value: e.target.value } : m) }))}
+                          className="input text-sm flex-1"
+                          placeholder="Wert"
+                        />
+                        <button type="button" onClick={() => setEditForm(p => ({ ...p, customMetadata: p.customMetadata.filter((_, j) => j !== i) }))} className="p-2 text-text-muted hover:text-accent-red">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setEditForm(p => ({ ...p, customMetadata: [...p.customMetadata, { key: '', value: '' }] }))}
+                      className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"
+                    >
+                      <Plus size={14} /> Feld hinzufügen
+                    </button>
+                  </div>
+                )}
+
+      <div className="flex justify-end gap-3 pt-4 mt-4 border-t border-surface-border">
+        <button type="button" onClick={onClose} className="btn-secondary">Abbrechen</button>
+        <button type="submit" className="btn-primary flex items-center gap-2"><Save size={14} /> Speichern</button>
+      </div>
+    </form>
   );
 }
 

@@ -1,9 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
-title PodCore v2.9.14 - Startup
+title PodCore v2.9.16 - Startup
 
 echo ===================================================
-echo PodCore v2.9.14 - Podcast Management System
+echo PodCore v2.9.16 - Podcast Management System
 echo ===================================================
 echo.
 
@@ -22,6 +22,17 @@ if not exist "server\node_modules" (
     cd server
     call npm install --production
     cd ..
+)
+
+:: Build server if dist\index.js doesn't exist
+if not exist "server\dist\index.js" (
+    echo [INFO] Kompiliere Server TypeScript...
+    cd server
+    call npx tsc
+    cd ..
+    if exist "server\dist\public" rmdir /s /q "server\dist\public"
+    xcopy /e /i /q "server\public" "server\dist\public" >nul
+    echo [INFO] Server kompiliert.
 )
 
 echo.
