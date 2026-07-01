@@ -691,6 +691,13 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
     // v2.9.0 – neue Berechtigungen
     canEditShowNotes: false,
     canManageInterviewBlocks: false,
+    // v2.9.16 – Media Library & Werbung
+    canEditMediaMetadata: false,
+    canUseAudioEditor: false,
+    canExportMarkers: false,
+    canManageAdBookings: false,
+    canBookAds: false,
+    canViewAdBookings: false,
   };
 
   switch (role) {
@@ -715,6 +722,12 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canUseMediaLibraryInEditor: true,
         canEditShowNotes: true,
         canManageInterviewBlocks: true,
+        // v2.9.16
+        canEditMediaMetadata: true,
+        canUseAudioEditor: true,
+        canExportMarkers: true,
+        canBookAds: true,
+        canViewAdBookings: true,
       };
     case 'moderator':
       return {
@@ -733,6 +746,13 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canUseMediaLibraryInEditor: true,
         canEditShowNotes: true,
         canManageInterviewBlocks: true,
+        // v2.9.16
+        canEditMediaMetadata: true,
+        canUseAudioEditor: true,
+        canExportMarkers: true,
+        canManageAdBookings: true,
+        canBookAds: true,
+        canViewAdBookings: true,
       };
     case 'produktion':
       return {
@@ -748,6 +768,11 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canManageInterviewBlocks: true,
         canViewInvoices: true,
         canExportPricelist: true,
+        // v2.9.16
+        canEditMediaMetadata: true,
+        canUseAudioEditor: true,
+        canExportMarkers: true,
+        canViewAdBookings: true,
       };
     default:
       return base;

@@ -54,8 +54,14 @@ const ALL_PERMISSIONS = [
   // v2.9.0 – neue Berechtigungen
   { key: 'canEditShowNotes', label: 'Show-Notes bearbeiten', group: 'Episoden' },
   { key: 'canManageInterviewBlocks', label: 'Interview-Fragen-Blöcke verwalten', group: 'Episoden' },
-  // PDF-Layouts
-  { key: 'canManagePdfLayouts', label: 'PDF-Layouts verwalten', group: 'Administration' },
+  // Media Library-Erweiterungen (v2.9.16)
+  { key: 'canEditMediaMetadata', label: 'Asset-Metadaten bearbeiten', group: 'Media Library' },
+  { key: 'canUseAudioEditor', label: 'Audio-Editor verwenden', group: 'Media Library' },
+  { key: 'canExportMarkers', label: 'Marker / DAW-Export', group: 'Media Library' },
+  // Werbung / Sponsoring-Buchung (v2.9.15)
+  { key: 'canManageAdBookings', label: 'Werbebuchungen verwalten', group: 'Sponsoring' },
+  { key: 'canBookAds', label: 'Werbung nachbuchen (spontan)', group: 'Sponsoring' },
+  { key: 'canViewAdBookings', label: 'Werbebuchungen ansehen', group: 'Sponsoring' },
 ];
 
 const PERMISSION_GROUPS = [...new Set(ALL_PERMISSIONS.map(p => p.group))];
