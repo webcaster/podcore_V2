@@ -951,25 +951,29 @@ router.get('/slots/:slotId/placements', requirePermission('canViewSponsors') as 
 router.post('/slots/:slotId/placements', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const id = uuidv4();
-  const { episodeId, episodeTitle, episodeNumber, position = 'mid-roll', confirmed = false, publishDate, listens, notes, price, currency,
-    placementStart, placementEnd, placementLabel, performanceNotes, deliveryConfirmed } = req.body;
+  const { episodeId, episodeTitle, episodeNumber, position = 'pre-roll', confirmed = false, publishDate, airDate, listens, notes, price, currency,
+    invoiceStatus, placementStart, placementEnd, placementLabel, performanceNotes, deliveryConfirmed, adTitle, status } = req.body;
 
-  if (!episodeId) return res.status(400).json({ success: false, error: 'Episode erforderlich' });
-
+  // Episode ist optional – Zeitraum-Buchungen ohne Episode sind erlaubt
   // Automatische Rechnungsnummer generieren
   const autoInvoiceNumber = generateInvoiceNumber(db);
-  const invoiceDate = new Date().toISOString().split('T')[0];
+  const invoiceDateVal = new Date().toISOString().split('T')[0];
 
   db.run('INSERT INTO ad_placements (id, ad_slot_id, episode_id, episode_title, episode_number, position, confirmed, publish_date, listens, notes, price, currency, invoice_number, invoice_date, invoice_status, placement_start, placement_end, placement_label, performance_notes, delivery_confirmed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, req.params.slotId, episodeId, episodeTitle || null, episodeNumber || null, position, confirmed ? 1 : 0, publishDate || null, listens || null, notes || null, price || null, currency || 'EUR', autoInvoiceNumber, invoiceDate, 'offen',
+    [id, req.params.slotId, episodeId || null, episodeTitle || adTitle || null, episodeNumber || null, position, confirmed ? 1 : 0,
+     airDate || publishDate || null, listens || null, notes || null, price || null, currency || 'EUR',
+     autoInvoiceNumber, invoiceDateVal, invoiceStatus || 'offen',
      placementStart || null, placementEnd || null, placementLabel || null, performanceNotes || null, deliveryConfirmed ? 1 : 0]);
 
-  const slot = db.get('SELECT booked_episodes FROM ad_slots WHERE id = ?', [req.params.slotId]) as any;
-  if (slot) {
-    const booked = JSON.parse(slot.booked_episodes || '[]');
-    if (!booked.includes(episodeId)) {
-      booked.push(episodeId);
-      db.run('UPDATE ad_slots SET booked_episodes = ? WHERE id = ?', [JSON.stringify(booked), req.params.slotId]);
+  // Gebuchte Episoden im Slot aktualisieren (nur wenn Episode angegeben)
+  if (episodeId) {
+    const slot = db.get('SELECT booked_episodes FROM ad_slots WHERE id = ?', [req.params.slotId]) as any;
+    if (slot) {
+      const booked = JSON.parse(slot.booked_episodes || '[]');
+      if (!booked.includes(episodeId)) {
+        booked.push(episodeId);
+        db.run('UPDATE ad_slots SET booked_episodes = ? WHERE id = ?', [JSON.stringify(booked), req.params.slotId]);
+      }
     }
   }
 
