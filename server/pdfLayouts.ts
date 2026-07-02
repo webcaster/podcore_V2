@@ -6,10 +6,12 @@
  * Sichtbarkeitsregeln definiert. Die Render-Funktionen nutzen PDFKit.
  *
  * Export-Typen:
- *   - episode   → Episoden-Dokument (Script, Meta, Blöcke)
- *   - idea      → Ideenmappe
- *   - calendar  → Redaktionsplan-Kalender
- *   - invoice   → Sponsor-Abrechnung
+ *   - episode          → Episoden-Dokument (Script, Meta, Blöcke)
+ *   - idea             → Ideenmappe
+ *   - calendar         → Redaktionsplan-Kalender
+ *   - invoice          → Sponsor-Abrechnung
+ *   - confirmation     → Buchungsbestätigung für Sponsor
+ *   - booking_calendar → Buchungskalender-Übersicht
  */
 
 import { getDb } from './database';
@@ -17,7 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
-export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice';
+export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar';
 
 export interface PdfLayoutColors {
   primary: string;       // Hauptfarbe (Überschriften, Akzente)
@@ -79,6 +81,13 @@ export interface PdfLayoutSections {
   // Pricelist
   showPricelistDescriptions: boolean;  // v2.9.3 – Beschreibungen in Preisliste
   showPricelistExclusive: boolean;     // v2.9.3 – Exklusiv-Kennzeichnung
+  // Confirmation (Buchungsbestätigung)
+  showConfirmationContact: boolean;    // v2.11.1 – Kontaktdaten im Bestätigungsdokument
+  showConfirmationPricing: boolean;    // v2.11.1 – Preisdetails in Bestätigung
+  showConfirmationTerms: boolean;      // v2.11.1 – Vertragslaufzeit in Bestätigung
+  // Booking Calendar
+  showBookingCalendarLegend: boolean;  // v2.11.1 – Legende im Buchungskalender
+  showBookingCalendarConflicts: boolean; // v2.11.1 – Konflikte hervorheben
 }
 
 export interface PdfLayoutWatermark {
@@ -173,6 +182,11 @@ export const DEFAULT_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> =
     showInvoiceSummary: true,
     showPricelistDescriptions: true,
     showPricelistExclusive: true,
+    showConfirmationContact: true,
+    showConfirmationPricing: true,
+    showConfirmationTerms: true,
+    showBookingCalendarLegend: true,
+    showBookingCalendarConflicts: true,
   },
   pageMargin: 50,
   pageSize: 'A4',
@@ -241,6 +255,11 @@ export const MINIMAL_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> =
     showInvoiceSummary: true,
     showPricelistDescriptions: true,
     showPricelistExclusive: false,
+    showConfirmationContact: true,
+    showConfirmationPricing: true,
+    showConfirmationTerms: true,
+    showBookingCalendarLegend: true,
+    showBookingCalendarConflicts: false,
   },
   pageMargin: 60,
   pageSize: 'A4',
@@ -269,6 +288,11 @@ function parseLayout(row: any): PdfLayout {
       showCalendarNotes: false,
       showPricelistDescriptions: true,
       showPricelistExclusive: true,
+      showConfirmationContact: true,
+      showConfirmationPricing: true,
+      showConfirmationTerms: true,
+      showBookingCalendarLegend: true,
+      showBookingCalendarConflicts: true,
       ...sections,
     },
     isDefault: row.is_default === 1,

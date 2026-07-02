@@ -149,7 +149,16 @@ export default function SponsorsPage() {
     setIsCreating(true);
     try {
       const sp = await sponsorsApi.create({
-        ...sponsorForm,
+        name: sponsorForm.name,
+        company: sponsorForm.company,
+        contactEmail: sponsorForm.email,
+        contactPhone: sponsorForm.phone,
+        website: sponsorForm.website,
+        status: sponsorForm.status,
+        adDelivery: sponsorForm.adDelivery,
+        notes: sponsorForm.notes,
+        contractStart: sponsorForm.contractStart || null,
+        contractEnd: sponsorForm.contractEnd || null,
       });
       showSuccess('Sponsor erstellt');
       setShowSponsorModal(false);

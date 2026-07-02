@@ -43,7 +43,7 @@ export default function SponsorRevenuePage() {
   const [search, setSearch] = useState('');
   const [sortField, setSortField] = useState<'sponsorName' | 'totalRevenue' | 'placements'>('totalRevenue');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [activeView, setActiveView] = useState<'overview' | 'placements' | 'monthly' | 'categories'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'placements' | 'monthly' | 'categories' | 'utilization'>('overview');
   const [isExporting, setIsExporting] = useState(false);
 
   const load = useCallback(async () => {

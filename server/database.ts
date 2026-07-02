@@ -542,7 +542,7 @@ function initializeSchema(db: any): void {
     try {
       const { execFile } = require('child_process');
       const assetsWithoutDuration = db.all(
-        "SELECT id, filepath FROM assets WHERE type = 'audio' AND (duration IS NULL OR duration = 0)"
+        "SELECT id, filepath FROM assets WHERE (duration IS NULL OR duration = 0) AND filepath IS NOT NULL"
       ) as any[];
       for (const asset of assetsWithoutDuration) {
         if (!asset.filepath) continue;

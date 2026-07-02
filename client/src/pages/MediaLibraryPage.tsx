@@ -76,7 +76,14 @@ export default function MediaLibraryPage() {
 
   // Upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadForm, setUploadForm] = useState({ name: '', type: 'other', description: '', folderId: '' });
+  const [uploadForm, setUploadForm] = useState({
+    name: '', type: 'other', description: '', folderId: '',
+    // Optionale Metadaten
+    artist: '', album: '', year: '', genre: '', language: '',
+    copyright: '', license: '', mood: '', notes: '', sourceUrl: '',
+    recordingDate: '', location: '',
+  });
+  const [showUploadMeta, setShowUploadMeta] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -193,16 +200,29 @@ export default function MediaLibraryPage() {
     try {
       const formData = new FormData();
       formData.append('file', uploadFile);
-      formData.append('name', uploadForm.name || uploadFile.name.replace(/\.[^/.]+$/, ''));
+            formData.append('name', uploadForm.name || uploadFile.name.replace(/\.[^/.]+$/, ''));
       formData.append('type', uploadForm.type);
       formData.append('folderId', currentFolderId === 'root' ? '' : currentFolderId);
       if (uploadForm.description) formData.append('description', uploadForm.description);
-
+      // Optionale Metadaten
+      if (uploadForm.artist) formData.append('artist', uploadForm.artist);
+      if (uploadForm.album) formData.append('album', uploadForm.album);
+      if (uploadForm.year) formData.append('year', uploadForm.year);
+      if (uploadForm.genre) formData.append('genre', uploadForm.genre);
+      if (uploadForm.language) formData.append('language', uploadForm.language);
+      if (uploadForm.copyright) formData.append('copyright', uploadForm.copyright);
+      if (uploadForm.license) formData.append('license', uploadForm.license);
+      if (uploadForm.mood) formData.append('mood', uploadForm.mood);
+      if (uploadForm.notes) formData.append('notes', uploadForm.notes);
+      if (uploadForm.sourceUrl) formData.append('sourceUrl', uploadForm.sourceUrl);
+      if (uploadForm.recordingDate) formData.append('recordingDate', uploadForm.recordingDate);
+      if (uploadForm.location) formData.append('location', uploadForm.location);
       await mediaApi.upload(formData);
       showSuccess('Asset hochgeladen');
       setShowUploadModal(false);
       setUploadFile(null);
-      setUploadForm({ name: '', type: 'other', description: '', folderId: '' });
+      setShowUploadMeta(false);
+      setUploadForm({ name: '', type: 'other', description: '', folderId: '', artist: '', album: '', year: '', genre: '', language: '', copyright: '', license: '', mood: '', notes: '', sourceUrl: '', recordingDate: '', location: '' });
       load();
     } catch (err: any) { showError(err.message); }
     finally { setIsUploading(false); }
@@ -880,6 +900,91 @@ export default function MediaLibraryPage() {
             <label className="label">Beschreibung</label>
             <textarea value={uploadForm.description} onChange={e => setUploadForm(p => ({ ...p, description: e.target.value }))} className="textarea" rows={2} />
           </div>
+          {/* Optionale Metadaten – aufklappbar */}
+          <div className="border border-surface-border rounded-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowUploadMeta(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-raised transition-colors"
+            >
+              <span className="flex items-center gap-2 font-medium">
+                <span>Metadaten (optional)</span>
+              </span>
+              <span className="text-xs text-text-muted">{showUploadMeta ? '▲ Einklappen' : '▼ Erweitern'}</span>
+            </button>
+            {showUploadMeta && (
+              <div className="px-4 pb-4 space-y-3 border-t border-surface-border">
+                <div className="grid grid-cols-2 gap-3 pt-3">
+                  <div>
+                    <label className="label text-xs">Künstler / Sprecher</label>
+                    <input type="text" value={uploadForm.artist} onChange={e => setUploadForm(p => ({ ...p, artist: e.target.value }))} className="input text-sm" placeholder="z.B. Max Mustermann" />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Album / Projekt</label>
+                    <input type="text" value={uploadForm.album} onChange={e => setUploadForm(p => ({ ...p, album: e.target.value }))} className="input text-sm" placeholder="z.B. Podcast Staffel 2" />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Genre</label>
+                    <input type="text" value={uploadForm.genre} onChange={e => setUploadForm(p => ({ ...p, genre: e.target.value }))} className="input text-sm" placeholder="z.B. Interview" />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Jahr</label>
+                    <input type="number" value={uploadForm.year} onChange={e => setUploadForm(p => ({ ...p, year: e.target.value }))} className="input text-sm" placeholder={String(new Date().getFullYear())} min="1900" max="2099" />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Sprache</label>
+                    <select value={uploadForm.language} onChange={e => setUploadForm(p => ({ ...p, language: e.target.value }))} className="select text-sm">
+                      <option value="">– Sprache wählen –</option>
+                      <option value="de">Deutsch</option>
+                      <option value="en">Englisch</option>
+                      <option value="fr">Französisch</option>
+                      <option value="es">Spanisch</option>
+                      <option value="other">Andere</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label text-xs">Stimmung / Mood</label>
+                    <input type="text" value={uploadForm.mood} onChange={e => setUploadForm(p => ({ ...p, mood: e.target.value }))} className="input text-sm" placeholder="z.B. entspannt, energetisch" />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Aufnahmedatum</label>
+                    <input type="date" value={uploadForm.recordingDate} onChange={e => setUploadForm(p => ({ ...p, recordingDate: e.target.value }))} className="input text-sm" />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Aufnahmeort</label>
+                    <input type="text" value={uploadForm.location} onChange={e => setUploadForm(p => ({ ...p, location: e.target.value }))} className="input text-sm" placeholder="z.B. Studio Berlin" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label text-xs">Copyright</label>
+                    <input type="text" value={uploadForm.copyright} onChange={e => setUploadForm(p => ({ ...p, copyright: e.target.value }))} className="input text-sm" placeholder="z.B. © 2025 PodCore" />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Lizenz</label>
+                    <select value={uploadForm.license} onChange={e => setUploadForm(p => ({ ...p, license: e.target.value }))} className="select text-sm">
+                      <option value="">– Lizenz wählen –</option>
+                      <option value="all-rights-reserved">All Rights Reserved</option>
+                      <option value="cc-by">CC BY</option>
+                      <option value="cc-by-sa">CC BY-SA</option>
+                      <option value="cc-by-nc">CC BY-NC</option>
+                      <option value="cc0">CC0 (Public Domain)</option>
+                      <option value="royalty-free">Royalty Free</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="label text-xs">Quelle / URL</label>
+                  <input type="url" value={uploadForm.sourceUrl} onChange={e => setUploadForm(p => ({ ...p, sourceUrl: e.target.value }))} className="input text-sm" placeholder="https://..." />
+                </div>
+                <div>
+                  <label className="label text-xs">Interne Notizen</label>
+                  <textarea value={uploadForm.notes} onChange={e => setUploadForm(p => ({ ...p, notes: e.target.value }))} className="textarea text-sm" rows={2} placeholder="Nur intern sichtbar" />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowUploadModal(false)} className="btn-secondary">Abbrechen</button>
             <button type="submit" disabled={!uploadFile || isUploading} className="btn-primary">

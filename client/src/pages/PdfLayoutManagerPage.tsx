@@ -14,6 +14,8 @@ const EXPORT_TYPES = [
   { value: 'idea', label: 'Ideenmappe' },
   { value: 'calendar', label: 'Redaktionskalender' },
   { value: 'invoice', label: 'Sponsoring-Abrechnung' },
+  { value: 'confirmation', label: 'Buchungsbestätigung (Sponsor)' },
+  { value: 'booking_calendar', label: 'Buchungskalender-Übersicht' },
 ];
 
 const HEADER_STYLES = [
@@ -60,6 +62,14 @@ const SECTION_GROUPS: Record<string, { label: string; keys: string[] }> = {
     label: 'Werbekategorien-Preisliste',
     keys: ['showPricelistDescriptions', 'showPricelistExclusive'],
   },
+  confirmation: {
+    label: 'Buchungsbestätigung',
+    keys: ['showConfirmationContact', 'showConfirmationPricing', 'showConfirmationTerms'],
+  },
+  booking_calendar: {
+    label: 'Buchungskalender',
+    keys: ['showBookingCalendarLegend', 'showBookingCalendarConflicts'],
+  },
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -84,6 +94,11 @@ const SECTION_LABELS: Record<string, string> = {
   showInvoiceBankDetails: 'Bankverbindung (Rechnung)',
   showPricelistDescriptions: 'Beschreibungen (Preisliste)',
   showPricelistExclusive: 'Exklusiv-Kennzeichnung (Preisliste)',
+  showConfirmationContact: 'Kontaktdaten (Bestätigung)',
+  showConfirmationPricing: 'Preisdetails (Bestätigung)',
+  showConfirmationTerms: 'Vertragslaufzeit (Bestätigung)',
+  showBookingCalendarLegend: 'Legende (Buchungskalender)',
+  showBookingCalendarConflicts: 'Konflikte hervorheben (Buchungskalender)',
 };
 
 const LINE_SPACING_OPTIONS = [

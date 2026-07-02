@@ -397,7 +397,11 @@ router.post('/upload', requirePermission('canUploadMedia') as any, (req: AuthReq
     if (!file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
 
     const id = uuidv4();
-    const { name, type = 'audio', description, tags, folderId } = req.body;
+    const {
+      name, type = 'audio', description, tags, folderId,
+      artist, album, year, genre, language, copyright, license,
+      mood, notes, sourceUrl, recordingDate, location
+    } = req.body;
     const assetName = name || path.basename(file.originalname, path.extname(file.originalname));
 
     // Detect duration via ffprobe
@@ -405,6 +409,23 @@ router.post('/upload', requirePermission('canUploadMedia') as any, (req: AuthReq
 
     db.run('INSERT INTO assets (id, name, type, filename, filepath, filesize, duration, mime_type, description, tags, uploaded_by, folder_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [id, assetName, type, file.filename, file.path, file.size, detectedDuration, file.mimetype, description || null, tags ? JSON.stringify(JSON.parse(tags)) : '[]', req.user!.id, folderId || null]);
+
+    // Save optional metadata if provided
+    const hasMeta = artist || album || year || genre || language || copyright || license || mood || notes || sourceUrl || recordingDate || location;
+    if (hasMeta) {
+      db.run(
+        `UPDATE assets SET
+          artist = COALESCE(?, artist), album = COALESCE(?, album),
+          year = COALESCE(?, year), genre = COALESCE(?, genre),
+          language = COALESCE(?, language), copyright = COALESCE(?, copyright),
+          license = COALESCE(?, license), mood = COALESCE(?, mood),
+          notes = COALESCE(?, notes), source_url = COALESCE(?, source_url),
+          recording_date = COALESCE(?, recording_date), location = COALESCE(?, location)
+        WHERE id = ?`,
+        [artist||null, album||null, year||null, genre||null, language||null, copyright||null,
+         license||null, mood||null, notes||null, sourceUrl||null, recordingDate||null, location||null, id]
+      );
+    }
 
     const asset = parseAsset(db.get('SELECT * FROM assets WHERE id = ?', [id]));
     return res.status(201).json({ success: true, data: asset });
