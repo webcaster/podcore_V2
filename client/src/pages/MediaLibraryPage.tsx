@@ -1394,6 +1394,25 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
     setShowExportMenu(false);
   };
 
+  const exportAuditionXML = () => {
+    // Adobe Audition XML Marker Format (XMP/Audition kompatibel)
+    const title = asset.name.replace(/[&<>"']/g, '_');
+    const allPoints = [
+      ...markers.map(m => ({ time: m.time, label: m.label, type: m.type })),
+      ...timedComments.filter(c => c.time != null).map(c => ({ time: c.time!, label: c.content || c.text, type: 'comment' }))
+    ].sort((a, b) => a.time - b.time);
+
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<markers>\n`;
+    allPoints.forEach((pt, i) => {
+      const start = pt.time.toFixed(6);
+      xml += `  <marker index="${i + 1}" start="${start}" duration="0" name="${pt.label || pt.type}" type="Track" description="[${pt.type.toUpperCase()}]" />\n`;
+    });
+    xml += `</markers>`;
+    
+    downloadFile(xml, `${title}_audition.xml`, 'application/xml');
+    setShowExportMenu(false);
+  };
+
   const exportFCPXML = () => {
     // Final Cut Pro X XML (FCPXML) – Marker-Export
     const title = asset.name.replace(/[&<>"']/g, '_');
@@ -1465,6 +1484,13 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
                   <div>
                     <p className="text-sm text-text-primary font-medium">Audacity Labels</p>
                     <p className="text-xs text-text-muted">Audacity Label Track (.txt)</p>
+                  </div>
+                </button>
+                <button onClick={exportAuditionXML} className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-obsidian-700 transition-colors text-left border-t border-surface-border">
+                  <FileTextIcon size={14} className="text-accent-purple mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-text-primary font-medium">Adobe Audition (XML)</p>
+                    <p className="text-xs text-text-muted">Adobe Audition Marker-Import</p>
                   </div>
                 </button>
                 <button onClick={exportCSV} className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-obsidian-700 transition-colors text-left border-t border-surface-border">

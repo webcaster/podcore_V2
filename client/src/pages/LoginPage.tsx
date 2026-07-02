@@ -5,7 +5,7 @@ import { authApi } from '../lib/api';
 
 // Injected at build time by vite.config.ts
 declare const __APP_VERSION__: string;
-const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.6.0';
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.10.0';
 
 export default function LoginPage() {
   const { login } = useAuth();

@@ -618,4 +618,15 @@ router.post('/:id/timed-comments', requirePermission('canCommentMedia') as any, 
   return res.status(201).json({ success: true, data: comment });
 });
 
+// DELETE /api/media/:id/timed-comments/:commentId — Zeitbezogenen Kommentar löschen
+router.delete('/:id/timed-comments/:commentId', requirePermission('canCommentMedia') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
+
+  const comments = JSON.parse(asset.comments || '[]').filter((c: any) => c.id !== req.params.commentId);
+  db.run(`UPDATE assets SET comments = ?, updated_at = datetime('now') WHERE id = ?`, [JSON.stringify(comments), req.params.id]);
+  return res.json({ success: true, message: 'Kommentar gelöscht' });
+});
+
 export default router;
