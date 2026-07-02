@@ -70,6 +70,10 @@ export default function SponsorDetailPage() {
     invoiceNumber: '', invoiceDate: '', invoiceStatus: 'offen', invoiceNotes: '',
   });
   const [billingData, setBillingData] = useState<any>(null);
+  // Buchungs-Modal: Slot in Episode buchen
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [bookingSlot, setBookingSlot] = useState<any>(null);
+  const [bookingForm, setBookingForm] = useState({ episodeId: '', price: '', airDate: '', notes: '', invoiceStatus: 'offen' });
   const [isExportingInvoice, setIsExportingInvoice] = useState(false);
   const [pdfLayoutId, setPdfLayoutId] = useState('');
   const [pdfFileName, setPdfFileName] = useState('');
@@ -87,6 +91,41 @@ export default function SponsorDetailPage() {
   const [tkpEpisodeCount, setTkpEpisodeCount] = useState<string>('1');
   const [tkpCalcResult, setTkpCalcResult] = useState<any>(null);
   const [isCalcLoading, setIsCalcLoading] = useState(false);
+
+  const openBookingModal = (slot: any) => {
+    setBookingSlot(slot);
+    setBookingForm({
+      episodeId: '',
+      price: slot.price != null ? String(slot.price) : (slot.basePrice != null ? String(slot.basePrice) : ''),
+      airDate: '',
+      notes: '',
+      invoiceStatus: 'offen',
+    });
+    setShowBookingModal(true);
+  };
+
+  const handleSaveBooking = async () => {
+    if (!bookingSlot) return;
+    try {
+      const ep = episodes.find((e: any) => e.id === bookingForm.episodeId);
+      await sponsorsApi.createPlacement(bookingSlot.id, {
+        episodeId: bookingForm.episodeId || null,
+        episodeTitle: ep?.title || null,
+        episodeNumber: ep?.episodeNumber || null,
+        position: bookingSlot.position || 'pre-roll',
+        adTitle: bookingSlot.name || bookingSlot.adTitle || 'Werbung',
+        price: bookingForm.price ? parseFloat(bookingForm.price) : null,
+        currency: sponsor?.currency || 'EUR',
+        airDate: bookingForm.airDate || null,
+        notes: bookingForm.notes || null,
+        invoiceStatus: bookingForm.invoiceStatus,
+        status: 'geplant',
+      });
+      showSuccess('Buchung erfasst');
+      setShowBookingModal(false);
+      loadBilling();
+    } catch (err: any) { showError(err.message); }
+  };
 
   const handleCalculateTkp = async (slot: any) => {
     if (!slot) return;
@@ -811,6 +850,11 @@ export default function SponsorDetailPage() {
 
                       {can('canEditSponsors') && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => openBookingModal(pl)}
+                            title="Als Buchung in Episode erfassen"
+                            className="p-2 text-text-muted hover:text-accent-green hover:bg-accent-green/10 rounded-lg"
+                          ><Plus size={14} /></button>
                           <button onClick={() => openEditPlacement(pl)} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg"><Edit2 size={14} /></button>
                           <button onClick={() => handleDeletePlacement(pl.id)} className="p-2 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg"><Trash2 size={14} /></button>
                         </div>
@@ -959,14 +1003,14 @@ export default function SponsorDetailPage() {
                   <select
                     className="select text-sm"
                     onChange={e => {
-                      const slot = placements.find((p: any) => p.id === e.target.value);
+                      const slot = slots.find((s: any) => s.id === e.target.value);
                       if (slot) handleCalculateTkp(slot);
                     }}
                     defaultValue=""
                   >
                     <option value="" disabled>Slot wählen…</option>
-                    {placements.filter((p: any) => p.pricePer1000Listens > 0 || p.pricePerEpisode > 0).map((p: any) => (
-                      <option key={p.id} value={p.id}>{p.name || p.slotName || `Slot ${p.id}`}</option>
+                    {slots.filter((s: any) => (s.pricePer1000Listens || 0) > 0 || (s.pricePerEpisode || 0) > 0).map((s: any) => (
+                      <option key={s.id} value={s.id}>{s.name || s.adTitle || `Slot ${s.id}`}</option>
                     ))}
                   </select>
                 </div>
@@ -1453,6 +1497,48 @@ export default function SponsorDetailPage() {
             <button type="submit" className="btn-primary">{editingPlacement ? 'Aktualisieren' : 'Erstellen'}</button>
           </div>
         </form>
+      </Modal>
+
+      {/* Buchungs-Modal: Slot in Episode buchen */}
+      <Modal isOpen={showBookingModal} onClose={() => setShowBookingModal(false)} title={`Buchung erfassen: ${bookingSlot?.name || bookingSlot?.adTitle || 'Werbeplatz'}`} size="md">
+        <div className="space-y-4">
+          <div>
+            <label className="label">Episode (optional)</label>
+            <select value={bookingForm.episodeId} onChange={e => setBookingForm(f => ({ ...f, episodeId: e.target.value }))} className="select">
+              <option value="">Ohne Episode (Zeitraum-Buchung)</option>
+              {episodes.map((ep: any) => (
+                <option key={ep.id} value={ep.id}>{ep.episodeNumber ? `#${ep.episodeNumber} – ` : ''}{ep.title}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Preis (€)</label>
+              <input type="number" value={bookingForm.price} onChange={e => setBookingForm(f => ({ ...f, price: e.target.value }))} className="input" placeholder="0.00" min="0" step="0.01" />
+            </div>
+            <div>
+              <label className="label">Ausstrahlungsdatum</label>
+              <input type="date" value={bookingForm.airDate} onChange={e => setBookingForm(f => ({ ...f, airDate: e.target.value }))} className="input" />
+            </div>
+          </div>
+          <div>
+            <label className="label">Rechnungsstatus</label>
+            <select value={bookingForm.invoiceStatus} onChange={e => setBookingForm(f => ({ ...f, invoiceStatus: e.target.value }))} className="select">
+              <option value="offen">Offen</option>
+              <option value="versendet">Versendet</option>
+              <option value="bezahlt">Bezahlt</option>
+              <option value="storniert">Storniert</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Notizen</label>
+            <textarea value={bookingForm.notes} onChange={e => setBookingForm(f => ({ ...f, notes: e.target.value }))} className="textarea" rows={2} placeholder="Interne Notizen zur Buchung..." />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setShowBookingModal(false)} className="btn-secondary">Abbrechen</button>
+            <button type="button" onClick={handleSaveBooking} className="btn-primary">Buchung erfassen</button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
