@@ -306,6 +306,8 @@ export const sponsorsApi = {
   // Buchungskalender
   getBookingCalendar: (params?: { from?: string; to?: string }) =>
     api.get<any>(`/sponsors/booking-calendar${buildQs(params)}`),
+  exportBookingCalendarCsv: (params?: { from?: string; to?: string }) =>
+    `/api/sponsors/booking-calendar/export${buildQs({ ...params, format: 'csv' })}`,
 
   // Folgensponsor-Automatisierung
   autoAssignEpisode: (episodeId: string) =>

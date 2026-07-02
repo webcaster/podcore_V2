@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, Clock,
   Calendar, Filter, RefreshCw, Info, Megaphone, Tag, ExternalLink, Euro,
+  Download, FileText, CalendarRange,
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
 
@@ -28,6 +29,13 @@ interface AdPlacement {
   episodeId?: string; episodeTitle?: string; episodeNumber?: number;
   date?: string; slotName?: string; price?: number;
   invoiceStatus?: string; status?: string; notes?: string;
+}
+interface PlannedSlot {
+  id: string; type: 'planned'; sponsorId: string; sponsorName: string;
+  sponsorCompany?: string; sponsorColor: string; categoryName?: string;
+  categoryColor: string; isExclusive: boolean; position?: string;
+  startDate?: string; endDate?: string; label?: string; status?: string;
+  basePrice?: number; pricePerEpisode?: number; notes?: string;
 }
 interface Conflict {
   type: string; date: string; categoryName: string;
@@ -60,6 +68,7 @@ const invoiceStatusColors: Record<string, string> = {
   'versendet': 'bg-blue-900/50 text-blue-400',
   'bezahlt': 'bg-green-900/50 text-green-400',
   'storniert': 'bg-gray-700 text-gray-400',
+  'geplant': 'bg-amber-900/50 text-amber-400',
 };
 
 // ─── Haupt-Komponente ─────────────────────────────────────────────────────────
@@ -71,18 +80,22 @@ export default function SponsorBookingCalendarPage() {
   const [episodeBookings, setEpisodeBookings] = useState<EpisodeBooking[]>([]);
   const [slotBookings, setSlotBookings] = useState<SlotBooking[]>([]);
   const [adPlacements, setAdPlacements] = useState<AdPlacement[]>([]);
+  const [plannedSlots, setPlannedSlots] = useState<PlannedSlot[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [filterSponsor, setFilterSponsor] = useState('');
   const [filterPosition, setFilterPosition] = useState('');
   const [showConflictsOnly, setShowConflictsOnly] = useState(false);
+  const [showPlanned, setShowPlanned] = useState(true);
+  const [exportLoading, setExportLoading] = useState(false);
 
   // Alle Sponsoren für Filter
   const allSponsors = Array.from(new Set([
     ...episodeBookings.map(b => b.sponsorName),
     ...slotBookings.map(b => b.sponsorName),
     ...adPlacements.map(p => p.sponsorName),
+    ...plannedSlots.map(p => p.sponsorName),
   ])).sort();
 
   const load = useCallback(async () => {
@@ -94,6 +107,7 @@ export default function SponsorBookingCalendarPage() {
       setEpisodeBookings(res.data?.episodeBookings || []);
       setSlotBookings(res.data?.slotBookings || []);
       setAdPlacements(res.data?.adPlacements || []);
+      setPlannedSlots(res.data?.plannedSlots || []);
       setConflicts(res.data?.conflicts || []);
     } catch (e) {
       console.error(e);
@@ -108,26 +122,44 @@ export default function SponsorBookingCalendarPage() {
   const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
 
+  // CSV Export
+  const handleExportCsv = () => {
+    const from = toIso(year, month, 1);
+    const to = toIso(year, month, getDaysInMonth(year, month));
+    const url = sponsorsApi.exportBookingCalendarCsv({ from, to });
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `buchungskalender_${MONTHS_DE[month]}_${year}.csv`;
+    a.click();
+  };
+
   // Buchungen für einen Tag filtern
   const getBookingsForDay = (dateStr: string) => {
     let ep = episodeBookings.filter(b => b.date === dateStr);
     let sl = slotBookings.filter(b => b.startDate && b.endDate && dateStr >= b.startDate && dateStr <= b.endDate);
     let pl = adPlacements.filter(p => p.date === dateStr);
+    let ps = showPlanned ? plannedSlots.filter(p =>
+      p.startDate && p.endDate && dateStr >= p.startDate && dateStr <= p.endDate
+    ) : [];
     if (filterSponsor) {
       ep = ep.filter(b => b.sponsorName === filterSponsor);
       sl = sl.filter(b => b.sponsorName === filterSponsor);
       pl = pl.filter(p => p.sponsorName === filterSponsor);
+      ps = ps.filter(p => p.sponsorName === filterSponsor);
     }
     if (filterPosition) {
       ep = ep.filter(b => b.position === filterPosition);
       sl = sl.filter(b => b.position === filterPosition);
       pl = pl.filter(p => p.position === filterPosition);
+      ps = ps.filter(p => p.position === filterPosition);
     }
-    return { ep, sl, pl };
+    return { ep, sl, pl, ps };
   };
 
-  // Placements ohne Datum: im aktuellen Monat anzeigen (als "undatiert")
+  // Placements ohne Datum: im aktuellen Monat anzeigen
   const undatedPlacements = adPlacements.filter(p => !p.date);
+  // Vorplanungen ohne Datum
+  const undatedPlanned = plannedSlots.filter(p => !p.startDate && !p.endDate);
 
   const hasConflict = (dateStr: string) => conflicts.some(c => c.date === dateStr);
 
@@ -154,8 +186,22 @@ export default function SponsorBookingCalendarPage() {
               <AlertTriangle size={12} /> {conflicts.length} Konflikt{conflicts.length !== 1 ? 'e' : ''}
             </span>
           )}
+          {plannedSlots.length > 0 && (
+            <span className="flex items-center gap-1 text-xs bg-amber-900/60 text-amber-300 px-2 py-0.5 rounded-full border border-amber-700">
+              <Clock size={12} /> {plannedSlots.length} Vorplanung{plannedSlots.length !== 1 ? 'en' : ''}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Export CSV */}
+          <button
+            onClick={handleExportCsv}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 rounded-lg transition-colors"
+            title="Als CSV exportieren"
+          >
+            <Download size={13} />
+            CSV Export
+          </button>
           <button onClick={load} className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors" title="Aktualisieren">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -204,6 +250,10 @@ export default function SponsorBookingCalendarPage() {
               <input type="checkbox" checked={showConflictsOnly} onChange={e => setShowConflictsOnly(e.target.checked)} className="rounded" />
               Nur Konflikte
             </label>
+            <label className="flex items-center gap-1.5 text-xs text-amber-400 cursor-pointer">
+              <input type="checkbox" checked={showPlanned} onChange={e => setShowPlanned(e.target.checked)} className="rounded" />
+              Vorplanungen anzeigen
+            </label>
             {(filterSponsor || filterPosition || showConflictsOnly) && (
               <button onClick={() => { setFilterSponsor(''); setFilterPosition(''); setShowConflictsOnly(false); }}
                 className="text-xs text-purple-400 hover:text-purple-300">Filter zurücksetzen</button>
@@ -230,11 +280,11 @@ export default function SponsorBookingCalendarPage() {
                   return <div key={i} className="min-h-[80px] bg-gray-900/30 rounded-lg" />;
                 }
                 const dateStr = toIso(year, month, dayNum);
-                const { ep, sl, pl } = getBookingsForDay(dateStr);
+                const { ep, sl, pl, ps } = getBookingsForDay(dateStr);
                 const isConflict = hasConflict(dateStr);
                 const isToday = dateStr === today.toISOString().split('T')[0];
                 const isSelected = dateStr === selectedDay;
-                const hasBookings = ep.length > 0 || sl.length > 0 || pl.length > 0;
+                const hasBookings = ep.length > 0 || sl.length > 0 || pl.length > 0 || ps.length > 0;
                 if (showConflictsOnly && !isConflict) {
                   return <div key={i} className="min-h-[80px] bg-gray-900/20 rounded-lg opacity-30" />;
                 }
@@ -273,12 +323,18 @@ export default function SponsorBookingCalendarPage() {
                       ))}
                       {pl.slice(0, 2).map(p => (
                         <div key={p.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
-                          style={{ backgroundColor: p.sponsorColor + '25', borderLeft: `2px solid ${p.sponsorColor}`, borderStyle: 'dotted' }}>
+                          style={{ backgroundColor: p.sponsorColor + '25', borderLeft: `2px dotted ${p.sponsorColor}` }}>
                           <span className="truncate" style={{ color: p.sponsorColor }}>● {p.sponsorName}</span>
                         </div>
                       ))}
-                      {(ep.length + sl.length + pl.length) > 5 && (
-                        <div className="text-[9px] text-gray-500 pl-1">+{ep.length + sl.length + pl.length - 5} weitere</div>
+                      {ps.slice(0, 1).map(p => (
+                        <div key={p.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
+                          style={{ backgroundColor: '#f59e0b20', borderLeft: `2px dashed #f59e0b` }}>
+                          <span className="truncate text-amber-400">◷ {p.sponsorName}</span>
+                        </div>
+                      ))}
+                      {(ep.length + sl.length + pl.length + ps.length) > 5 && (
+                        <div className="text-[9px] text-gray-500 pl-1">+{ep.length + sl.length + pl.length + ps.length - 5} weitere</div>
                       )}
                     </div>
                   </div>
@@ -287,11 +343,11 @@ export default function SponsorBookingCalendarPage() {
             </div>
           )}
 
-          {/* Undatierte Placements-Hinweis */}
-          {undatedPlacements.length > 0 && (
+          {/* Undatierte Einträge */}
+          {(undatedPlacements.length > 0 || undatedPlanned.length > 0) && (
             <div className="mt-4 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
               <div className="text-xs text-gray-400 font-semibold mb-2 flex items-center gap-1">
-                <Info size={12} /> {undatedPlacements.length} Buchung{undatedPlacements.length !== 1 ? 'en' : ''} ohne Ausstrahlungsdatum
+                <Info size={12} /> Einträge ohne Datum
               </div>
               <div className="space-y-1">
                 {undatedPlacements.map(p => (
@@ -299,7 +355,15 @@ export default function SponsorBookingCalendarPage() {
                     <span style={{ color: p.sponsorColor }}>●</span>
                     <span className="font-medium text-white">{p.sponsorName}</span>
                     {p.slotName && <span className="text-gray-500">– {p.slotName}</span>}
-                    {p.price && <span className="text-green-400 ml-auto">{p.price.toFixed(2)} €</span>}
+                    <span className="text-[10px] text-green-400 ml-auto">{p.price?.toFixed(2)} €</span>
+                  </div>
+                ))}
+                {undatedPlanned.map(p => (
+                  <div key={p.id} className="flex items-center gap-2 text-xs text-amber-400">
+                    <span>◷</span>
+                    <span className="font-medium">{p.sponsorName}</span>
+                    {p.label && <span className="text-amber-500/70">– {p.label}</span>}
+                    <span className="text-[10px] text-gray-500 ml-auto">Vorplanung ohne Datum</span>
                   </div>
                 ))}
               </div>
@@ -319,6 +383,10 @@ export default function SponsorBookingCalendarPage() {
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded border-l-2 border-dotted border-green-500 bg-green-500/10" />
               Werbeplatz-Buchung
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded border-l-2 border-dashed border-amber-500 bg-amber-500/10" />
+              Vorplanung
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded border border-red-700 bg-red-900/20" />
@@ -402,7 +470,8 @@ export default function SponsorBookingCalendarPage() {
                           {b.label && <div>{b.label}</div>}
                           {b.categoryName && <div className="flex items-center gap-1"><Tag size={10} />{b.categoryName}</div>}
                           {b.startDate && b.endDate && (
-                            <div className="text-gray-500">
+                            <div className="flex items-center gap-1 text-gray-500">
+                              <CalendarRange size={10} />
                               {new Date(b.startDate + 'T12:00:00').toLocaleDateString('de-DE')} – {new Date(b.endDate + 'T12:00:00').toLocaleDateString('de-DE')}
                             </div>
                           )}
@@ -471,7 +540,46 @@ export default function SponsorBookingCalendarPage() {
                 </div>
               )}
 
-              {selectedBookings && selectedBookings.ep.length === 0 && selectedBookings.sl.length === 0 && selectedBookings.pl.length === 0 && (
+              {/* Vorplanungen */}
+              {selectedBookings && selectedBookings.ps.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Vorplanungen</h4>
+                  <div className="space-y-2">
+                    {selectedBookings.ps.map(p => (
+                      <div key={p.id} className="p-3 rounded-lg border border-dashed border-amber-700/50 bg-amber-900/10">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-sm text-white">{p.sponsorName}</span>
+                          <span className="text-[10px] text-amber-400 bg-amber-900/40 px-1.5 py-0.5 rounded-full">Geplant</span>
+                        </div>
+                        <div className="text-xs text-gray-400 space-y-0.5">
+                          {p.label && <div className="text-amber-300/80">{p.label}</div>}
+                          {p.categoryName && <div className="flex items-center gap-1"><Tag size={10} />{p.categoryName}</div>}
+                          {p.startDate && p.endDate && (
+                            <div className="flex items-center gap-1 text-amber-500/70">
+                              <CalendarRange size={10} />
+                              {new Date(p.startDate + 'T12:00:00').toLocaleDateString('de-DE')} – {new Date(p.endDate + 'T12:00:00').toLocaleDateString('de-DE')}
+                            </div>
+                          )}
+                          {(p.basePrice || p.pricePerEpisode) && (
+                            <div className="flex items-center gap-0.5 text-amber-400">
+                              <Euro size={9} />{(p.basePrice || p.pricePerEpisode || 0).toFixed(2)} (geplant)
+                            </div>
+                          )}
+                          {p.notes && <div className="text-gray-500 text-[10px] italic">{p.notes}</div>}
+                        </div>
+                        <button
+                          onClick={() => navigate(`/sponsors/${p.sponsorId}`)}
+                          className="mt-2 flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300"
+                        >
+                          <ExternalLink size={9} /> Sponsor öffnen & buchen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedBookings && selectedBookings.ep.length === 0 && selectedBookings.sl.length === 0 && selectedBookings.pl.length === 0 && selectedBookings.ps.length === 0 && (
                 <div className="text-center text-gray-500 py-8 text-sm">
                   <Calendar size={24} className="mx-auto mb-2 opacity-40" />
                   Keine Buchungen an diesem Tag
@@ -484,8 +592,8 @@ export default function SponsorBookingCalendarPage() {
               <h3 className="font-semibold text-white mb-4">Monatsübersicht</h3>
               <div className="space-y-3">
                 <div className="p-3 bg-gray-800 rounded-lg">
-                  <div className="text-2xl font-bold text-white">{totalBookings}</div>
-                  <div className="text-xs text-gray-400">Buchungen gesamt</div>
+                  <div className="text-2xl font-bold text-white">{totalBookings + plannedSlots.length}</div>
+                  <div className="text-xs text-gray-400">Einträge gesamt</div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="p-3 bg-gray-800 rounded-lg">
@@ -497,9 +605,15 @@ export default function SponsorBookingCalendarPage() {
                     <div className="text-xs text-gray-400">Zeitraum-Buchungen</div>
                   </div>
                 </div>
-                <div className="p-3 bg-gray-800 rounded-lg">
-                  <div className="text-lg font-bold text-green-400">{adPlacements.length}</div>
-                  <div className="text-xs text-gray-400">Werbeplatz-Buchungen</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3 bg-gray-800 rounded-lg">
+                    <div className="text-lg font-bold text-green-400">{adPlacements.length}</div>
+                    <div className="text-xs text-gray-400">Werbeplatz-Buchungen</div>
+                  </div>
+                  <div className="p-3 bg-amber-900/20 border border-amber-700/50 rounded-lg">
+                    <div className="text-lg font-bold text-amber-400">{plannedSlots.length}</div>
+                    <div className="text-xs text-amber-500">Vorplanungen</div>
+                  </div>
                 </div>
                 {adPlacements.length > 0 && (
                   <div className="p-3 bg-gray-800 rounded-lg">
@@ -515,13 +629,33 @@ export default function SponsorBookingCalendarPage() {
                     <div className="text-xs text-red-300">Konflikte erkannt</div>
                   </div>
                 )}
-                <div className="p-3 bg-gray-800 rounded-lg">
-                  <div className="text-lg font-bold text-green-400">
-                    {episodeBookings.filter(b => b.confirmed).length}
-                  </div>
-                  <div className="text-xs text-gray-400">Bestätigte Episodenbuchungen</div>
-                </div>
               </div>
+
+              {/* Vorplanungen-Liste */}
+              {plannedSlots.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Clock size={12} /> Offene Vorplanungen
+                  </h4>
+                  <div className="space-y-2">
+                    {plannedSlots.slice(0, 5).map(p => (
+                      <div key={p.id} className="p-2 bg-amber-900/10 border border-amber-700/40 rounded-lg cursor-pointer hover:border-amber-600"
+                        onClick={() => navigate(`/sponsors/${p.sponsorId}`)}>
+                        <div className="text-xs text-amber-300 font-medium">{p.sponsorName}</div>
+                        <div className="text-[11px] text-amber-500/80 mt-0.5">{p.label}</div>
+                        {p.startDate && (
+                          <div className="text-[10px] text-gray-500 mt-0.5">
+                            {new Date(p.startDate + 'T12:00:00').toLocaleDateString('de-DE')} – {p.endDate ? new Date(p.endDate + 'T12:00:00').toLocaleDateString('de-DE') : '?'}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {plannedSlots.length > 5 && (
+                      <div className="text-[11px] text-gray-500 pl-1">+{plannedSlots.length - 5} weitere Vorplanungen</div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Konflikte-Liste */}
               {conflicts.length > 0 && (
@@ -543,7 +677,21 @@ export default function SponsorBookingCalendarPage() {
                 </div>
               )}
 
+              {/* Export-Bereich */}
               <div className="mt-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                <div className="text-xs text-gray-400 font-semibold mb-2 flex items-center gap-1">
+                  <Download size={12} /> Export
+                </div>
+                <button
+                  onClick={handleExportCsv}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg transition-colors"
+                >
+                  <FileText size={12} />
+                  CSV für {MONTHS_DE[month]} {year}
+                </button>
+              </div>
+
+              <div className="mt-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
                 <div className="flex items-center gap-2 text-xs text-gray-400">
                   <Info size={12} />
                   Klicke auf einen Tag um Details zu sehen.

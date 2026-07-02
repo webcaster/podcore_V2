@@ -228,7 +228,7 @@ function initializeSchema(db: any): void {
     CREATE TABLE IF NOT EXISTS ad_placements (
       id TEXT PRIMARY KEY,
       ad_slot_id TEXT NOT NULL,
-      episode_id TEXT NOT NULL,
+      episode_id TEXT,
       episode_title TEXT,
       episode_number INTEGER,
       position TEXT NOT NULL DEFAULT 'mid-roll',
@@ -236,6 +236,19 @@ function initializeSchema(db: any): void {
       publish_date TEXT,
       listens INTEGER,
       notes TEXT,
+      price REAL DEFAULT NULL,
+      currency TEXT NOT NULL DEFAULT 'EUR',
+      invoice_number TEXT DEFAULT NULL,
+      invoice_date TEXT DEFAULT NULL,
+      invoice_status TEXT NOT NULL DEFAULT 'offen',
+      invoice_notes TEXT DEFAULT NULL,
+      placement_start TEXT DEFAULT NULL,
+      placement_end TEXT DEFAULT NULL,
+      placement_label TEXT DEFAULT NULL,
+      performance_notes TEXT DEFAULT NULL,
+      delivery_confirmed INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'geplant',
+      ad_title TEXT DEFAULT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -594,6 +607,60 @@ function initializeSchema(db: any): void {
 
   // Chat messages table migration for existing DBs
   try { db.exec('CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, recipient_id TEXT, channel TEXT, message TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime("now")), FOREIGN KEY (sender_id) REFERENCES users(id), FOREIGN KEY (recipient_id) REFERENCES users(id))'); } catch (_) {}
+
+  // ad_placements: episode_id nullable machen + status + ad_title Spalten (v2.11.1)
+  // SQLite kann NOT NULL nicht per ALTER TABLE entfernen → Tabelle neu erstellen
+  try {
+    const hasNullableEpisode = db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='ad_placements'") as any;
+    if (hasNullableEpisode && hasNullableEpisode.sql && hasNullableEpisode.sql.includes('episode_id TEXT NOT NULL')) {
+      db.exec(`
+        BEGIN;
+        CREATE TABLE IF NOT EXISTS ad_placements_new (
+          id TEXT PRIMARY KEY,
+          ad_slot_id TEXT NOT NULL,
+          episode_id TEXT,
+          episode_title TEXT,
+          episode_number INTEGER,
+          position TEXT NOT NULL DEFAULT 'mid-roll',
+          confirmed INTEGER NOT NULL DEFAULT 0,
+          publish_date TEXT,
+          listens INTEGER,
+          notes TEXT,
+          price REAL DEFAULT NULL,
+          currency TEXT NOT NULL DEFAULT 'EUR',
+          invoice_number TEXT DEFAULT NULL,
+          invoice_date TEXT DEFAULT NULL,
+          invoice_status TEXT NOT NULL DEFAULT 'offen',
+          invoice_notes TEXT DEFAULT NULL,
+          placement_start TEXT DEFAULT NULL,
+          placement_end TEXT DEFAULT NULL,
+          placement_label TEXT DEFAULT NULL,
+          performance_notes TEXT DEFAULT NULL,
+          delivery_confirmed INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'geplant',
+          ad_title TEXT DEFAULT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO ad_placements_new SELECT
+          id, ad_slot_id, episode_id, episode_title, episode_number, position, confirmed,
+          publish_date, listens, notes,
+          COALESCE(price, NULL), COALESCE(currency, 'EUR'),
+          COALESCE(invoice_number, NULL), COALESCE(invoice_date, NULL),
+          COALESCE(invoice_status, 'offen'), COALESCE(invoice_notes, NULL),
+          COALESCE(placement_start, NULL), COALESCE(placement_end, NULL),
+          COALESCE(placement_label, NULL), COALESCE(performance_notes, NULL),
+          COALESCE(delivery_confirmed, 0), 'geplant', NULL, created_at
+        FROM ad_placements;
+        DROP TABLE ad_placements;
+        ALTER TABLE ad_placements_new RENAME TO ad_placements;
+        COMMIT;
+      `);
+      console.log('[DB] ad_placements migrated: episode_id nullable, status + ad_title added');
+    }
+  } catch (e) { console.error('[DB] ad_placements migration failed:', e); }
+  // ad_placements: status und ad_title Spalten sicherstellen (falls Tabelle schon neu war)
+  try { db.exec("ALTER TABLE ad_placements ADD COLUMN status TEXT NOT NULL DEFAULT 'geplant'"); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN ad_title TEXT DEFAULT NULL'); } catch (_) {}
 
   // Default admin user
   const userCount = db.get('SELECT COUNT(*) as count FROM users') as any;

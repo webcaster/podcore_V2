@@ -1096,20 +1096,30 @@ export default function SponsorDetailPage() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <h4 className="text-text-primary font-medium text-sm">{pl.adTitle || 'Unbenannte Werbung'}</h4>
-                            {pl.placementLabel && (
+                            <h4 className={`font-medium text-sm ${pl.isPlanned ? 'text-amber-300' : 'text-text-primary'}`}>
+                              {pl.isPlanned && '◷ '}{pl.adTitle || pl.slotName || pl.placementLabel || 'Unbenannte Werbung'}
+                            </h4>
+                            {pl.isPlanned && (
+                              <span className="badge text-xs bg-amber-900/40 text-amber-400 border border-amber-700/50">Vorplanung</span>
+                            )}
+                            {pl.placementLabel && !pl.isPlanned && (
                               <span className="badge text-xs bg-accent-blue/20 text-accent-blue">{pl.placementLabel}</span>
                             )}
-                            <span className={`badge text-xs ${si.color}`}>{si.label}</span>
+                            {!pl.isPlanned && <span className={`badge text-xs ${si.color}`}>{si.label}</span>}
+                            {pl.categoryName && (
+                              <span className="badge text-xs bg-surface-overlay text-text-muted">{pl.categoryName}</span>
+                            )}
                             <span className={`badge text-xs ${
                               pl.invoiceStatus === 'bezahlt' ? 'bg-accent-green/20 text-accent-green' :
                               pl.invoiceStatus === 'versendet' ? 'bg-accent-orange/20 text-accent-orange' :
                               pl.invoiceStatus === 'storniert' ? 'bg-accent-red/20 text-accent-red' :
+                              pl.invoiceStatus === 'geplant' ? 'bg-amber-900/30 text-amber-400' :
                               'bg-surface-overlay text-text-muted'
                             }`}>
                               {pl.invoiceStatus === 'bezahlt' ? '✓ Bezahlt' :
                                pl.invoiceStatus === 'versendet' ? '→ Versendet' :
-                               pl.invoiceStatus === 'storniert' ? '✕ Storniert' : '○ Offen'}
+                               pl.invoiceStatus === 'storniert' ? '✕ Storniert' :
+                               pl.invoiceStatus === 'geplant' ? '◷ Geplant' : '○ Offen'}
                             </span>
                           </div>
 
