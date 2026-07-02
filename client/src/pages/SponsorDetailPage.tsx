@@ -969,11 +969,27 @@ export default function SponsorDetailPage() {
               />
             </div>
 
+            {/* Hinweis wenn keine echten Buchungen vorhanden */}
+            {placements.filter(p => !p.isPlanned).length === 0 && (
+              <div className="flex items-start gap-2 p-3 bg-amber-900/20 border border-amber-700/40 rounded-lg text-xs text-amber-300">
+                <Info size={14} className="mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-semibold">Leistungsübersicht</span> ist erst verfügbar, wenn mindestens eine Episode mit diesem Sponsor ausgestrahlt wurde und als Buchung erfasst ist.
+                  Die <span className="font-semibold">Buchungsbestätigung</span> hingegen zeigt alle Vorplanungen für den Kunden.
+                </div>
+              </div>
+            )}
+
             {/* Export-Buttons */}
             <div className="flex flex-wrap gap-3 pt-1">
               <div className="flex items-center gap-2">
                 <PdfLayoutPicker exportType="invoice" value={pdfLayoutId} onChange={setPdfLayoutId} />
-                <button onClick={handleExportLeistungPdf} disabled={isExportingLeistung} className="btn-primary">
+                <button
+                  onClick={handleExportLeistungPdf}
+                  disabled={isExportingLeistung || placements.filter(p => !p.isPlanned).length === 0}
+                  title={placements.filter(p => !p.isPlanned).length === 0 ? 'Keine abgeschlossenen Buchungen – erst nach Ausstrahlung verfügbar' : 'Leistungsübersicht als PDF exportieren'}
+                  className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                >
                   {isExportingLeistung ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                   <span>Leistungsübersicht (PDF)</span>
                 </button>

@@ -1454,14 +1454,33 @@ router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any,
     doc.moveDown(1.5);
   };
 
-  // Abschnitt 1: Episodengebundene Platzierungen
-  renderSection('Geplante Episoden-Platzierungen', episodePlacements);
+  // Vorplanungen: Slots ohne Buchung
+  const bookedSlotIdsConf = new Set(episodePlacements.map((p: any) => p.ad_slot_id));
+  const plannedSlotsForPdf = slots
+    .filter((s: any) => !bookedSlotIdsConf.has(s.id))
+    .map((s: any) => ({
+      placement_label: s.placement_label || s.name,
+      slot_name: s.name,
+      position: s.category || 'pre-roll',
+      placement_start: s.placement_start,
+      placement_end: s.placement_end,
+      publish_date: s.placement_start || null,
+      price: s.base_price || s.price_per_episode || null,
+      currency: s.currency || 'EUR',
+      isPlanned: true,
+    }));
+
+  // Abschnitt 1: Episodengebundene Platzierungen (echte Buchungen)
+  renderSection('Gebuchte Episoden-Platzierungen', episodePlacements);
 
   // Abschnitt 2: Zeitraum-Buchungen (ohne feste Folge)
   renderSection('Zeitraum-Buchungen (ohne feste Folge)', standaloneBookings);
 
+  // Abschnitt 3: Vorplanungen (Werbeplätze ohne Buchung)
+  renderSection('Vorplanungen (noch nicht final gebucht)', plannedSlotsForPdf);
+
   // Gesamt
-  const allRows = [...episodePlacements, ...standaloneBookings];
+  const allRows = [...episodePlacements, ...standaloneBookings, ...plannedSlotsForPdf];
   const totalRevenue = allRows.reduce((sum: number, p: any) => sum + (p.price || p.base_price || 0), 0);
   if (allRows.length === 0) {
     doc.fillColor(layout.colors.muted).fontSize(layout.typography.bodySize)

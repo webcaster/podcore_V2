@@ -345,27 +345,37 @@ export default function SponsorBookingCalendarPage() {
 
           {/* Undatierte Einträge */}
           {(undatedPlacements.length > 0 || undatedPlanned.length > 0) && (
-            <div className="mt-4 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
-              <div className="text-xs text-gray-400 font-semibold mb-2 flex items-center gap-1">
-                <Info size={12} /> Einträge ohne Datum
+            <div className="mt-4 p-3 bg-amber-900/15 border border-amber-700/50 rounded-lg">
+              <div className="text-xs text-amber-400 font-semibold mb-2 flex items-center gap-1">
+                <Clock size={12} /> Vorplanungen & Buchungen ohne Datum
+                <span className="ml-auto text-[10px] text-amber-500/70 font-normal">Im Kalender nicht sichtbar</span>
               </div>
-              <div className="space-y-1">
-                {undatedPlacements.map(p => (
-                  <div key={p.id} className="flex items-center gap-2 text-xs text-gray-400">
-                    <span style={{ color: p.sponsorColor }}>●</span>
-                    <span className="font-medium text-white">{p.sponsorName}</span>
-                    {p.slotName && <span className="text-gray-500">– {p.slotName}</span>}
-                    <span className="text-[10px] text-green-400 ml-auto">{p.price?.toFixed(2)} €</span>
-                  </div>
-                ))}
+              <div className="space-y-1.5">
                 {undatedPlanned.map(p => (
-                  <div key={p.id} className="flex items-center gap-2 text-xs text-amber-400">
-                    <span>◷</span>
-                    <span className="font-medium">{p.sponsorName}</span>
-                    {p.label && <span className="text-amber-500/70">– {p.label}</span>}
-                    <span className="text-[10px] text-gray-500 ml-auto">Vorplanung ohne Datum</span>
+                  <div key={p.id} className="flex items-center gap-2 text-xs text-amber-300 bg-amber-900/20 rounded px-2 py-1.5">
+                    <span className="text-amber-400">◷</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium">{p.sponsorName}</span>
+                      {p.label && <span className="text-amber-500/70 ml-1">– {p.label}</span>}
+                    </div>
+                    {(p.basePrice || p.pricePerEpisode) && (
+                      <span className="text-[10px] text-amber-400 shrink-0">{(p.basePrice || p.pricePerEpisode || 0).toFixed(2)} €</span>
+                    )}
                   </div>
                 ))}
+                {undatedPlacements.map(p => (
+                  <div key={p.id} className="flex items-center gap-2 text-xs text-green-300 bg-green-900/20 rounded px-2 py-1.5">
+                    <span style={{ color: p.sponsorColor }}>●</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium text-white">{p.sponsorName}</span>
+                      {p.slotName && <span className="text-gray-400 ml-1">– {p.slotName}</span>}
+                    </div>
+                    <span className="text-[10px] text-green-400 shrink-0">{p.price?.toFixed(2)} €</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 text-[10px] text-amber-600/70">
+                Tipp: Laufzeit-Datum im Werbeplatz eintragen, damit Vorplanungen im Kalender erscheinen.
               </div>
             </div>
           )}
