@@ -39,7 +39,8 @@ export default function SponsorDetailPage() {
   const navigate = useNavigate();
   const { can, showSuccess, showError } = useApp();
   const [sponsor, setSponsor] = useState<any>(null);
-  const [placements, setPlacements] = useState<any[]>([]);
+  const [placements, setPlacements] = useState<any[]>([]); // echte ad_placements (aus billing)
+  const [slots, setSlots] = useState<any[]>([]); // ad_slots (Werbeplätze)
   const [categories, setCategories] = useState<any[]>([]);
   const [episodes, setEpisodes] = useState<any[]>([]);
   const [episodeBookings, setEpisodeBookings] = useState<any[]>([]);
@@ -108,13 +109,14 @@ export default function SponsorDetailPage() {
     if (!id) return;
     setIsLoading(true);
     try {
-      const [spData, plData, catData, epData] = await Promise.all([
+      const [spData, slotData, catData, epData] = await Promise.all([
         sponsorsApi.get(id),
-        sponsorsApi.getPlacements(id),
+        sponsorsApi.listSlots(id),
         sponsorsApi.listCategories(),
         episodesApi.list({ pageSize: 200 }),
       ]);
       setSponsor(spData);
+      setSlots(slotData || []);
       setEpisodeBookings(spData.episodeBookings || []);
       setForm({
         name: spData.name || '',
@@ -134,7 +136,6 @@ export default function SponsorDetailPage() {
         contactHint: spData.contactHint || '',
         currency: spData.currency || 'EUR',
       });
-      setPlacements(plData);
       setCategories(catData);
       setEpisodes(epData.items || []);
     } catch (err: any) { showError(err.message); }
@@ -218,7 +219,8 @@ export default function SponsorDetailPage() {
         showSuccess('Platzierung erstellt');
       }
       setShowPlacementModal(false);
-      load();
+      load(); // lädt Slots neu
+      loadBilling(); // lädt echte Placements für Billing-Tab neu
     } catch (err: any) { showError(err.message); }
   };
 
@@ -228,6 +230,7 @@ export default function SponsorDetailPage() {
       await sponsorsApi.deleteSlot(placementId);
       showSuccess('Platzierung gelöscht');
       load();
+      loadBilling();
     } catch (err: any) { showError(err.message); }
   };
 
@@ -371,6 +374,8 @@ export default function SponsorDetailPage() {
     try {
       const data = await sponsorsApi.getBilling(id);
       setBillingData(data);
+      // Echte Placements (ad_placements) aus dem Billing-Endpunkt laden
+      setPlacements(data?.placements || []);
     } catch {}
   };
 
@@ -537,7 +542,7 @@ export default function SponsorDetailPage() {
       <div className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit">
         {[
           { key: 'overview', label: 'Übersicht' },
-          { key: 'placements', label: `Platzierungen (${placements.length})` },
+          { key: 'placements', label: `Werbeplätze (${slots.length})` },
           { key: 'billing', label: 'Abrechnung' },
           { key: 'contact', label: 'Kontakt & Vertrag' },
         ].map(tab => (
@@ -716,17 +721,17 @@ export default function SponsorDetailPage() {
             )}
           </div>
 
-          {placements.length === 0 ? (
+          {slots.length === 0 ? (
             <div className="card text-center py-12">
               <Tag size={32} className="text-text-muted mx-auto mb-3" />
-              <p className="text-text-secondary">Noch keine Platzierungen</p>
+              <p className="text-text-secondary">Noch keine Werbeplätze angelegt</p>
               {can('canEditSponsors') && (
-                <button onClick={openCreatePlacement} className="btn-primary mt-4 mx-auto"><Plus size={16} /><span>Erste Platzierung erstellen</span></button>
+                <button onClick={openCreatePlacement} className="btn-primary mt-4 mx-auto"><Plus size={16} /><span>Ersten Werbeplatz erstellen</span></button>
               )}
             </div>
           ) : (
             <div className="space-y-3">
-              {placements.map(pl => {
+              {slots.map(pl => {
                 const si = adStatusInfo(pl.status);
                 const cat = categories.find(c => c.id === pl.categoryId);
                 const runtime = calcRuntime(pl.placementStart, pl.placementEnd);
@@ -761,7 +766,7 @@ export default function SponsorDetailPage() {
                           )}
                           <span className="capitalize">{pl.position?.replace('-', ' ')}</span>
                           <span className="flex items-center gap-1"><Clock size={11} />{pl.duration}s</span>
-                          {pl.price && <span className="font-medium text-accent-green">{pl.price.toFixed(2)} €</span>}
+                          {(pl.price != null || pl.basePrice != null) && <span className="font-medium text-accent-green">{((pl.price || pl.basePrice || 0) as number).toFixed(2)} €</span>}
                           {pl.deliveryType === 'produced' ? (
                             <span className="flex items-center gap-1 text-accent-purple"><Mic2 size={11} />Produziert</span>
                           ) : (
@@ -1085,7 +1090,7 @@ export default function SponsorDetailPage() {
                             </div>
                             <div>
                               <p className="text-text-muted text-xs">Preis</p>
-                              <p className="text-text-primary font-medium">{pl.price ? `${pl.price.toFixed(2)} €` : '—'}</p>
+                              <p className="text-text-primary font-medium">{pl.price != null ? `${(pl.price as number).toFixed(2)} €` : '—'}</p>
                             </div>
                             <div>
                               <p className="text-text-muted text-xs">Rechnungs-Nr.</p>
