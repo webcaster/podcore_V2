@@ -1414,7 +1414,7 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
   const db = getDb();
   const { from, to } = req.query as any;
 
-  // 1. Episodengebundene Buchungen
+  // 1. Episodengebundene Buchungen (alte episode_ad_bookings)
   const episodeBookings = db.all(`
     SELECT b.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
            c.name as category_name, c.color as category_color, c.is_exclusive,
@@ -1437,7 +1437,21 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
     ORDER BY COALESCE(sl.placement_start, sl.start_date) ASC
   `) as any[];
 
-  // 3. Konflikte erkennen: Exklusive Kategorien an gleichen Terminen
+  // 3. ad_placements (neue Buchungen über Plus-Button in Sponsor-Detailseite)
+  const adPlacements = db.all(`
+    SELECT p.*, sl.name as slot_name, sl.category_id,
+           sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
+           c.name as category_name, c.color as category_color, c.is_exclusive,
+           e.title as ep_title, e.number as ep_number, e.status as ep_status
+    FROM ad_placements p
+    JOIN ad_slots sl ON p.ad_slot_id = sl.id
+    JOIN sponsors sp ON sl.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON sl.category_id = c.id
+    LEFT JOIN episodes e ON p.episode_id = e.id
+    ORDER BY COALESCE(p.publish_date, p.created_at) ASC
+  `) as any[];
+
+  // 4. Konflikte erkennen: Exklusive Kategorien an gleichen Terminen
   const conflicts: any[] = [];
   const exclusiveBookings = episodeBookings.filter((b: any) => b.is_exclusive);
   const byDate: Record<string, any[]> = {};
@@ -1458,7 +1472,7 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
     }
   });
 
-  // 4. Datum-Filter anwenden
+  // 5. Datum-Filter anwenden
   let filteredEpisodeBookings = episodeBookings;
   if (from) filteredEpisodeBookings = filteredEpisodeBookings.filter((b: any) => !b.publish_date || b.publish_date >= from);
   if (to) filteredEpisodeBookings = filteredEpisodeBookings.filter((b: any) => !b.publish_date || b.publish_date <= to);
@@ -1471,6 +1485,16 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
   if (to) filteredSlotBookings = filteredSlotBookings.filter((b: any) => {
     const end = b.placement_end || b.end_date;
     return !end || end <= to;
+  });
+
+  let filteredAdPlacements = adPlacements;
+  if (from) filteredAdPlacements = filteredAdPlacements.filter((p: any) => {
+    const d = p.publish_date || p.air_date;
+    return !d || d >= from;
+  });
+  if (to) filteredAdPlacements = filteredAdPlacements.filter((p: any) => {
+    const d = p.publish_date || p.air_date;
+    return !d || d <= to;
   });
 
   return res.json({
@@ -1511,6 +1535,28 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
         status: b.status,
         basePrice: b.base_price,
         pricePerEpisode: b.price_per_episode,
+      })),
+      // Neue ad_placements (Buchungen über Plus-Button)
+      adPlacements: filteredAdPlacements.map((p: any) => ({
+        id: p.id,
+        type: 'placement',
+        sponsorId: p.sponsor_id,
+        sponsorName: p.sponsor_name,
+        sponsorCompany: p.sponsor_company,
+        sponsorColor: p.sponsor_color || '#059669',
+        categoryName: p.category_name,
+        categoryColor: p.category_color || '#6b7280',
+        isExclusive: p.is_exclusive === 1,
+        position: p.position || 'pre-roll',
+        episodeId: p.episode_id,
+        episodeTitle: p.episode_title || p.ep_title,
+        episodeNumber: p.episode_number || p.ep_number,
+        date: p.publish_date,
+        slotName: p.slot_name,
+        price: p.price,
+        invoiceStatus: p.invoice_status,
+        status: p.status,
+        notes: p.notes,
       })),
       conflicts,
     },

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, Clock,
-  Calendar, Filter, RefreshCw, Info, Megaphone, Tag, ExternalLink,
+  Calendar, Filter, RefreshCw, Info, Megaphone, Tag, ExternalLink, Euro,
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
 
@@ -21,6 +21,14 @@ interface SlotBooking {
   startDate?: string; endDate?: string; label?: string; status?: string;
   basePrice?: number; pricePerEpisode?: number;
 }
+interface AdPlacement {
+  id: string; type: 'placement'; sponsorId: string; sponsorName: string;
+  sponsorCompany?: string; sponsorColor: string; categoryName?: string;
+  categoryColor: string; isExclusive: boolean; position?: string;
+  episodeId?: string; episodeTitle?: string; episodeNumber?: number;
+  date?: string; slotName?: string; price?: number;
+  invoiceStatus?: string; status?: string; notes?: string;
+}
 interface Conflict {
   type: string; date: string; categoryName: string;
   bookings: { id: string; sponsorName: string; episodeTitle?: string }[];
@@ -35,7 +43,6 @@ function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
 function getFirstDayOfMonth(year: number, month: number) {
-  // 0=So → umrechnen auf Mo=0
   const d = new Date(year, month, 1).getDay();
   return d === 0 ? 6 : d - 1;
 }
@@ -48,6 +55,13 @@ const positionLabels: Record<string, string> = {
   'folgensponsor': 'Folgensponsor', 'sonderbuchung': 'Sonderbuchung',
 };
 
+const invoiceStatusColors: Record<string, string> = {
+  'offen': 'bg-yellow-900/50 text-yellow-400',
+  'versendet': 'bg-blue-900/50 text-blue-400',
+  'bezahlt': 'bg-green-900/50 text-green-400',
+  'storniert': 'bg-gray-700 text-gray-400',
+};
+
 // ─── Haupt-Komponente ─────────────────────────────────────────────────────────
 export default function SponsorBookingCalendarPage() {
   const navigate = useNavigate();
@@ -56,6 +70,7 @@ export default function SponsorBookingCalendarPage() {
   const [month, setMonth] = useState(today.getMonth());
   const [episodeBookings, setEpisodeBookings] = useState<EpisodeBooking[]>([]);
   const [slotBookings, setSlotBookings] = useState<SlotBooking[]>([]);
+  const [adPlacements, setAdPlacements] = useState<AdPlacement[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -67,6 +82,7 @@ export default function SponsorBookingCalendarPage() {
   const allSponsors = Array.from(new Set([
     ...episodeBookings.map(b => b.sponsorName),
     ...slotBookings.map(b => b.sponsorName),
+    ...adPlacements.map(p => p.sponsorName),
   ])).sort();
 
   const load = useCallback(async () => {
@@ -77,6 +93,7 @@ export default function SponsorBookingCalendarPage() {
       const res = await sponsorsApi.getBookingCalendar({ from: firstDay, to: lastDay });
       setEpisodeBookings(res.data?.episodeBookings || []);
       setSlotBookings(res.data?.slotBookings || []);
+      setAdPlacements(res.data?.adPlacements || []);
       setConflicts(res.data?.conflicts || []);
     } catch (e) {
       console.error(e);
@@ -95,16 +112,22 @@ export default function SponsorBookingCalendarPage() {
   const getBookingsForDay = (dateStr: string) => {
     let ep = episodeBookings.filter(b => b.date === dateStr);
     let sl = slotBookings.filter(b => b.startDate && b.endDate && dateStr >= b.startDate && dateStr <= b.endDate);
+    let pl = adPlacements.filter(p => p.date === dateStr);
     if (filterSponsor) {
       ep = ep.filter(b => b.sponsorName === filterSponsor);
       sl = sl.filter(b => b.sponsorName === filterSponsor);
+      pl = pl.filter(p => p.sponsorName === filterSponsor);
     }
     if (filterPosition) {
       ep = ep.filter(b => b.position === filterPosition);
       sl = sl.filter(b => b.position === filterPosition);
+      pl = pl.filter(p => p.position === filterPosition);
     }
-    return { ep, sl };
+    return { ep, sl, pl };
   };
+
+  // Placements ohne Datum: im aktuellen Monat anzeigen (als "undatiert")
+  const undatedPlacements = adPlacements.filter(p => !p.date);
 
   const hasConflict = (dateStr: string) => conflicts.some(c => c.date === dateStr);
 
@@ -116,6 +139,8 @@ export default function SponsorBookingCalendarPage() {
   // Detail-Panel für ausgewählten Tag
   const selectedBookings = selectedDay ? getBookingsForDay(selectedDay) : null;
   const selectedConflicts = selectedDay ? conflicts.filter(c => c.date === selectedDay) : [];
+
+  const totalBookings = episodeBookings.length + slotBookings.length + adPlacements.length;
 
   return (
     <div className="flex flex-col h-full bg-gray-950 text-gray-100 min-h-screen">
@@ -205,11 +230,11 @@ export default function SponsorBookingCalendarPage() {
                   return <div key={i} className="min-h-[80px] bg-gray-900/30 rounded-lg" />;
                 }
                 const dateStr = toIso(year, month, dayNum);
-                const { ep, sl } = getBookingsForDay(dateStr);
+                const { ep, sl, pl } = getBookingsForDay(dateStr);
                 const isConflict = hasConflict(dateStr);
                 const isToday = dateStr === today.toISOString().split('T')[0];
                 const isSelected = dateStr === selectedDay;
-                const hasBookings = ep.length > 0 || sl.length > 0;
+                const hasBookings = ep.length > 0 || sl.length > 0 || pl.length > 0;
                 if (showConflictsOnly && !isConflict) {
                   return <div key={i} className="min-h-[80px] bg-gray-900/20 rounded-lg opacity-30" />;
                 }
@@ -234,20 +259,26 @@ export default function SponsorBookingCalendarPage() {
                       {isConflict && <AlertTriangle size={10} className="text-red-400" />}
                     </div>
                     <div className="space-y-0.5">
-                      {ep.slice(0, 3).map(b => (
+                      {ep.slice(0, 2).map(b => (
                         <div key={b.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
                           style={{ backgroundColor: b.sponsorColor + '30', borderLeft: `2px solid ${b.sponsorColor}` }}>
                           <span className="truncate font-medium" style={{ color: b.sponsorColor }}>{b.sponsorName}</span>
                         </div>
                       ))}
-                      {sl.slice(0, 2).map(b => (
+                      {sl.slice(0, 1).map(b => (
                         <div key={b.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
                           style={{ backgroundColor: b.sponsorColor + '20', borderLeft: `2px dashed ${b.sponsorColor}` }}>
                           <span className="truncate text-gray-400">{b.sponsorName}</span>
                         </div>
                       ))}
-                      {(ep.length + sl.length) > 5 && (
-                        <div className="text-[9px] text-gray-500 pl-1">+{ep.length + sl.length - 5} weitere</div>
+                      {pl.slice(0, 2).map(p => (
+                        <div key={p.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
+                          style={{ backgroundColor: p.sponsorColor + '25', borderLeft: `2px solid ${p.sponsorColor}`, borderStyle: 'dotted' }}>
+                          <span className="truncate" style={{ color: p.sponsorColor }}>● {p.sponsorName}</span>
+                        </div>
+                      ))}
+                      {(ep.length + sl.length + pl.length) > 5 && (
+                        <div className="text-[9px] text-gray-500 pl-1">+{ep.length + sl.length + pl.length - 5} weitere</div>
                       )}
                     </div>
                   </div>
@@ -256,8 +287,27 @@ export default function SponsorBookingCalendarPage() {
             </div>
           )}
 
+          {/* Undatierte Placements-Hinweis */}
+          {undatedPlacements.length > 0 && (
+            <div className="mt-4 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
+              <div className="text-xs text-gray-400 font-semibold mb-2 flex items-center gap-1">
+                <Info size={12} /> {undatedPlacements.length} Buchung{undatedPlacements.length !== 1 ? 'en' : ''} ohne Ausstrahlungsdatum
+              </div>
+              <div className="space-y-1">
+                {undatedPlacements.map(p => (
+                  <div key={p.id} className="flex items-center gap-2 text-xs text-gray-400">
+                    <span style={{ color: p.sponsorColor }}>●</span>
+                    <span className="font-medium text-white">{p.sponsorName}</span>
+                    {p.slotName && <span className="text-gray-500">– {p.slotName}</span>}
+                    {p.price && <span className="text-green-400 ml-auto">{p.price.toFixed(2)} €</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Legende */}
-          <div className="flex items-center gap-4 mt-4 text-xs text-gray-500">
+          <div className="flex items-center gap-4 mt-4 text-xs text-gray-500 flex-wrap">
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded border-l-2 border-purple-500 bg-purple-500/20" />
               Episodenbuchung
@@ -265,6 +315,10 @@ export default function SponsorBookingCalendarPage() {
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded border-l-2 border-dashed border-purple-500 bg-purple-500/10" />
               Zeitraum-Buchung
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded border-l-2 border-dotted border-green-500 bg-green-500/10" />
+              Werbeplatz-Buchung
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded border border-red-700 bg-red-900/20" />
@@ -366,7 +420,58 @@ export default function SponsorBookingCalendarPage() {
                 </div>
               )}
 
-              {selectedBookings && selectedBookings.ep.length === 0 && selectedBookings.sl.length === 0 && (
+              {/* Werbeplatz-Buchungen (ad_placements) */}
+              {selectedBookings && selectedBookings.pl.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-2">Werbeplatz-Buchungen</h4>
+                  <div className="space-y-2">
+                    {selectedBookings.pl.map(p => (
+                      <div key={p.id} className="p-3 rounded-lg border border-gray-700 bg-gray-800/50"
+                        style={{ borderLeftColor: p.sponsorColor, borderLeftWidth: 3 }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-sm text-white">{p.sponsorName}</span>
+                          {p.price != null && (
+                            <span className="flex items-center gap-0.5 text-[10px] text-green-400">
+                              <Euro size={9} />{p.price.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-400 space-y-0.5">
+                          {p.slotName && <div className="text-gray-300 font-medium">{p.slotName}</div>}
+                          {p.episodeTitle && (
+                            <div className="flex items-center gap-1">
+                              <Megaphone size={10} />
+                              <button onClick={() => p.episodeId && navigate(`/episodes/${p.episodeId}`)}
+                                className="hover:text-purple-400 transition-colors truncate max-w-[180px]">
+                                {p.episodeNumber ? `#${p.episodeNumber} ` : ''}{p.episodeTitle}
+                              </button>
+                            </div>
+                          )}
+                          {!p.episodeTitle && <div className="text-gray-500 italic">Zeitraum-Buchung</div>}
+                          <div className="flex items-center gap-1">
+                            <Tag size={10} />
+                            {positionLabels[p.position || ''] || p.position || 'Pre-Roll'}
+                          </div>
+                          {p.invoiceStatus && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${invoiceStatusColors[p.invoiceStatus] || 'bg-gray-700 text-gray-400'}`}>
+                              {p.invoiceStatus}
+                            </span>
+                          )}
+                          {p.notes && <div className="text-gray-500 text-[10px] mt-1 italic">{p.notes}</div>}
+                        </div>
+                        <button
+                          onClick={() => navigate(`/sponsors/${p.sponsorId}`)}
+                          className="mt-2 flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300"
+                        >
+                          <ExternalLink size={9} /> Sponsor öffnen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedBookings && selectedBookings.ep.length === 0 && selectedBookings.sl.length === 0 && selectedBookings.pl.length === 0 && (
                 <div className="text-center text-gray-500 py-8 text-sm">
                   <Calendar size={24} className="mx-auto mb-2 opacity-40" />
                   Keine Buchungen an diesem Tag
@@ -379,7 +484,7 @@ export default function SponsorBookingCalendarPage() {
               <h3 className="font-semibold text-white mb-4">Monatsübersicht</h3>
               <div className="space-y-3">
                 <div className="p-3 bg-gray-800 rounded-lg">
-                  <div className="text-2xl font-bold text-white">{episodeBookings.length + slotBookings.length}</div>
+                  <div className="text-2xl font-bold text-white">{totalBookings}</div>
                   <div className="text-xs text-gray-400">Buchungen gesamt</div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -392,6 +497,18 @@ export default function SponsorBookingCalendarPage() {
                     <div className="text-xs text-gray-400">Zeitraum-Buchungen</div>
                   </div>
                 </div>
+                <div className="p-3 bg-gray-800 rounded-lg">
+                  <div className="text-lg font-bold text-green-400">{adPlacements.length}</div>
+                  <div className="text-xs text-gray-400">Werbeplatz-Buchungen</div>
+                </div>
+                {adPlacements.length > 0 && (
+                  <div className="p-3 bg-gray-800 rounded-lg">
+                    <div className="text-lg font-bold text-green-300">
+                      {adPlacements.filter(p => p.price).reduce((sum, p) => sum + (p.price || 0), 0).toFixed(2)} €
+                    </div>
+                    <div className="text-xs text-gray-400">Umsatz Werbeplätze</div>
+                  </div>
+                )}
                 {conflicts.length > 0 && (
                   <div className="p-3 bg-red-900/20 border border-red-700 rounded-lg">
                     <div className="text-lg font-bold text-red-400">{conflicts.length}</div>
@@ -402,7 +519,7 @@ export default function SponsorBookingCalendarPage() {
                   <div className="text-lg font-bold text-green-400">
                     {episodeBookings.filter(b => b.confirmed).length}
                   </div>
-                  <div className="text-xs text-gray-400">Bestätigte Buchungen</div>
+                  <div className="text-xs text-gray-400">Bestätigte Episodenbuchungen</div>
                 </div>
               </div>
 
