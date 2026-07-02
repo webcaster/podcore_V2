@@ -589,6 +589,8 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE assets ADD COLUMN recording_date TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE assets ADD COLUMN location TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE assets ADD COLUMN custom_metadata TEXT DEFAULT NULL'); } catch (_) {}
+  // Assets: WaveSurfer Regions (v2.10.1)
+  try { db.exec('ALTER TABLE assets ADD COLUMN regions TEXT DEFAULT NULL'); } catch (_) {}
 
   // Chat messages table migration for existing DBs
   try { db.exec('CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, recipient_id TEXT, channel TEXT, message TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime("now")), FOREIGN KEY (sender_id) REFERENCES users(id), FOREIGN KEY (recipient_id) REFERENCES users(id))'); } catch (_) {}

@@ -107,7 +107,8 @@ function parseAsset(row: any) {
     sourceUrl: row.source_url ?? null,
     recordingDate: row.recording_date ?? null,
     location: row.location ?? null,
-    customMetadata: row.custom_metadata ? JSON.parse(row.custom_metadata) : [],
+    custom_metadata: row.custom_metadata ? JSON.parse(row.custom_metadata) : [],
+    regions: row.regions ? JSON.parse(row.regions) : [],
   };
 }
 
@@ -445,6 +446,7 @@ router.put('/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest
       recording_date = ?,
       location = ?,
       custom_metadata = ?,
+      regions = COALESCE(?, regions),
       updated_at = datetime('now')
     WHERE id = ?`,
     [
@@ -456,6 +458,7 @@ router.put('/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest
       mood ?? null, energy ?? null, notes ?? null,
       sourceUrl ?? null, recordingDate ?? null, location ?? null,
       customMetadata ? JSON.stringify(customMetadata) : null,
+      req.body.regions !== undefined ? JSON.stringify(req.body.regions) : null,
       req.params.id,
     ]
   );

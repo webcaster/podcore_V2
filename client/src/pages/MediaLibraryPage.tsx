@@ -1154,6 +1154,9 @@ function AudioEditorInline({ asset, onSaved }: { asset: any; onSaved?: () => voi
 
 // Eingebettete Version des AudioEditors (ohne Fixed-Overlay und ohne Close-Button)
 import WaveSurfer from 'wavesurfer.js';
+import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js';
+import HoverPlugin from 'wavesurfer.js/dist/plugins/hover.js';
+import MinimapPlugin from 'wavesurfer.js/dist/plugins/minimap.js';
 import {
   Play as PlayIcon, Pause as PauseIcon, Scissors as ScissorsIcon,
   MessageSquare as MsgIcon, Trash2 as TrashIcon, Save as SaveIcon,
@@ -1161,7 +1164,8 @@ import {
   Volume2 as VolIcon, VolumeX as VolXIcon,
   Flag as FlagIcon, Loader2 as LoaderIcon, Clock as ClockIcon,
   ChevronDown as ChevDownIcon, ChevronUp as ChevUpIcon,
-  Download as DownloadIcon, FileText as FileTextIcon
+  Download as DownloadIcon, FileText as FileTextIcon,
+  Layers as LayersIcon, MapPin as MapPinIcon, Plus as PlusRegionIcon
 } from 'lucide-react';
 import { api, mediaApi as mApi } from '../lib/api';
 
@@ -1186,6 +1190,15 @@ interface TimedCommentE {
   createdAt: string;
 }
 
+interface RegionE {
+  id: string;
+  start: number;
+  end: number;
+  label: string;
+  color: string;
+  loop: boolean;
+}
+
 const MARKER_TYPES_E = [
   { value: 'cut', label: 'Schnittmarke', color: '#ef4444', icon: '✂' },
   { value: 'chapter', label: 'Kapitel', color: '#3b82f6', icon: '📖' },
@@ -1203,9 +1216,20 @@ function fmtTime(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+const REGION_COLORS = [
+  'rgba(239,68,68,0.25)',
+  'rgba(59,130,246,0.25)',
+  'rgba(34,197,94,0.25)',
+  'rgba(249,115,22,0.25)',
+  'rgba(168,85,247,0.25)',
+  'rgba(20,184,166,0.25)',
+];
+
 function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => void }) {
   const waveformRef = useRef<HTMLDivElement>(null);
+  const minimapRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
+  const regionsRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -1215,15 +1239,20 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
   const [zoom, setZoom] = useState(50);
   const [markers, setMarkers] = useState<MarkerE[]>([]);
   const [timedComments, setTimedComments] = useState<TimedCommentE[]>([]);
+  const [regions, setRegions] = useState<RegionE[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showMarkerForm, setShowMarkerForm] = useState(false);
   const [showCommentForm, setShowCommentForm] = useState(false);
+  const [showRegionForm, setShowRegionForm] = useState(false);
   const [markerForm, setMarkerForm] = useState({ type: 'cut', label: '', time: 0 });
   const [commentForm, setCommentForm] = useState({ text: '', time: 0 });
+  const [regionForm, setRegionForm] = useState({ label: '', start: 0, end: 10, color: REGION_COLORS[0], loop: false });
   const [showMarkerList, setShowMarkerList] = useState(true);
   const [showCommentList, setShowCommentList] = useState(true);
+  const [showRegionList, setShowRegionList] = useState(true);
+  const [activeRegionId, setActiveRegionId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -1235,6 +1264,9 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
         setMarkers(Array.isArray(mkrs) ? mkrs : []);
         const comments = (assetData?.comments || []).filter((c: any) => c.time != null);
         setTimedComments(comments);
+        // Regions aus den Asset-Metadaten laden (gespeichert als JSON in asset.regions)
+        const savedRegions = assetData?.regions || [];
+        setRegions(Array.isArray(savedRegions) ? savedRegions : []);
       } catch (e) { /* ignore */ }
     };
     loadData();
@@ -1242,6 +1274,33 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
 
   useEffect(() => {
     if (!waveformRef.current) return;
+
+    // ── Hover-Plugin ──────────────────────────────────────────────────────────
+    const hover = HoverPlugin.create({
+      lineColor: '#a855f7',
+      lineWidth: 1,
+      labelBackground: '#1e1b4b',
+      labelColor: '#c4b5fd',
+      labelSize: '11px',
+      formatTimeCallback: (sec: number) => fmtTime(sec),
+    });
+
+    // ── Minimap-Plugin ────────────────────────────────────────────────────────
+    const minimap = MinimapPlugin.create({
+      height: 32,
+      waveColor: '#6366f1',
+      progressColor: '#7c3aed',
+      cursorColor: '#a855f7',
+      barWidth: 1,
+      barGap: 1,
+      overlayColor: 'rgba(168,85,247,0.15)',
+    });
+
+    // ── Regions-Plugin ────────────────────────────────────────────────────────
+    const regPlugin = RegionsPlugin.create();
+    regionsRef.current = regPlugin;
+
+    // ── WaveSurfer erstellen ──────────────────────────────────────────────────
     const ws = WaveSurfer.create({
       container: waveformRef.current,
       waveColor: '#4f46e5',
@@ -1251,20 +1310,145 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
       barGap: 1,
       height: 80,
       normalize: true,
+      plugins: [hover, minimap, regPlugin],
     });
     wsRef.current = ws;
+
     const url = mApi.getStreamUrl(asset.filename);
     ws.load(url);
-    ws.on('ready', () => { setIsReady(true); setIsLoading(false); setDuration(ws.getDuration()); });
+
+    ws.on('ready', () => {
+      setIsReady(true);
+      setIsLoading(false);
+      setDuration(ws.getDuration());
+      // Gespeicherte Regions nach dem Laden rendern
+      setRegions(prev => {
+        prev.forEach(r => {
+          regPlugin.addRegion({
+            id: r.id,
+            start: r.start,
+            end: r.end,
+            content: r.label,
+            color: r.color,
+            drag: true,
+            resize: true,
+          });
+        });
+        return prev;
+      });
+    });
+
+    // Regions-Events: Drag/Resize → State aktualisieren
+    regPlugin.on('region-updated', (region: any) => {
+      setRegions(prev => prev.map(r =>
+        r.id === region.id ? { ...r, start: region.start, end: region.end } : r
+      ));
+    });
+
+    // Doppelklick auf Region → löschen
+    regPlugin.on('region-double-clicked', (region: any, e: MouseEvent) => {
+      e.stopPropagation();
+      region.remove();
+      setRegions(prev => prev.filter(r => r.id !== region.id));
+    });
+
+    // Klick auf Region → aktiv setzen / abspielen
+    regPlugin.on('region-clicked', (region: any, e: MouseEvent) => {
+      e.stopPropagation();
+      setActiveRegionId(region.id);
+    });
+
+    // Drag auf leere Waveform → neue Region anlegen
+    regPlugin.enableDragSelection({
+      color: REGION_COLORS[0],
+    });
+
+    regPlugin.on('region-created', (region: any) => {
+      // Nur neue Regions (ohne id aus gespeicherten) aufnehmen
+      setRegions(prev => {
+        const exists = prev.find(r => r.id === region.id);
+        if (exists) return prev;
+        const newRegion: RegionE = {
+          id: region.id,
+          start: region.start,
+          end: region.end,
+          label: '',
+          color: REGION_COLORS[prev.length % REGION_COLORS.length],
+          loop: false,
+        };
+        // Farbe aktualisieren
+        region.setOptions({ color: newRegion.color });
+        return [...prev, newRegion].sort((a, b) => a.start - b.start);
+      });
+    });
+
     ws.on('audioprocess', () => setCurrentTime(ws.getCurrentTime()));
     ws.on('seek', () => setCurrentTime(ws.getCurrentTime()));
     ws.on('play', () => setIsPlaying(true));
     ws.on('pause', () => setIsPlaying(false));
     ws.on('error', (e: any) => { setLoadError(`Fehler beim Laden: ${e}`); setIsLoading(false); });
+
     return () => { ws.destroy(); };
   }, [asset.id, asset.filename]);
 
   const seekToTime = (t: number) => { wsRef.current?.seekTo(t / (wsRef.current.getDuration() || 1)); };
+
+  // Region manuell hinzufügen
+  const addRegion = () => {
+    const regPlugin = regionsRef.current;
+    if (!regPlugin) return;
+    const id = `region-${Date.now()}`;
+    const newRegion: RegionE = {
+      id,
+      start: regionForm.start,
+      end: regionForm.end,
+      label: regionForm.label,
+      color: regionForm.color,
+      loop: regionForm.loop,
+    };
+    regPlugin.addRegion({
+      id,
+      start: regionForm.start,
+      end: regionForm.end,
+      content: regionForm.label,
+      color: regionForm.color,
+      drag: true,
+      resize: true,
+      loop: regionForm.loop,
+    });
+    setRegions(prev => [...prev, newRegion].sort((a, b) => a.start - b.start));
+    setShowRegionForm(false);
+    setRegionForm({ label: '', start: 0, end: 10, color: REGION_COLORS[0], loop: false });
+  };
+
+  // Region löschen
+  const deleteRegion = (id: string) => {
+    const regPlugin = regionsRef.current;
+    if (regPlugin) {
+      const reg = regPlugin.getRegions().find((r: any) => r.id === id);
+      if (reg) reg.remove();
+    }
+    setRegions(prev => prev.filter(r => r.id !== id));
+    if (activeRegionId === id) setActiveRegionId(null);
+  };
+
+  // Region abspielen (Loop optional)
+  const playRegion = (id: string) => {
+    const regPlugin = regionsRef.current;
+    if (!regPlugin) return;
+    const reg = regPlugin.getRegions().find((r: any) => r.id === id);
+    if (reg) reg.play();
+  };
+
+  // Region-Label aktualisieren
+  const updateRegionLabel = (id: string, label: string) => {
+    const regPlugin = regionsRef.current;
+    if (regPlugin) {
+      const reg = regPlugin.getRegions().find((r: any) => r.id === id);
+      if (reg) reg.setOptions({ content: label });
+    }
+    setRegions(prev => prev.map(r => r.id === id ? { ...r, label } : r));
+  };
 
   const addMarker = async () => {
     const t = markerForm.time ?? currentTime;
@@ -1307,7 +1491,10 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
   const saveAll = async () => {
     setIsSaving(true);
     try {
+      // Marker speichern
       await api.post(`/media/${asset.id}/markers`, { markers });
+      // Regions als Metadaten speichern
+      await api.put(`/media/${asset.id}`, { regions });
       onSaved?.();
     } catch (e) { /* ignore */ }
     finally { setIsSaving(false); }
@@ -1510,8 +1697,8 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
         </div>
       </div>
 
-      {/* Waveform */}
-      <div className="bg-obsidian-900 rounded-xl p-4 border border-obsidian-600">
+      {/* Waveform + Minimap */}
+      <div className="bg-obsidian-900 rounded-xl p-4 border border-obsidian-600 space-y-2">
         {isLoading && (
           <div className="flex items-center justify-center h-24 gap-2 text-text-muted">
             <LoaderIcon size={18} className="animate-spin" />
@@ -1521,10 +1708,12 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
         {loadError && (
           <div className="flex items-center justify-center h-24 text-red-400 text-sm">{loadError}</div>
         )}
+        {/* Haupt-Waveform (inkl. Hover + Regions) */}
         <div ref={waveformRef} className={isLoading || loadError ? 'hidden' : ''} />
 
+        {/* Marker-Pins auf der Timeline */}
         {isReady && duration > 0 && (
-          <div className="relative h-4 mt-1">
+          <div className="relative h-4">
             {markers.map(m => {
               const pct = Math.min(100, Math.max(0, (m.time / duration) * 100));
               const typeInfo = MARKER_TYPES_E.find(t => t.value === m.type);
@@ -1537,6 +1726,13 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Minimap (wird von WaveSurfer automatisch gerendert) */}
+        {!isLoading && !loadError && (
+          <div className="border-t border-obsidian-600 pt-2">
+            <p className="text-[10px] text-text-muted uppercase tracking-wide mb-1">Minimap — Navigationsansicht</p>
           </div>
         )}
       </div>
@@ -1572,13 +1768,17 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
 
       {/* Aktions-Buttons */}
       <div className="flex gap-2 flex-wrap">
-        <button onClick={() => { setMarkerForm(f => ({ ...f, time: currentTime })); setShowMarkerForm(!showMarkerForm); setShowCommentForm(false); }}
+        <button onClick={() => { setMarkerForm(f => ({ ...f, time: currentTime })); setShowMarkerForm(!showMarkerForm); setShowCommentForm(false); setShowRegionForm(false); }}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${showMarkerForm ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange' : 'border-surface-border text-text-muted hover:text-text-primary hover:border-accent-orange/40'}`}>
-          <ScissorsIcon size={13} /> Marker setzen @ {fmtTime(currentTime)}
+          <ScissorsIcon size={13} /> Marker @ {fmtTime(currentTime)}
         </button>
-        <button onClick={() => { setCommentForm(f => ({ ...f, time: currentTime })); setShowCommentForm(!showCommentForm); setShowMarkerForm(false); }}
+        <button onClick={() => { setCommentForm(f => ({ ...f, time: currentTime })); setShowCommentForm(!showCommentForm); setShowMarkerForm(false); setShowRegionForm(false); }}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${showCommentForm ? 'bg-accent-purple/20 border-accent-purple/50 text-accent-purple' : 'border-surface-border text-text-muted hover:text-text-primary hover:border-accent-purple/40'}`}>
           <MsgIcon size={13} /> Anmerkung @ {fmtTime(currentTime)}
+        </button>
+        <button onClick={() => { setRegionForm(f => ({ ...f, start: currentTime, end: Math.min(currentTime + 10, duration) })); setShowRegionForm(!showRegionForm); setShowMarkerForm(false); setShowCommentForm(false); }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${showRegionForm ? 'bg-accent-blue/20 border-accent-blue/50 text-accent-blue' : 'border-surface-border text-text-muted hover:text-text-primary hover:border-accent-blue/40'}`}>
+          <LayersIcon size={13} /> Region @ {fmtTime(currentTime)}
         </button>
       </div>
 
@@ -1626,6 +1826,48 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
           <div className="flex gap-2">
             <button onClick={addTimedComment} disabled={!commentForm.text.trim()} className="btn-primary text-xs py-1 flex-1 disabled:opacity-50">Anmerkung hinzufügen</button>
             <button onClick={() => setShowCommentForm(false)} className="btn-ghost text-xs py-1">Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {/* Region-Formular */}
+      {showRegionForm && (
+        <div className="p-3 bg-obsidian-900 rounded-xl border border-accent-blue/30 space-y-3">
+          <p className="text-xs font-semibold text-accent-blue flex items-center gap-1.5"><LayersIcon size={12}/> Neue Region</p>
+          <p className="text-[10px] text-text-muted">Tipp: Direkt auf der Waveform ziehen um eine Region aufzuziehen, oder hier manuell eintragen.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-text-muted uppercase mb-1 block">Start (s)</label>
+              <input type="number" value={regionForm.start} onChange={e => setRegionForm(f => ({ ...f, start: parseFloat(e.target.value) || 0 }))} className="input text-xs py-1" step="0.1" min="0" max={duration} />
+            </div>
+            <div>
+              <label className="text-[10px] text-text-muted uppercase mb-1 block">Ende (s)</label>
+              <input type="number" value={regionForm.end} onChange={e => setRegionForm(f => ({ ...f, end: parseFloat(e.target.value) || 0 }))} className="input text-xs py-1" step="0.1" min="0" max={duration} />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] text-text-muted uppercase mb-1 block">Bezeichnung</label>
+            <input type="text" value={regionForm.label} onChange={e => setRegionForm(f => ({ ...f, label: e.target.value }))} className="input text-xs py-1" placeholder="z.B. Intro, Werbung, Interview-Teil 1..." />
+          </div>
+          <div className="flex items-center gap-4">
+            <div>
+              <label className="text-[10px] text-text-muted uppercase mb-1 block">Farbe</label>
+              <div className="flex gap-1.5">
+                {REGION_COLORS.map(c => (
+                  <button key={c} onClick={() => setRegionForm(f => ({ ...f, color: c }))}
+                    className={`w-5 h-5 rounded-full border-2 transition-all ${regionForm.color === c ? 'border-white scale-110' : 'border-transparent'}`}
+                    style={{ background: c.replace('0.25', '0.8') }} />
+                ))}
+              </div>
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer mt-3">
+              <input type="checkbox" checked={regionForm.loop} onChange={e => setRegionForm(f => ({ ...f, loop: e.target.checked }))} className="w-3 h-3" />
+              Loop
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={addRegion} className="btn-primary text-xs py-1 flex-1">Region hinzufügen</button>
+            <button onClick={() => setShowRegionForm(false)} className="btn-ghost text-xs py-1">Abbrechen</button>
           </div>
         </div>
       )}
@@ -1680,6 +1922,47 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
                     {(c.userName || c.displayName) && <p className="text-[10px] text-text-muted mt-0.5">{c.userName || c.displayName}</p>}
                   </div>
                   <button onClick={() => deleteTimedComment(c.id)} className="p-1 text-text-muted hover:text-accent-red opacity-0 group-hover:opacity-100 transition-all rounded flex-shrink-0">
+                    <TrashIcon size={12} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Regions-Liste */}
+      <div>
+        <button onClick={() => setShowRegionList(v => !v)} className="flex items-center gap-2 text-sm font-medium text-text-primary mb-2 w-full hover:text-accent-blue transition-colors">
+          {showRegionList ? <ChevUpIcon size={14} /> : <ChevDownIcon size={14} />}
+          <LayersIcon size={13} className="text-accent-blue" />
+          Regions ({regions.length})
+          <span className="text-[10px] text-text-muted ml-auto font-normal">Doppelklick auf Region zum Löschen</span>
+        </button>
+        {showRegionList && (
+          <div className="space-y-1.5 max-h-64 overflow-y-auto">
+            {regions.length === 0 ? (
+              <p className="text-xs text-text-muted text-center py-4">Noch keine Regions. Auf der Waveform ziehen oder über den Button anlegen.</p>
+            ) : (
+              regions.sort((a, b) => a.start - b.start).map(r => (
+                <div key={r.id} className={`flex items-center gap-2 p-2 rounded-lg border group transition-all ${activeRegionId === r.id ? 'border-accent-blue/50 bg-accent-blue/10' : 'bg-obsidian-800 border-surface-border'}`}>
+                  <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: r.color.replace('0.25', '0.8') }} />
+                  <button onClick={() => { seekToTime(r.start); setActiveRegionId(r.id); }} className="text-xs font-mono text-accent-blue hover:underline flex-shrink-0">
+                    {fmtTime(r.start)} – {fmtTime(r.end)}
+                  </button>
+                  <input
+                    type="text"
+                    value={r.label}
+                    onChange={e => updateRegionLabel(r.id, e.target.value)}
+                    className="text-xs text-text-primary bg-transparent border-none outline-none flex-1 min-w-0"
+                    placeholder="Bezeichnung..."
+                  />
+                  <span className="text-[10px] text-text-muted flex-shrink-0">{fmtTime(r.end - r.start)}</span>
+                  {r.loop && <span className="text-[10px] text-accent-cyan flex-shrink-0">Loop</span>}
+                  <button onClick={() => playRegion(r.id)} className="p-1 text-text-muted hover:text-accent-green opacity-0 group-hover:opacity-100 transition-all rounded" title="Region abspielen">
+                    <PlayIcon size={11} />
+                  </button>
+                  <button onClick={() => deleteRegion(r.id)} className="p-1 text-text-muted hover:text-accent-red opacity-0 group-hover:opacity-100 transition-all rounded" title="Region löschen">
                     <TrashIcon size={12} />
                   </button>
                 </div>
