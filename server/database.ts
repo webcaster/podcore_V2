@@ -495,6 +495,25 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE ad_slots ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE ad_categories ADD COLUMN is_exclusive INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
 
+  // Ad slots: flexibles Preismodell (v2.10.0)
+  try { db.exec('ALTER TABLE ad_slots ADD COLUMN price_model TEXT NOT NULL DEFAULT \'fixed\''); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_slots ADD COLUMN base_price REAL DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_slots ADD COLUMN price_per_episode REAL DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_slots ADD COLUMN price_per_1000_listens REAL DEFAULT NULL'); } catch (_) {}
+
+  // Ad slots: Laufzeit-Felder direkt an der Platzierung (v2.10.0)
+  try { db.exec('ALTER TABLE ad_slots ADD COLUMN placement_start TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_slots ADD COLUMN placement_end TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_slots ADD COLUMN placement_label TEXT DEFAULT NULL'); } catch (_) {}
+
+  // Sponsors: fehlende Spalten sicherstellen (v2.10.0)
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN contract_start TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN contract_end TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN contact_hint TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN ad_delivery TEXT DEFAULT \'self\''); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN color TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN customer_number TEXT DEFAULT NULL'); } catch (_) {}
+
   // episode_ad_bookings: add presentation_text (migration for existing DBs)
   try { db.exec('ALTER TABLE episode_ad_bookings ADD COLUMN presentation_text TEXT DEFAULT NULL'); } catch (_) {}
 

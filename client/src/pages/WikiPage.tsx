@@ -810,6 +810,52 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-10-0',
+        title: 'v2.10.0 — Sponsoring-Korrektionen, Backup-Import & Metadaten',
+        summary: 'Flexibles Preismodell im Sponsoring (3 Preistypen), Laufzeit- und Kategorie-Übernahme repariert, Buchungsbestätigung für Sponsoren, Backup-Import mit Vorschau und Metadaten in der Media Library.',
+        icon: <Package size={18} />,
+        tags: ['sponsoring', 'preismodell', 'backup', 'import', 'metadaten', 'media-library', 'audio-editor', 'daw', 'freigabe'],
+        content: [
+          {
+            heading: 'Sponsoring',
+            list: [
+              'Flexibles Preismodell: Basispreis, Folgenpreis und Preis pro 1.000 Hörer (CPM) pro Werbe-Kategorie',
+              'Laufzeit und Werbe-Kategorie werden beim Anlegen einer Platzierung korrekt übernommen',
+              'Kontakt- und Vertragsdaten werden nach dem Speichern korrekt angezeigt',
+              'Buchungsbestätigung als PDF exportierbar (inkl. Zeitraum-Buchungen ohne feste Folge)',
+              'Export auch für Platzierungen ohne Episodenzuordnung',
+            ],
+          },
+          {
+            heading: 'Backup-Import',
+            list: [
+              'Vollständiger Backup-Import in der Administration (System-Tab)',
+              'Vorschau-Analyse vor dem Import: zeigt neue, vorhandene und überschreibbare Einträge',
+              'Zwei Modi: Zusammenführen (neue Einträge hinzufügen) oder Überschreiben',
+              'Automatisches Pre-Import-Backup vor jedem Restore',
+            ],
+          },
+          {
+            heading: 'Media Library & Audio-Editor',
+            list: [
+              'Metadaten-Verwaltung: Basis, Audio-Info, Rechte & Lizenz, eigene Felder',
+              'Audio-Editor als eigener Tab (schwarze Seite behoben)',
+              'DAW-Export: EDL, FCPXML, Reaper, Audacity Labels, CSV',
+              'Neue Berechtigungen: canEditMetadata, canUseAudioEditor, canExportMarkers, canManageAds, canBookAds, canViewAds',
+            ],
+          },
+          {
+            heading: 'Episoden-Freigabe',
+            list: [
+              'Freigabe-Widget in der Sidebar des Episoden-Editors',
+              'Workflow: Freigabe anfordern → freigeben oder zur Überarbeitung zurückgeben',
+              'Rollenbasiert: canRequestApproval (Redakteur/Moderator), canApproveEpisodes (Admin/Moderator)',
+              'Freigabe-Workflow kann in den Einstellungen deaktiviert werden',
+            ],
+          },
+        ],
+      },
+      {
         id: 'v2-9-11',
         title: 'v2.9.11 — Vollständiger Audit & Stabilitäts-Update',
         summary: 'Vollständiger Code-Audit aller Features: Audio-Editor Datenbank-Fix, Werbung löschen repariert, Berechtigungen der Produktion-Rolle erweitert, Online-Nutzer Widget im Dashboard.',

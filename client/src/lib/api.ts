@@ -269,6 +269,10 @@ export const sponsorsApi = {
   // Billing
   getBilling: (sponsorId: string) => api.get<any>(`/sponsors/${sponsorId}/billing`),
   getInvoicePdfUrl: (sponsorId: string) => `/api/sponsors/${sponsorId}/invoice-pdf`,
+  getConfirmationPdfUrl: (sponsorId: string, params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return `/api/sponsors/${sponsorId}/confirmation-pdf${qs}`;
+  },
 
   // Reports
   getReport: (sponsorIdOrParams: string | { sponsorId?: string; dateFrom?: string; dateTo?: string }, params?: { from?: string; to?: string }) => {

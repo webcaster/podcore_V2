@@ -52,6 +52,8 @@ function parseSponsor(row: any) {
     contractStart: row.contract_start,
     contractEnd: row.contract_end,
     contactHint: row.contact_hint,
+    adDelivery: row.ad_delivery,
+    color: row.color,
   };
 }
 
@@ -73,6 +75,17 @@ function parseAdSlot(row: any) {
     adTitle: row.name,
     adScript: row.script,
     invoiceNotes: row.invoice_notes,
+    // Kategorie
+    categoryId: row.category_id,
+    // Flexibles Preismodell (3 Preistypen)
+    basePrice: row.base_price,
+    pricePerEpisode: row.price_per_episode,
+    pricePer1000Listens: row.price_per_1000_listens,
+    priceModel: row.price_model || 'fixed',   // 'fixed' | 'per_episode' | 'per_1000'
+    // Laufzeit
+    placementStart: row.placement_start,
+    placementEnd: row.placement_end,
+    placementLabel: row.placement_label,
   };
 }
 
@@ -767,12 +780,32 @@ router.get('/:sponsorId/slots', requirePermission('canViewSponsors') as any, (re
 router.post('/:sponsorId/slots', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const id = uuidv4();
-  const { name, category = 'mid-roll', productionType = 'eigenproduktion', status = 'angefragt', duration, script, assetId, deliveredAssetPath, price, currency = 'EUR', startDate, endDate, targetEpisodes, notes } = req.body;
+  const {
+    name, category = 'mid-roll', categoryId,
+    productionType = 'eigenproduktion', status = 'angefragt',
+    duration, script, assetId, deliveredAssetPath,
+    price, priceModel = 'fixed', basePrice, pricePerEpisode, pricePer1000Listens,
+    currency = 'EUR', startDate, endDate, targetEpisodes,
+    placementStart, placementEnd, placementLabel,
+    notes, invoiceNotes,
+  } = req.body;
 
   if (!name) return res.status(400).json({ success: false, error: 'Name erforderlich' });
 
-  db.run('INSERT INTO ad_slots (id, sponsor_id, name, category, production_type, status, duration, script, asset_id, delivered_asset_path, price, currency, start_date, end_date, target_episodes, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, req.params.sponsorId, name, category, productionType, status, duration || null, script || null, assetId || null, deliveredAssetPath || null, price || null, currency, startDate || null, endDate || null, targetEpisodes || null, notes || null]);
+  db.run(`INSERT INTO ad_slots
+    (id, sponsor_id, name, category, category_id, production_type, status, duration, script,
+     asset_id, delivered_asset_path, price, price_model, base_price, price_per_episode,
+     price_per_1000_listens, currency, start_date, end_date, target_episodes,
+     placement_start, placement_end, placement_label, notes, invoice_notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, req.params.sponsorId, name, category, categoryId || null,
+     productionType, status, duration || null, script || null,
+     assetId || null, deliveredAssetPath || null,
+     price || null, priceModel, basePrice || null, pricePerEpisode || null,
+     pricePer1000Listens || null, currency,
+     startDate || null, endDate || null, targetEpisodes || null,
+     placementStart || null, placementEnd || null, placementLabel || null,
+     notes || null, invoiceNotes || null]);
 
   const slot = parseAdSlot(db.get('SELECT * FROM ad_slots WHERE id = ?', [id]));
   slot.placements = [];
@@ -781,10 +814,63 @@ router.post('/:sponsorId/slots', requirePermission('canEditSponsors') as any, (r
 
 router.put('/slots/:slotId', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { name, category, productionType, status, duration, script, assetId, deliveredAssetPath, price, currency, startDate, endDate, targetEpisodes, notes } = req.body;
+  const {
+    name, category, categoryId, productionType, status, duration, script,
+    assetId, deliveredAssetPath,
+    // Preismodell
+    price, priceModel, basePrice, pricePerEpisode, pricePer1000Listens, currency,
+    // Laufzeit
+    startDate, endDate, targetEpisodes,
+    placementStart, placementEnd, placementLabel,
+    notes, invoiceNotes, deliveryType,
+  } = req.body;
 
-  db.run(`UPDATE ad_slots SET name = COALESCE(?, name), category = COALESCE(?, category), production_type = COALESCE(?, production_type), status = COALESCE(?, status), duration = ?, script = ?, asset_id = ?, delivered_asset_path = ?, price = ?, currency = COALESCE(?, currency), start_date = ?, end_date = ?, target_episodes = ?, notes = ?, updated_at = datetime('now') WHERE id = ?`,
-    [name ?? null, category ?? null, productionType ?? null, status ?? null, duration ?? null, script ?? null, assetId ?? null, deliveredAssetPath ?? null, price ?? null, currency ?? null, startDate ?? null, endDate ?? null, targetEpisodes ?? null, notes ?? null, req.params.slotId]);
+  // category_id: entweder direkt als categoryId oder aus category (Legacy)
+  const resolvedCategoryId = categoryId !== undefined ? categoryId : (category !== undefined ? category : undefined);
+
+  db.run(`UPDATE ad_slots SET
+    name = COALESCE(?, name),
+    category = COALESCE(?, category),
+    category_id = COALESCE(?, category_id),
+    production_type = COALESCE(?, production_type),
+    status = COALESCE(?, status),
+    duration = ?,
+    script = ?,
+    asset_id = ?,
+    delivered_asset_path = ?,
+    price = ?,
+    price_model = COALESCE(?, price_model),
+    base_price = ?,
+    price_per_episode = ?,
+    price_per_1000_listens = ?,
+    currency = COALESCE(?, currency),
+    start_date = ?,
+    end_date = ?,
+    target_episodes = ?,
+    placement_start = ?,
+    placement_end = ?,
+    placement_label = ?,
+    notes = ?,
+    invoice_notes = ?,
+    updated_at = datetime('now')
+    WHERE id = ?`,
+    [
+      name ?? null, category ?? null, resolvedCategoryId ?? null,
+      productionType ?? null, status ?? null,
+      duration ?? null, script ?? null, assetId ?? null, deliveredAssetPath ?? null,
+      price !== undefined ? price : null,
+      priceModel ?? null,
+      basePrice !== undefined ? basePrice : null,
+      pricePerEpisode !== undefined ? pricePerEpisode : null,
+      pricePer1000Listens !== undefined ? pricePer1000Listens : null,
+      currency ?? null,
+      startDate ?? null, endDate ?? null, targetEpisodes ?? null,
+      placementStart !== undefined ? placementStart : null,
+      placementEnd !== undefined ? placementEnd : null,
+      placementLabel !== undefined ? placementLabel : null,
+      notes ?? null, invoiceNotes ?? null,
+      req.params.slotId,
+    ]);
 
   const slot = parseAdSlot(db.get('SELECT * FROM ad_slots WHERE id = ?', [req.params.slotId]));
   if (!slot) return res.status(404).json({ success: false, error: 'Werbeplatz nicht gefunden' });
@@ -1008,11 +1094,37 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
     return;
   }
 
+  // Alle Platzierungen inkl. episode_ad_bookings ohne Folge zusammenführen
+  const allRows: any[] = [
+    ...placements,
+    // Buchungen ohne feste Folge aus episode_ad_bookings
+    ...(db.all(`
+      SELECT b.*, s.name as slot_name, s.category as slot_category, s.price as slot_price
+      FROM episode_ad_bookings b
+      LEFT JOIN ad_slots s ON b.ad_slot_id = s.id
+      WHERE b.sponsor_id = ? AND (b.episode_id IS NULL OR b.episode_id = '')
+    `, [req.params.id]) as any[]).map((b: any) => ({
+      ...b,
+      price: b.price || b.slot_price || 0,
+      episode_title: null,
+      publish_date: null,
+      invoice_status: b.invoice_status || 'offen',
+      invoice_number: b.invoice_number || null,
+      position: b.position || 'mid-roll',
+    })),
+  ];
+
+  // Filter anwenden
+  const filterStatus = req.query.filter as string | undefined;
+  const filteredRows = filterStatus && filterStatus !== 'alle'
+    ? allRows.filter((p: any) => (p.invoice_status || 'offen') === filterStatus)
+    : allRows;
+
   // Table header (nur wenn showDetails aktiv)
   const tblW = doc.page.width - m * 2;
   if (!showDetails) {
     // Nur Zusammenfassung: direkt zur Gesamt-Zeile
-    const totalOnly = (db.all(`SELECT COALESCE(SUM(price), 0) as total FROM sponsor_placements WHERE sponsor_id = ?`, [sponsor.id]) as any[])[0]?.total || 0;
+    const totalOnly = filteredRows.reduce((sum: number, p: any) => sum + (p.price || 0), 0);
     doc.fontSize(layout.typography.headingSize).font(`${layout.typography.fontFamily}-Bold`)
       .fillColor(layout.colors.primary).text(`Gesamtumsatz: ${totalOnly.toFixed(2)} €`, m, doc.y, { align: 'right' });
     renderWatermark(doc, layout);
@@ -1035,7 +1147,7 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
   let totalRevenue = 0;
   let rowY = doc.y;
   const maxY = doc.page.height - m - 60;
-  placements.forEach((p: any, i: number) => {
+  filteredRows.forEach((p: any, i: number) => {
     if (rowY > maxY) { doc.addPage(); rowY = m; }
     const bg = i % 2 === 0 ? '#f8f9fa' : '#ffffff';
     doc.rect(m, rowY, tblW, 18).fill(bg);
@@ -1052,7 +1164,7 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
     rowY += 18;
   });
 
-  if (placements.length === 0) {
+  if (filteredRows.length === 0) {
     doc.fillColor(layout.colors.muted).fontSize(layout.typography.bodySize)
       .text('Keine Platzierungen vorhanden.', m, rowY + 10);
     rowY += 30;
@@ -1071,5 +1183,170 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
   doc.end();
 });
 
+
+// ============================================================
+// GET /api/sponsors/:id/confirmation-pdf — Buchungsbestätigung für den Sponsor
+// Enthält ALLE Platzierungen (mit und ohne Folge) als übersichtliche Bestätigung
+// ============================================================
+router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [req.params.id]) as any;
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
+
+  const slots = db.all('SELECT * FROM ad_slots WHERE sponsor_id = ?', [req.params.id]) as any[];
+  const slotIds = slots.map((s: any) => s.id);
+
+  // Episodengebundene Platzierungen
+  let episodePlacements: any[] = [];
+  if (slotIds.length > 0) {
+    const placeholders = slotIds.map(() => '?').join(',');
+    episodePlacements = db.all(`
+      SELECT p.*, s.name as slot_name, s.category as slot_category,
+             s.placement_start, s.placement_end, s.placement_label,
+             s.base_price, s.price_per_episode, s.price_per_1000_listens, s.price_model
+      FROM ad_placements p
+      JOIN ad_slots s ON p.ad_slot_id = s.id
+      WHERE p.ad_slot_id IN (${placeholders})
+      ORDER BY p.publish_date ASC, p.created_at ASC
+    `, slotIds) as any[];
+  }
+
+  // Nicht-episodengebundene Buchungen aus episode_ad_bookings
+  const standaloneBookings = db.all(`
+    SELECT b.*, s.name as slot_name, s.category as slot_category,
+           s.placement_start, s.placement_end, s.placement_label,
+           s.base_price, s.price_per_episode, s.price_per_1000_listens, s.price_model,
+           c.name as category_name, c.color as category_color
+    FROM episode_ad_bookings b
+    LEFT JOIN ad_slots s ON b.ad_slot_id = s.id
+    LEFT JOIN ad_categories c ON b.ad_category_id = c.id
+    WHERE b.sponsor_id = ? AND (b.episode_id IS NULL OR b.episode_id = '')
+    ORDER BY b.created_at ASC
+  `, [req.params.id]) as any[];
+
+  const PDFDocument = require('pdfkit');
+  const fs = require('fs');
+  const path = require('path');
+  const { DATA_DIR } = require('../database');
+  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark } = require('../pdfLayouts');
+
+  const layoutId = req.query.layoutId as string | undefined;
+  const layout = layoutId ? (getLayoutById(layoutId) || getDefaultLayoutForType('invoice')) : getDefaultLayoutForType('invoice');
+  const m = layout.pageMargin;
+
+  const customDocTitle = req.query.documentTitle as string | undefined;
+  const documentTitle = customDocTitle ? decodeURIComponent(customDocTitle) : 'Buchungsbestätigung';
+
+  const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+  const settings = settingsRow ? JSON.parse(settingsRow.value) : {};
+  const podcastName = settings?.branding?.podcastName || settings?.general?.podcastName || 'PodCore';
+
+  let logoPath: string | null = null;
+  const brandingDir = path.join(DATA_DIR, 'branding');
+  if (fs.existsSync(brandingDir)) {
+    const lf = fs.readdirSync(brandingDir).find((f: string) => f.startsWith('logo.'));
+    if (lf) logoPath = path.join(brandingDir, lf);
+  }
+
+  const doc = new PDFDocument({ margin: m, size: layout.pageSize, autoFirstPage: true });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Buchungsbestaetigung_${sponsor.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`);
+  doc.pipe(res);
+
+  renderPdfHeader(doc, layout, { podcastName, documentTitle, logoPath });
+
+  // Sponsor-Info
+  doc.fontSize(layout.typography.subtitleSize).font(`${layout.typography.fontFamily}-Bold`)
+    .fillColor(layout.colors.primary).text(sponsor.name);
+  doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily).fillColor(layout.colors.muted);
+  if (sponsor.company) doc.text(sponsor.company);
+  if (sponsor.contact_name) doc.text(`Ansprechpartner: ${sponsor.contact_name}`);
+  if (sponsor.contact_email) doc.text(`E-Mail: ${sponsor.contact_email}`);
+  if (sponsor.contract_start || sponsor.contract_end) {
+    const cs = sponsor.contract_start ? new Date(sponsor.contract_start).toLocaleDateString('de-DE') : '—';
+    const ce = sponsor.contract_end ? new Date(sponsor.contract_end).toLocaleDateString('de-DE') : '—';
+    doc.text(`Vertragslaufzeit: ${cs} – ${ce}`);
+  }
+  doc.fillColor(layout.colors.text);
+  doc.moveDown(0.5);
+  doc.moveTo(m, doc.y).lineTo(doc.page.width - m, doc.y).strokeColor(layout.colors.accent).lineWidth(1.5).stroke();
+  doc.moveDown(0.5);
+
+  const tblW = doc.page.width - m * 2;
+  const maxY = doc.page.height - m - 60;
+  const posLabels: Record<string, string> = { 'pre-roll': 'Pre-Roll', 'mid-roll': 'Mid-Roll', 'post-roll': 'Post-Roll', 'host-read': 'Host-Read' };
+
+  const renderSection = (title: string, rows: any[]) => {
+    if (rows.length === 0) return;
+    doc.fontSize(layout.typography.headingSize).font(`${layout.typography.fontFamily}-Bold`)
+      .fillColor(layout.colors.primary).text(title, m, doc.y);
+    doc.moveDown(0.3);
+
+    // Tabellen-Header
+    doc.fontSize(layout.typography.smallSize).font(`${layout.typography.fontFamily}-Bold`);
+    doc.rect(m, doc.y, tblW, 20).fill(layout.colors.secondary);
+    const hY = doc.y - 20;
+    const c1 = m + 5, c2 = m + tblW * 0.35, c3 = m + tblW * 0.52, c4 = m + tblW * 0.65, c5 = m + tblW * 0.78;
+    doc.fillColor('#ffffff');
+    doc.text('Platzierung / Kampagne', c1, hY + 6, { width: tblW * 0.32 });
+    doc.text('Position', c2, hY + 6, { width: tblW * 0.15 });
+    doc.text('Laufzeit', c3, hY + 6, { width: tblW * 0.11 });
+    doc.text('Datum', c4, hY + 6, { width: tblW * 0.11 });
+    doc.text('Preis', c5, hY + 6, { width: tblW * 0.20, align: 'right' });
+    doc.moveDown(0.5);
+
+    let rowY = doc.y;
+    rows.forEach((p: any, i: number) => {
+      if (rowY > maxY) { doc.addPage(); rowY = m; }
+      const bg = i % 2 === 0 ? '#f8f9fa' : '#ffffff';
+      doc.rect(m, rowY, tblW, 20).fill(bg);
+      doc.fillColor(layout.colors.text).fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
+
+      const label = p.placement_label || p.slot_name || p.name || '—';
+      doc.text(label.length > 28 ? label.substring(0, 26) + '…' : label, c1, rowY + 6, { width: tblW * 0.32 });
+      doc.text(posLabels[p.position] || p.position || '—', c2, rowY + 6, { width: tblW * 0.15 });
+
+      const ps = p.placement_start ? new Date(p.placement_start).toLocaleDateString('de-DE') : '—';
+      const pe = p.placement_end ? new Date(p.placement_end).toLocaleDateString('de-DE') : '—';
+      const laufzeit = (p.placement_start || p.placement_end) ? `${ps}–${pe}` : '—';
+      doc.text(laufzeit, c3, rowY + 6, { width: tblW * 0.11 });
+
+      const pubDate = p.publish_date ? new Date(p.publish_date).toLocaleDateString('de-DE') : '—';
+      doc.text(pubDate, c4, rowY + 6, { width: tblW * 0.11 });
+
+      // Preis: Abrechnungspreis oder Basispreis
+      const price = p.price || p.base_price || 0;
+      const currency = p.currency || 'EUR';
+      doc.fillColor(price > 0 ? layout.colors.primary : layout.colors.muted)
+        .text(price > 0 ? `${Number(price).toFixed(2)} ${currency}` : '—', c5, rowY + 6, { width: tblW * 0.20, align: 'right' });
+      rowY += 20;
+    });
+    doc.moveDown(1.5);
+  };
+
+  // Abschnitt 1: Episodengebundene Platzierungen
+  renderSection('Geplante Episoden-Platzierungen', episodePlacements);
+
+  // Abschnitt 2: Zeitraum-Buchungen (ohne feste Folge)
+  renderSection('Zeitraum-Buchungen (ohne feste Folge)', standaloneBookings);
+
+  // Gesamt
+  const allRows = [...episodePlacements, ...standaloneBookings];
+  const totalRevenue = allRows.reduce((sum: number, p: any) => sum + (p.price || p.base_price || 0), 0);
+  if (allRows.length === 0) {
+    doc.fillColor(layout.colors.muted).fontSize(layout.typography.bodySize)
+      .text('Keine Platzierungen vorhanden.', m, doc.y);
+  } else {
+    doc.moveTo(m, doc.y).lineTo(doc.page.width - m, doc.y).strokeColor(layout.colors.accent).lineWidth(1).stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(layout.typography.headingSize).font(`${layout.typography.fontFamily}-Bold`)
+      .fillColor(layout.colors.primary)
+      .text(`Gesamt: ${totalRevenue.toFixed(2)} ${sponsor.currency || 'EUR'}  |  ${allRows.length} Platzierung${allRows.length !== 1 ? 'en' : ''}`, m, doc.y, { align: 'right' });
+  }
+
+  renderWatermark(doc, layout);
+  renderPdfFooter(doc, layout, { podcastName, pageNum: 1 });
+  doc.end();
+});
 
 export default router;

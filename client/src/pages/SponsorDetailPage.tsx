@@ -52,14 +52,21 @@ export default function SponsorDetailPage() {
   const [form, setForm] = useState<any>({});
   const [placementForm, setPlacementForm] = useState({
     episodeId: '', categoryId: '', position: 'pre-roll', duration: 30,
-    status: 'geplant', deliveryType: 'self', price: '', notes: '',
+    status: 'geplant', deliveryType: 'self', notes: '',
     adTitle: '', adScript: '', airDate: '',
     // Laufzeit der Platzierung
     placementStart: '', placementEnd: '', placementLabel: '',
     // Performance / Lieferung
     performanceNotes: '', deliveryConfirmed: false,
+    // Flexibles Preismodell
+    priceModel: 'fixed' as 'fixed' | 'per_episode' | 'per_1000',
+    price: '',
+    basePrice: '',
+    pricePerEpisode: '',
+    pricePer1000Listens: '',
+    currency: 'EUR',
     // Abrechnung
-    invoiceNumber: '', invoiceDate: '', invoiceStatus: 'offen', invoiceNotes: '', currency: 'EUR',
+    invoiceNumber: '', invoiceDate: '', invoiceStatus: 'offen', invoiceNotes: '',
   });
   const [billingData, setBillingData] = useState<any>(null);
   const [isExportingInvoice, setIsExportingInvoice] = useState(false);
@@ -152,15 +159,33 @@ export default function SponsorDetailPage() {
     e.preventDefault();
     try {
       const payload = {
-        ...placementForm,
         name: placementForm.adTitle,
+        // Kategorie korrekt als categoryId übermitteln
         category: placementForm.categoryId,
-        price: placementForm.price ? parseFloat(placementForm.price) : undefined,
+        categoryId: placementForm.categoryId || null,
+        position: placementForm.position,
+        duration: placementForm.duration,
+        status: placementForm.status,
+        productionType: placementForm.deliveryType === 'produced' ? 'eigenproduktion' : 'fremd',
+        script: placementForm.adScript || null,
+        notes: placementForm.notes || null,
+        // Laufzeit
         placementStart: placementForm.placementStart || null,
         placementEnd: placementForm.placementEnd || null,
         placementLabel: placementForm.placementLabel || null,
-        performanceNotes: placementForm.performanceNotes || null,
+        // Flexibles Preismodell
+        priceModel: placementForm.priceModel,
+        price: placementForm.price ? parseFloat(placementForm.price) : null,
+        basePrice: placementForm.basePrice ? parseFloat(placementForm.basePrice) : null,
+        pricePerEpisode: placementForm.pricePerEpisode ? parseFloat(placementForm.pricePerEpisode) : null,
+        pricePer1000Listens: placementForm.pricePer1000Listens ? parseFloat(placementForm.pricePer1000Listens) : null,
+        currency: placementForm.currency,
+        // Lieferung
         deliveryConfirmed: placementForm.deliveryConfirmed,
+        // Performance
+        performanceNotes: placementForm.performanceNotes || null,
+        // Abrechnung
+        invoiceNotes: placementForm.invoiceNotes || null,
       };
       if (editingPlacement) {
         await sponsorsApi.updateSlot(editingPlacement.id, payload);
@@ -192,7 +217,8 @@ export default function SponsorDetailPage() {
 
   const handleUpdateInvoiceStatus = async (placementId: string, invoiceStatus: string) => {
     try {
-      await sponsorsApi.updateSlot(placementId, { invoiceStatus });
+      // Rechnungsstatus wird auf der Platzierung (ad_placements) gespeichert
+      await sponsorsApi.updatePlacement(placementId, { invoiceStatus });
       load();
       loadBilling();
     } catch (err: any) { showError(err.message); }
@@ -293,6 +319,30 @@ export default function SponsorDetailPage() {
     finally { setIsExportingInvoice(false); }
   };
 
+  // Buchungsbestätigung als PDF exportieren (alle Platzierungen inkl. ohne Folge)
+  const handleExportConfirmation = async () => {
+    if (!id) return;
+    try {
+      const params: Record<string, string> = {};
+      if (pdfLayoutId) params.layoutId = pdfLayoutId;
+      if (pdfDocTitle) params.documentTitle = encodeURIComponent(pdfDocTitle);
+      const url = sponsorsApi.getConfirmationPdfUrl(id, Object.keys(params).length ? params : undefined);
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `PDF-Export fehlgeschlagen (${res.status})`);
+      }
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `buchungsbestaetigung-${sponsor?.name?.replace(/\s+/g, '-').toLowerCase() || id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+      showSuccess('Buchungsbestätigung exportiert');
+    } catch (err: any) { showError(err.message); }
+  };
+
   const loadBilling = async () => {
     if (!id) return;
     try {
@@ -301,21 +351,29 @@ export default function SponsorDetailPage() {
     } catch {}
   };
 
-  // Preis aus Kategorie automatisch übernehmen
+  // Kategorie auswählen: Position, Dauer und alle 3 Preistypen übernehmen
   const handleCategoryChange = (categoryId: string) => {
     const cat = categories.find((c: any) => c.id === categoryId);
     if (cat) {
-      const suggestedPrice = cat.pricePerEpisode || cat.basePrice || '';
       const newPosition = cat.defaultPosition || placementForm.position;
       const newDuration = cat.defaultDuration || placementForm.duration;
+      // Alle drei Preistypen aus der Kategorie übernehmen
+      const newBasePrice = cat.basePrice != null ? String(cat.basePrice) : '';
+      const newPricePerEpisode = cat.pricePerEpisode != null ? String(cat.pricePerEpisode) : '';
+      const newPricePer1000 = cat.pricePer1000Listens != null ? String(cat.pricePer1000Listens) : '';
+      // Empfohlener Einzelpreis für das Preis-Feld
+      const suggestedPrice = cat.pricePerEpisode || cat.basePrice || '';
       setPlacementForm(p => ({
         ...p,
         categoryId,
         position: newPosition,
         duration: newDuration,
+        basePrice: newBasePrice,
+        pricePerEpisode: newPricePerEpisode,
+        pricePer1000Listens: newPricePer1000,
         price: suggestedPrice ? String(suggestedPrice) : p.price,
       }));
-      if (suggestedPrice && !placementForm.price) setShowPriceHint(true);
+      if (suggestedPrice) setShowPriceHint(true);
     } else {
       setPlacementForm(p => ({ ...p, categoryId }));
     }
@@ -331,7 +389,6 @@ export default function SponsorDetailPage() {
       duration: 30,
       status: 'geplant',
       deliveryType: sponsor?.adDelivery || 'self',
-      price: '',
       notes: '',
       adTitle: `Platzierung ${new Date().toLocaleDateString('de-DE')}`,
       adScript: '',
@@ -341,11 +398,16 @@ export default function SponsorDetailPage() {
       placementLabel: '',
       performanceNotes: '',
       deliveryConfirmed: false,
+      priceModel: 'fixed',
+      price: '',
+      basePrice: '',
+      pricePerEpisode: '',
+      pricePer1000Listens: '',
+      currency: 'EUR',
       invoiceNumber: '',
       invoiceDate: '',
       invoiceStatus: 'offen',
       invoiceNotes: '',
-      currency: 'EUR',
     });
     setShowPlacementModal(true);
   };
@@ -360,21 +422,26 @@ export default function SponsorDetailPage() {
       duration: pl.duration || 30,
       status: pl.status || 'geplant',
       deliveryType: pl.deliveryType || 'self',
-      price: pl.price ? String(pl.price) : '',
       notes: pl.notes || '',
-      adTitle: pl.adTitle || '',
-      adScript: pl.adScript || '',
+      adTitle: pl.adTitle || pl.name || '',
+      adScript: pl.adScript || pl.script || '',
       airDate: pl.airDate ? pl.airDate.slice(0, 10) : '',
       placementStart: pl.placementStart ? pl.placementStart.slice(0, 10) : '',
       placementEnd: pl.placementEnd ? pl.placementEnd.slice(0, 10) : '',
       placementLabel: pl.placementLabel || '',
       performanceNotes: pl.performanceNotes || '',
       deliveryConfirmed: pl.deliveryConfirmed || false,
+      // Flexibles Preismodell
+      priceModel: (pl.priceModel || 'fixed') as 'fixed' | 'per_episode' | 'per_1000',
+      price: pl.price ? String(pl.price) : '',
+      basePrice: pl.basePrice != null ? String(pl.basePrice) : '',
+      pricePerEpisode: pl.pricePerEpisode != null ? String(pl.pricePerEpisode) : '',
+      pricePer1000Listens: pl.pricePer1000Listens != null ? String(pl.pricePer1000Listens) : '',
+      currency: pl.currency || 'EUR',
       invoiceNumber: pl.invoiceNumber || '',
       invoiceDate: pl.invoiceDate?.slice(0, 10) || '',
       invoiceStatus: pl.invoiceStatus || 'offen',
       invoiceNotes: pl.invoiceNotes || '',
-      currency: pl.currency || 'EUR',
     });
     setShowPlacementModal(true);
   };
@@ -839,6 +906,10 @@ export default function SponsorDetailPage() {
                   <span>Leistungsübersicht (PDF)</span>
                 </button>
               </div>
+              <button onClick={handleExportConfirmation} className="btn-secondary">
+                <FileText size={16} />
+                <span>Buchungsbestätigung (PDF)</span>
+              </button>
               <button onClick={() => handleExportSponsorPlacements('csv')} className="btn-secondary">
                 <FileSpreadsheet size={16} />
                 <span>Als CSV exportieren</span>
@@ -1119,7 +1190,7 @@ export default function SponsorDetailPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Position</label>
               <select value={placementForm.position} onChange={e => setPlacementForm(p => ({ ...p, position: e.target.value }))} className="select">
@@ -1134,21 +1205,61 @@ export default function SponsorDetailPage() {
               <label className="label">Dauer (Sekunden)</label>
               <input type="number" value={placementForm.duration} onChange={e => setPlacementForm(p => ({ ...p, duration: parseInt(e.target.value) || 30 }))} className="input" min="5" max="600" />
             </div>
-            <div>
-              <label className="label">Preis ({placementForm.currency || 'EUR'})</label>
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  value={placementForm.price}
+          </div>
+
+          {/* Flexibles Preismodell */}
+          <div className="bg-obsidian-800 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="label mb-0 text-accent-green">Preismodell</label>
+              {showPriceHint && (
+                <span className="text-xs text-accent-green flex items-center gap-1">
+                  <CheckCircle size={11} /> Preise aus Kategorie übernommen
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'fixed', label: 'Festpreis', desc: 'Einmaliger Preis' },
+                { value: 'per_episode', label: 'Pro Folge', desc: 'Preis je Episode' },
+                { value: 'per_1000', label: 'Per 1.000 Hörer', desc: 'CPM-Modell' },
+              ] as const).map(m => (
+                <button key={m.value} type="button"
+                  onClick={() => setPlacementForm(p => ({ ...p, priceModel: m.value }))}
+                  className={`p-2 rounded-lg border-2 text-left transition-all ${
+                    placementForm.priceModel === m.value
+                      ? 'border-accent-green bg-accent-green/10'
+                      : 'border-surface-border hover:border-surface-border-light'
+                  }`}>
+                  <p className="text-text-primary text-xs font-semibold">{m.label}</p>
+                  <p className="text-text-muted text-xs">{m.desc}</p>
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label text-xs">Basispreis ({placementForm.currency})</label>
+                <input type="number" value={placementForm.basePrice}
+                  onChange={e => setPlacementForm(p => ({ ...p, basePrice: e.target.value }))}
+                  className="input" placeholder="0.00" min="0" step="0.01" />
+              </div>
+              <div>
+                <label className="label text-xs">Folgenpreis ({placementForm.currency})</label>
+                <input type="number" value={placementForm.pricePerEpisode}
+                  onChange={e => setPlacementForm(p => ({ ...p, pricePerEpisode: e.target.value }))}
+                  className="input" placeholder="0.00" min="0" step="0.01" />
+              </div>
+              <div>
+                <label className="label text-xs">Preis / 1.000 Hörer ({placementForm.currency})</label>
+                <input type="number" value={placementForm.pricePer1000Listens}
+                  onChange={e => setPlacementForm(p => ({ ...p, pricePer1000Listens: e.target.value }))}
+                  className="input" placeholder="0.00" min="0" step="0.01" />
+              </div>
+              <div>
+                <label className="label text-xs">Abrechnungspreis ({placementForm.currency})</label>
+                <input type="number" value={placementForm.price}
                   onChange={e => setPlacementForm(p => ({ ...p, price: e.target.value }))}
-                  className="input"
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                />
-                {showPriceHint && (
-                  <span title="Preis aus Kategorie" className="text-accent-green flex-shrink-0"><CheckCircle size={14} /></span>
-                )}
+                  className="input" placeholder="Finaler Rechnungsbetrag" min="0" step="0.01" />
+                <p className="text-text-muted text-xs mt-1">Wird für die Abrechnung verwendet</p>
               </div>
             </div>
           </div>
