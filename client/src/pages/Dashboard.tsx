@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Mic2, Lightbulb, Library, Megaphone, TrendingUp, Clock,
   BarChart2, Radio, Save, X, RefreshCw,
   Download, Eye, Headphones, MapPin, Smartphone, ChevronLeft, ChevronRight,
-  BookOpen, Settings2, GripVertical, EyeOff, Edit2, Users
+  BookOpen, Settings2, GripVertical, EyeOff, Edit2, Users,
+  CheckCircle, XCircle, AlertTriangle, Globe, Info, ShieldCheck,
 } from 'lucide-react';
 import { episodesApi, editorialApi, adminApi, podigeeApi, authApi } from '../lib/api';
 import { useApp, useOnlineUsers } from '../contexts/AppContext';
@@ -17,25 +18,33 @@ interface Stats {
 }
 
 export default function Dashboard() {
-  const { user, can, branding, showSuccess, showError, refreshUser } = useApp();
+  const navigate = useNavigate();
+  const { user, can, branding, podcastProfile, refreshPodcastProfile, showSuccess, showError, refreshUser } = useApp();
   const { onlineUsers } = useOnlineUsers();
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentEpisodes, setRecentEpisodes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [podcastInfo, setPodcastInfo] = useState<any>(null);
   const [podigeeStats, setPodigeeStats] = useState<any>(null);
   const [podigeeLoading, setPodigeeLoading] = useState(false);
-  const [editingPodcast, setEditingPodcast] = useState(false);
-  const [podcastForm, setPodcastForm] = useState<any>({});
-  const [savingPodcast, setSavingPodcast] = useState(false);
   const [editorialPlan, setEditorialPlan] = useState<any[]>([]);
   const [planMonth, setPlanMonth] = useState(new Date().getMonth() + 1);
   const [planYear, setPlanYear] = useState(new Date().getFullYear());
 
+  // Podcast-Profil bearbeiten (nur Admin/canManageSettings)
+  const [editingPodcast, setEditingPodcast] = useState(false);
+  const [podcastForm, setPodcastForm] = useState<any>({});
+  const [savingPodcast, setSavingPodcast] = useState(false);
+
+  // Freigabe-Anfragen
+  const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
+  const [approvalsLoading, setApprovalsLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+
   // Dashboard-Anpassung
-  const DEFAULT_WIDGETS = ['stats', 'online_users', 'podcast_episodes', 'podigee', 'editorial', 'quickactions'];
+  const DEFAULT_WIDGETS = ['stats', 'approvals', 'online_users', 'podcast_episodes', 'podigee', 'editorial', 'quickactions'];
   const WIDGET_LABELS: Record<string, string> = {
     stats: 'Statistik-Kacheln',
+    approvals: 'Freigabe-Anfragen',
     online_users: 'Online-Nutzer',
     podcast_episodes: 'Podcast-Profil & Aktuelle Episoden',
     podigee: 'Podcast-Statistiken (Podigee)',
@@ -50,7 +59,13 @@ export default function Dashboard() {
   // Layout aus Benutzerprofil laden
   useEffect(() => {
     if (user?.dashboardLayout && Array.isArray(user.dashboardLayout) && user.dashboardLayout.length > 0) {
-      setWidgetOrder(user.dashboardLayout);
+      // Sicherstellen dass 'approvals' im Layout vorhanden ist (Migration)
+      const layout = user.dashboardLayout;
+      if (!layout.includes('approvals')) {
+        setWidgetOrder(['approvals', ...layout]);
+      } else {
+        setWidgetOrder(layout);
+      }
     }
   }, [user?.dashboardLayout]);
 
@@ -88,6 +103,52 @@ export default function Dashboard() {
     );
   };
 
+  // Freigabe-Anfragen laden
+  const loadPendingApprovals = useCallback(async () => {
+    if (!can('canApproveEpisodes')) return;
+    setApprovalsLoading(true);
+    try {
+      const data = await episodesApi.getPendingApprovals();
+      setPendingApprovals(Array.isArray(data) ? data : []);
+    } catch {
+      setPendingApprovals([]);
+    } finally {
+      setApprovalsLoading(false);
+    }
+  }, [can]);
+
+  useEffect(() => {
+    loadPendingApprovals();
+  }, [loadPendingApprovals]);
+
+  // Episode freigeben
+  const handleApprove = async (episodeId: string) => {
+    setApprovingId(episodeId);
+    try {
+      await episodesApi.approve(episodeId, '');
+      showSuccess('Episode freigegeben');
+      setPendingApprovals(prev => prev.filter(e => e.id !== episodeId));
+    } catch {
+      showError('Freigabe fehlgeschlagen');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  // Episode ablehnen
+  const handleReject = async (episodeId: string) => {
+    setApprovingId(episodeId);
+    try {
+      await episodesApi.reject(episodeId, 'Vom Dashboard abgelehnt');
+      showSuccess('Episode abgelehnt');
+      setPendingApprovals(prev => prev.filter(e => e.id !== episodeId));
+    } catch {
+      showError('Ablehnen fehlgeschlagen');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   useEffect(() => {
     if (can('canViewEditorialPlan')) {
       editorialApi.listPlan({ month: planMonth, year: planYear })
@@ -99,28 +160,15 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [sysData, settingsData] = await Promise.allSettled([
-          adminApi.getSystem(),
-          adminApi.getSettings(),
-        ]);
-
-        if (sysData.status === 'fulfilled') {
-          const sys = sysData.value;
+        const sysData = await adminApi.getSystem().catch(() => null);
+        if (sysData) {
           setStats({
-            episodes: { total: sys.episodes, byStatus: {} },
-            ideas: { total: sys.ideas, new: 0 },
-            assets: { total: sys.assets },
-            sponsors: { total: sys.sponsors, active: 0 },
+            episodes: { total: sysData.episodes, byStatus: {} },
+            ideas: { total: sysData.ideas, new: 0 },
+            assets: { total: sysData.assets },
+            sponsors: { total: sysData.sponsors, active: 0 },
           });
         }
-
-        if (settingsData.status === 'fulfilled') {
-          const s = settingsData.value;
-          const podcast = s?.podcast || s?.general || {};
-          setPodcastInfo(podcast);
-          setPodcastForm(podcast);
-        }
-
         if (can('canViewEpisodes')) {
           const epData = await episodesApi.list({ pageSize: 5 });
           setRecentEpisodes(epData.items || []);
@@ -133,6 +181,26 @@ export default function Dashboard() {
     };
     fetchData();
   }, [can]);
+
+  // Podcast-Profil-Form mit globalem Profil synchronisieren
+  useEffect(() => {
+    if (podcastProfile) {
+      setPodcastForm({
+        name: podcastProfile.name || '',
+        podcastName: podcastProfile.name || '',
+        description: podcastProfile.description || '',
+        author: podcastProfile.author || '',
+        email: podcastProfile.email || '',
+        website: podcastProfile.website || '',
+        rssUrl: podcastProfile.rssUrl || '',
+        category: podcastProfile.category || '',
+        language: podcastProfile.language || 'de',
+        moderator: podcastProfile.moderator || '',
+        copyright: podcastProfile.copyright || '',
+        explicit: podcastProfile.explicit || false,
+      });
+    }
+  }, [podcastProfile]);
 
   const loadPodigeeStats = async () => {
     setPodigeeLoading(true);
@@ -150,10 +218,14 @@ export default function Dashboard() {
     setSavingPodcast(true);
     try {
       const current = await adminApi.getSettings();
-      await adminApi.updateSettings({ ...current, podcast: podcastForm });
-      setPodcastInfo(podcastForm);
+      await adminApi.updateSettings({
+        ...current,
+        podcast: { ...podcastForm, name: podcastForm.name || podcastForm.podcastName },
+        general: { ...current?.general, podcastName: podcastForm.name || podcastForm.podcastName },
+      });
+      await refreshPodcastProfile();
       setEditingPodcast(false);
-      showSuccess('Podcast-Informationen gespeichert');
+      showSuccess('Podcast-Profil gespeichert – für alle Nutzer aktualisiert');
     } catch (e) {
       showError('Fehler beim Speichern');
     } finally {
@@ -173,7 +245,139 @@ export default function Dashboard() {
     return 'Guten Abend';
   };
 
-  // Widget-Render-Funktionen
+  // ─── Widget: Freigabe-Anfragen ─────────────────────────────────────────────
+  const renderApprovals = () => {
+    // Nur für Nutzer mit canApproveEpisodes oder canRequestApproval anzeigen
+    if (!can('canApproveEpisodes') && !can('canRequestApproval')) return null;
+
+    return (
+      <div key="approvals" className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="section-title mb-0 flex items-center gap-2">
+            <ShieldCheck size={16} className="text-accent-orange" />
+            Freigabe-Anfragen
+            {pendingApprovals.length > 0 && (
+              <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-accent-orange/20 text-accent-orange font-semibold">
+                {pendingApprovals.length}
+              </span>
+            )}
+          </h2>
+          <button
+            onClick={loadPendingApprovals}
+            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-obsidian-800 rounded-lg transition-colors"
+            title="Aktualisieren"
+          >
+            <RefreshCw size={14} className={approvalsLoading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+
+        {approvalsLoading ? (
+          <div className="flex items-center justify-center py-8 text-text-muted">
+            <RefreshCw size={18} className="animate-spin mr-2" /> Lade Anfragen…
+          </div>
+        ) : pendingApprovals.length === 0 ? (
+          <div className="text-center py-8">
+            <CheckCircle size={32} className="mx-auto text-accent-green mb-2 opacity-60" />
+            <p className="text-text-muted text-sm">Keine offenen Freigabe-Anfragen</p>
+            {can('canRequestApproval') && !can('canApproveEpisodes') && (
+              <p className="text-text-muted text-xs mt-1">Du kannst Episoden zur Freigabe einreichen.</p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pendingApprovals.map(ep => (
+              <div
+                key={ep.id}
+                className="flex items-center gap-3 p-3 rounded-lg bg-obsidian-800 border border-accent-orange/20 hover:border-accent-orange/40 transition-colors"
+              >
+                {/* Episode-Info */}
+                <div
+                  className="flex-1 min-w-0 cursor-pointer"
+                  onClick={() => navigate(`/episodes/${ep.id}`)}
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-text-primary font-medium text-sm truncate">
+                      {ep.number ? `#${ep.number} ` : ''}{ep.title}
+                    </span>
+                    <span className="badge text-xs bg-accent-orange/20 text-accent-orange flex items-center gap-1">
+                      <AlertTriangle size={10} /> Freigabe angefragt
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-text-muted">
+                    {ep.approvalRequestedAt && (
+                      <span>
+                        {new Date(ep.approvalRequestedAt).toLocaleDateString('de-DE', {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })}
+                      </span>
+                    )}
+                    {ep.status && (
+                      <span className={`badge text-xs ${
+                        ep.status === 'produktion' ? 'bg-accent-blue/20 text-accent-blue' :
+                        ep.status === 'aufnahme' ? 'bg-accent-orange/20 text-accent-orange' :
+                        'bg-surface-overlay text-text-muted'
+                      }`}>{statusLabels[ep.status] || ep.status}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Aktions-Buttons (nur für canApproveEpisodes) */}
+                {can('canApproveEpisodes') && (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleApprove(ep.id)}
+                      disabled={approvingId === ep.id}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-accent-green/20 text-accent-green hover:bg-accent-green/30 rounded-lg transition-colors disabled:opacity-50"
+                      title="Freigeben"
+                    >
+                      <CheckCircle size={13} />
+                      Freigeben
+                    </button>
+                    <button
+                      onClick={() => handleReject(ep.id)}
+                      disabled={approvingId === ep.id}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-accent-red/20 text-accent-red hover:bg-accent-red/30 rounded-lg transition-colors disabled:opacity-50"
+                      title="Ablehnen"
+                    >
+                      <XCircle size={13} />
+                      Ablehnen
+                    </button>
+                    <button
+                      onClick={() => navigate(`/episodes/${ep.id}`)}
+                      className="p-1.5 text-text-muted hover:text-text-primary hover:bg-obsidian-700 rounded-lg transition-colors"
+                      title="Episode öffnen"
+                    >
+                      <Eye size={14} />
+                    </button>
+                  </div>
+                )}
+                {/* Nur-Lesen für canRequestApproval ohne canApproveEpisodes */}
+                {!can('canApproveEpisodes') && can('canRequestApproval') && (
+                  <button
+                    onClick={() => navigate(`/episodes/${ep.id}`)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-surface-overlay text-text-secondary hover:text-text-primary rounded-lg transition-colors"
+                  >
+                    <Eye size={13} /> Öffnen
+                  </button>
+                )}
+              </div>
+            ))}
+            {can('canApproveEpisodes') && (
+              <Link
+                to="/episodes?filter=approval"
+                className="block text-center text-xs text-accent-purple hover:text-accent-purple/80 mt-2"
+              >
+                Alle Episoden mit Freigabe-Status anzeigen →
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ─── Widget: Statistiken ──────────────────────────────────────────────────
   const renderStats = () => {
     if (isLoading || !stats) return null;
     return (
@@ -230,289 +434,340 @@ export default function Dashboard() {
     );
   };
 
-  const renderPodcastEpisodes = () => (
-    <div key="podcast_episodes" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Podcast Profile Card */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="section-title mb-0 flex items-center gap-2">
-            <Radio size={16} className="text-accent-purple" /> Podcast-Profil
-          </h2>
-          {can('canManageSettings') && !editingPodcast && (
-            <button onClick={() => setEditingPodcast(true)} className="p-1.5 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg">
-              <Edit2 size={14} />
-            </button>
-          )}
+  // ─── Widget: Podcast-Profil + Episoden ────────────────────────────────────
+  const renderPodcastEpisodes = () => {
+    const profile = podcastProfile;
+    const hasProfile = profile && (profile.name || profile.description || profile.website);
+
+    return (
+      <div key="podcast_episodes" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Podcast Profile Card */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="section-title mb-0 flex items-center gap-2">
+              <Radio size={16} className="text-accent-purple" /> Podcast-Profil
+              {!can('canManageSettings') && hasProfile && (
+                <span className="text-xs text-text-muted font-normal flex items-center gap-1 ml-1">
+                  <Globe size={11} /> Global
+                </span>
+              )}
+            </h2>
+            <div className="flex items-center gap-2">
+              {can('canManageSettings') && !editingPodcast && (
+                <button
+                  onClick={() => setEditingPodcast(true)}
+                  className="p-1.5 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg"
+                  title="Podcast-Profil bearbeiten (gilt für alle Nutzer)"
+                >
+                  <Edit2 size={14} />
+                </button>
+              )}
+              {editingPodcast && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setEditingPodcast(false); }}
+                    className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg"
+                  >
+                    <X size={14} />
+                  </button>
+                  <button
+                    onClick={savePodcastInfo}
+                    disabled={savingPodcast}
+                    className="btn-primary text-xs px-3 py-1 flex items-center gap-1"
+                  >
+                    <Save size={12} /> {savingPodcast ? 'Speichern...' : 'Global speichern'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Admin-Hinweis beim Bearbeiten */}
           {editingPodcast && (
-            <div className="flex gap-2">
-              <button onClick={() => { setEditingPodcast(false); setPodcastForm(podcastInfo); }} className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg">
-                <X size={14} />
-              </button>
-              <button onClick={savePodcastInfo} disabled={savingPodcast} className="btn-primary text-xs px-3 py-1 flex items-center gap-1">
-                <Save size={12} /> {savingPodcast ? 'Speichern...' : 'Speichern'}
-              </button>
+            <div className="flex items-start gap-2 p-2 mb-3 bg-accent-blue/10 border border-accent-blue/30 rounded-lg text-xs text-accent-blue">
+              <Info size={13} className="mt-0.5 flex-shrink-0" />
+              <span>Diese Einstellungen gelten <strong>global für alle Nutzer</strong>. Änderungen sind sofort für alle sichtbar.</span>
+            </div>
+          )}
+
+          {editingPodcast ? (
+            <div className="space-y-3">
+              {[
+                { key: 'name', label: 'Podcast-Name', placeholder: 'Mein Podcast' },
+                { key: 'moderator', label: 'Moderator/in', placeholder: 'Max Mustermann' },
+                { key: 'category', label: 'Kategorie', placeholder: 'Technologie, Gesellschaft...' },
+                { key: 'language', label: 'Sprache', placeholder: 'Deutsch' },
+                { key: 'website', label: 'Website', placeholder: 'https://...' },
+                { key: 'rssUrl', label: 'RSS-Feed URL', placeholder: 'https://...' },
+                { key: 'copyright', label: 'Copyright', placeholder: `© ${new Date().getFullYear()}` },
+              ].map(field => (
+                <div key={field.key}>
+                  <label className="label">{field.label}</label>
+                  <input
+                    className="input w-full text-sm"
+                    placeholder={field.placeholder}
+                    value={podcastForm[field.key] || ''}
+                    onChange={e => setPodcastForm((f: any) => ({ ...f, [field.key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+              <div>
+                <label className="label">Beschreibung</label>
+                <textarea
+                  className="input w-full text-sm resize-none"
+                  rows={3}
+                  placeholder="Kurzbeschreibung des Podcasts..."
+                  value={podcastForm.description || ''}
+                  onChange={e => setPodcastForm((f: any) => ({ ...f, description: e.target.value }))}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {hasProfile ? (
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  {(profile.name) && (
+                    <div className="col-span-2">
+                      <p className="text-text-muted text-xs">Podcast-Name</p>
+                      <p className="text-text-primary font-medium">{profile.name}</p>
+                    </div>
+                  )}
+                  {profile.moderator && (
+                    <div>
+                      <p className="text-text-muted text-xs">Moderator/in</p>
+                      <p className="text-text-secondary">{profile.moderator}</p>
+                    </div>
+                  )}
+                  {profile.category && (
+                    <div>
+                      <p className="text-text-muted text-xs">Kategorie</p>
+                      <p className="text-text-secondary">{profile.category}</p>
+                    </div>
+                  )}
+                  {profile.language && (
+                    <div>
+                      <p className="text-text-muted text-xs">Sprache</p>
+                      <p className="text-text-secondary">{profile.language === 'de' ? 'Deutsch' : profile.language}</p>
+                    </div>
+                  )}
+                  {profile.website && (
+                    <div>
+                      <p className="text-text-muted text-xs">Website</p>
+                      <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-accent-blue hover:underline text-xs">{profile.website}</a>
+                    </div>
+                  )}
+                  {profile.rssUrl && (
+                    <div>
+                      <p className="text-text-muted text-xs">RSS-Feed</p>
+                      <a href={profile.rssUrl} target="_blank" rel="noopener noreferrer" className="text-accent-blue hover:underline text-xs truncate block">{profile.rssUrl}</a>
+                    </div>
+                  )}
+                  {profile.copyright && (
+                    <div>
+                      <p className="text-text-muted text-xs">Copyright</p>
+                      <p className="text-text-secondary text-xs">{profile.copyright}</p>
+                    </div>
+                  )}
+                  {profile.description && (
+                    <div className="col-span-2">
+                      <p className="text-text-muted text-xs">Beschreibung</p>
+                      <p className="text-text-secondary text-sm">{profile.description}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <Radio size={32} className="mx-auto text-text-muted mb-2" />
+                  <p className="text-text-muted text-sm">Noch keine Podcast-Infos hinterlegt</p>
+                  {can('canManageSettings') ? (
+                    <button onClick={() => setEditingPodcast(true)} className="btn-ghost text-sm mt-2">
+                      Jetzt ausfüllen
+                    </button>
+                  ) : (
+                    <p className="text-text-muted text-xs mt-1">Der Admin kann das Podcast-Profil in den Einstellungen hinterlegen.</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
-        {editingPodcast ? (
-          <div className="space-y-3">
-            {[
-              { key: 'podcastName', label: 'Podcast-Name', placeholder: 'Mein Podcast' },
-              { key: 'moderator', label: 'Moderator/in', placeholder: 'Max Mustermann' },
-              { key: 'category', label: 'Kategorie', placeholder: 'Technologie, Gesellschaft...' },
-              { key: 'language', label: 'Sprache', placeholder: 'Deutsch' },
-              { key: 'website', label: 'Website', placeholder: 'https://...' },
-              { key: 'rssUrl', label: 'RSS-Feed URL', placeholder: 'https://...' },
-            ].map(field => (
-              <div key={field.key}>
-                <label className="label">{field.label}</label>
-                <input
-                  className="input w-full text-sm"
-                  placeholder={field.placeholder}
-                  value={podcastForm[field.key] || ''}
-                  onChange={e => setPodcastForm((f: any) => ({ ...f, [field.key]: e.target.value }))}
-                />
-              </div>
-            ))}
-            <div>
-              <label className="label">Beschreibung</label>
-              <textarea
-                className="input w-full text-sm resize-none"
-                rows={3}
-                placeholder="Kurzbeschreibung des Podcasts..."
-                value={podcastForm.description || ''}
-                onChange={e => setPodcastForm((f: any) => ({ ...f, description: e.target.value }))}
-              />
+
+        {/* Recent Episodes */}
+        {can('canViewEpisodes') && (
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="section-title mb-0 flex items-center gap-2">
+                <Clock size={16} className="text-accent-blue" /> Aktuelle Episoden
+              </h2>
+              <Link to="/episodes" className="text-accent-purple text-sm hover:underline">Alle →</Link>
             </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {podcastInfo && Object.keys(podcastInfo).length > 0 ? (
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                {podcastInfo.podcastName && (
-                  <div className="col-span-2">
-                    <p className="text-text-muted text-xs">Podcast-Name</p>
-                    <p className="text-text-primary font-medium">{podcastInfo.podcastName}</p>
-                  </div>
-                )}
-                {podcastInfo.moderator && (
-                  <div>
-                    <p className="text-text-muted text-xs">Moderator/in</p>
-                    <p className="text-text-secondary">{podcastInfo.moderator}</p>
-                  </div>
-                )}
-                {podcastInfo.category && (
-                  <div>
-                    <p className="text-text-muted text-xs">Kategorie</p>
-                    <p className="text-text-secondary">{podcastInfo.category}</p>
-                  </div>
-                )}
-                {podcastInfo.language && (
-                  <div>
-                    <p className="text-text-muted text-xs">Sprache</p>
-                    <p className="text-text-secondary">{podcastInfo.language}</p>
-                  </div>
-                )}
-                {podcastInfo.website && (
-                  <div>
-                    <p className="text-text-muted text-xs">Website</p>
-                    <a href={podcastInfo.website} target="_blank" rel="noopener noreferrer" className="text-accent-blue hover:underline text-xs">{podcastInfo.website}</a>
-                  </div>
-                )}
-                {podcastInfo.rssUrl && (
-                  <div>
-                    <p className="text-text-muted text-xs">RSS-Feed</p>
-                    <a href={podcastInfo.rssUrl} target="_blank" rel="noopener noreferrer" className="text-accent-blue hover:underline text-xs truncate block">{podcastInfo.rssUrl}</a>
-                  </div>
-                )}
-                {podcastInfo.description && (
-                  <div className="col-span-2">
-                    <p className="text-text-muted text-xs">Beschreibung</p>
-                    <p className="text-text-secondary text-sm">{podcastInfo.description}</p>
-                  </div>
+            {recentEpisodes.length === 0 ? (
+              <div className="text-center py-6">
+                <Mic2 size={32} className="mx-auto text-text-muted mb-2" />
+                <p className="text-text-muted text-sm">Noch keine Episoden</p>
+                {can('canCreateEpisodes') && (
+                  <Link to="/episodes" className="btn-ghost text-sm mt-2 inline-block">Erste Episode erstellen</Link>
                 )}
               </div>
             ) : (
-              <div className="text-center py-6">
-                <Radio size={32} className="mx-auto text-text-muted mb-2" />
-                <p className="text-text-muted text-sm">Noch keine Podcast-Infos hinterlegt</p>
-                {can('canManageSettings') && (
-                  <button onClick={() => setEditingPodcast(true)} className="btn-ghost text-sm mt-2">Jetzt ausfüllen</button>
-                )}
+              <div className="space-y-2">
+                {recentEpisodes.map(ep => (
+                  <Link
+                    key={ep.id}
+                    to={`/episodes/${ep.id}`}
+                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-surface-raised transition-colors group"
+                  >
+                    <div className="w-8 h-8 bg-obsidian-700 rounded-lg flex items-center justify-center text-text-muted text-xs font-mono flex-shrink-0">
+                      {ep.number ? `#${ep.number}` : '—'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-text-primary font-medium truncate group-hover:text-accent-purple transition-colors text-sm">
+                        {ep.title}
+                      </p>
+                      <p className="text-text-muted text-xs">
+                        {ep.publishDate ? new Date(ep.publishDate).toLocaleDateString('de-DE') : 'Kein Datum'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {ep.approvalStatus === 'angefragt' && (
+                        <span className="badge text-xs bg-accent-orange/20 text-accent-orange" title="Freigabe angefragt">
+                          <AlertTriangle size={10} />
+                        </span>
+                      )}
+                      {ep.approvalStatus === 'freigegeben' && (
+                        <span className="badge text-xs bg-accent-green/20 text-accent-green" title="Freigegeben">
+                          <CheckCircle size={10} />
+                        </span>
+                      )}
+                      <span className={`badge text-xs ${
+                        ep.status === 'veroeffentlicht' ? 'bg-accent-green/20 text-accent-green' :
+                        ep.status === 'produktion' ? 'bg-accent-blue/20 text-accent-blue' :
+                        ep.status === 'aufnahme' ? 'bg-accent-orange/20 text-accent-orange' :
+                        ep.status === 'geplant' ? 'bg-accent-purple/20 text-accent-purple' :
+                        'bg-surface-overlay text-text-muted'
+                      }`}>
+                        {statusLabels[ep.status] || ep.status}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
               </div>
             )}
           </div>
         )}
       </div>
+    );
+  };
 
-      {/* Recent Episodes */}
-      {can('canViewEpisodes') && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="section-title mb-0 flex items-center gap-2">
-              <Clock size={16} className="text-accent-blue" /> Aktuelle Episoden
-            </h2>
-            <Link to="/episodes" className="text-accent-purple text-sm hover:underline">Alle →</Link>
+  // ─── Widget: Podigee ──────────────────────────────────────────────────────
+  const renderPodigee = () => {
+    if (!can('canViewStats')) return null;
+    return (
+      <div key="podigee" className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="section-title mb-0 flex items-center gap-2">
+            <BarChart2 size={16} className="text-accent-cyan" /> Podcast-Statistiken
+          </h2>
+          <button
+            onClick={loadPodigeeStats}
+            disabled={podigeeLoading}
+            className="btn-secondary text-xs flex items-center gap-1.5"
+          >
+            {podigeeLoading ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+            {podigeeLoading ? 'Lade...' : 'Podigee-Daten laden'}
+          </button>
+        </div>
+        {!podigeeStats ? (
+          <div className="text-center py-8">
+            <Headphones size={32} className="mx-auto text-text-muted mb-2" />
+            <p className="text-text-muted text-sm">Klicke auf "Podigee-Daten laden" um Statistiken anzuzeigen</p>
           </div>
-          {recentEpisodes.length === 0 ? (
-            <div className="text-center py-6">
-              <Mic2 size={32} className="mx-auto text-text-muted mb-2" />
-              <p className="text-text-muted text-sm">Noch keine Episoden</p>
-              {can('canCreateEpisodes') && (
-                <Link to="/episodes" className="btn-ghost text-sm mt-2 inline-block">Erste Episode erstellen</Link>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {recentEpisodes.map(ep => (
-                <Link
-                  key={ep.id}
-                  to={`/episodes/${ep.id}`}
-                  className="flex items-center gap-4 p-3 rounded-lg hover:bg-surface-raised transition-colors group"
-                >
-                  <div className="w-8 h-8 bg-obsidian-700 rounded-lg flex items-center justify-center text-text-muted text-xs font-mono flex-shrink-0">
-                    {ep.number ? `#${ep.number}` : '—'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-text-primary font-medium truncate group-hover:text-accent-purple transition-colors text-sm">
-                      {ep.title}
-                    </p>
-                    <p className="text-text-muted text-xs">
-                      {ep.publishDate ? new Date(ep.publishDate).toLocaleDateString('de-DE') : 'Kein Datum'}
-                    </p>
-                  </div>
-                  <span className={`badge text-xs ${
-                    ep.status === 'veroeffentlicht' ? 'bg-accent-green/20 text-accent-green' :
-                    ep.status === 'produktion' ? 'bg-accent-blue/20 text-accent-blue' :
-                    ep.status === 'aufnahme' ? 'bg-accent-orange/20 text-accent-orange' :
-                    ep.status === 'geplant' ? 'bg-accent-purple/20 text-accent-purple' :
-                    'bg-surface-overlay text-text-muted'
-                  }`}>
-                    {statusLabels[ep.status] || ep.status}
-                  </span>
-                </Link>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Downloads gesamt', value: podigeeStats.totalDownloads?.toLocaleString('de-DE') || '—', color: 'text-accent-cyan' },
+                { label: 'Ø Downloads/Episode', value: podigeeStats.avgDownloadsPerEpisode?.toLocaleString('de-DE') || '—', color: 'text-accent-purple' },
+                { label: 'Episoden', value: podigeeStats.episodeCount || '—', color: 'text-accent-blue' },
+                { label: 'Abonnenten', value: podigeeStats.subscribers?.toLocaleString('de-DE') || '—', color: 'text-accent-green' },
+              ].map(s => (
+                <div key={s.label} className="text-center p-3 bg-obsidian-800 rounded-lg">
+                  <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                  <p className="text-text-muted text-xs mt-1">{s.label}</p>
+                </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
-  const renderPodigee = () => (
-    <div key="podigee" className="card">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="section-title mb-0 flex items-center gap-2">
-          <BarChart2 size={16} className="text-accent-cyan" /> Podcast-Statistiken (Podigee)
-        </h2>
-        <button
-          onClick={loadPodigeeStats}
-          disabled={podigeeLoading}
-          className="btn-ghost text-sm flex items-center gap-2"
-        >
-          <RefreshCw size={14} className={podigeeLoading ? 'animate-spin' : ''} />
-          {podigeeLoading ? 'Laden...' : 'Aktualisieren'}
-        </button>
-      </div>
-      {!podigeeStats && !podigeeLoading && (
-        <div className="text-center py-8">
-          <BarChart2 size={40} className="mx-auto text-text-muted mb-3" />
-          <p className="text-text-secondary text-sm">Klicke auf "Aktualisieren" um Podigee-Statistiken zu laden</p>
-          <p className="text-text-muted text-xs mt-1">
-            Podigee API-Token in den <Link to="/settings" className="text-accent-blue hover:underline">Einstellungen</Link> konfigurieren
-          </p>
-        </div>
-      )}
-      {podigeeLoading && (
-        <div className="flex items-center justify-center py-8">
-          <RefreshCw size={24} className="animate-spin text-accent-purple" />
-        </div>
-      )}
-      {podigeeStats && !podigeeLoading && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Downloads gesamt', value: podigeeStats.totalDownloads?.toLocaleString('de-DE') || '—', icon: <Download size={16} />, color: 'text-accent-purple' },
-              { label: 'Letzte 30 Tage', value: podigeeStats.last30Days?.toLocaleString('de-DE') || '—', icon: <TrendingUp size={16} />, color: 'text-accent-green' },
-              { label: 'Letzte 7 Tage', value: podigeeStats.last7Days?.toLocaleString('de-DE') || '—', icon: <Clock size={16} />, color: 'text-accent-blue' },
-              { label: 'Ø pro Episode', value: podigeeStats.avgPerEpisode?.toLocaleString('de-DE') || '—', icon: <Headphones size={16} />, color: 'text-accent-cyan' },
-            ].map(item => (
-              <div key={item.label} className="bg-surface-raised rounded-xl p-4">
-                <div className={`${item.color} mb-2`}>{item.icon}</div>
-                <p className="text-xl font-bold text-text-primary">{item.value}</p>
-                <p className="text-text-muted text-xs mt-1">{item.label}</p>
-              </div>
-            ))}
-          </div>
-          {podigeeStats.topEpisodes && podigeeStats.topEpisodes.length > 0 && (
-            <div>
-              <h3 className="text-text-secondary text-sm font-medium mb-3 flex items-center gap-2">
-                <Mic2 size={14} /> Top Episoden
-              </h3>
-              <div className="space-y-2">
-                {podigeeStats.topEpisodes.slice(0, 5).map((ep: any, i: number) => (
-                  <div key={ep.id || i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-raised transition-colors">
-                    <span className="text-text-muted text-xs font-mono w-5 text-right">{i + 1}.</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-text-secondary text-sm truncate">{ep.title}</p>
+            {podigeeStats.topEpisodes && podigeeStats.topEpisodes.length > 0 && (
+              <div>
+                <h3 className="text-text-secondary text-sm font-medium mb-3 flex items-center gap-2">
+                  <TrendingUp size={14} /> Top Episoden
+                </h3>
+                <div className="space-y-2">
+                  {podigeeStats.topEpisodes.slice(0, 5).map((ep: any, i: number) => (
+                    <div key={ep.id || i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-raised transition-colors">
+                      <span className="text-text-muted text-xs font-mono w-5 text-right">{i + 1}.</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-text-secondary text-sm truncate">{ep.title}</p>
+                      </div>
+                      <span className="text-text-primary text-sm font-medium">{ep.downloads?.toLocaleString('de-DE') || 0}</span>
                     </div>
-                    <span className="text-text-primary text-sm font-medium">{ep.downloads?.toLocaleString('de-DE') || 0}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {podigeeStats.clients && podigeeStats.clients.length > 0 && (
+                <div>
+                  <h3 className="text-text-secondary text-sm font-medium mb-3 flex items-center gap-2">
+                    <Smartphone size={14} /> Podcast-Apps
+                  </h3>
+                  <div className="space-y-2">
+                    {podigeeStats.clients.slice(0, 5).map((c: any, i: number) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-text-secondary truncate">{c.name}</span>
+                            <span className="text-text-muted ml-2">{c.percentage?.toFixed(1) || 0}%</span>
+                          </div>
+                          <div className="h-1.5 bg-surface-overlay rounded-full overflow-hidden">
+                            <div className="h-full bg-accent-purple rounded-full" style={{ width: `${c.percentage || 0}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+              {podigeeStats.countries && podigeeStats.countries.length > 0 && (
+                <div>
+                  <h3 className="text-text-secondary text-sm font-medium mb-3 flex items-center gap-2">
+                    <MapPin size={14} /> Länder
+                  </h3>
+                  <div className="space-y-2">
+                    {podigeeStats.countries.slice(0, 5).map((c: any, i: number) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-text-secondary truncate">{c.country}</span>
+                            <span className="text-text-muted ml-2">{c.percentage?.toFixed(1) || 0}%</span>
+                          </div>
+                          <div className="h-1.5 bg-surface-overlay rounded-full overflow-hidden">
+                            <div className="h-full bg-accent-cyan rounded-full" style={{ width: `${c.percentage || 0}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {podigeeStats.clients && podigeeStats.clients.length > 0 && (
-              <div>
-                <h3 className="text-text-secondary text-sm font-medium mb-3 flex items-center gap-2">
-                  <Smartphone size={14} /> Podcast-Apps
-                </h3>
-                <div className="space-y-2">
-                  {podigeeStats.clients.slice(0, 5).map((c: any, i: number) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-text-secondary truncate">{c.name}</span>
-                          <span className="text-text-muted ml-2">{c.percentage?.toFixed(1) || 0}%</span>
-                        </div>
-                        <div className="h-1.5 bg-surface-overlay rounded-full overflow-hidden">
-                          <div className="h-full bg-accent-purple rounded-full" style={{ width: `${c.percentage || 0}%` }} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {podigeeStats.countries && podigeeStats.countries.length > 0 && (
-              <div>
-                <h3 className="text-text-secondary text-sm font-medium mb-3 flex items-center gap-2">
-                  <MapPin size={14} /> Länder
-                </h3>
-                <div className="space-y-2">
-                  {podigeeStats.countries.slice(0, 5).map((c: any, i: number) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-text-secondary truncate">{c.country}</span>
-                          <span className="text-text-muted ml-2">{c.percentage?.toFixed(1) || 0}%</span>
-                        </div>
-                        <div className="h-1.5 bg-surface-overlay rounded-full overflow-hidden">
-                          <div className="h-full bg-accent-cyan rounded-full" style={{ width: `${c.percentage || 0}%` }} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
+  // ─── Widget: Redaktionsplan ───────────────────────────────────────────────
   const renderEditorial = () => {
     if (!can('canViewEditorialPlan')) return null;
     return (
@@ -599,6 +854,7 @@ export default function Dashboard() {
     );
   };
 
+  // ─── Widget: Schnellzugriff ───────────────────────────────────────────────
   const renderQuickActions = () => (
     <div key="quickactions" className="card">
       <h2 className="section-title">Schnellzugriff</h2>
@@ -631,6 +887,7 @@ export default function Dashboard() {
     </div>
   );
 
+  // ─── Widget: Online-Nutzer ────────────────────────────────────────────────
   const renderOnlineUsers = () => (
     <div key="online_users" className="card">
       <div className="flex items-center gap-2 mb-4">
@@ -673,14 +930,22 @@ export default function Dashboard() {
     </div>
   );
 
+  // ─── Widget-Map ───────────────────────────────────────────────────────────
   const widgetRenderers: Record<string, () => React.ReactNode> = {
     stats: renderStats,
+    approvals: renderApprovals,
     online_users: renderOnlineUsers,
     podcast_episodes: renderPodcastEpisodes,
     podigee: renderPodigee,
     editorial: renderEditorial,
     quickactions: renderQuickActions,
   };
+
+  // Sichtbare Widgets (nur die, die für den aktuellen Nutzer relevant sind)
+  const visibleWidgets = widgetOrder.filter(w => {
+    if (w === 'approvals' && !can('canApproveEpisodes') && !can('canRequestApproval')) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -695,6 +960,20 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Freigabe-Badge im Header */}
+          {can('canApproveEpisodes') && pendingApprovals.length > 0 && (
+            <button
+              onClick={() => {
+                const idx = widgetOrder.indexOf('approvals');
+                if (idx === -1) setWidgetOrder(prev => ['approvals', ...prev]);
+                document.getElementById('widget-approvals')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-accent-orange/20 text-accent-orange border border-accent-orange/40 rounded-full hover:bg-accent-orange/30 transition-colors"
+            >
+              <AlertTriangle size={13} />
+              {pendingApprovals.length} Freigabe{pendingApprovals.length !== 1 ? 'n' : ''} ausstehend
+            </button>
+          )}
           {branding?.logoUrl && (
             <img src={branding.logoUrl} alt="Podcast Logo" className="h-12 w-auto object-contain rounded-lg" />
           )}
@@ -716,10 +995,7 @@ export default function Dashboard() {
               <Settings2 size={16} className="text-accent-purple" /> Dashboard anpassen
             </h2>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setWidgetOrder(DEFAULT_WIDGETS)}
-                className="btn-ghost text-xs"
-              >
+              <button onClick={() => setWidgetOrder(DEFAULT_WIDGETS)} className="btn-ghost text-xs">
                 Zurücksetzen
               </button>
               <button
@@ -756,6 +1032,11 @@ export default function Dashboard() {
                 >
                   <GripVertical size={16} className="text-text-muted flex-shrink-0" />
                   <span className="flex-1 text-text-primary text-sm">{WIDGET_LABELS[widget]}</span>
+                  {widget === 'approvals' && (
+                    <span className="text-xs text-accent-orange bg-accent-orange/10 px-2 py-0.5 rounded-full">
+                      Moderator/Admin
+                    </span>
+                  )}
                   {isVisible && (
                     <span className="text-text-muted text-xs bg-obsidian-700 px-2 py-0.5 rounded-full">
                       Position {pos + 1}
@@ -780,10 +1061,16 @@ export default function Dashboard() {
       )}
 
       {/* Widgets in benutzerdefinierter Reihenfolge */}
-      {widgetOrder.map(widget => {
+      {visibleWidgets.map(widget => {
         const renderer = widgetRenderers[widget];
         if (!renderer) return null;
-        return <React.Fragment key={widget}>{renderer()}</React.Fragment>;
+        const rendered = renderer();
+        if (!rendered) return null;
+        return (
+          <div key={widget} id={`widget-${widget}`}>
+            {rendered}
+          </div>
+        );
       })}
     </div>
   );
