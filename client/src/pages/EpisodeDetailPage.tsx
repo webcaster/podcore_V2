@@ -5,7 +5,7 @@ import {
   FileText, ChevronDown, ChevronUp, Calendar, Clock, Tag, Users, Loader2,
   Download, Settings, Wrench, Bold, Italic, Underline, List, ListOrdered,
   AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Quote, Code,
-  Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle,
+  AlertTriangle, Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle,
   Search, Star, CheckSquare, Square, BookOpen, UserCheck, Layers, ExternalLink, X,
   MessageSquare, HelpCircle, FileEdit, StickyNote, Target, Timer, Timer as TimerIcon,
   RotateCcw
@@ -1335,6 +1335,83 @@ export default function EpisodeDetailPage() {
                   </div>
                 )}
               </div>
+
+              {/* ── Konflikt-Warnung: mehrere Sponsoren gleicher Kategorie ── */}
+              {(() => {
+                const categoryGroups: Record<string, any[]> = {};
+                adBookings.forEach(b => {
+                  if (b.category_name) {
+                    if (!categoryGroups[b.category_name]) categoryGroups[b.category_name] = [];
+                    categoryGroups[b.category_name].push(b);
+                  }
+                });
+                const conflicts = Object.entries(categoryGroups).filter(([, bks]) => bks.length > 1);
+                if (conflicts.length === 0) return null;
+                return (
+                  <div className="card border-yellow-700/50 bg-yellow-900/10">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle size={16} className="text-yellow-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-yellow-400">Kategorie-Konflikt erkannt</p>
+                        <p className="text-xs text-text-muted mt-0.5">Mehrere Sponsoren aus derselben Kategorie sind in dieser Episode gebucht:</p>
+                        <div className="mt-2 space-y-1">
+                          {conflicts.map(([cat, bks]) => (
+                            <div key={cat} className="text-xs text-yellow-300">
+                              <span className="font-medium">{cat}:</span> {bks.map(b => b.sponsor_name).join(', ')}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── Folgensponsor-Hinweis: Slots mit Laufzeit die diese Episode abdecken ── */}
+              {availableSlots.filter((sl: any) => sl.startDate && sl.endDate && episode?.publishDate &&
+                sl.startDate <= episode.publishDate && sl.endDate >= episode.publishDate &&
+                !adBookings.some(b => b.ad_slot_id === sl.id)
+              ).length > 0 && (
+                <div className="card border-blue-700/50 bg-blue-900/10">
+                  <div className="flex items-start gap-3">
+                    <Info size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-blue-400">Folgensponsor-Hinweis</p>
+                      <p className="text-xs text-text-muted mt-0.5">Folgende Werbeplätze haben eine aktive Laufzeit, die diese Episode abdeckt, sind aber noch nicht zugewiesen:</p>
+                      <div className="mt-2 space-y-1.5">
+                        {availableSlots.filter((sl: any) => sl.startDate && sl.endDate && episode?.publishDate &&
+                          sl.startDate <= episode.publishDate && sl.endDate >= episode.publishDate &&
+                          !adBookings.some(b => b.ad_slot_id === sl.id)
+                        ).map((sl: any) => (
+                          <div key={sl.id} className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sl.sponsorColor || '#3b82f6' }} />
+                              <span className="text-text-primary font-medium">{sl.sponsorName}</span>
+                              <span className="text-text-muted">{sl.name}</span>
+                              <span className="text-text-muted opacity-60">{sl.startDate?.slice(0,10)} – {sl.endDate?.slice(0,10)}</span>
+                            </div>
+                            {can('canEditEpisodes') && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await sponsorsApi.createEpisodeBooking({ episodeId: id, adSlotId: sl.id, sponsorId: sl.sponsorId, position: sl.defaultPosition || 'mid-roll', confirmed: false });
+                                    const updated = await sponsorsApi.getEpisodeBookings(id);
+                                    setAdBookings(updated);
+                                    showSuccess(`${sl.sponsorName} zugewiesen`);
+                                  } catch (e: any) { showError(e.message); }
+                                }}
+                                className="text-[10px] px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-300 border border-blue-700/50 hover:bg-blue-800/60 transition-colors"
+                              >
+                                + Zuweisen
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* ── Timeline-Visualisierung (nur wenn Buchungen + Dauer vorhanden) ── */}
               {adBookings.length > 0 && totalDuration > 0 && (

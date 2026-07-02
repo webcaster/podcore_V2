@@ -120,6 +120,7 @@ export default function SponsorRevenuePage() {
 
   const summary = data?.summary || {};
   const maxRevenue = Math.max(...(data?.byMonth || []).map((m: any) => m.totalRevenue || 0), 1);
+  const maxSlotRevenue = Math.max(...(data?.slotUtilization || []).map((s: any) => s.totalRevenue || 0), 1);
 
   return (
     <div className="p-6 space-y-6">
@@ -224,13 +225,45 @@ export default function SponsorRevenuePage() {
             </div>
           </div>
 
+          {/* Neue KPI-Cards: Auslastung, TKP, Aktive Slots */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-surface rounded-xl p-4 border border-surface-border">
+              <div className="flex items-center gap-2 mb-2">
+                <BarChart3 size={16} className="text-blue-400" />
+                <span className="text-text-muted text-xs">Slot-Auslastung</span>
+              </div>
+              <div className="text-2xl font-bold text-blue-400">{(summary.utilizationRate || 0).toFixed(0)} %</div>
+              <div className="text-text-muted text-xs mt-1">{summary.activeSlots || 0} von {summary.totalSlots || 0} Slots aktiv</div>
+              <div className="w-full bg-surface-raised rounded-full h-1.5 mt-2">
+                <div className="h-1.5 bg-blue-400 rounded-full" style={{ width: `${Math.min(100, summary.utilizationRate || 0)}%` }} />
+              </div>
+            </div>
+            <div className="bg-surface rounded-xl p-4 border border-surface-border">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={16} className="text-purple-400" />
+                <span className="text-text-muted text-xs">Ø TKP (Cost per Mille)</span>
+              </div>
+              <div className="text-2xl font-bold text-purple-400">{fmt(summary.avgTkp || 0)} €</div>
+              <div className="text-text-muted text-xs mt-1">Durchschnitt pro 1.000 Hörer</div>
+            </div>
+            <div className="bg-surface rounded-xl p-4 border border-surface-border">
+              <div className="flex items-center gap-2 mb-2">
+                <Users size={16} className="text-accent-green" />
+                <span className="text-text-muted text-xs">Aktive Werbeplätze</span>
+              </div>
+              <div className="text-2xl font-bold text-accent-green">{summary.activeSlots || 0}</div>
+              <div className="text-text-muted text-xs mt-1">Slots mit Buchungen im Zeitraum</div>
+            </div>
+          </div>
+
           {/* View Tabs */}
-          <div className="flex gap-1 bg-surface rounded-xl p-1 border border-surface-border w-fit">
+          <div className="flex gap-1 bg-surface rounded-xl p-1 border border-surface-border w-fit flex-wrap">
             {[
               { key: 'overview', label: 'Pro Sponsor', icon: <Users size={14} /> },
               { key: 'placements', label: 'Alle Platzierungen', icon: <BarChart3 size={14} /> },
               { key: 'monthly', label: 'Monatlich', icon: <Calendar size={14} /> },
               { key: 'categories', label: 'Kategorien', icon: <Tag size={14} /> },
+              { key: 'utilization', label: 'Auslastung', icon: <TrendingUp size={14} /> },
             ].map(v => (
               <button key={v.key} onClick={() => setActiveView(v.key as any)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${activeView === v.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}>
@@ -372,6 +405,57 @@ export default function SponsorRevenuePage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Auslastung */}
+          {activeView === 'utilization' && (
+            <div className="space-y-4">
+              <div className="bg-surface rounded-xl border border-surface-border p-5">
+                <h3 className="text-text-primary font-semibold mb-4 flex items-center gap-2">
+                  <TrendingUp size={16} className="text-blue-400" />
+                  Slot-Auslastung im Zeitraum
+                </h3>
+                {(data?.slotUtilization || []).length === 0 ? (
+                  <p className="text-text-muted text-sm text-center py-8">Keine Slots vorhanden</p>
+                ) : (
+                  <div className="space-y-3">
+                    {(data.slotUtilization || []).map((sl: any) => (
+                      <div key={sl.id} className="p-3 bg-surface-raised rounded-lg border border-surface-border">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: sl.sponsorColor }} />
+                            <span className="font-medium text-text-primary text-sm">{sl.name}</span>
+                            <span className="text-text-muted text-xs">({sl.sponsorName})</span>
+                            {sl.isExclusive && (
+                              <span className="text-[10px] bg-yellow-900/40 text-yellow-400 px-1.5 py-0.5 rounded-full border border-yellow-700/50">Exklusiv</span>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="font-semibold text-text-primary text-sm">{fmt(sl.totalRevenue)} €</div>
+                            <div className="text-text-muted text-xs">{sl.placements} Platzierung{sl.placements !== 1 ? 'en' : ''}</div>
+                          </div>
+                        </div>
+                        <div className="w-full bg-surface rounded-full h-3 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${Math.max(2, (sl.totalRevenue / maxSlotRevenue) * 100)}%`,
+                              backgroundColor: sl.sponsorColor + 'cc',
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between mt-1.5 text-[11px] text-text-muted">
+                          <span>{sl.bookings} Episodenbuchung{sl.bookings !== 1 ? 'en' : ''}</span>
+                          {sl.basePrice > 0 && <span>Basispreis: {fmt(sl.basePrice)} €</span>}
+                          {sl.pricePer1000Listens > 0 && <span>TKP: {fmt(sl.pricePer1000Listens)} €</span>}
+                          {sl.pricePerEpisode > 0 && <span>Pro Folge: {fmt(sl.pricePerEpisode)} €</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

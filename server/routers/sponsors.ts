@@ -197,10 +197,63 @@ router.get('/revenue/dashboard', requirePermission('canViewSponsorReports') as a
     byCategory[cat].placements++;
   });
 
+  // Slot-Auslastung: alle Slots laden und Belegung berechnen
+  const allSlots = db.all(`
+    SELECT sl.*, s.name as sponsor_name, s.company as sponsor_company, s.color as sponsor_color,
+      COUNT(ap.id) as placement_count,
+      COALESCE(sl.base_price, sl.price, 0) as effective_price
+    FROM ad_slots sl
+    JOIN sponsors s ON sl.sponsor_id = s.id
+    LEFT JOIN ad_placements ap ON ap.ad_slot_id = sl.id
+    GROUP BY sl.id
+    ORDER BY s.name, sl.name
+  `, []) as any[];
+
+  // Episoden-Buchungen für Auslastung
+  const episodeBookings = db.all(`
+    SELECT eab.*, s.name as sponsor_name, s.color as sponsor_color
+    FROM episode_ad_bookings eab
+    JOIN sponsors s ON eab.sponsor_id = s.id
+    ORDER BY eab.created_at DESC
+  `, []) as any[];
+
+  // Ø TKP berechnen (nur Slots mit pricePer1000Listens)
+  const tkpSlots = allSlots.filter((sl: any) => sl.price_per_1000_listens > 0);
+  const avgTkp = tkpSlots.length > 0
+    ? tkpSlots.reduce((sum: number, sl: any) => sum + sl.price_per_1000_listens, 0) / tkpSlots.length
+    : 0;
+
+  // Aktive Slots (mit Buchungen im Zeitraum)
+  const activeSlotIds = new Set(filtered.map((r: any) => r.ad_slot_id));
+  const activeSlotCount = activeSlotIds.size;
+
+  // Slot-Auslastung: Buchungen pro Slot
+  const slotUtilization = allSlots.map((sl: any) => {
+    const slotPlacements = filtered.filter((r: any) => r.ad_slot_id === sl.id);
+    const slotBookings = episodeBookings.filter((b: any) => b.slot_id === sl.id);
+    return {
+      id: sl.id, name: sl.name, sponsorName: sl.sponsor_name, sponsorCompany: sl.sponsor_company,
+      sponsorColor: sl.sponsor_color || '#7c3aed',
+      placements: slotPlacements.length, bookings: slotBookings.length,
+      totalRevenue: slotPlacements.reduce((s: number, r: any) => s + (r.price || r.slot_price || 0), 0),
+      status: sl.status || 'aktiv', isExclusive: sl.is_exclusive === 1,
+      categoryId: sl.category_id, startDate: sl.placement_start, endDate: sl.placement_end,
+      basePrice: sl.base_price || sl.price || 0, pricePerEpisode: sl.price_per_episode || 0,
+      pricePer1000Listens: sl.price_per_1000_listens || 0,
+    };
+  });
+
   return res.json({
     success: true,
     data: {
-      summary: { totalRevenue, paidRevenue, openRevenue, sentRevenue, totalPlacements: filtered.length },
+      summary: {
+        totalRevenue, paidRevenue, openRevenue, sentRevenue,
+        totalPlacements: filtered.length,
+        activeSlots: activeSlotCount,
+        totalSlots: allSlots.length,
+        avgTkp,
+        utilizationRate: allSlots.length > 0 ? (activeSlotCount / allSlots.length) * 100 : 0,
+      },
       bySponsor: Object.values(bySponsor).sort((a: any, b: any) => b.totalRevenue - a.totalRevenue),
       byMonth: Object.values(byMonth).sort((a: any, b: any) => a.month.localeCompare(b.month)),
       byCategory: Object.values(byCategory).sort((a: any, b: any) => b.totalRevenue - a.totalRevenue),
@@ -209,6 +262,7 @@ router.get('/revenue/dashboard', requirePermission('canViewSponsorReports') as a
         versendet: filtered.filter((r: any) => r.invoice_status === 'versendet').length,
         bezahlt: filtered.filter((r: any) => r.invoice_status === 'bezahlt').length,
       },
+      slotUtilization,
       placements: filtered.map((r: any) => ({
         id: r.id, sponsorId: r.sponsor_id, sponsorName: r.sponsor_name, sponsorCompany: r.sponsor_company,
         slotName: r.slot_name, category: r.slot_category, position: r.position, episodeTitle: r.episode_title,
@@ -1347,6 +1401,265 @@ router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any,
   renderWatermark(doc, layout);
   renderPdfFooter(doc, layout, { podcastName, pageNum: 1 });
   doc.end();
+});
+
+// ============================================================
+// BUCHUNGSKALENDER – Alle Buchungen/Platzierungen für Kalenderansicht
+// ============================================================
+router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { from, to } = req.query as any;
+
+  // 1. Episodengebundene Buchungen
+  const episodeBookings = db.all(`
+    SELECT b.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
+           c.name as category_name, c.color as category_color, c.is_exclusive,
+           e.title as episode_title, e.number as episode_number, e.publish_date, e.status as episode_status
+    FROM episode_ad_bookings b
+    JOIN sponsors sp ON b.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON b.ad_category_id = c.id
+    LEFT JOIN episodes e ON b.episode_id = e.id
+    ORDER BY e.publish_date ASC, b.sort_order ASC
+  `) as any[];
+
+  // 2. Zeitraum-Buchungen (ad_slots mit Laufzeit)
+  const slotBookings = db.all(`
+    SELECT sl.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
+           c.name as category_name, c.color as category_color, c.is_exclusive
+    FROM ad_slots sl
+    JOIN sponsors sp ON sl.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON sl.category_id = c.id
+    WHERE sl.placement_start IS NOT NULL OR sl.start_date IS NOT NULL
+    ORDER BY COALESCE(sl.placement_start, sl.start_date) ASC
+  `) as any[];
+
+  // 3. Konflikte erkennen: Exklusive Kategorien an gleichen Terminen
+  const conflicts: any[] = [];
+  const exclusiveBookings = episodeBookings.filter((b: any) => b.is_exclusive);
+  const byDate: Record<string, any[]> = {};
+  exclusiveBookings.forEach((b: any) => {
+    const key = `${b.publish_date || 'no-date'}_${b.ad_category_id}`;
+    if (!byDate[key]) byDate[key] = [];
+    byDate[key].push(b);
+  });
+  Object.values(byDate).forEach((group: any[]) => {
+    if (group.length > 1) {
+      conflicts.push({
+        type: 'exclusive_conflict',
+        date: group[0].publish_date,
+        categoryName: group[0].category_name,
+        bookings: group.map((b: any) => ({ id: b.id, sponsorName: b.sponsor_name, episodeTitle: b.episode_title })),
+        message: `Exklusive Kategorie "${group[0].category_name}" ist am ${group[0].publish_date} mehrfach gebucht`,
+      });
+    }
+  });
+
+  // 4. Datum-Filter anwenden
+  let filteredEpisodeBookings = episodeBookings;
+  if (from) filteredEpisodeBookings = filteredEpisodeBookings.filter((b: any) => !b.publish_date || b.publish_date >= from);
+  if (to) filteredEpisodeBookings = filteredEpisodeBookings.filter((b: any) => !b.publish_date || b.publish_date <= to);
+
+  let filteredSlotBookings = slotBookings;
+  if (from) filteredSlotBookings = filteredSlotBookings.filter((b: any) => {
+    const start = b.placement_start || b.start_date;
+    return !start || start >= from;
+  });
+  if (to) filteredSlotBookings = filteredSlotBookings.filter((b: any) => {
+    const end = b.placement_end || b.end_date;
+    return !end || end <= to;
+  });
+
+  return res.json({
+    success: true,
+    data: {
+      episodeBookings: filteredEpisodeBookings.map((b: any) => ({
+        id: b.id,
+        type: 'episode',
+        sponsorId: b.sponsor_id,
+        sponsorName: b.sponsor_name,
+        sponsorCompany: b.sponsor_company,
+        sponsorColor: b.sponsor_color || '#7c3aed',
+        categoryName: b.category_name,
+        categoryColor: b.category_color || '#6b7280',
+        isExclusive: b.is_exclusive === 1,
+        position: b.position,
+        episodeId: b.episode_id,
+        episodeTitle: b.episode_title,
+        episodeNumber: b.episode_number,
+        date: b.publish_date,
+        confirmed: b.confirmed === 1,
+        episodeStatus: b.episode_status,
+      })),
+      slotBookings: filteredSlotBookings.map((b: any) => ({
+        id: b.id,
+        type: 'slot',
+        sponsorId: b.sponsor_id,
+        sponsorName: b.sponsor_name,
+        sponsorCompany: b.sponsor_company,
+        sponsorColor: b.sponsor_color || '#7c3aed',
+        categoryName: b.category_name,
+        categoryColor: b.category_color || '#6b7280',
+        isExclusive: b.is_exclusive === 1,
+        position: b.category || b.production_type,
+        startDate: b.placement_start || b.start_date,
+        endDate: b.placement_end || b.end_date,
+        label: b.placement_label || b.name,
+        status: b.status,
+        basePrice: b.base_price,
+        pricePerEpisode: b.price_per_episode,
+      })),
+      conflicts,
+    },
+  });
+});
+
+// ============================================================
+// FOLGENSPONSOR-AUTOMATISIERUNG – Neue Episode einem aktiven Folgensponsor zuordnen
+// ============================================================
+router.post('/auto-assign-episode', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { episodeId } = req.body;
+  if (!episodeId) return res.status(400).json({ success: false, error: 'episodeId erforderlich' });
+
+  const episode = db.get('SELECT id, publish_date, recording_date FROM episodes WHERE id = ?', [episodeId]) as any;
+  if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
+
+  const epDate = episode.publish_date || episode.recording_date;
+  if (!epDate) return res.json({ success: true, data: { assigned: [], message: 'Kein Datum – keine automatische Zuordnung möglich' } });
+
+  // Alle aktiven Slots mit Laufzeit finden, die dieses Datum abdecken
+  const activeSlots = db.all(`
+    SELECT sl.*, sp.name as sponsor_name, c.is_exclusive, c.name as category_name
+    FROM ad_slots sl
+    JOIN sponsors sp ON sl.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON sl.category_id = c.id
+    WHERE sl.status IN ('aktiv', 'angefragt', 'bestätigt')
+      AND (
+        (sl.placement_start IS NOT NULL AND sl.placement_end IS NOT NULL
+         AND ? BETWEEN sl.placement_start AND sl.placement_end)
+        OR
+        (sl.start_date IS NOT NULL AND sl.end_date IS NOT NULL
+         AND ? BETWEEN sl.start_date AND sl.end_date)
+      )
+  `, [epDate, epDate]) as any[];
+
+  const assigned: any[] = [];
+  const skipped: any[] = [];
+
+  for (const slot of activeSlots) {
+    // Bereits gebucht?
+    const existing = db.get('SELECT id FROM episode_ad_bookings WHERE episode_id = ? AND ad_slot_id = ?', [episodeId, slot.id]);
+    if (existing) { skipped.push({ slotId: slot.id, reason: 'Bereits gebucht' }); continue; }
+
+    // Exklusivitäts-Check
+    if (slot.is_exclusive && slot.category_id) {
+      const conflict = db.get(`
+        SELECT b.id FROM episode_ad_bookings b
+        WHERE b.episode_id = ? AND b.ad_category_id = ?
+      `, [episodeId, slot.category_id]) as any;
+      if (conflict) { skipped.push({ slotId: slot.id, reason: 'Exklusive Kategorie bereits belegt' }); continue; }
+    }
+
+    // Buchung anlegen
+    const bookingId = uuidv4();
+    const position = slot.category || 'mid-roll';
+    db.run(`INSERT INTO episode_ad_bookings
+      (id, episode_id, ad_slot_id, ad_category_id, sponsor_id, position, confirmed, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))`,
+      [bookingId, episodeId, slot.id, slot.category_id || null, slot.sponsor_id, position]);
+
+    assigned.push({ bookingId, slotId: slot.id, sponsorName: slot.sponsor_name, categoryName: slot.category_name, position });
+  }
+
+  return res.json({
+    success: true,
+    data: { assigned, skipped, message: `${assigned.length} Platzierung(en) automatisch zugeordnet, ${skipped.length} übersprungen` },
+  });
+});
+
+// ============================================================
+// KONFLIKT-PRÜFUNG – Prüfe ob ein Slot für einen Zeitraum Konflikte hat
+// ============================================================
+router.get('/check-conflicts', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { slotId, from, to, categoryId, isExclusive } = req.query as any;
+
+  const conflicts: any[] = [];
+
+  if (from && to && isExclusive === 'true' && categoryId) {
+    // Episoden im Zeitraum finden
+    const episodes = db.all(`
+      SELECT e.id, e.title, e.number, e.publish_date
+      FROM episodes e
+      WHERE e.publish_date BETWEEN ? AND ?
+      ORDER BY e.publish_date ASC
+    `, [from, to]) as any[];
+
+    for (const ep of episodes) {
+      const existingExclusive = db.all(`
+        SELECT b.id, sp.name as sponsor_name, c.name as category_name
+        FROM episode_ad_bookings b
+        JOIN sponsors sp ON b.sponsor_id = sp.id
+        LEFT JOIN ad_categories c ON b.ad_category_id = c.id
+        WHERE b.episode_id = ? AND b.ad_category_id = ?
+        ${slotId ? 'AND b.ad_slot_id != ?' : ''}
+      `, slotId ? [ep.id, categoryId, slotId] : [ep.id, categoryId]) as any[];
+
+      if (existingExclusive.length > 0) {
+        conflicts.push({
+          episodeId: ep.id,
+          episodeTitle: ep.title,
+          episodeNumber: ep.number,
+          date: ep.publish_date,
+          conflictingBookings: existingExclusive,
+        });
+      }
+    }
+  }
+
+  return res.json({ success: true, data: { conflicts, hasConflicts: conflicts.length > 0 } });
+});
+
+// ============================================================
+// TKP-BERECHNUNG – Dynamische Preisberechnung für eine Buchung
+// ============================================================
+router.post('/calculate-price', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const { basePrice = 0, pricePerEpisode = 0, pricePer1000Listens = 0, episodeCount = 1, totalListens = 0, priceModel = 'fixed' } = req.body;
+
+  let episodeTotal = 0;
+  let tkpTotal = 0;
+  let total = 0;
+
+  if (priceModel === 'fixed') {
+    total = Number(basePrice);
+  } else if (priceModel === 'per_episode') {
+    episodeTotal = Number(pricePerEpisode) * Number(episodeCount);
+    total = Number(basePrice) + episodeTotal;
+  } else if (priceModel === 'per_1000') {
+    tkpTotal = (Number(totalListens) / 1000) * Number(pricePer1000Listens);
+    episodeTotal = Number(pricePerEpisode) * Number(episodeCount);
+    total = Number(basePrice) + episodeTotal + tkpTotal;
+  } else if (priceModel === 'combined') {
+    episodeTotal = Number(pricePerEpisode) * Number(episodeCount);
+    tkpTotal = (Number(totalListens) / 1000) * Number(pricePer1000Listens);
+    total = Number(basePrice) + episodeTotal + tkpTotal;
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      basePrice: Number(basePrice),
+      episodeTotal,
+      tkpTotal,
+      total,
+      breakdown: {
+        basispreis: Number(basePrice),
+        folgenpreis: episodeTotal,
+        tkpGebuehr: tkpTotal,
+        gesamt: total,
+      },
+    },
+  });
 });
 
 export default router;

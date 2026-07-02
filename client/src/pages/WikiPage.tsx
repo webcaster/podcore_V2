@@ -429,8 +429,24 @@ const wikiData: WikiCategory[] = [
             },
           },
           {
-            heading: 'Werbe-Kategorien',
-            text: 'Werbe-Kategorien definieren die Art und den Typ einer Werbeplatzierung. Beispiele: "Pre-Roll 30s", "Mid-Roll 60s", "Sponsored Segment", "Host-Read Ad". Kategorien können frei erstellt und mit einem Preis versehen werden.',
+            heading: 'Werbe-Kategorien & Preismodell',
+            text: 'Werbe-Kategorien definieren die Art und den Typ einer Werbeplatzierung. Jede Kategorie unterstützt drei Preistypen:',
+            table: {
+              headers: ['Preistyp', 'Beschreibung', 'Verwendung'],
+              rows: [
+                ['Basispreis', 'Pauschalpreis pro Platzierung', 'Einmalige Gebühr unabhängig von Reichweite'],
+                ['Folgenpreis', 'Preis pro Episode', 'Für Serien-Buchungen über mehrere Folgen'],
+                ['TKP / CPM', 'Preis pro 1.000 Hörer', 'Dynamisch basierend auf tatsächlicher Reichweite'],
+              ],
+            },
+          },
+          {
+            heading: 'Buchungskalender',
+            text: 'Der Buchungskalender (Sponsoring → Buchungskalender) zeigt alle Werbe-Slots in einer Monatsansicht. Jeder Slot wird farblich nach Sponsor dargestellt. Klick auf einen Tag zeigt alle Buchungen für diesen Zeitraum. Konflikte (mehrere Slots gleicher Kategorie) werden farblich hervorgehoben.',
+          },
+          {
+            heading: 'Folgensponsor-Automatisierung',
+            text: 'Werbe-Slots mit einer definierten Laufzeit (Start- und Enddatum) werden im Episoden-Editor automatisch erkannt. Wenn eine Episode im Laufzeit-Zeitraum eines Slots liegt, erscheint ein Hinweis-Banner mit einem „Zuweisen"-Button für schnelle Buchung.',
           },
           {
             heading: 'Werbemittel-Lieferung',
@@ -468,7 +484,11 @@ const wikiData: WikiCategory[] = [
           },
           {
             heading: 'Platzierung anlegen',
-            text: 'Im Sponsor-Detail-Bereich können neue Platzierungen angelegt werden. Es werden Episode, Werbe-Kategorie, Preis, Werbemittel-Status und ein optionaler Hinweistext angegeben.',
+            text: 'Im Sponsor-Detail-Bereich können neue Platzierungen angelegt werden. Beim Auswählen einer Werbe-Kategorie werden Laufzeit und alle drei Preistypen automatisch übernommen und können noch angepasst werden.',
+          },
+          {
+            heading: 'Konflikt-Erkennung',
+            text: 'Im Werbung-Tab des Episoden-Editors werden Kategorie-Konflikte automatisch erkannt: Sind zwei Sponsoren aus derselben Kategorie in einer Episode gebucht, erscheint eine gelbe Warnmeldung mit den betroffenen Sponsoren.',
           },
           {
             tip: 'Platzierungen mit Status "Ausgestrahlt" werden automatisch in den Sponsor-Auswertungen berücksichtigt.',
@@ -811,6 +831,33 @@ const wikiData: WikiCategory[] = [
     articles: [
       {
         id: 'v2-10-0',
+        title: 'v2.11.0 — Sponsoring-Konzept: Buchungskalender, TKP-Kalkulator & Folgensponsor-Automatisierung',
+        date: '02.07.2026',
+        summary: 'Vollständige Umsetzung des Sponsoring-Konzepts: Buchungskalender mit Monatsansicht und Konfliktanzeige, TKP-Kalkulator im Billing-Tab, Folgensponsor-Automatisierung im Episoden-Editor, Auslastungs-Tab im Einnahmen-Dashboard und Kategorie-Konflikt-Erkennung.',
+        changes: [
+          {
+            heading: 'Buchungskalender',
+            text: 'Neuer Bereich im Sponsoring-Menü: Monatsansicht aller Werbe-Slots mit farblicher Sponsor-Zuordnung. Konflikte (gleiche Kategorie, überlappende Zeiträume) werden farblich hervorgehoben. Klick auf einen Tag zeigt alle Buchungen.',
+          },
+          {
+            heading: 'Folgensponsor-Automatisierung',
+            text: 'Im Werbung-Tab des Episoden-Editors erscheint automatisch ein Hinweis-Banner, wenn ein Werbe-Slot eine aktive Laufzeit hat, die die aktuelle Episode abdeckt. Direkte Zuweisung per Klick.',
+          },
+          {
+            heading: 'Kategorie-Konflikt-Erkennung',
+            text: 'Sind zwei Sponsoren aus derselben Werbe-Kategorie in einer Episode gebucht, erscheint eine gelbe Warnmeldung mit den betroffenen Sponsoren.',
+          },
+          {
+            heading: 'TKP-Kalkulator',
+            text: 'Im Billing-Tab des Sponsor-Detail-Bereichs: Eingabe der Hörer-Anzahl berechnet automatisch den TKP-Preis und den Gesamtbetrag basierend auf dem CPM-Preis der Platzierungen.',
+          },
+          {
+            heading: 'Auslastungs-Tab im Einnahmen-Dashboard',
+            text: 'Neuer Tab „Auslastung" zeigt alle Werbe-Slots mit Buchungsgrad als Fortschrittsbalken. Neue KPI-Cards: Slot-Auslastung in %, Ø TKP und Anzahl aktiver Slots.',
+          },
+        ],
+      },
+      {
         title: 'v2.10.0 — Sponsoring-Korrektionen, Backup-Import & Metadaten',
         summary: 'Flexibles Preismodell im Sponsoring (3 Preistypen), Laufzeit- und Kategorie-Übernahme repariert, Buchungsbestätigung für Sponsoren, Backup-Import mit Vorschau und Metadaten in der Media Library.',
         icon: <Package size={18} />,

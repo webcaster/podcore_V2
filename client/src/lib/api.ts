@@ -302,6 +302,22 @@ export const sponsorsApi = {
     api.get<any>(`/sponsors/revenue/dashboard${buildQs(params)}`),
   exportRevenueCsv: (params?: { from?: string; to?: string; status?: string }) =>
     `/api/sponsors/revenue/dashboard${buildQs({ ...params, format: 'csv' })}`,
+
+  // Buchungskalender
+  getBookingCalendar: (params?: { from?: string; to?: string }) =>
+    api.get<any>(`/sponsors/booking-calendar${buildQs(params)}`),
+
+  // Folgensponsor-Automatisierung
+  autoAssignEpisode: (episodeId: string) =>
+    api.post<any>('/sponsors/auto-assign-episode', { episodeId }),
+
+  // Konfliktprüfung
+  checkConflicts: (params: { slotId?: string; from: string; to: string; categoryId?: string; isExclusive?: boolean }) =>
+    api.get<any>(`/sponsors/check-conflicts${buildQs(params as any)}`),
+
+  // TKP-Preisberechnung
+  calculatePrice: (data: { basePrice?: number; pricePerEpisode?: number; pricePer1000Listens?: number; episodeCount?: number; totalListens?: number; priceModel?: string }) =>
+    api.post<any>('/sponsors/calculate-price', data),
 };
 
 // ============================================================

@@ -65,6 +65,7 @@ export default function Layout() {
     { to: '/chat', icon: <MessageSquare size={18} />, label: 'Team-Chat' },
     { to: '/media', icon: <Library size={18} />, label: 'Media Library', permission: 'canViewMedia' },
     { to: '/sponsors', icon: <Megaphone size={18} />, label: 'Sponsoring', permission: 'canViewSponsors', dividerBefore: true },
+    { to: '/sponsors/calendar', icon: <Calendar size={18} />, label: 'Buchungskalender', permission: 'canViewSponsors' },
     { to: '/sponsors/reports', icon: <BarChart3 size={18} />, label: 'Sponsor-Auswertungen', permission: 'canViewSponsorReports' },
     { to: '/seasons', icon: <Layers size={18} />, label: 'Staffeln', permission: 'canViewEpisodes' },
     { to: '/archive', icon: <Archive size={18} />, label: 'Archiv', permission: 'canViewEpisodes' },
@@ -83,7 +84,7 @@ export default function Layout() {
     // Dann Feature-Flags prüfen
     const path = item.to;
     if ((path === '/editorial' || path === '/calendar') && !features.editorial) return false;
-    if ((path === '/sponsors' || path === '/sponsors/reports') && !features.sponsoring) return false;
+    if ((path === '/sponsors' || path === '/sponsors/calendar' || path === '/sponsors/reports') && !features.sponsoring) return false;
     if (path === '/media' && !features.mediaLibrary) return false;
     if (path === '/chat' && !features.chat) return false;
     if ((path === '/analytics' || path === '/stats') && !features.statistics) return false;

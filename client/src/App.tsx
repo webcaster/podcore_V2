@@ -15,6 +15,7 @@ const SponsorsPage = lazy(() => import('./pages/SponsorsPage'));
 const SponsorDetailPage = lazy(() => import('./pages/SponsorDetailPage'));
 const SponsorReportsPage = lazy(() => import('./pages/SponsorReportsPage'));
 const SponsorRevenuePage = lazy(() => import('./pages/SponsorRevenuePage'));
+const SponsorBookingCalendarPage = lazy(() => import('./pages/SponsorBookingCalendarPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const PodigeePage = lazy(() => import('./pages/PodigeePage'));
@@ -88,6 +89,7 @@ function AppRoutes() {
         <Route path="sponsors/:id" element={<Suspense fallback={<LoadingSpinner />}><SponsorDetailPage /></Suspense>} />
         <Route path="sponsors/reports" element={<Suspense fallback={<LoadingSpinner />}><SponsorReportsPage /></Suspense>} />
         <Route path="sponsors/revenue" element={<Suspense fallback={<LoadingSpinner />}><SponsorRevenuePage /></Suspense>} />
+        <Route path="sponsors/calendar" element={<Suspense fallback={<LoadingSpinner />}><SponsorBookingCalendarPage /></Suspense>} />
         <Route path="analytics" element={<Suspense fallback={<LoadingSpinner />}><PodigeePage /></Suspense>} />
         <Route path="branding" element={<Suspense fallback={<LoadingSpinner />}><BrandingPage /></Suspense>} />
         <Route path="admin" element={<Suspense fallback={<LoadingSpinner />}><AdminPage /></Suspense>} />

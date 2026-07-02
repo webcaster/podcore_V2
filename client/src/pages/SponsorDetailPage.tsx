@@ -81,6 +81,29 @@ export default function SponsorDetailPage() {
   const [leistungFilter, setLeistungFilter] = useState<'alle' | 'offen' | 'bezahlt' | 'versendet'>('alle');
   const [isExportingLeistung, setIsExportingLeistung] = useState(false);
 
+  // TKP-Kalkulator
+  const [tkpListeners, setTkpListeners] = useState<string>('');
+  const [tkpEpisodeCount, setTkpEpisodeCount] = useState<string>('1');
+  const [tkpCalcResult, setTkpCalcResult] = useState<any>(null);
+  const [isCalcLoading, setIsCalcLoading] = useState(false);
+
+  const handleCalculateTkp = async (slot: any) => {
+    if (!slot) return;
+    setIsCalcLoading(true);
+    try {
+      const result = await sponsorsApi.calculatePrice({
+        basePrice: slot.basePrice || 0,
+        pricePerEpisode: slot.pricePerEpisode || 0,
+        pricePer1000Listens: slot.pricePer1000Listens || 0,
+        episodeCount: parseInt(tkpEpisodeCount) || 1,
+        totalListens: parseInt(tkpListeners) || 0,
+        priceModel: slot.priceModel || 'fixed',
+      });
+      setTkpCalcResult({ ...result, slotName: slot.name });
+    } catch (e: any) { showError(e.message); }
+    finally { setIsCalcLoading(false); }
+  };
+
   const load = async () => {
     if (!id) return;
     setIsLoading(true);
@@ -916,6 +939,86 @@ export default function SponsorDetailPage() {
               </button>
             </div>
           </div>
+
+          {/* TKP-Kalkulator */}
+          {placements.length > 0 && placements.some((p: any) => p.pricePer1000Listens > 0 || p.pricePerEpisode > 0) && (
+            <div className="card space-y-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp size={16} className="text-purple-400" />
+                <h3 className="font-semibold text-text-primary">TKP-Kalkulator</h3>
+                <span className="text-xs text-text-muted">(Preis-Simulation für Slots mit dynamischem Preismodell)</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="label text-xs">Werbeplatz auswählen</label>
+                  <select
+                    className="select text-sm"
+                    onChange={e => {
+                      const slot = placements.find((p: any) => p.id === e.target.value);
+                      if (slot) handleCalculateTkp(slot);
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Slot wählen…</option>
+                    {placements.filter((p: any) => p.pricePer1000Listens > 0 || p.pricePerEpisode > 0).map((p: any) => (
+                      <option key={p.id} value={p.id}>{p.name || p.slotName || `Slot ${p.id}`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label text-xs">Anzahl Hörer (gesamt)</label>
+                  <input
+                    type="number"
+                    value={tkpListeners}
+                    onChange={e => setTkpListeners(e.target.value)}
+                    placeholder="z.B. 5000"
+                    className="input text-sm"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="label text-xs">Anzahl Episoden</label>
+                  <input
+                    type="number"
+                    value={tkpEpisodeCount}
+                    onChange={e => setTkpEpisodeCount(e.target.value)}
+                    placeholder="1"
+                    className="input text-sm"
+                    min="1"
+                  />
+                </div>
+              </div>
+              {tkpCalcResult && (
+                <div className="bg-surface-raised rounded-xl p-4 border border-surface-border">
+                  <div className="text-xs text-text-muted mb-3">Kalkulation für: <span className="text-text-primary font-medium">{tkpCalcResult.slotName}</span></div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {tkpCalcResult.basePrice > 0 && (
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-text-primary">{tkpCalcResult.basePrice?.toFixed(2)} €</div>
+                        <div className="text-xs text-text-muted">Basispreis</div>
+                      </div>
+                    )}
+                    {tkpCalcResult.episodeCost > 0 && (
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-blue-400">{tkpCalcResult.episodeCost?.toFixed(2)} €</div>
+                        <div className="text-xs text-text-muted">{tkpCalcResult.episodeCount} × Folgenpreis</div>
+                      </div>
+                    )}
+                    {tkpCalcResult.tkpCost > 0 && (
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-purple-400">{tkpCalcResult.tkpCost?.toFixed(2)} €</div>
+                        <div className="text-xs text-text-muted">{(parseInt(tkpListeners) / 1000).toFixed(1)}k Hörer × TKP</div>
+                      </div>
+                    )}
+                    <div className="text-center bg-accent-purple/10 rounded-lg p-2">
+                      <div className="text-xl font-bold text-accent-purple">{tkpCalcResult.total?.toFixed(2)} €</div>
+                      <div className="text-xs text-text-muted">Gesamtpreis</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Platzierungs-Liste mit Rechnungs-Status */}
           <div className="space-y-3">
