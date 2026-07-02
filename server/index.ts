@@ -27,6 +27,17 @@ import pdfLayoutsRouter from './routers/pdfLayouts';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
+
+// Version dynamisch aus package.json lesen (wird bei jedem Build automatisch aktualisiert)
+const pkgPath = path.join(__dirname, '..', 'package.json');
+const APP_VERSION: string = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    return pkg.version || '2.11.0';
+  } catch (_) {
+    return '2.11.0';
+  }
+})();
 // Always bind to 0.0.0.0 so the app is reachable in LAN
 const HOST = process.env.HOST || '0.0.0.0';
 const NODE_ENV = process.env.NODE_ENV || 'production';
@@ -130,7 +141,7 @@ app.get('/api/health', (req, res) => {
   const ips = getLocalNetworkIPs();
   res.json({
     status: 'ok',
-    version: '2.10.0',
+    version: APP_VERSION,
     timestamp: new Date().toISOString(),
     dataDir: DATA_DIR,
     networkIPs: ips,
