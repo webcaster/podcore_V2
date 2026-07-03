@@ -872,6 +872,7 @@ export default function AdminPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
                 { key: 'editorial', label: 'Redaktions-Hub', desc: 'Ideen, Redaktionsplan, Interview-Partner, Recherche', icon: '📝' },
+                { key: 'approvals', label: 'Freigabe-Center', desc: 'Zentrale Verwaltung aller Freigabe-Anfragen (Episoden & Interviews)', icon: '✅' },
                 { key: 'sponsoring', label: 'Sponsoring', desc: 'Sponsoren, Werbekategorien, Platzierungen, Abrechnung', icon: '📢' },
                 { key: 'mediaLibrary', label: 'Media Library', desc: 'Asset-Verwaltung, Audio- und Bild-Uploads', icon: '🗂️' },
                 { key: 'statistics', label: 'Statistiken & Analytics', desc: 'Podcast-Statistiken und Podigee-Analytics', icon: '📊' },

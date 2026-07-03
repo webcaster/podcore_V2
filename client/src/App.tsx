@@ -23,6 +23,7 @@ const BrandingPage = lazy(() => import('./pages/BrandingPage'));
 const ImpressumPage = lazy(() => import('./pages/ImpressumPage'));
 const WikiPage = lazy(() => import('./pages/WikiPage'));
 const SeasonsPage = lazy(() => import('./pages/SeasonsPage'));
+const ApprovalsPage = lazy(() => import('./pages/ApprovalsPage'));
 const ArchivePage = lazy(() => import('./pages/ArchivePage'));
 const StatsPage = lazy(() => import('./pages/StatsPage'));
 const IdeaDetailPage = lazy(() => import('./pages/IdeaDetailPage'));
@@ -97,6 +98,7 @@ function AppRoutes() {
         <Route path="impressum" element={<Suspense fallback={<LoadingSpinner />}><ImpressumPage /></Suspense>} />
         <Route path="wiki" element={<Suspense fallback={<LoadingSpinner />}><WikiPage /></Suspense>} />
         <Route path="seasons" element={<Suspense fallback={<LoadingSpinner />}><SeasonsPage /></Suspense>} />
+        <Route path="approvals" element={<Suspense fallback={<LoadingSpinner />}><ApprovalsPage /></Suspense>} />
         <Route path="archive" element={<Suspense fallback={<LoadingSpinner />}><ArchivePage /></Suspense>} />
         <Route path="stats" element={<Suspense fallback={<LoadingSpinner />}><StatsPage /></Suspense>} />
         <Route path="calendar" element={<Suspense fallback={<LoadingSpinner />}><CalendarPage /></Suspense>} />

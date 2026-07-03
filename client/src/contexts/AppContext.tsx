@@ -33,11 +33,12 @@ export interface FeatureFlags {
   editorial: boolean;
   statistics: boolean;
   chat: boolean;
-  podigee: boolean;
-  mediaLibrary: boolean;
-  seasons: boolean;
-  wiki: boolean;
   branding: boolean;
+  podigee: boolean;
+  seasons: boolean;
+  approvals: boolean;
+  wiki: boolean;
+  mediaLibrary: boolean;
 }
 
 export interface BrandingState {
@@ -151,6 +152,7 @@ const DEFAULT_FEATURES: FeatureFlags = {
   seasons: true,
   wiki: true,
   branding: true,
+  approvals: true,
 };
 
 const DEFAULT_TECHNICAL_DEFAULTS: TechnicalDefaults = {
@@ -415,9 +417,9 @@ export function applyUserTheme(theme: UserTheme | null | undefined) {
 
   if (theme.sidebarColor) {
     root.style.setProperty('--color-sidebar-bg', theme.sidebarColor);
-    root.style.setProperty('--color-obsidian-800', theme.sidebarColor);
-    root.style.setProperty('--color-surface', lightenColor(theme.sidebarColor, 8));
-    root.style.setProperty('--color-surface-raised', lightenColor(theme.sidebarColor, 12));
+    // root.style.setProperty('--color-obsidian-800', theme.sidebarColor); // REMOVED: Breaks shared card styling
+    // root.style.setProperty('--color-surface', lightenColor(theme.sidebarColor, 8)); // REMOVED: Breaks shared card styling
+    // root.style.setProperty('--color-surface-raised', lightenColor(theme.sidebarColor, 12)); // REMOVED: Breaks shared card styling
   }
 
   if (theme.fontScale) {

@@ -68,6 +68,10 @@ export default function SponsorDetailPage() {
     currency: 'EUR',
     // Abrechnung
     invoiceNumber: '', invoiceDate: '', invoiceStatus: 'offen', invoiceNotes: '',
+    // Manuelle Anpassungen (v2.11.5)
+    priceAdjustment: '0',
+    listenerFee: '0',
+    manualPrice: '',
   });
   const [billingData, setBillingData] = useState<any>(null);
   // Buchungs-Modal: Slot in Episode buchen
@@ -222,10 +226,12 @@ export default function SponsorDetailPage() {
     e.preventDefault();
     try {
       const payload = {
+        adTitle: placementForm.adTitle,
         name: placementForm.adTitle,
         // Kategorie korrekt als categoryId übermitteln
         category: placementForm.categoryId,
         categoryId: placementForm.categoryId || null,
+        adCategoryId: placementForm.categoryId || null,
         position: placementForm.position,
         duration: placementForm.duration,
         status: placementForm.status,
@@ -249,6 +255,10 @@ export default function SponsorDetailPage() {
         performanceNotes: placementForm.performanceNotes || null,
         // Abrechnung
         invoiceNotes: placementForm.invoiceNotes || null,
+        // Manuelle Anpassungen (v2.11.5)
+        priceAdjustment: parseFloat(placementForm.priceAdjustment) || 0,
+        listenerFee: parseFloat(placementForm.listenerFee) || 0,
+        manualPrice: placementForm.manualPrice ? parseFloat(placementForm.manualPrice) : null,
       };
       if (editingPlacement) {
         await sponsorsApi.updateSlot(editingPlacement.id, payload);
@@ -484,7 +494,7 @@ export default function SponsorDetailPage() {
     setShowPriceHint(false);
     setPlacementForm({
       episodeId: pl.episodeId || '',
-      categoryId: pl.categoryId || '',
+      categoryId: pl.categoryId || pl.adCategoryId || '',
       position: pl.position || 'pre-roll',
       duration: pl.duration || 30,
       status: pl.status || 'geplant',
@@ -509,6 +519,10 @@ export default function SponsorDetailPage() {
       invoiceDate: pl.invoiceDate?.slice(0, 10) || '',
       invoiceStatus: pl.invoiceStatus || 'offen',
       invoiceNotes: pl.invoiceNotes || '',
+      // Manuelle Anpassungen (v2.11.5)
+      priceAdjustment: String(pl.priceAdjustment || 0),
+      listenerFee: String(pl.listenerFee || 0),
+      manualPrice: pl.manualPrice != null ? String(pl.manualPrice) : '',
     });
     setShowPlacementModal(true);
   };
@@ -1378,6 +1392,7 @@ export default function SponsorDetailPage() {
             <div>
               <label className="label">Position</label>
               <select value={placementForm.position} onChange={e => setPlacementForm(p => ({ ...p, position: e.target.value }))} className="select">
+                <option value="folgensponsor">Folgensponsor</option>
                 <option value="pre-roll">Pre-Roll</option>
                 <option value="mid-roll">Mid-Roll</option>
                 <option value="post-roll">Post-Roll</option>
@@ -1444,6 +1459,23 @@ export default function SponsorDetailPage() {
                   onChange={e => setPlacementForm(p => ({ ...p, price: e.target.value }))}
                   className="input" placeholder="Finaler Rechnungsbetrag" min="0" step="0.01" />
                 <p className="text-text-muted text-xs mt-1">Wird für die Abrechnung verwendet</p>
+              </div>
+            </div>
+            {/* Manuelle Preisanpassungen */}
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-surface-border/50">
+              <div>
+                <label className="label text-xs text-accent-orange">Preisanpassung / Rabatt ({placementForm.currency})</label>
+                <input type="number" value={placementForm.priceAdjustment}
+                  onChange={e => setPlacementForm(p => ({ ...p, priceAdjustment: e.target.value }))}
+                  className="input border-accent-orange/30 focus:border-accent-orange" placeholder="± 0.00" step="0.01" />
+                <p className="text-text-muted text-[10px] mt-0.5">Positiv für Aufschlag, negativ für Rabatt</p>
+              </div>
+              <div>
+                <label className="label text-xs text-accent-cyan">Hörer-Gebühr / Variable ({placementForm.currency})</label>
+                <input type="number" value={placementForm.listenerFee}
+                  onChange={e => setPlacementForm(p => ({ ...p, listenerFee: e.target.value }))}
+                  className="input border-accent-cyan/30 focus:border-accent-cyan" placeholder="0.00" min="0" step="0.01" />
+                <p className="text-text-muted text-[10px] mt-0.5">Optionale Gebühr basierend auf Reichweite</p>
               </div>
             </div>
           </div>

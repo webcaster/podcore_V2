@@ -110,6 +110,12 @@ function parsePlacement(row: any) {
     placementEnd: row.placement_end,
     placementLabel: row.placement_label,
     performanceNotes: row.performance_notes,
+    adTitle: row.ad_title,
+    adCategoryId: row.ad_category_id,
+    listenerFee: row.listener_fee || 0,
+    priceAdjustment: row.price_adjustment || 0,
+    manualPrice: row.manual_price,
+    status: row.status || 'geplant',
   };
 }
 
@@ -784,12 +790,12 @@ router.get('/:id', requirePermission('canViewSponsors') as any, (req: AuthReques
 router.post('/', requirePermission('canCreateSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const id = uuidv4();
-  const { name, company, contactName, contactEmail, contactPhone, website, logo, status = 'interessent', description, notes, tags = [], totalBudget, currency = 'EUR', customerNumber } = req.body;
+  const { name, company, contactName, contactEmail, contactPhone, website, logo, status = 'interessent', description, notes, tags = [], totalBudget, currency = 'EUR', customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
 
   if (!name || !company) return res.status(400).json({ success: false, error: 'Name und Firma erforderlich' });
 
-  db.run('INSERT INTO sponsors (id, name, company, contact_name, contact_email, contact_phone, website, logo, status, description, notes, tags, total_budget, currency, customer_number, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, name, company, contactName || null, contactEmail || null, contactPhone || null, website || null, logo || null, status, description || null, notes || null, JSON.stringify(tags), totalBudget || null, currency, customerNumber || null, req.user!.id]);
+  db.run('INSERT INTO sponsors (id, name, company, contact_name, contact_email, contact_phone, website, logo, status, description, notes, tags, total_budget, currency, customer_number, contract_start, contract_end, contact_hint, ad_delivery, color, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, name, company, contactName || null, contactEmail || null, contactPhone || null, website || null, logo || null, status, description || null, notes || null, JSON.stringify(tags), totalBudget || null, currency, customerNumber || null, contractStart || null, contractEnd || null, contactHint || null, adDelivery || 'self', color || null, req.user!.id]);
 
   const sponsor = parseSponsor(db.get('SELECT * FROM sponsors WHERE id = ?', [id]));
   sponsor.adSlots = [];
@@ -952,18 +958,19 @@ router.post('/slots/:slotId/placements', requirePermission('canEditSponsors') as
   const db = getDb();
   const id = uuidv4();
   const { episodeId, episodeTitle, episodeNumber, position = 'pre-roll', confirmed = false, publishDate, airDate, listens, notes, price, currency,
-    invoiceStatus, placementStart, placementEnd, placementLabel, performanceNotes, deliveryConfirmed, adTitle, status } = req.body;
+    invoiceStatus, placementStart, placementEnd, placementLabel, performanceNotes, deliveryConfirmed, adTitle, adCategoryId, status, listenerFee, priceAdjustment, manualPrice } = req.body;
 
   // Episode ist optional – Zeitraum-Buchungen ohne Episode sind erlaubt
   // Automatische Rechnungsnummer generieren
   const autoInvoiceNumber = generateInvoiceNumber(db);
   const invoiceDateVal = new Date().toISOString().split('T')[0];
 
-  db.run('INSERT INTO ad_placements (id, ad_slot_id, episode_id, episode_title, episode_number, position, confirmed, publish_date, listens, notes, price, currency, invoice_number, invoice_date, invoice_status, placement_start, placement_end, placement_label, performance_notes, delivery_confirmed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  db.run('INSERT INTO ad_placements (id, ad_slot_id, episode_id, episode_title, episode_number, position, confirmed, publish_date, listens, notes, price, currency, invoice_number, invoice_date, invoice_status, placement_start, placement_end, placement_label, performance_notes, delivery_confirmed, status, ad_title, ad_category_id, listener_fee, price_adjustment, manual_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [id, req.params.slotId, episodeId || null, episodeTitle || adTitle || null, episodeNumber || null, position, confirmed ? 1 : 0,
      airDate || publishDate || null, listens || null, notes || null, price || null, currency || 'EUR',
      autoInvoiceNumber, invoiceDateVal, invoiceStatus || 'offen',
-     placementStart || null, placementEnd || null, placementLabel || null, performanceNotes || null, deliveryConfirmed ? 1 : 0]);
+     placementStart || null, placementEnd || null, placementLabel || null, performanceNotes || null, deliveryConfirmed ? 1 : 0,
+     status || 'geplant', adTitle || null, adCategoryId || null, listenerFee || 0, priceAdjustment || 0, manualPrice || null]);
 
   // Gebuchte Episoden im Slot aktualisieren (nur wenn Episode angegeben)
   if (episodeId) {
@@ -985,7 +992,8 @@ router.put('/placements/:placementId', requirePermission('canEditSponsors') as a
   const db = getDb();
   const { position, confirmed, publishDate, listens, notes, episodeTitle, episodeNumber,
     price, currency, invoiceNumber, invoiceDate, invoiceStatus, invoiceNotes,
-    placementStart, placementEnd, placementLabel, performanceNotes, deliveryConfirmed } = req.body;
+    placementStart, placementEnd, placementLabel, performanceNotes, deliveryConfirmed,
+    adTitle, adCategoryId, status, listenerFee, priceAdjustment, manualPrice } = req.body;
 
   db.run(
     `UPDATE ad_placements SET
@@ -1006,7 +1014,13 @@ router.put('/placements/:placementId', requirePermission('canEditSponsors') as a
       placement_end = ?,
       placement_label = ?,
       performance_notes = ?,
-      delivery_confirmed = COALESCE(?, delivery_confirmed)
+      delivery_confirmed = COALESCE(?, delivery_confirmed),
+      ad_title = ?,
+      ad_category_id = ?,
+      status = COALESCE(?, status),
+      listener_fee = ?,
+      price_adjustment = ?,
+      manual_price = ?
     WHERE id = ?`,
     [
       position ?? null, confirmed !== undefined ? (confirmed ? 1 : 0) : null,
@@ -1023,6 +1037,8 @@ router.put('/placements/:placementId', requirePermission('canEditSponsors') as a
       placementLabel !== undefined ? placementLabel : null,
       performanceNotes !== undefined ? performanceNotes : null,
       deliveryConfirmed !== undefined ? (deliveryConfirmed ? 1 : 0) : null,
+      adTitle ?? null, adCategoryId ?? null, status ?? null,
+      listenerFee ?? 0, priceAdjustment ?? 0, manualPrice ?? null,
       req.params.placementId
     ]
   );
@@ -1280,18 +1296,30 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
   filteredRows.forEach((p: any, i: number) => {
     if (rowY > maxY) { doc.addPage(); rowY = m; }
     const bg = i % 2 === 0 ? '#f8f9fa' : '#ffffff';
-    doc.rect(m, rowY, tblW, 18).fill(bg);
-    doc.fillColor(layout.colors.text).fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
     const title = p.episode_title || p.episode_id || '-';
-    doc.text(title.length > 32 ? title.substring(0, 30) + '…' : title, c1, rowY + 5, { width: tblW * 0.35 });
-    doc.text(p.position || '-', c2, rowY + 5, { width: tblW * 0.15 });
-    doc.text(p.publish_date ? new Date(p.publish_date).toLocaleDateString('de-DE') : '-', c3, rowY + 5, { width: tblW * 0.15 });
-    const statusColor = p.invoice_status === 'bezahlt' ? '#16a34a' : p.invoice_status === 'versendet' ? '#d97706' : '#dc2626';
-    doc.fillColor(statusColor).text(p.invoice_status || 'offen', c4, rowY + 5, { width: tblW * 0.12 });
+    const posLabel = p.position || '-';
+    const dateStr = p.publish_date ? new Date(p.publish_date).toLocaleDateString('de-DE') : '-';
+    const statusStr = p.invoice_status || 'offen';
     const price = p.price || 0;
+    const priceStr = `${price.toFixed(2)} €`;
+
+    // Berechne maximale Höhe dieser Zeile
+    const h1 = doc.heightOfString(title, { width: tblW * 0.35 });
+    const rowHeight = Math.max(18, h1) + 6;
+
+    if (rowY + rowHeight > maxY) { doc.addPage(); rowY = m; }
+    doc.rect(m, rowY, tblW, rowHeight).fill(bg);
+    doc.fillColor(layout.colors.text).fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
+    
+    doc.text(title, c1, rowY + 5, { width: tblW * 0.35 });
+    doc.text(posLabel, c2, rowY + 5, { width: tblW * 0.15 });
+    doc.text(dateStr, c3, rowY + 5, { width: tblW * 0.15 });
+    const statusColor = p.invoice_status === 'bezahlt' ? '#16a34a' : p.invoice_status === 'versendet' ? '#d97706' : '#dc2626';
+    doc.fillColor(statusColor).text(statusStr, c4, rowY + 5, { width: tblW * 0.12 });
+    doc.fillColor(layout.colors.text).text(priceStr, c5, rowY + 5, { width: tblW * 0.12, align: 'right' });
+    
     totalRevenue += price;
-    doc.fillColor(layout.colors.text).text(`${price.toFixed(2)} €`, c5, rowY + 5, { width: tblW * 0.12, align: 'right' });
-    rowY += 18;
+    rowY += rowHeight;
   });
 
   if (filteredRows.length === 0) {
@@ -1404,7 +1432,7 @@ router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any,
 
   const tblW = doc.page.width - m * 2;
   const maxY = doc.page.height - m - 60;
-  const posLabels: Record<string, string> = { 'pre-roll': 'Pre-Roll', 'mid-roll': 'Mid-Roll', 'post-roll': 'Post-Roll', 'host-read': 'Host-Read' };
+    const posLabels: Record<string, string> = { 'pre-roll': 'Pre-Roll', 'mid-roll': 'Mid-Roll', 'post-roll': 'Post-Roll', 'host-read': 'Host-Read', 'folgensponsor': 'Folgensponsor' };
 
   const renderSection = (title: string, rows: any[]) => {
     if (rows.length === 0) return;
@@ -1441,15 +1469,26 @@ router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any,
       doc.rect(m, rowY, tblW, currentHeight).fill(bg);
       doc.fillColor(layout.colors.text).fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
       
-      doc.text(label, c1, rowY + 6, { width: tblW * 0.32 });
-      doc.text(posLabels[p.position] || p.position || '—', c2, rowY + 6, { width: tblW * 0.15 });
-
+      const posLabel = posLabels[p.position] || p.position || '—';
       const ps = p.placement_start ? new Date(p.placement_start).toLocaleDateString('de-DE') : '—';
       const pe = p.placement_end ? new Date(p.placement_end).toLocaleDateString('de-DE') : '—';
       const laufzeit = (p.placement_start || p.placement_end) ? `${ps}–${pe}` : '—';
-      doc.text(laufzeit, c3, rowY + 6, { width: tblW * 0.11 });
-
       const pubDate = p.publish_date ? new Date(p.publish_date).toLocaleDateString('de-DE') : '—';
+
+      // Berechne maximale Höhe dieser Zeile
+      const h1 = doc.heightOfString(label, { width: tblW * 0.32 });
+      const h2 = doc.heightOfString(posLabel, { width: tblW * 0.15 });
+      const h3 = doc.heightOfString(laufzeit, { width: tblW * 0.11 });
+      const h4 = doc.heightOfString(pubDate, { width: tblW * 0.11 });
+      const rowHeight = Math.max(20, h1, h2, h3, h4) + 10;
+
+      if (rowY + rowHeight > maxY) { doc.addPage(); rowY = m; doc.rect(m, rowY, tblW, rowHeight).fill(bg); }
+      else { doc.rect(m, rowY, tblW, rowHeight).fill(bg); }
+      
+      doc.fillColor(layout.colors.text);
+      doc.text(label, c1, rowY + 6, { width: tblW * 0.32 });
+      doc.text(posLabel, c2, rowY + 6, { width: tblW * 0.15 });
+      doc.text(laufzeit, c3, rowY + 6, { width: tblW * 0.11 });
       doc.text(pubDate, c4, rowY + 6, { width: tblW * 0.11 });
 
       // Preis: Abrechnungspreis oder Basispreis
@@ -1457,7 +1496,7 @@ router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any,
       const currency = p.currency || 'EUR';
       doc.fillColor(price > 0 ? layout.colors.primary : layout.colors.muted)
         .text(price > 0 ? `${Number(price).toFixed(2)} ${currency}` : '—', c5, rowY + 6, { width: tblW * 0.20, align: 'right' });
-      rowY += currentHeight;
+      rowY += rowHeight;
     });
     doc.moveDown(1.5);
   };
@@ -1596,103 +1635,152 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
     return !d || d <= to;
   });
 
+  const episodeBookingsList = filteredEpisodeBookings.map((b: any) => ({
+    id: b.id,
+    type: 'episode',
+    sponsorId: b.sponsor_id,
+    sponsorName: b.sponsor_name,
+    sponsorCompany: b.sponsor_company,
+    sponsorColor: b.sponsor_color || '#7c3aed',
+    categoryName: b.category_name,
+    categoryColor: b.category_color || '#6b7280',
+    isExclusive: b.is_exclusive === 1,
+    position: b.position,
+    episodeId: b.episode_id,
+    episodeTitle: b.episode_title,
+    episodeNumber: b.episode_number,
+    date: b.publish_date,
+    confirmed: b.confirmed === 1,
+    episodeStatus: b.episode_status,
+  }));
+
+  const slotBookingsList = filteredSlotBookings.map((b: any) => ({
+    id: b.id,
+    type: 'slot',
+    sponsorId: b.sponsor_id,
+    sponsorName: b.sponsor_name,
+    sponsorCompany: b.sponsor_company,
+    sponsorColor: b.sponsor_color || '#7c3aed',
+    categoryName: b.category_name,
+    categoryColor: b.category_color || '#6b7280',
+    isExclusive: b.is_exclusive === 1,
+    position: b.category || b.production_type,
+    startDate: b.placement_start || b.start_date,
+    endDate: b.placement_end || b.end_date,
+    label: b.placement_label || b.name,
+    status: b.status,
+    basePrice: b.base_price,
+    pricePerEpisode: b.price_per_episode,
+  }));
+
+  const adPlacementsList = filteredAdPlacements.map((p: any) => ({
+    id: p.id,
+    type: 'placement',
+    sponsorId: p.sponsor_id,
+    sponsorName: p.sponsor_name,
+    sponsorCompany: p.sponsor_company,
+    sponsorColor: p.sponsor_color || '#059669',
+    categoryName: p.category_name,
+    categoryColor: p.category_color || '#6b7280',
+    isExclusive: p.is_exclusive === 1,
+    position: p.position || 'pre-roll',
+    episodeId: p.episode_id,
+    episodeTitle: p.episode_title || p.ep_title,
+    episodeNumber: p.episode_number || p.ep_number,
+    date: p.publish_date,
+    slotName: p.slot_name,
+    price: p.price,
+    invoiceStatus: p.invoice_status,
+    status: p.status,
+    notes: p.notes,
+  }));
+
+  const plannedSlotsList = (() => {
+    const bookedSlotIds = new Set(adPlacements.map((p: any) => p.ad_slot_id));
+    const allSlots = db.all(`
+      SELECT sl.*, sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
+             c.name as category_name, c.color as category_color, c.is_exclusive
+      FROM ad_slots sl
+      JOIN sponsors sp ON sl.sponsor_id = sp.id
+      LEFT JOIN ad_categories c ON sl.category_id = c.id
+      WHERE sl.status NOT IN ('inaktiv', 'archiviert', 'abgelehnt', 'storniert')
+    `) as any[];
+    return allSlots
+      .filter((s: any) => !bookedSlotIds.has(s.id))
+      .map((s: any) => ({
+        id: `planned_${s.id}`,
+        type: 'planned',
+        sponsorId: s.sponsor_id,
+        sponsorName: s.sponsor_name,
+        sponsorCompany: s.sponsor_company,
+        sponsorColor: s.sponsor_color || '#f59e0b',
+        categoryName: s.category_name,
+        categoryColor: s.category_color || '#6b7280',
+        isExclusive: s.is_exclusive === 1,
+        position: s.category || 'pre-roll',
+        startDate: s.placement_start,
+        endDate: s.placement_end,
+        label: s.placement_label || s.name,
+        status: s.status,
+        basePrice: s.base_price,
+        pricePerEpisode: s.price_per_episode,
+        notes: s.notes,
+      }));
+  })();
+
+  if (req.query.format === 'csv') {
+    const headers = ['Typ', 'Sponsor', 'Firma', 'Kategorie', 'Position', 'Episode', 'Datum', 'Preis', 'Status', 'Notizen'];
+    const rows = [
+      ...episodeBookingsList.map(b => ['Episodenbuchung', b.sponsorName, b.sponsorCompany || '', b.categoryName || '', b.position, b.episodeTitle || '', b.date || '', '', b.confirmed ? 'Bestätigt' : 'Offen', '']),
+      ...slotBookingsList.map(b => ['Zeitraum-Slot', b.sponsorName, b.sponsorCompany || '', b.categoryName || '', b.position, '', `${b.startDate || ''} - ${b.endDate || ''}`, b.basePrice || '', b.status, '']),
+      ...adPlacementsList.map(p => ['Werbeplatz-Buchung', p.sponsorName, p.sponsorCompany || '', p.categoryName || '', p.position, p.episodeTitle || '', p.date || '', p.price || '', p.invoiceStatus, p.notes || '']),
+      ...plannedSlotsList.map(s => ['Vorplanung', s.sponsorName, s.sponsorCompany || '', s.categoryName || '', s.position, '', `${s.startDate || ''} - ${s.endDate || ''}`, s.price || '', 'Geplant', ''])
+    ];
+    
+    let csv = headers.join(';') + '\n';
+    rows.forEach(row => {
+      csv += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';') + '\n';
+    });
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=buchungskalender_${new Date().toISOString().split('T')[0]}.csv`);
+    return res.send(Buffer.from('\ufeff' + csv, 'utf-8'));
+  }
+
   return res.json({
     success: true,
     data: {
-      episodeBookings: filteredEpisodeBookings.map((b: any) => ({
-        id: b.id,
-        type: 'episode',
-        sponsorId: b.sponsor_id,
-        sponsorName: b.sponsor_name,
-        sponsorCompany: b.sponsor_company,
-        sponsorColor: b.sponsor_color || '#7c3aed',
-        categoryName: b.category_name,
-        categoryColor: b.category_color || '#6b7280',
-        isExclusive: b.is_exclusive === 1,
-        position: b.position,
-        episodeId: b.episode_id,
-        episodeTitle: b.episode_title,
-        episodeNumber: b.episode_number,
-        date: b.publish_date,
-        confirmed: b.confirmed === 1,
-        episodeStatus: b.episode_status,
-      })),
-      slotBookings: filteredSlotBookings.map((b: any) => ({
-        id: b.id,
-        type: 'slot',
-        sponsorId: b.sponsor_id,
-        sponsorName: b.sponsor_name,
-        sponsorCompany: b.sponsor_company,
-        sponsorColor: b.sponsor_color || '#7c3aed',
-        categoryName: b.category_name,
-        categoryColor: b.category_color || '#6b7280',
-        isExclusive: b.is_exclusive === 1,
-        position: b.category || b.production_type,
-        startDate: b.placement_start || b.start_date,
-        endDate: b.placement_end || b.end_date,
-        label: b.placement_label || b.name,
-        status: b.status,
-        basePrice: b.base_price,
-        pricePerEpisode: b.price_per_episode,
-      })),
-      // Neue ad_placements (Buchungen über Plus-Button)
-      adPlacements: filteredAdPlacements.map((p: any) => ({
-        id: p.id,
-        type: 'placement',
-        sponsorId: p.sponsor_id,
-        sponsorName: p.sponsor_name,
-        sponsorCompany: p.sponsor_company,
-        sponsorColor: p.sponsor_color || '#059669',
-        categoryName: p.category_name,
-        categoryColor: p.category_color || '#6b7280',
-        isExclusive: p.is_exclusive === 1,
-        position: p.position || 'pre-roll',
-        episodeId: p.episode_id,
-        episodeTitle: p.episode_title || p.ep_title,
-        episodeNumber: p.episode_number || p.ep_number,
-        date: p.publish_date,
-        slotName: p.slot_name,
-        price: p.price,
-        invoiceStatus: p.invoice_status,
-        status: p.status,
-        notes: p.notes,
-      })),
-      // Vorplanungen: Slots die noch keine ad_placement-Buchung haben
-      plannedSlots: (() => {
-        const bookedSlotIds = new Set(adPlacements.map((p: any) => p.ad_slot_id));
-        const allSlots = db.all(`
-          SELECT sl.*, sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
-                 c.name as category_name, c.color as category_color, c.is_exclusive
-          FROM ad_slots sl
-          JOIN sponsors sp ON sl.sponsor_id = sp.id
-          LEFT JOIN ad_categories c ON sl.category_id = c.id
-          WHERE sl.status NOT IN ('inaktiv', 'archiviert', 'abgelehnt', 'storniert')
-        `) as any[];
-        return allSlots
-          .filter((s: any) => !bookedSlotIds.has(s.id))
-          .map((s: any) => ({
-            id: `planned_${s.id}`,
-            type: 'planned',
-            sponsorId: s.sponsor_id,
-            sponsorName: s.sponsor_name,
-            sponsorCompany: s.sponsor_company,
-            sponsorColor: s.sponsor_color || '#f59e0b',
-            categoryName: s.category_name,
-            categoryColor: s.category_color || '#6b7280',
-            isExclusive: s.is_exclusive === 1,
-            position: s.category || 'pre-roll',
-            startDate: s.placement_start,
-            endDate: s.placement_end,
-            label: s.placement_label || s.name,
-            status: s.status,
-            basePrice: s.base_price,
-            pricePerEpisode: s.price_per_episode,
-            notes: s.notes,
-          }));
-      })(),
+      episodeBookings: episodeBookingsList,
+      slotBookings: slotBookingsList,
+      adPlacements: adPlacementsList,
+      plannedSlots: plannedSlotsList,
       conflicts,
     },
   });
+});
+
+// Folgensponsor-Automatisierung
+router.post('/placements/:placementId/auto-assign', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const placement = db.get('SELECT * FROM ad_placements WHERE id = ?', [req.params.placementId]) as any;
+  if (!placement) return res.status(404).json({ success: false, error: 'Platzierung nicht gefunden' });
+
+  // Nächste unveröffentlichte Episode finden, die noch keinen Folgensponsor hat
+  const nextEpisode = db.get(`
+    SELECT e.* FROM episodes e
+    WHERE e.status != 'veröffentlicht'
+    AND e.id NOT IN (SELECT episode_id FROM ad_placements WHERE position = 'folgensponsor' AND episode_id IS NOT NULL)
+    ORDER BY COALESCE(e.publish_date, '9999-12-31') ASC
+    LIMIT 1
+  `) as any;
+
+  if (!nextEpisode) return res.status(400).json({ success: false, error: 'Keine freie Episode gefunden' });
+
+  db.run('UPDATE ad_placements SET episode_id = ?, episode_title = ?, episode_number = ?, publish_date = ?, status = ? WHERE id = ?',
+    [nextEpisode.id, nextEpisode.title, nextEpisode.number, nextEpisode.publish_date, 'bestätigt', req.params.placementId]);
+
+  return res.json({ success: true, data: { episodeId: nextEpisode.id, episodeTitle: nextEpisode.title } });
+});
 });
 
 // GET /api/sponsors/booking-calendar/export — CSV-Export des Buchungskalenders

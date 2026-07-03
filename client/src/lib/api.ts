@@ -111,6 +111,8 @@ export const episodesApi = {
   reject: (id: string, notes?: string) => api.post<any>(`/episodes/${id}/reject`, { notes }),
   resetApproval: (id: string) => api.post<any>(`/episodes/${id}/reset-approval`, {}),
   getPendingApprovals: () => api.get<any[]>('/episodes/pending-approval'),
+  approveQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/approve`, {}),
+  revokeQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/revoke`, {}),
   list: (params?: { status?: string; search?: string; page?: number; pageSize?: number }) => {
     return api.get<any>(`/episodes${buildQs(params as any)}`);
   },
@@ -304,8 +306,7 @@ export const sponsorsApi = {
     `/api/sponsors/revenue/dashboard${buildQs({ ...params, format: 'csv' })}`,
 
   // Buchungskalender
-  getBookingCalendar: (params?: { from?: string; to?: string }) =>
-    api.get<any>(`/sponsors/booking-calendar${buildQs(params)}`),
+  getBookingCalendar: (params?: { from?: string; to?: string }) => api.get<any>(`/sponsors/booking-calendar${buildQs(params)}`),
   exportBookingCalendarCsv: (params?: { from?: string; to?: string }) =>
     `/api/sponsors/booking-calendar/export${buildQs({ ...params, format: 'csv' })}`,
 
@@ -320,6 +321,13 @@ export const sponsorsApi = {
   // TKP-Preisberechnung
   calculatePrice: (data: { basePrice?: number; pricePerEpisode?: number; pricePer1000Listens?: number; episodeCount?: number; totalListens?: number; priceModel?: string }) =>
     api.post<any>('/sponsors/calculate-price', data),
+};
+
+// ============================================================
+// Approvals API
+// ============================================================
+export const approvalsApi = {
+  getPending: () => api.get<any>('/approvals/pending'),
 };
 
 // ============================================================

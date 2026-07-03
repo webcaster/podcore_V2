@@ -4,7 +4,7 @@ import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
   Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle,
-  Layers, Archive, BarChart2, Calendar, MessageSquare, Radio
+  Layers, Archive, BarChart2, Calendar, MessageSquare, Radio, CheckCircle
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
 import { api } from '../../lib/api';
@@ -58,6 +58,7 @@ export default function Layout() {
 
   const navItems: NavItem[] = [
     { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard', exact: true },
+    { to: '/approvals', icon: <CheckCircle size={18} />, label: 'Freigabe-Center', permission: 'canViewApprovals' },
     { to: '/episodes', icon: <Mic2 size={18} />, label: 'Episoden', permission: 'canViewEpisodes' },
     { to: '/episodes-dashboard', icon: <Radio size={18} />, label: 'Episoden-Dashboard', permission: 'canViewEpisodes' },
     { to: '/editorial', icon: <BookOpen size={18} />, label: 'Redaktions-Hub', permission: 'canViewIdeas' },
@@ -84,6 +85,7 @@ export default function Layout() {
     // Dann Feature-Flags prüfen
     const path = item.to;
     if ((path === '/editorial' || path === '/calendar') && !features.editorial) return false;
+    if (path === '/approvals' && !features.approvals) return false;
     if ((path === '/sponsors' || path === '/sponsors/calendar' || path === '/sponsors/reports') && !features.sponsoring) return false;
     if (path === '/media' && !features.mediaLibrary) return false;
     if (path === '/chat' && !features.chat) return false;

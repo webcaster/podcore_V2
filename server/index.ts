@@ -24,6 +24,7 @@ import seasonsRouter from './routers/seasons';
 import statsRouter from './routers/stats';
 import chatRouter from './routers/chat';
 import pdfLayoutsRouter from './routers/pdfLayouts';
+import approvalsRouter from './routers/approvals';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -78,6 +79,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/episodes', episodesRouter);
 app.use('/api/editorial', editorialRouter);
 app.use('/api/sponsors', sponsorsRouter);
+app.use('/api/approvals', approvalsRouter);
 
 // Stream endpoint BEFORE mediaRouter — accepts cookie OR query token for <audio> elements
 app.get('/api/media/stream/:filename', (req: any, res: any) => {

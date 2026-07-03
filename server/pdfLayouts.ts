@@ -683,3 +683,20 @@ export function renderSectionHeading(doc: any, layout: PdfLayout, title: string)
   doc.fillColor(colors.text);
   doc.moveDown(0.2 * ls);
 }
+
+/**
+ * Zeichnet Text mit automatischem Umbruch und gibt die neue Y-Position zurück.
+ * Verhindert das Abschneiden von langen Zeilen in Tabellen oder Listen.
+ */
+export function drawWrappedText(
+  doc: any,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  options: any = {}
+): number {
+  const startY = y || doc.y;
+  doc.text(text, x, startY, { ...options, width });
+  return doc.y;
+}

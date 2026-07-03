@@ -380,6 +380,7 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN approved INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN approved_by TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN approved_at TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN status TEXT NOT NULL DEFAULT \'offen\''); } catch (_) {}
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime(\'now\'))'); } catch (_) {}
   // Interview partners: add custom guest intro text
   try { db.exec('ALTER TABLE interview_partners ADD COLUMN guest_intro TEXT DEFAULT NULL'); } catch (_) {}
@@ -661,6 +662,39 @@ function initializeSchema(db: any): void {
   // ad_placements: status und ad_title Spalten sicherstellen (falls Tabelle schon neu war)
   try { db.exec("ALTER TABLE ad_placements ADD COLUMN status TEXT NOT NULL DEFAULT 'geplant'"); } catch (_) {}
   try { db.exec('ALTER TABLE ad_placements ADD COLUMN ad_title TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN ad_category_id TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN listener_fee REAL DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN price_adjustment REAL DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_placements ADD COLUMN manual_price REAL DEFAULT NULL'); } catch (_) {}
+  
+  // Roles table migration (v2.11.5)
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS roles (
+      id TEXT PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      display_name TEXT NOT NULL,
+      permissions TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+    
+    // Default roles if none exist
+    const roleCount = db.get('SELECT COUNT(*) as count FROM roles') as any;
+    if (!roleCount || roleCount.count === 0) {
+      const { v4: uuidv4 } = require('uuid');
+      const roles = [
+        { name: 'admin', display: 'Administrator', perms: { all: true } },
+        { name: 'moderator', display: 'Moderator', perms: { canViewDashboard: true, canViewEpisodes: true, canEditEpisodes: true, canApproveEpisodes: true, canViewSponsors: true, canViewEditorial: true, canApproveInterviews: true, canViewApprovals: true } },
+        { name: 'redakteur', display: 'Redakteur', perms: { canViewDashboard: true, canViewEpisodes: true, canEditEpisodes: true, canRequestApproval: true, canViewEditorial: true, canEditEditorial: true, canViewApprovals: true } },
+        { name: 'produktion', display: 'Produktion', perms: { canViewDashboard: true, canViewEpisodes: true, canEditEpisodes: true, canViewAssets: true, canEditAssets: true, canViewApprovals: true } }
+      ];
+      
+      roles.forEach(r => {
+        db.run('INSERT OR IGNORE INTO roles (id, name, display_name, permissions) VALUES (?, ?, ?, ?)', 
+          [uuidv4(), r.name, r.display, JSON.stringify(r.perms)]);
+      });
+    }
+  } catch (_) {}
 
   // Default admin user
   const userCount = db.get('SELECT COUNT(*) as count FROM users') as any;

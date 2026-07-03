@@ -2029,7 +2029,7 @@ function ArticleContent({ sections }: { sections: WikiSection[] }) {
           {section.heading && (
             <h3 className="font-semibold text-text-primary mt-5 mb-2 first:mt-0">{section.heading}</h3>
           )}
-          {section.text && <p>{section.text}</p>}
+          {section.text && <p className="bg-transparent">{section.text}</p>}
           {section.list && (
             <ul className="space-y-1 mt-2">
               {section.list.map((item, i) => (
