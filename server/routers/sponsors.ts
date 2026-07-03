@@ -1433,7 +1433,15 @@ router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any,
       doc.fillColor(layout.colors.text).fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
 
       const label = p.placement_label || p.slot_name || p.name || '—';
-      doc.text(label.length > 28 ? label.substring(0, 26) + '…' : label, c1, rowY + 6, { width: tblW * 0.32 });
+      // Berechne Zeilenhöhe basierend auf Textlänge
+      const labelHeight = doc.heightOfString(label, { width: tblW * 0.32 });
+      const currentHeight = Math.max(20, labelHeight + 10);
+      if (rowY + currentHeight > maxY) { doc.addPage(); rowY = m; }
+
+      doc.rect(m, rowY, tblW, currentHeight).fill(bg);
+      doc.fillColor(layout.colors.text).fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
+      
+      doc.text(label, c1, rowY + 6, { width: tblW * 0.32 });
       doc.text(posLabels[p.position] || p.position || '—', c2, rowY + 6, { width: tblW * 0.15 });
 
       const ps = p.placement_start ? new Date(p.placement_start).toLocaleDateString('de-DE') : '—';
@@ -1449,7 +1457,7 @@ router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any,
       const currency = p.currency || 'EUR';
       doc.fillColor(price > 0 ? layout.colors.primary : layout.colors.muted)
         .text(price > 0 ? `${Number(price).toFixed(2)} ${currency}` : '—', c5, rowY + 6, { width: tblW * 0.20, align: 'right' });
-      rowY += 20;
+      rowY += currentHeight;
     });
     doc.moveDown(1.5);
   };

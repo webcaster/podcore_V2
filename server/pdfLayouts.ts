@@ -344,6 +344,36 @@ export function ensureDefaultLayouts(): void {
     try { db.exec(`ALTER TABLE pdf_layouts ADD COLUMN watermark TEXT DEFAULT NULL`); } catch (_) {}
   } catch (_) {}
 
+  // v2.11.4: Ensure confirmation and booking_calendar layouts exist
+  const hasConfirmation = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'confirmation' LIMIT 1");
+  if (!hasConfirmation) {
+    const layout = { ...DEFAULT_LAYOUT, name: 'Buchungsbestätigung Standard', exportType: 'confirmation', isDefault: true, isSystem: false };
+    db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuidv4(), layout.name, layout.description, layout.exportType,
+        layout.isDefault ? 1 : 0, layout.isSystem ? 1 : 0,
+        JSON.stringify(layout.colors), JSON.stringify(layout.typography),
+        JSON.stringify(layout.header), JSON.stringify(layout.footer),
+        JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
+        (layout as any).pageOrientation || 'portrait',
+      ]);
+  }
+  const hasBookingCal = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'booking_calendar' LIMIT 1");
+  if (!hasBookingCal) {
+    const layout = { ...DEFAULT_LAYOUT, name: 'Buchungskalender Standard', exportType: 'booking_calendar', isDefault: true, isSystem: false, pageOrientation: 'landscape' };
+    db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuidv4(), layout.name, layout.description, layout.exportType,
+        layout.isDefault ? 1 : 0, layout.isSystem ? 1 : 0,
+        JSON.stringify(layout.colors), JSON.stringify(layout.typography),
+        JSON.stringify(layout.header), JSON.stringify(layout.footer),
+        JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
+        (layout as any).pageOrientation || 'landscape',
+      ]);
+  }
+
   // Insert system layouts if they don't exist
   const existing = db.all("SELECT id FROM pdf_layouts WHERE is_system = 1") as any[];
   if (existing.length === 0) {

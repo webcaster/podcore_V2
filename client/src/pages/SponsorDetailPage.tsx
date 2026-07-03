@@ -994,10 +994,13 @@ export default function SponsorDetailPage() {
                   <span>Leistungsübersicht (PDF)</span>
                 </button>
               </div>
-              <button onClick={handleExportConfirmation} className="btn-secondary">
-                <FileText size={16} />
-                <span>Buchungsbestätigung (PDF)</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <PdfLayoutPicker exportType="confirmation" value={pdfLayoutId} onChange={setPdfLayoutId} />
+                <button onClick={handleExportConfirmation} className="btn-secondary">
+                  <FileText size={16} />
+                  <span>Buchungsbestätigung (PDF)</span>
+                </button>
+              </div>
               <button onClick={() => handleExportSponsorPlacements('csv')} className="btn-secondary">
                 <FileSpreadsheet size={16} />
                 <span>Als CSV exportieren</span>
@@ -1156,7 +1159,10 @@ export default function SponsorDetailPage() {
                             </div>
                             <div>
                               <p className="text-text-muted text-xs">Episode / Position</p>
-                              <p className="text-text-primary text-xs">{pl.episodeTitle || '—'} {pl.position ? `· ${pl.position}` : ''}</p>
+                              <p className="text-text-primary text-xs">
+                                {pl.episodeTitle && !pl.episodeTitle.match(/^[0-9a-f-]{36}$/) ? pl.episodeTitle : (pl.isPlanned ? '—' : 'Offen')}
+                                {pl.position ? ` · ${pl.position}` : ''}
+                              </p>
                             </div>
                             <div>
                               <p className="text-text-muted text-xs">Preis</p>
