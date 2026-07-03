@@ -1,4 +1,4 @@
-# PodCore v2.11.3
+# PodCore v2.11.4
 
 PodCore ist ein eigenständiges, lokal hostbares Podcast-Management-System zur Verwaltung von Episoden, Ideen, Medien, Sponsoren und Statistiken.
 
