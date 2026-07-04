@@ -1724,6 +1724,7 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
         status: s.status,
         basePrice: s.base_price,
         pricePerEpisode: s.price_per_episode,
+        price: s.base_price,
         notes: s.notes,
       }));
   })();
@@ -1780,7 +1781,6 @@ router.post('/placements/:placementId/auto-assign', requirePermission('canEditSp
     [nextEpisode.id, nextEpisode.title, nextEpisode.number, nextEpisode.publish_date, 'bestätigt', req.params.placementId]);
 
   return res.json({ success: true, data: { episodeId: nextEpisode.id, episodeTitle: nextEpisode.title } });
-});
 });
 
 // GET /api/sponsors/booking-calendar/export — CSV-Export des Buchungskalenders

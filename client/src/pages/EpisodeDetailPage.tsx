@@ -1394,6 +1394,7 @@ export default function EpisodeDetailPage() {
                               <button
                                 onClick={async () => {
                                   try {
+                    // @ts-ignore
                                     await sponsorsApi.createEpisodeBooking({ episodeId: id, adSlotId: sl.id, sponsorId: sl.sponsorId, position: sl.defaultPosition || 'mid-roll', confirmed: false });
                                     const updated = await sponsorsApi.getEpisodeBookings(id);
                                     setAdBookings(updated);

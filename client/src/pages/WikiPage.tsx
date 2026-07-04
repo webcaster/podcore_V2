@@ -832,9 +832,10 @@ const wikiData: WikiCategory[] = [
       {
         id: 'v2-10-0',
         title: 'v2.11.0 — Sponsoring-Konzept: Buchungskalender, TKP-Kalkulator & Folgensponsor-Automatisierung',
-        date: '02.07.2026',
+        icon: <Package size={18} />,
+        tags: ['sponsoring', 'buchungskalender', 'tkp', 'folgensponsor', 'abrechnung'],
         summary: 'Vollständige Umsetzung des Sponsoring-Konzepts: Buchungskalender mit Monatsansicht und Konfliktanzeige, TKP-Kalkulator im Billing-Tab, Folgensponsor-Automatisierung im Episoden-Editor, Auslastungs-Tab im Einnahmen-Dashboard und Kategorie-Konflikt-Erkennung.',
-        changes: [
+        content: [
           {
             heading: 'Buchungskalender',
             text: 'Neuer Bereich im Sponsoring-Menü: Monatsansicht aller Werbe-Slots mit farblicher Sponsor-Zuordnung. Konflikte (gleiche Kategorie, überlappende Zeiträume) werden farblich hervorgehoben. Klick auf einen Tag zeigt alle Buchungen.',
@@ -858,6 +859,7 @@ const wikiData: WikiCategory[] = [
         ],
       },
       {
+        id: 'v2-10-0-old',
         title: 'v2.10.0 — Sponsoring-Korrektionen, Backup-Import & Metadaten',
         summary: 'Flexibles Preismodell im Sponsoring (3 Preistypen), Laufzeit- und Kategorie-Übernahme repariert, Buchungsbestätigung für Sponsoren, Backup-Import mit Vorschau und Metadaten in der Media Library.',
         icon: <Package size={18} />,

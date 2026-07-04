@@ -4,7 +4,7 @@ import {
   ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, Mail, Phone,
   Globe, Building2, Calendar, Clock, Tag, CheckCircle, XCircle,
   AlertCircle, Megaphone, BarChart3, FileText, Package, Mic2,
-  ExternalLink, Download, FileSpreadsheet, CalendarRange, Info
+  ExternalLink, Download, FileSpreadsheet, CalendarRange, Info, TrendingUp
 } from 'lucide-react';
 import { sponsorsApi, episodesApi } from '../lib/api';
 import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
@@ -485,6 +485,9 @@ export default function SponsorDetailPage() {
       invoiceDate: '',
       invoiceStatus: 'offen',
       invoiceNotes: '',
+      priceAdjustment: '0',
+      listenerFee: '0',
+      manualPrice: '',
     });
     setShowPlacementModal(true);
   };

@@ -8,7 +8,7 @@ import { approvalsApi, episodesApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
 
 const ApprovalsPage: React.FC = () => {
-  const { can, showToast } = useApp();
+  const { can, showSuccess, showError } = useApp();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<{ episodes: any[], questions: any[] }>({ episodes: [], questions: [] });
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -20,7 +20,7 @@ const ApprovalsPage: React.FC = () => {
       setData(res);
     } catch (err) {
       console.error('Failed to load approvals:', err);
-      showToast('Fehler beim Laden der Freigaben', 'error');
+      showError('Fehler beim Laden der Freigaben');
     } finally {
       setLoading(false);
     }
@@ -34,10 +34,10 @@ const ApprovalsPage: React.FC = () => {
     setProcessingId(id);
     try {
       await episodesApi.approve(id);
-      showToast('Episode freigegeben', 'success');
+      showSuccess('Episode freigegeben');
       loadData();
     } catch (err) {
-      showToast('Fehler bei der Freigabe', 'error');
+      showError('Fehler bei der Freigabe');
     } finally {
       setProcessingId(null);
     }
@@ -50,10 +50,10 @@ const ApprovalsPage: React.FC = () => {
     setProcessingId(id);
     try {
       await episodesApi.reject(id, reason);
-      showToast('Episode abgelehnt', 'info');
+      showSuccess('Episode abgelehnt');
       loadData();
     } catch (err) {
-      showToast('Fehler beim Ablehnen', 'error');
+      showError('Fehler beim Ablehnen');
     } finally {
       setProcessingId(null);
     }
@@ -63,10 +63,10 @@ const ApprovalsPage: React.FC = () => {
     setProcessingId(id);
     try {
       await episodesApi.approveQuestion(id);
-      showToast('Interview-Frage freigegeben', 'success');
+      showSuccess('Interview-Frage freigegeben');
       loadData();
     } catch (err) {
-      showToast('Fehler bei der Freigabe', 'error');
+      showError('Fehler bei der Freigabe');
     } finally {
       setProcessingId(null);
     }
