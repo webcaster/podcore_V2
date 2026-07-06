@@ -11,7 +11,7 @@ import { api } from '../../lib/api';
 
 // Injected at build time by vite.config.ts
 declare const __APP_VERSION__: string;
-const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.11.4';
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.11.7';
 
 interface NavItem {
   to: string;
@@ -58,7 +58,7 @@ export default function Layout() {
 
   const navItems: NavItem[] = [
     { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard', exact: true },
-    { to: '/approvals', icon: <CheckCircle size={18} />, label: 'Freigabe-Center', permission: 'canViewApprovals' },
+    { to: '/approvals', icon: <CheckCircle size={18} />, label: 'Freigabe-Center', permission: 'canApproveEpisodes' },
     { to: '/episodes', icon: <Mic2 size={18} />, label: 'Episoden', permission: 'canViewEpisodes' },
     { to: '/episodes-dashboard', icon: <Radio size={18} />, label: 'Episoden-Dashboard', permission: 'canViewEpisodes' },
     { to: '/editorial', icon: <BookOpen size={18} />, label: 'Redaktions-Hub', permission: 'canViewIdeas' },

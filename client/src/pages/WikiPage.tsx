@@ -830,6 +830,54 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-11-7',
+        title: 'v2.11.7 — Freigabe-Center Fixes, Wiki-Updates & Versionsverwaltung',
+        icon: <Package size={18} />,
+        tags: ['freigabe', 'wiki', 'version', 'bugfixes', 'permissions'],
+        summary: 'Behebung der Freigabe-Center Sichtbarkeit für Moderatoren, korrekte Versionsnummer in Einstellungen, Wiki mit neuen Funktionen erweitert.',
+        content: [
+          {
+            heading: 'Freigabe-Center für Moderatoren',
+            text: 'Das Freigabe-Center ist jetzt für alle Benutzer mit der Berechtigung "Episoden freigeben / abnehmen" sichtbar. Moderatoren können Episoden und Interview-Fragen direkt genehmigen oder ablehnen.',
+          },
+          {
+            heading: 'Versionsnummer in Einstellungen',
+            text: 'Die App-Version wird jetzt korrekt in den Einstellungen unter "App-Update" angezeigt.',
+          },
+          {
+            heading: 'Wiki erweitert',
+            list: [
+              'Neue Artikel für Freigabe-Center, Sponsoring-Management und Buchungskalender',
+              'Alle neuen Funktionen aus v2.11.6 dokumentiert',
+            ],
+          },
+        ],
+      },
+      {
+        id: 'v2-11-6',
+        title: 'v2.11.6 — Platzierungseditor, Preispersistierung & Kalender-Fixes',
+        icon: <Package size={18} />,
+        tags: ['sponsoring', 'platzierungen', 'preise', 'buchungskalender', 'bugfixes'],
+        summary: 'Kritische Bugfixes: Platzierungen editierbar, Preise korrekt gespeichert, Buchungskalender zeigt Vorplanungen im Grid.',
+        content: [
+          {
+            heading: 'Platzierungseditor',
+            list: [
+              'Platzierungen sind jetzt vollständig editierbar',
+              'Alle Felder werden korrekt gespeichert: Titel, Kategorie, Position, Preis, Laufzeit',
+            ],
+          },
+          {
+            heading: 'Buchungskalender',
+            text: 'Vorplanungen mit Datum werden jetzt im Kalender-Grid angezeigt.',
+          },
+          {
+            heading: 'Position statt UUID',
+            text: 'Die Platzierungsübersicht zeigt jetzt aussagekräftige Namen statt UUIDs.',
+          },
+        ],
+      },
+      {
         id: 'v2-10-0',
         title: 'v2.11.0 — Sponsoring-Konzept: Buchungskalender, TKP-Kalkulator & Folgensponsor-Automatisierung',
         icon: <Package size={18} />,
