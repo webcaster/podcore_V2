@@ -27,7 +27,7 @@ function parseEpisode(row: any) {
 }
 
 // GET /api/approvals/pending — Alle ausstehenden Freigaben (Episoden & Interview-Fragen)
-router.get('/pending', requirePermission('canViewApprovals') as any, (req: AuthRequest, res: Response) => {
+router.get('/pending', requirePermission('canApproveEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   
   // 1. Episoden mit Status 'angefragt'

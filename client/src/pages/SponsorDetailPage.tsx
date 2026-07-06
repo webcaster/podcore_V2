@@ -225,45 +225,91 @@ export default function SponsorDetailPage() {
   const handleSavePlacement = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload = {
-        adTitle: placementForm.adTitle,
-        name: placementForm.adTitle,
-        // Kategorie korrekt als categoryId übermitteln
-        category: placementForm.categoryId,
-        categoryId: placementForm.categoryId || null,
-        adCategoryId: placementForm.categoryId || null,
-        position: placementForm.position,
-        duration: placementForm.duration,
-        status: placementForm.status,
-        productionType: placementForm.deliveryType === 'produced' ? 'eigenproduktion' : 'fremd',
-        script: placementForm.adScript || null,
-        notes: placementForm.notes || null,
-        // Laufzeit
-        placementStart: placementForm.placementStart || null,
-        placementEnd: placementForm.placementEnd || null,
-        placementLabel: placementForm.placementLabel || null,
-        // Flexibles Preismodell
-        priceModel: placementForm.priceModel,
-        price: placementForm.price ? parseFloat(placementForm.price) : null,
-        basePrice: placementForm.basePrice ? parseFloat(placementForm.basePrice) : null,
-        pricePerEpisode: placementForm.pricePerEpisode ? parseFloat(placementForm.pricePerEpisode) : null,
-        pricePer1000Listens: placementForm.pricePer1000Listens ? parseFloat(placementForm.pricePer1000Listens) : null,
-        currency: placementForm.currency,
-        // Lieferung
-        deliveryConfirmed: placementForm.deliveryConfirmed,
-        // Performance
-        performanceNotes: placementForm.performanceNotes || null,
-        // Abrechnung
-        invoiceNotes: placementForm.invoiceNotes || null,
-        // Manuelle Anpassungen (v2.11.5)
-        priceAdjustment: parseFloat(placementForm.priceAdjustment) || 0,
-        listenerFee: parseFloat(placementForm.listenerFee) || 0,
-        manualPrice: placementForm.manualPrice ? parseFloat(placementForm.manualPrice) : null,
-      };
-      if (editingPlacement) {
-        await sponsorsApi.updateSlot(editingPlacement.id, payload);
+      // BUGFIX v2.11.6: Unterscheide zwischen Slot-Edit und Placement-Edit
+      if (editingPlacement && editingPlacement.id && editingPlacement.id.startsWith('planned_')) {
+        // Slot-Update (Vorplanung)
+        const realSlotId = editingPlacement.id.replace('planned_', '');
+        const payload = {
+          adTitle: placementForm.adTitle,
+          name: placementForm.adTitle,
+          category: placementForm.categoryId,
+          categoryId: placementForm.categoryId || null,
+          adCategoryId: placementForm.categoryId || null,
+          position: placementForm.position,
+          duration: placementForm.duration,
+          status: placementForm.status,
+          productionType: placementForm.deliveryType === 'produced' ? 'eigenproduktion' : 'fremd',
+          script: placementForm.adScript || null,
+          notes: placementForm.notes || null,
+          placementStart: placementForm.placementStart || null,
+          placementEnd: placementForm.placementEnd || null,
+          placementLabel: placementForm.placementLabel || null,
+          priceModel: placementForm.priceModel,
+          price: placementForm.price ? parseFloat(placementForm.price) : null,
+          basePrice: placementForm.basePrice ? parseFloat(placementForm.basePrice) : null,
+          pricePerEpisode: placementForm.pricePerEpisode ? parseFloat(placementForm.pricePerEpisode) : null,
+          pricePer1000Listens: placementForm.pricePer1000Listens ? parseFloat(placementForm.pricePer1000Listens) : null,
+          currency: placementForm.currency,
+          deliveryConfirmed: placementForm.deliveryConfirmed,
+          performanceNotes: placementForm.performanceNotes || null,
+          invoiceNotes: placementForm.invoiceNotes || null,
+          priceAdjustment: parseFloat(placementForm.priceAdjustment) || 0,
+          listenerFee: parseFloat(placementForm.listenerFee) || 0,
+          manualPrice: placementForm.manualPrice ? parseFloat(placementForm.manualPrice) : null,
+        };
+        await sponsorsApi.updateSlot(realSlotId, payload);
         showSuccess('Platzierung aktualisiert');
+      } else if (editingPlacement && editingPlacement.id && !editingPlacement.id.startsWith('planned_')) {
+        // Placement-Update (echte Buchung) - BUGFIX: Alle Felder speichern
+        const payload = {
+          adTitle: placementForm.adTitle,
+          adCategoryId: placementForm.categoryId || null,
+          position: placementForm.position,
+          price: placementForm.price ? parseFloat(placementForm.price) : null,
+          invoiceStatus: placementForm.invoiceStatus,
+          invoiceNumber: placementForm.invoiceNumber || null,
+          invoiceDate: placementForm.invoiceDate || null,
+          invoiceNotes: placementForm.invoiceNotes || null,
+          placementStart: placementForm.placementStart || null,
+          placementEnd: placementForm.placementEnd || null,
+          placementLabel: placementForm.placementLabel || null,
+          performanceNotes: placementForm.performanceNotes || null,
+          priceAdjustment: parseFloat(placementForm.priceAdjustment) || 0,
+          listenerFee: parseFloat(placementForm.listenerFee) || 0,
+          manualPrice: placementForm.manualPrice ? parseFloat(placementForm.manualPrice) : null,
+        };
+        await sponsorsApi.updatePlacement(editingPlacement.id, payload);
+        showSuccess('Buchung aktualisiert');
       } else {
+        // Neuer Slot
+        const payload = {
+          adTitle: placementForm.adTitle,
+          name: placementForm.adTitle,
+          category: placementForm.categoryId,
+          categoryId: placementForm.categoryId || null,
+          adCategoryId: placementForm.categoryId || null,
+          position: placementForm.position,
+          duration: placementForm.duration,
+          status: placementForm.status,
+          productionType: placementForm.deliveryType === 'produced' ? 'eigenproduktion' : 'fremd',
+          script: placementForm.adScript || null,
+          notes: placementForm.notes || null,
+          placementStart: placementForm.placementStart || null,
+          placementEnd: placementForm.placementEnd || null,
+          placementLabel: placementForm.placementLabel || null,
+          priceModel: placementForm.priceModel,
+          price: placementForm.price ? parseFloat(placementForm.price) : null,
+          basePrice: placementForm.basePrice ? parseFloat(placementForm.basePrice) : null,
+          pricePerEpisode: placementForm.pricePerEpisode ? parseFloat(placementForm.pricePerEpisode) : null,
+          pricePer1000Listens: placementForm.pricePer1000Listens ? parseFloat(placementForm.pricePer1000Listens) : null,
+          currency: placementForm.currency,
+          deliveryConfirmed: placementForm.deliveryConfirmed,
+          performanceNotes: placementForm.performanceNotes || null,
+          invoiceNotes: placementForm.invoiceNotes || null,
+          priceAdjustment: parseFloat(placementForm.priceAdjustment) || 0,
+          listenerFee: parseFloat(placementForm.listenerFee) || 0,
+          manualPrice: placementForm.manualPrice ? parseFloat(placementForm.manualPrice) : null,
+        };
         await sponsorsApi.createSlot(id!, payload);
         showSuccess('Platzierung erstellt');
       }
@@ -1175,9 +1221,9 @@ export default function SponsorDetailPage() {
                               )}
                             </div>
                             <div>
-                              <p className="text-text-muted text-xs">Episode / Position</p>
+                              <p className="text-text-muted text-xs">Position / Titel</p>
                               <p className="text-text-primary text-xs">
-                                {pl.episodeTitle && !pl.episodeTitle.match(/^[0-9a-f-]{36}$/) ? pl.episodeTitle : (pl.isPlanned ? '—' : 'Offen')}
+                                {pl.adTitle || pl.slotName || 'Ohne Position'}
                                 {pl.position ? ` · ${pl.position}` : ''}
                               </p>
                             </div>

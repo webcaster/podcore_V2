@@ -1705,28 +1705,32 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
       LEFT JOIN ad_categories c ON sl.category_id = c.id
       WHERE sl.status NOT IN ('inaktiv', 'archiviert', 'abgelehnt', 'storniert')
     `) as any[];
-    return allSlots
-      .filter((s: any) => !bookedSlotIds.has(s.id))
-      .map((s: any) => ({
-        id: `planned_${s.id}`,
-        type: 'planned',
-        sponsorId: s.sponsor_id,
-        sponsorName: s.sponsor_name,
-        sponsorCompany: s.sponsor_company,
-        sponsorColor: s.sponsor_color || '#f59e0b',
-        categoryName: s.category_name,
-        categoryColor: s.category_color || '#6b7280',
-        isExclusive: s.is_exclusive === 1,
-        position: s.category || 'pre-roll',
-        startDate: s.placement_start,
-        endDate: s.placement_end,
-        label: s.placement_label || s.name,
-        status: s.status,
-        basePrice: s.base_price,
-        pricePerEpisode: s.price_per_episode,
-        price: s.base_price,
-        notes: s.notes,
-      }));
+    
+    // BUGFIX v2.11.6: Filtere nach Datum-Bereich für Kalender-Anzeige
+    let filtered = allSlots.filter((s: any) => !bookedSlotIds.has(s.id));
+    if (from) filtered = filtered.filter((s: any) => !s.placement_start || s.placement_start >= from);
+    if (to) filtered = filtered.filter((s: any) => !s.placement_end || s.placement_end <= to);
+    
+    return filtered.map((s: any) => ({
+      id: `planned_${s.id}`,
+      type: 'planned',
+      sponsorId: s.sponsor_id,
+      sponsorName: s.sponsor_name,
+      sponsorCompany: s.sponsor_company,
+      sponsorColor: s.sponsor_color || '#f59e0b',
+      categoryName: s.category_name,
+      categoryColor: s.category_color || '#6b7280',
+      isExclusive: s.is_exclusive === 1,
+      position: s.category || 'pre-roll',
+      startDate: s.placement_start,
+      endDate: s.placement_end,
+      label: s.placement_label || s.name,
+      status: s.status,
+      basePrice: s.base_price,
+      pricePerEpisode: s.price_per_episode,
+      price: s.base_price,
+      notes: s.notes,
+    }));
   })();
 
   if (req.query.format === 'csv') {
