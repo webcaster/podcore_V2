@@ -1091,6 +1091,12 @@ router.get('/:id/billing', requirePermission('canViewSponsors') as any, (req: Au
       WHERE p.ad_slot_id IN (${placeholders})
       ORDER BY COALESCE(p.publish_date, p.created_at) DESC
     `, slotIds);
+    
+    // BUGFIX v2.11.8: Stelle sicher, dass ad_title nicht NULL ist
+    placements = placements.map((p: any) => ({
+      ...p,
+      ad_title: p.ad_title || p.slot_name || `Platzierung ${p.id.substring(0, 8)}`,
+    }));
   }
 
   // Vorplanungen: Slots die noch keine Buchung haben (geplante Werbeplätze)
@@ -1706,10 +1712,32 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
       WHERE sl.status NOT IN ('inaktiv', 'archiviert', 'abgelehnt', 'storniert')
     `) as any[];
     
-    // BUGFIX v2.11.6: Filtere nach Datum-Bereich für Kalender-Anzeige
+    // BUGFIX v2.11.8: Filtere nach Datum-Bereich mit Overlap-Logik
     let filtered = allSlots.filter((s: any) => !bookedSlotIds.has(s.id));
-    if (from) filtered = filtered.filter((s: any) => !s.placement_start || s.placement_start >= from);
-    if (to) filtered = filtered.filter((s: any) => !s.placement_end || s.placement_end <= to);
+    
+    // Overlap-Logik: Zeige Slots wenn sie sich mit dem Zeitraum [from, to] ueberschneiden
+    if (from || to) {
+      filtered = filtered.filter((s: any) => {
+        // Slots ohne Datum werden immer angezeigt
+        if (!s.placement_start && !s.placement_end) return true;
+        
+        // Wenn nur Start-Datum: Zeige wenn start <= to
+        if (s.placement_start && !s.placement_end) {
+          return !to || s.placement_start <= to;
+        }
+        
+        // Wenn nur End-Datum: Zeige wenn end >= from
+        if (!s.placement_start && s.placement_end) {
+          return !from || s.placement_end >= from;
+        }
+        
+        // Wenn beide Daten: Zeige wenn [start, end] und [from, to] sich ueberschneiden
+        // Ueberschneidung: start <= to AND end >= from
+        const startOk = !to || s.placement_start <= to;
+        const endOk = !from || s.placement_end >= from;
+        return startOk && endOk;
+      });
+    }
     
     return filtered.map((s: any) => ({
       id: `planned_${s.id}`,
