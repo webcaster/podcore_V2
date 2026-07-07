@@ -1222,9 +1222,9 @@ export default function SponsorDetailPage() {
                             </div>
                             <div>
                               <p className="text-text-muted text-xs">Position / Titel</p>
-                              <p className="text-text-primary text-xs">
+                              <p className="text-text-primary text-xs truncate">
                                 {pl.adTitle || pl.slotName || 'Ohne Position'}
-                                {pl.position ? ` · ${pl.position}` : ''}
+                                {pl.position && pl.position !== 'pre-roll' && pl.position !== 'mid-roll' && pl.position !== 'post-roll' && pl.position !== 'outro' ? ` · ${pl.position.substring(0, 20)}` : ''}
                               </p>
                             </div>
                             <div>

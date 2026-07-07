@@ -1718,23 +1718,43 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
     // Overlap-Logik: Zeige Slots wenn sie sich mit dem Zeitraum [from, to] ueberschneiden
     if (from || to) {
       filtered = filtered.filter((s: any) => {
+        // Normalisiere Daten zu ISO-String Format (YYYY-MM-DD)
+        const normalize = (d: any) => {
+          if (!d) return null;
+          if (typeof d === 'string') {
+            // Wenn bereits ISO-Format, nutze es
+            if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.substring(0, 10);
+            // Versuche zu parsen
+            const parsed = new Date(d);
+            if (!isNaN(parsed.getTime())) {
+              return parsed.toISOString().substring(0, 10);
+            }
+          }
+          return null;
+        };
+        
+        const slotStart = normalize(s.placement_start);
+        const slotEnd = normalize(s.placement_end);
+        const fromNorm = from ? normalize(from) : null;
+        const toNorm = to ? normalize(to) : null;
+        
         // Slots ohne Datum werden immer angezeigt
-        if (!s.placement_start && !s.placement_end) return true;
+        if (!slotStart && !slotEnd) return true;
         
         // Wenn nur Start-Datum: Zeige wenn start <= to
-        if (s.placement_start && !s.placement_end) {
-          return !to || s.placement_start <= to;
+        if (slotStart && !slotEnd) {
+          return !toNorm || slotStart <= toNorm;
         }
         
         // Wenn nur End-Datum: Zeige wenn end >= from
-        if (!s.placement_start && s.placement_end) {
-          return !from || s.placement_end >= from;
+        if (!slotStart && slotEnd) {
+          return !fromNorm || slotEnd >= fromNorm;
         }
         
         // Wenn beide Daten: Zeige wenn [start, end] und [from, to] sich ueberschneiden
         // Ueberschneidung: start <= to AND end >= from
-        const startOk = !to || s.placement_start <= to;
-        const endOk = !from || s.placement_end >= from;
+        const startOk = !toNorm || (slotStart && slotStart <= toNorm);
+        const endOk = !fromNorm || (slotEnd && slotEnd >= fromNorm);
         return startOk && endOk;
       });
     }
