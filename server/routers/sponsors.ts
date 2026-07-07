@@ -1702,7 +1702,7 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
   }));
 
   const plannedSlotsList = (() => {
-    const bookedSlotIds = new Set(adPlacements.map((p: any) => p.ad_slot_id));
+    // BUGFIX v2.11.10: Zeige ALLE Slots mit Vorplanungs-Daten, nicht nur unggebuchte
     const allSlots = db.all(`
       SELECT sl.*, sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
              c.name as category_name, c.color as category_color, c.is_exclusive
@@ -1710,10 +1710,11 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
       JOIN sponsors sp ON sl.sponsor_id = sp.id
       LEFT JOIN ad_categories c ON sl.category_id = c.id
       WHERE sl.status NOT IN ('inaktiv', 'archiviert', 'abgelehnt', 'storniert')
+        AND (sl.placement_start IS NOT NULL OR sl.placement_end IS NOT NULL)
     `) as any[];
     
-    // BUGFIX v2.11.8: Filtere nach Datum-Bereich mit Overlap-Logik
-    let filtered = allSlots.filter((s: any) => !bookedSlotIds.has(s.id));
+    // BUGFIX v2.11.10: Filtere nach Datum-Bereich mit Overlap-Logik
+    let filtered = allSlots;
     
     // Overlap-Logik: Zeige Slots wenn sie sich mit dem Zeitraum [from, to] ueberschneiden
     if (from || to) {
