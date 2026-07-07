@@ -138,16 +138,38 @@ export default function SponsorBookingCalendarPage() {
     let ep = episodeBookings.filter(b => b.date === dateStr);
     let sl = slotBookings.filter(b => b.startDate && b.endDate && dateStr >= b.startDate && dateStr <= b.endDate);
     let pl = adPlacements.filter(p => p.date === dateStr);
-    // BUGFIX v2.11.10: Vorplanungen mit korrekter Datum-Vergleich
-    let ps = showPlanned ? plannedSlots.filter(p => {
-      if (!p.startDate || !p.endDate) return false;
-      // Normalisiere zu ISO-Format fuer Vergleich
-      const normalize = (d: string) => d ? d.substring(0, 10) : '';
-      const pStart = normalize(p.startDate);
-      const pEnd = normalize(p.endDate);
-      const date = normalize(dateStr);
-      return date >= pStart && date <= pEnd;
-    }) : [];
+    // BUGFIX v2.11.11: Vorplanungen mit verbesserter Logik
+    let ps: PlannedSlot[] = [];
+    if (showPlanned && plannedSlots.length > 0) {
+      ps = plannedSlots.filter(p => {
+        // Slots ohne Daten werden nicht angezeigt
+        if (!p.startDate && !p.endDate) return false;
+        if (!p.startDate || !p.endDate) return false;
+        
+        // Normalisiere zu ISO-Format
+        const normalize = (d: any) => {
+          if (!d) return null;
+          const str = String(d);
+          // Wenn bereits ISO-Format, nutze es
+          if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
+          // Versuche zu parsen
+          const date = new Date(str);
+          if (!isNaN(date.getTime())) {
+            return date.toISOString().substring(0, 10);
+          }
+          return null;
+        };
+        
+        const pStart = normalize(p.startDate);
+        const pEnd = normalize(p.endDate);
+        const date = normalize(dateStr);
+        
+        if (!pStart || !pEnd || !date) return false;
+        
+        // Zeige wenn date zwischen start und end liegt
+        return date >= pStart && date <= pEnd;
+      });
+    }
     if (filterSponsor) {
       ep = ep.filter(b => b.sponsorName === filterSponsor);
       sl = sl.filter(b => b.sponsorName === filterSponsor);
