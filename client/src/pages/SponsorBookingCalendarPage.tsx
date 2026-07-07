@@ -138,9 +138,16 @@ export default function SponsorBookingCalendarPage() {
     let ep = episodeBookings.filter(b => b.date === dateStr);
     let sl = slotBookings.filter(b => b.startDate && b.endDate && dateStr >= b.startDate && dateStr <= b.endDate);
     let pl = adPlacements.filter(p => p.date === dateStr);
-    let ps = showPlanned ? plannedSlots.filter(p =>
-      p.startDate && p.endDate && dateStr >= p.startDate && dateStr <= p.endDate
-    ) : [];
+    // BUGFIX v2.11.10: Vorplanungen mit korrekter Datum-Vergleich
+    let ps = showPlanned ? plannedSlots.filter(p => {
+      if (!p.startDate || !p.endDate) return false;
+      // Normalisiere zu ISO-Format fuer Vergleich
+      const normalize = (d: string) => d ? d.substring(0, 10) : '';
+      const pStart = normalize(p.startDate);
+      const pEnd = normalize(p.endDate);
+      const date = normalize(dateStr);
+      return date >= pStart && date <= pEnd;
+    }) : [];
     if (filterSponsor) {
       ep = ep.filter(b => b.sponsorName === filterSponsor);
       sl = sl.filter(b => b.sponsorName === filterSponsor);
