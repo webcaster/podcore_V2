@@ -4,7 +4,8 @@ import {
   ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, Mail, Phone,
   Building2, CalendarRange, CheckCircle, AlertCircle, Megaphone,
   FileText, Download, FileSpreadsheet, Info, Receipt, Files,
-  X, ChevronDown, ChevronUp, BookOpen, Star
+  X, ChevronDown, ChevronUp, BookOpen, Star, Send, ClipboardList,
+  Tag, Percent, Users, Hash, Clock, ExternalLink
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
 import { sponsorsV2Api } from '../lib/api-v2';
@@ -33,6 +34,9 @@ interface BookingForm {
   discount: string;
   discountType: 'absolute' | 'percent';
   listenerCount: string;
+  priceAdjustment: string;
+  listenerFee: string;
+  totalEpisodes: string;
 }
 
 export default function SponsorDetailPageV2() {
@@ -46,7 +50,21 @@ export default function SponsorDetailPageV2() {
   const [slots, setSlots] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'stammdaten' | 'contracts' | 'slots' | 'bookings' | 'billing'>('stammdaten');
+  const [activeTab, setActiveTab] = useState<'stammdaten' | 'contracts' | 'slots' | 'bookings' | 'billing' | 'offers'>('stammdaten');
+
+  // Angebote State
+  const [offers, setOffers] = useState<any[]>([]);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [editingOffer, setEditingOffer] = useState<any>(null);
+  const [showAcceptModal, setShowAcceptModal] = useState(false);
+  const [acceptingOffer, setAcceptingOffer] = useState<any>(null);
+  const [acceptOptions, setAcceptOptions] = useState({ updateContact: false, updateNotes: false });
+  const emptyOfferForm = {
+    title: '', offerNumber: '', validUntil: '', introText: '', outroText: '',
+    positions: [] as any[], discount: '0', discountType: 'absolute' as 'absolute' | 'percent', notes: '',
+  };
+  const [offerForm, setOfferForm] = useState(emptyOfferForm);
+  const [newPosition, setNewPosition] = useState({ description: '', quantity: '1', unitPrice: '', unit: 'Pauschal' });
 
   // Contract Modal
   const [showContractModal, setShowContractModal] = useState(false);
@@ -64,6 +82,7 @@ export default function SponsorDetailPageV2() {
     priceModel: 'per_episode', notes: '', invoiceStatus: 'offen',
     status: 'geplant', contractId: '', placementCount: '1', episodeRefs: [],
     discount: '0', discountType: 'absolute', listenerCount: '',
+    priceAdjustment: '0', listenerFee: '0', totalEpisodes: '',
   };
   const [bookingForm, setBookingForm] = useState<BookingForm>(emptyBookingForm);
   const [newEpisodeRef, setNewEpisodeRef] = useState<EpisodeRef>({ episodeTitle: '', count: 1 });
@@ -96,16 +115,18 @@ export default function SponsorDetailPageV2() {
     if (!id) return;
     setIsLoading(true);
     try {
-      const [spData, contractsData, bookingsData, slotsData] = await Promise.all([
+      const [spData, contractsData, bookingsData, slotsData, offersData] = await Promise.all([
         sponsorsApi.get(id),
         sponsorsV2Api.listContracts(id),
         sponsorsV2Api.listBookings(id),
         sponsorsV2Api.listAllSlots(),
+        sponsorsV2Api.listOffers(id).catch(() => []),
       ]);
       setSponsor(spData);
       setContracts(contractsData || []);
       setBookings(bookingsData || []);
       setSlots(slotsData || []);
+      setOffers(offersData || []);
       if (spData.lastPerformanceExport) setLastExportTime(spData.lastPerformanceExport);
     } catch (err: any) {
       showError(err.message);
@@ -151,35 +172,37 @@ export default function SponsorDetailPageV2() {
     setIsSaving(true);
     try {
       const rawPrice = parseFloat(bookingForm.price) || 0;
+      const priceAdjustment = parseFloat(bookingForm.priceAdjustment) || 0;
+      const listenerFee = parseFloat(bookingForm.listenerFee) || 0;
       const discount = parseFloat(bookingForm.discount) || 0;
       const discountType = bookingForm.discountType;
       const listenerCount = parseInt(bookingForm.listenerCount) || null;
-      // Endpreis berechnen
-      let finalPrice = rawPrice;
+      const totalEpisodes = parseInt(bookingForm.totalEpisodes) || null;
+      // Endpreis berechnen: Grundpreis + Preisanpassung + Hörerbeteiligung - Rabatt
+      let baseForCalc = rawPrice + priceAdjustment + listenerFee;
+      if (bookingForm.priceModel === 'cpm' && listenerCount) {
+        baseForCalc = (rawPrice / 1000) * listenerCount + priceAdjustment + listenerFee;
+      }
+      let finalPrice = baseForCalc;
       if (discount > 0) {
         finalPrice = discountType === 'percent'
-          ? rawPrice * (1 - discount / 100)
-          : rawPrice - discount;
-      }
-      if (bookingForm.priceModel === 'cpm' && listenerCount) {
-        finalPrice = (rawPrice / 1000) * listenerCount;
-        if (discount > 0) {
-          finalPrice = discountType === 'percent'
-            ? finalPrice * (1 - discount / 100)
-            : finalPrice - discount;
-        }
+          ? baseForCalc * (1 - discount / 100)
+          : baseForCalc - discount;
       }
       const payload = {
         slotId: bookingForm.slotId,
         bookingDate: bookingForm.bookingDate,
         bookingEndDate: bookingForm.bookingEndDate || null,
         price: rawPrice,
+        priceAdjustment,
+        listenerFee,
         finalPrice: Math.max(0, finalPrice),
         notes: bookingForm.notes || null,
         invoiceStatus: bookingForm.invoiceStatus,
         status: bookingForm.status,
         contractId: bookingForm.contractId || null,
         placementCount: parseInt(bookingForm.placementCount) || 1,
+        totalEpisodes,
         episodeRefs: parseEpisodeRefs(bookingForm.episodeRefs).length > 0 ? parseEpisodeRefs(bookingForm.episodeRefs) : null,
         discount,
         discountType,
@@ -207,6 +230,67 @@ export default function SponsorDetailPageV2() {
       showSuccess('Buchung gelöscht');
       load();
     } catch (err: any) { showError(err.message); }
+  };
+
+  // ── Angebots-Handler ─────────────────────────────────────────────────────
+  const handleSaveOffer = async () => {
+    if (!id) return;
+    setIsSaving(true);
+    try {
+      const positions = offerForm.positions;
+      const subtotal = positions.reduce((s: number, p: any) => s + (parseFloat(p.unitPrice) || 0) * (parseInt(p.quantity) || 1), 0);
+      const discount = parseFloat(offerForm.discount) || 0;
+      const discountAmt = offerForm.discountType === 'percent' ? subtotal * discount / 100 : discount;
+      const total = Math.max(0, subtotal - discountAmt);
+      const payload = {
+        title: offerForm.title,
+        offerNumber: offerForm.offerNumber || undefined,
+        validUntil: offerForm.validUntil || undefined,
+        introText: offerForm.introText || undefined,
+        outroText: offerForm.outroText || undefined,
+        positions,
+        subtotal,
+        discount,
+        discountType: offerForm.discountType,
+        total,
+        notes: offerForm.notes || undefined,
+      };
+      if (editingOffer) {
+        await sponsorsV2Api.updateOffer(editingOffer.id, payload);
+        showSuccess('Angebot aktualisiert');
+      } else {
+        await sponsorsV2Api.createOffer(id, payload);
+        showSuccess('Angebot erstellt');
+      }
+      setShowOfferModal(false);
+      setEditingOffer(null);
+      setOfferForm(emptyOfferForm);
+      load();
+    } catch (err: any) { showError(err.message); }
+    finally { setIsSaving(false); }
+  };
+
+  const handleDeleteOffer = async (offerId: string) => {
+    if (!confirm('Angebot wirklich löschen?')) return;
+    try {
+      await sponsorsV2Api.deleteOffer(offerId);
+      showSuccess('Angebot gelöscht');
+      load();
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const handleAcceptOffer = async () => {
+    if (!acceptingOffer || !id) return;
+    setIsSaving(true);
+    try {
+      await sponsorsV2Api.acceptOffer(acceptingOffer.id, acceptOptions);
+      showSuccess('Angebot angenommen – Buchungen wurden erstellt');
+      setShowAcceptModal(false);
+      setAcceptingOffer(null);
+      setAcceptOptions({ updateContact: false, updateNotes: false });
+      load();
+    } catch (err: any) { showError(err.message); }
+    finally { setIsSaving(false); }
   };
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -425,7 +509,7 @@ export default function SponsorDetailPageV2() {
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-gray-800 bg-gray-900/50 px-6">
-        {(['stammdaten', 'contracts', 'slots', 'bookings', 'billing'] as const).map((tab) => (
+        {(['stammdaten', 'contracts', 'slots', 'bookings', 'billing', 'offers'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -440,6 +524,7 @@ export default function SponsorDetailPageV2() {
             {tab === 'slots' && 'Werbe-Slots'}
             {tab === 'bookings' && `Buchungen${bookings.length > 0 ? ` (${bookings.length})` : ''}`}
             {tab === 'billing' && 'Abrechnung'}
+            {tab === 'offers' && `Angebote${offers.length > 0 ? ` (${offers.length})` : ''}`}
           </button>
         ))}
       </div>
@@ -677,6 +762,9 @@ export default function SponsorDetailPageV2() {
                                 discount: String(booking.discount || 0),
                                 discountType: booking.discountType || 'absolute',
                                 listenerCount: String(booking.listenerCount || ''),
+                                priceAdjustment: String(booking.priceAdjustment || 0),
+                                listenerFee: String(booking.listenerFee || 0),
+                                totalEpisodes: String(booking.totalEpisodes || ''),
                               });
                               setShowBookingModal(true);
                             }}
@@ -1020,7 +1108,107 @@ export default function SponsorDetailPageV2() {
                   })}
                 </div>
               )}
+                      </div>
+        </div>
+        )}
+
+        {/* ── Angebote Tab ───────────────────────────────────────────────────────────────── */}
+        {activeTab === 'offers' && (
+          <div className="space-y-4 max-w-4xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <ClipboardList size={18} className="text-purple-400" />
+                  Angebote
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">Erstelle individuelle Angebote für {sponsor?.name}. Bei Annahme werden automatisch Buchungen angelegt.</p>
+              </div>
+              <button
+                onClick={() => { setEditingOffer(null); setOfferForm(emptyOfferForm); setShowOfferModal(true); }}
+                className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
+              >
+                <Plus size={14} /> Neues Angebot
+              </button>
             </div>
+
+            {offers.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 bg-gray-900/30 rounded-xl border border-gray-800">
+                <ClipboardList size={32} className="mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Noch keine Angebote erstellt</p>
+                <p className="text-xs mt-1">Erstelle ein individuelles Angebot für diesen Sponsor</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {offers.map((offer: any) => {
+                  const statusColor = offer.status === 'angenommen' ? 'text-green-400 bg-green-900/20 border-green-700/40'
+                    : offer.status === 'abgelehnt' ? 'text-red-400 bg-red-900/20 border-red-700/40'
+                    : offer.status === 'gesendet' ? 'text-blue-400 bg-blue-900/20 border-blue-700/40'
+                    : 'text-yellow-400 bg-yellow-900/20 border-yellow-700/40';
+                  const isExpired = offer.validUntil && new Date(offer.validUntil) < new Date() && offer.status === 'entwurf';
+                  return (
+                    <div key={offer.id} className="p-4 bg-gray-900/50 border border-gray-800 rounded-xl">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="font-medium text-white">{offer.title}</span>
+                            {offer.offerNumber && <span className="text-xs text-gray-500">#{offer.offerNumber}</span>}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusColor}`}>{offer.status || 'entwurf'}</span>
+                            {isExpired && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-900/20 text-red-400 border border-red-700/40">Abgelaufen</span>}
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-gray-400">
+                            {offer.validUntil && <span className="flex items-center gap-1"><Clock size={10} /> Gültig bis {new Date(offer.validUntil).toLocaleDateString('de-DE')}</span>}
+                            <span className="flex items-center gap-1"><Hash size={10} /> {(offer.positions ? JSON.parse(typeof offer.positions === 'string' ? offer.positions : JSON.stringify(offer.positions)) : []).length} Positionen</span>
+                            <span className="font-medium text-white">{(offer.total ?? 0).toFixed(2)} €</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {offer.status !== 'angenommen' && (
+                            <button
+                              onClick={() => { setAcceptingOffer(offer); setAcceptOptions({ updateContact: false, updateNotes: false }); setShowAcceptModal(true); }}
+                              className="flex items-center gap-1 px-2 py-1 text-xs bg-green-900/30 hover:bg-green-900/50 text-green-400 border border-green-700/40 rounded-lg transition-colors"
+                              title="Angebot annehmen"
+                            >
+                              <CheckCircle size={12} /> Annehmen
+                            </button>
+                          )}
+                          <a
+                            href={sponsorsV2Api.getOfferPdfUrl(offer.id)}
+                            target="_blank" rel="noopener noreferrer"
+                            className="p-1.5 text-gray-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors"
+                            title="Angebot als PDF"
+                          ><FileText size={13} /></a>
+                          <button
+                            onClick={() => {
+                              const positions = typeof offer.positions === 'string' ? JSON.parse(offer.positions) : (offer.positions || []);
+                              setEditingOffer(offer);
+                              setOfferForm({
+                                title: offer.title || '',
+                                offerNumber: offer.offerNumber || offer.offer_number || '',
+                                validUntil: offer.validUntil || offer.valid_until || '',
+                                introText: offer.introText || offer.intro_text || '',
+                                outroText: offer.outroText || offer.outro_text || '',
+                                positions,
+                                discount: String(offer.discount ?? 0),
+                                discountType: offer.discountType || offer.discount_type || 'absolute',
+                                notes: offer.notes || '',
+                              });
+                              setShowOfferModal(true);
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-purple-300 hover:bg-purple-900/20 rounded transition-colors"
+                            title="Bearbeiten"
+                          ><Edit2 size={13} /></button>
+                          <button
+                            onClick={() => handleDeleteOffer(offer.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors"
+                            title="Löschen"
+                          ><Trash2 size={13} /></button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1310,6 +1498,54 @@ export default function SponsorDetailPageV2() {
             </div>
           )}
 
+          {/* Preisanpassung */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Preisanpassung
+              <span className="text-gray-500 font-normal text-xs ml-1">(positiver Wert = Aufschlag, negativer Wert = Abzug)</span>
+            </label>
+            <input type="number" step="0.01" value={bookingForm.priceAdjustment}
+              onChange={e => setBookingForm({ ...bookingForm, priceAdjustment: e.target.value })}
+              placeholder="0.00"
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+            <p className="text-xs text-gray-500 mt-1">Z.B. +50 € Sonderaufschlag oder -20 € Kulanzabzug</p>
+          </div>
+
+          {/* Hörerbeteiligung */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Hörerbeteiligung (Fee pro 1.000 Hörer)
+              <span className="text-gray-500 font-normal text-xs ml-1">(zusätzliche variable Vergütung)</span>
+            </label>
+            <input type="number" step="0.01" min="0" value={bookingForm.listenerFee}
+              onChange={e => setBookingForm({ ...bookingForm, listenerFee: e.target.value })}
+              placeholder="0.00"
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+            {parseFloat(bookingForm.listenerFee) > 0 && bookingForm.listenerCount && (
+              <p className="text-xs text-cyan-400 mt-1">
+                Hörerbeteiligung: {(parseFloat(bookingForm.listenerFee) / 1000 * parseInt(bookingForm.listenerCount)).toFixed(2)} EUR
+                ({bookingForm.listenerCount} Hörer × {bookingForm.listenerFee} EUR/1k)
+              </p>
+            )}
+          </div>
+
+          {/* Gesamtanzahl Folgen im Vertrag */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Gesamtanzahl Folgen im Vertrag
+              <span className="text-gray-500 font-normal text-xs ml-1">(optional – wie viele Folgen sind im Vertrag vereinbart)</span>
+            </label>
+            <input type="number" min="1" value={bookingForm.totalEpisodes}
+              onChange={e => setBookingForm({ ...bookingForm, totalEpisodes: e.target.value })}
+              placeholder="z.B. 10"
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+            {bookingForm.totalEpisodes && parseEpisodeRefs(bookingForm.episodeRefs).length > 0 && (
+              <p className="text-xs text-gray-400 mt-1">
+                {parseEpisodeRefs(bookingForm.episodeRefs).length} von {bookingForm.totalEpisodes} Folgen eingetragen
+              </p>
+            )}
+          </div>
+
           {/* Rabatt */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Rabatt</label>
@@ -1436,6 +1672,201 @@ export default function SponsorDetailPageV2() {
             >
               {isExportingDossier ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
               Dossier als PDF exportieren
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ─── Angebots-Modal ─── */}
+      <Modal isOpen={showOfferModal} onClose={() => setShowOfferModal(false)}
+        title={editingOffer ? 'Angebot bearbeiten' : 'Neues Angebot erstellen'}>
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+          <p className="text-xs text-gray-400">Erstelle ein individuelles Angebot für <strong className="text-white">{sponsor?.name}</strong>. Positionen werden bei Annahme als Buchungen übernommen.</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Angebots-Titel *</label>
+              <input type="text" value={offerForm.title}
+                onChange={e => setOfferForm({ ...offerForm, title: e.target.value })}
+                placeholder="z.B. Sponsoring-Paket Q3 2026"
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Angebotsnummer</label>
+              <input type="text" value={offerForm.offerNumber}
+                onChange={e => setOfferForm({ ...offerForm, offerNumber: e.target.value })}
+                placeholder="z.B. ANG-2026-001"
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Gültig bis</label>
+            <input type="date" value={offerForm.validUntil}
+              onChange={e => setOfferForm({ ...offerForm, validUntil: e.target.value })}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Einleitungstext (optional)</label>
+            <textarea value={offerForm.introText}
+              onChange={e => setOfferForm({ ...offerForm, introText: e.target.value })}
+              rows={2} placeholder="Sehr geehrte Damen und Herren, wir unterbreiten Ihnen folgendes Angebot..."
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+          </div>
+
+          {/* Positionen */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Positionen</label>
+            {offerForm.positions.length > 0 && (
+              <div className="space-y-1 mb-3">
+                {offerForm.positions.map((pos: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-2 p-2 bg-gray-800/60 rounded-lg border border-gray-700">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-white">{pos.description}</span>
+                      <span className="text-xs text-gray-400 ml-2">{pos.quantity}x à {parseFloat(pos.unitPrice).toFixed(2)} € ({pos.unit})</span>
+                    </div>
+                    <span className="text-sm font-medium text-white shrink-0">{((parseFloat(pos.unitPrice) || 0) * (parseInt(pos.quantity) || 1)).toFixed(2)} €</span>
+                    <button onClick={() => setOfferForm(prev => ({ ...prev, positions: prev.positions.filter((_: any, i: number) => i !== idx) }))}
+                      className="p-1 text-gray-500 hover:text-red-400 transition-colors"><X size={12} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input type="text" value={newPosition.description}
+                onChange={e => setNewPosition({ ...newPosition, description: e.target.value })}
+                placeholder="Beschreibung (z.B. Pre-Roll Spot, 5 Folgen)"
+                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
+              <input type="number" value={newPosition.quantity}
+                onChange={e => setNewPosition({ ...newPosition, quantity: e.target.value })}
+                placeholder="Anz." min="1"
+                className="w-16 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
+              <input type="number" value={newPosition.unitPrice}
+                onChange={e => setNewPosition({ ...newPosition, unitPrice: e.target.value })}
+                placeholder="Preis €"
+                className="w-24 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
+              <select value={newPosition.unit}
+                onChange={e => setNewPosition({ ...newPosition, unit: e.target.value })}
+                className="w-28 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500">
+                <option>Pauschal</option>
+                <option>Folge</option>
+                <option>Monat</option>
+                <option>Woche</option>
+                <option>Spot</option>
+              </select>
+              <button
+                onClick={() => {
+                  if (!newPosition.description || !newPosition.unitPrice) return;
+                  setOfferForm(prev => ({ ...prev, positions: [...prev.positions, { ...newPosition }] }));
+                  setNewPosition({ description: '', quantity: '1', unitPrice: '', unit: 'Pauschal' });
+                }}
+                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
+              ><Plus size={14} /></button>
+            </div>
+          </div>
+
+          {/* Rabatt */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Rabatt (gesamt)</label>
+            <div className="flex gap-2">
+              <input type="number" value={offerForm.discount} min="0"
+                onChange={e => setOfferForm({ ...offerForm, discount: e.target.value })}
+                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+              <select value={offerForm.discountType}
+                onChange={e => setOfferForm({ ...offerForm, discountType: e.target.value as 'absolute' | 'percent' })}
+                className="w-24 px-2 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500">
+                <option value="absolute">EUR</option>
+                <option value="percent">%</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Gesamtberechnung */}
+          {offerForm.positions.length > 0 && (() => {
+            const sub = offerForm.positions.reduce((s: number, p: any) => s + (parseFloat(p.unitPrice) || 0) * (parseInt(p.quantity) || 1), 0);
+            const disc = parseFloat(offerForm.discount) || 0;
+            const discAmt = offerForm.discountType === 'percent' ? sub * disc / 100 : disc;
+            const total = Math.max(0, sub - discAmt);
+            return (
+              <div className="p-3 bg-gray-800/60 rounded-lg border border-gray-700 text-sm space-y-1">
+                <div className="flex justify-between text-gray-400"><span>Zwischensumme</span><span>{sub.toFixed(2)} €</span></div>
+                {discAmt > 0 && <div className="flex justify-between text-red-400"><span>Rabatt</span><span>-{discAmt.toFixed(2)} €</span></div>}
+                <div className="flex justify-between font-bold text-white border-t border-gray-700 pt-1"><span>Gesamt</span><span>{total.toFixed(2)} €</span></div>
+              </div>
+            );
+          })()}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Abschlusstext (optional)</label>
+            <textarea value={offerForm.outroText}
+              onChange={e => setOfferForm({ ...offerForm, outroText: e.target.value })}
+              rows={2} placeholder="Wir freuen uns auf eine erfolgreiche Zusammenarbeit..."
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Interne Notizen</label>
+            <textarea value={offerForm.notes}
+              onChange={e => setOfferForm({ ...offerForm, notes: e.target.value })}
+              rows={2} placeholder="Interne Notizen (erscheinen nicht im PDF)..."
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={handleSaveOffer} disabled={isSaving || !offerForm.title}
+              className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50">
+              {isSaving ? 'Speichert...' : editingOffer ? 'Aktualisieren' : 'Angebot erstellen'}
+            </button>
+            <button onClick={() => setShowOfferModal(false)}
+              className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors">
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ─── Annahme-Dialog ─── */}
+      <Modal isOpen={showAcceptModal} onClose={() => setShowAcceptModal(false)} title="Angebot annehmen">
+        <div className="space-y-4">
+          <div className="p-3 bg-green-900/20 border border-green-700/30 rounded-lg">
+            <p className="text-sm text-green-300 font-medium">✅ Angebot wird angenommen</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Alle Positionen aus <strong className="text-white">{acceptingOffer?.title}</strong> werden als Buchungen in diesem Sponsor angelegt.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Zusätzlich übernehmen (optional)</p>
+            <label className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-lg border border-gray-700 cursor-pointer hover:border-gray-600 transition-colors">
+              <input type="checkbox" checked={acceptOptions.updateContact}
+                onChange={e => setAcceptOptions(prev => ({ ...prev, updateContact: e.target.checked }))}
+                className="w-4 h-4 rounded accent-purple-500" />
+              <div>
+                <div className="text-sm font-medium text-white">Kontaktdaten aus Angebot übernehmen</div>
+                <div className="text-xs text-gray-500">Ansprechpartner im Sponsor-Stammdaten aktualisieren</div>
+              </div>
+            </label>
+            <label className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-lg border border-gray-700 cursor-pointer hover:border-gray-600 transition-colors">
+              <input type="checkbox" checked={acceptOptions.updateNotes}
+                onChange={e => setAcceptOptions(prev => ({ ...prev, updateNotes: e.target.checked }))}
+                className="w-4 h-4 rounded accent-purple-500" />
+              <div>
+                <div className="text-sm font-medium text-white">Notizen aus Angebot übernehmen</div>
+                <div className="text-xs text-gray-500">Angebots-Notizen in Sponsor-Notizen übertragen</div>
+              </div>
+            </label>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={handleAcceptOffer} disabled={isSaving}
+              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+              {isSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+              Angebot annehmen & Buchungen erstellen
+            </button>
+            <button onClick={() => setShowAcceptModal(false)}
+              className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors">
+              Abbrechen
             </button>
           </div>
         </div>

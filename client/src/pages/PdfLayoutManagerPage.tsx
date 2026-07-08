@@ -16,6 +16,9 @@ const EXPORT_TYPES = [
   { value: 'invoice', label: 'Sponsoring-Abrechnung' },
   { value: 'confirmation', label: 'Buchungsbestätigung (Sponsor)' },
   { value: 'booking_calendar', label: 'Buchungskalender-Übersicht' },
+  { value: 'performance_report', label: 'Leistungsübersicht (Sponsor)' },
+  { value: 'sponsor_dossier', label: 'Sponsor-Dossier' },
+  { value: 'sponsor_offer', label: 'Sponsor-Angebot' },
 ];
 
 const HEADER_STYLES = [

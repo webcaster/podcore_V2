@@ -470,6 +470,7 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
       sponsorName: booking.sponsor_name,
       contractId: booking.contract_id,
       placementCount: booking.placement_count ?? 1,
+      totalEpisodes: booking.total_episodes ?? null,
       episodeRefs: booking.episode_refs ? JSON.parse(booking.episode_refs) : [],
       discount: booking.discount ?? 0,
       discountType: booking.discount_type ?? 'absolute',
@@ -1118,6 +1119,343 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
   );
 
   doc.end();
+});
+
+// ============================================================
+// SPONSOR OFFERS (v2.12.8)
+// ============================================================
+
+// GET /:sponsorId/offers — alle Angebote eines Sponsors
+router.get('/:sponsorId/offers', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const offers = db.all(
+    `SELECT * FROM sponsor_offers WHERE sponsor_id = ? ORDER BY created_at DESC`,
+    [req.params.sponsorId]
+  ) as any[];
+  return res.json({
+    success: true,
+    data: offers.map(o => ({
+      id: o.id,
+      sponsorId: o.sponsor_id,
+      title: o.title,
+      offerNumber: o.offer_number,
+      validUntil: o.valid_until,
+      status: o.status,
+      introText: o.intro_text,
+      outroText: o.outro_text,
+      positions: o.positions ? JSON.parse(o.positions) : [],
+      totalPrice: o.total_price,
+      discount: o.discount,
+      discountType: o.discount_type,
+      notes: o.notes,
+      createdBy: o.created_by,
+      createdAt: o.created_at,
+      updatedAt: o.updated_at,
+    }))
+  });
+});
+
+// POST /:sponsorId/offers — neues Angebot erstellen
+router.post('/:sponsorId/offers', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const {
+    title, offerNumber, validUntil, introText, outroText,
+    positions = [], discount = 0, discountType = 'absolute', notes
+  } = req.body;
+  if (!title) return res.status(400).json({ success: false, error: 'Titel erforderlich' });
+  const posArr = Array.isArray(positions) ? positions : [];
+  const subtotal = posArr.reduce((s: number, p: any) => s + ((p.unitPrice || 0) * (p.quantity || 1)), 0);
+  const discountAmt = discountType === 'percent' ? subtotal * (discount / 100) : (discount || 0);
+  const totalPrice = Math.max(0, subtotal - discountAmt);
+  const id = uuidv4();
+  // Angebotsnummer generieren wenn nicht angegeben
+  const autoNumber = offerNumber || `ANG-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
+  db.run(
+    `INSERT INTO sponsor_offers (id, sponsor_id, title, offer_number, valid_until, status, intro_text, outro_text, positions, total_price, discount, discount_type, notes, created_by)
+     VALUES (?, ?, ?, ?, ?, 'entwurf', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, req.params.sponsorId, title, autoNumber, validUntil || null,
+     introText || null, outroText || null, JSON.stringify(posArr),
+     totalPrice, discount || 0, discountType || 'absolute', notes || null,
+     (req as any).user?.id || null]
+  );
+  const offer = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [id]) as any;
+  return res.status(201).json({
+    success: true,
+    data: {
+      id: offer.id, sponsorId: offer.sponsor_id, title: offer.title,
+      offerNumber: offer.offer_number, validUntil: offer.valid_until,
+      status: offer.status, introText: offer.intro_text, outroText: offer.outro_text,
+      positions: offer.positions ? JSON.parse(offer.positions) : [],
+      totalPrice: offer.total_price, discount: offer.discount,
+      discountType: offer.discount_type, notes: offer.notes,
+      createdAt: offer.created_at, updatedAt: offer.updated_at,
+    }
+  });
+});
+
+// PUT /offers/:offerId — Angebot bearbeiten
+router.put('/offers/:offerId', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const {
+    title, offerNumber, validUntil, status, introText, outroText,
+    positions, discount, discountType, notes
+  } = req.body;
+  const existing = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [req.params.offerId]) as any;
+  if (!existing) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
+  const posArr = positions !== undefined ? (Array.isArray(positions) ? positions : []) : JSON.parse(existing.positions || '[]');
+  const eff_discount = discount !== undefined ? discount : existing.discount;
+  const eff_discountType = discountType !== undefined ? discountType : existing.discount_type;
+  const subtotal = posArr.reduce((s: number, p: any) => s + ((p.unitPrice || 0) * (p.quantity || 1)), 0);
+  const discountAmt = eff_discountType === 'percent' ? subtotal * (eff_discount / 100) : (eff_discount || 0);
+  const totalPrice = Math.max(0, subtotal - discountAmt);
+  db.run(
+    `UPDATE sponsor_offers SET
+      title = COALESCE(?, title),
+      offer_number = COALESCE(?, offer_number),
+      valid_until = ?,
+      status = COALESCE(?, status),
+      intro_text = ?,
+      outro_text = ?,
+      positions = ?,
+      total_price = ?,
+      discount = ?,
+      discount_type = ?,
+      notes = ?,
+      updated_at = datetime('now')
+     WHERE id = ?`,
+    [title || null, offerNumber || null,
+     validUntil !== undefined ? (validUntil || null) : existing.valid_until,
+     status || null,
+     introText !== undefined ? (introText || null) : existing.intro_text,
+     outroText !== undefined ? (outroText || null) : existing.outro_text,
+     JSON.stringify(posArr), totalPrice, eff_discount, eff_discountType,
+     notes !== undefined ? (notes || null) : existing.notes,
+     req.params.offerId]
+  );
+  const updated = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [req.params.offerId]) as any;
+  return res.json({
+    success: true,
+    data: {
+      id: updated.id, sponsorId: updated.sponsor_id, title: updated.title,
+      offerNumber: updated.offer_number, validUntil: updated.valid_until,
+      status: updated.status, introText: updated.intro_text, outroText: updated.outro_text,
+      positions: updated.positions ? JSON.parse(updated.positions) : [],
+      totalPrice: updated.total_price, discount: updated.discount,
+      discountType: updated.discount_type, notes: updated.notes,
+      createdAt: updated.created_at, updatedAt: updated.updated_at,
+    }
+  });
+});
+
+// DELETE /offers/:offerId — Angebot löschen
+router.delete('/offers/:offerId', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  db.run('DELETE FROM sponsor_offers WHERE id = ?', [req.params.offerId]);
+  return res.json({ success: true });
+});
+
+// POST /offers/:offerId/accept — Angebot annehmen → Buchungen + optional Sponsor updaten
+router.post('/offers/:offerId/accept', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const offer = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [req.params.offerId]) as any;
+  if (!offer) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
+  const {
+    createBookings = true,
+    updateContactInfo = false,
+    updateNotes = false,
+    contractId = null,
+  } = req.body;
+  const positions = offer.positions ? JSON.parse(offer.positions) : [];
+  const createdBookingIds: string[] = [];
+  // Buchungen aus Positionen anlegen
+  if (createBookings && positions.length > 0) {
+    for (const pos of positions) {
+      const bookingId = uuidv4();
+      const unitPrice = pos.unitPrice || 0;
+      const qty = pos.quantity || 1;
+      const posDiscount = offer.discount_type === 'percent'
+        ? unitPrice * qty * (offer.discount / 100)
+        : (offer.discount / Math.max(positions.length, 1));
+      const finalPrice = Math.max(0, unitPrice * qty - posDiscount);
+      db.run(
+        `INSERT INTO ad_bookings (id, slot_id, sponsor_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs, discount, discount_type, listener_count)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, 'geplant', 'offen', ?, ?, ?, ?, ?, ?, NULL)`,
+        [
+          bookingId,
+          pos.slotId || pos.categoryId || 'angebot',
+          offer.sponsor_id,
+          offer.valid_until || new Date().toISOString().slice(0, 10),
+          null,
+          unitPrice * qty,
+          finalPrice,
+          `[Angebot ${offer.offer_number}] ${pos.description || pos.title || ''}${offer.intro_text ? ' – ' + offer.intro_text : ''}`.trim(),
+          contractId || offer.contract_id || null,
+          qty,
+          pos.episodeRefs ? JSON.stringify(pos.episodeRefs) : null,
+          offer.discount || 0,
+          offer.discount_type || 'absolute',
+        ]
+      );
+      createdBookingIds.push(bookingId);
+    }
+  }
+  // Optional: Kontaktdaten aus Angebot in Sponsor übernehmen
+  if (updateContactInfo && offer.contact_name) {
+    db.run(`UPDATE sponsors SET contact_name = ?, updated_at = datetime('now') WHERE id = ?`,
+      [offer.contact_name, offer.sponsor_id]);
+  }
+  // Optional: Notizen in Sponsor übernehmen
+  if (updateNotes && offer.notes) {
+    const sponsor = db.get('SELECT notes FROM sponsors WHERE id = ?', [offer.sponsor_id]) as any;
+    const combinedNotes = [sponsor?.notes, `[Angebot ${offer.offer_number}] ${offer.notes}`].filter(Boolean).join('\n\n');
+    db.run(`UPDATE sponsors SET notes = ?, updated_at = datetime('now') WHERE id = ?`,
+      [combinedNotes, offer.sponsor_id]);
+  }
+  // Angebot-Status auf 'angenommen' setzen
+  db.run(`UPDATE sponsor_offers SET status = 'angenommen', updated_at = datetime('now') WHERE id = ?`,
+    [req.params.offerId]);
+  return res.json({
+    success: true,
+    data: { createdBookings: createdBookingIds.length, bookingIds: createdBookingIds }
+  });
+});
+
+// GET /offers/:offerId/pdf — Angebots-PDF exportieren
+router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const offer = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [req.params.offerId]) as any;
+  if (!offer) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
+  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [offer.sponsor_id]) as any;
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
+  const positions = offer.positions ? JSON.parse(offer.positions) : [];
+  try {
+    const { getDefaultLayoutForType } = require('../pdfLayouts');
+    const layout = getDefaultLayoutForType('sponsor_offer');
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Angebot-${offer.offer_number || offer.id}.pdf"`);
+    doc.pipe(res);
+    const primaryColor = layout?.colors?.primary || '#7c3aed';
+    const m = 50;
+    const contentW = doc.page.width - m * 2;
+    const now = new Date().toLocaleDateString('de-DE');
+    // Settings
+    const settings = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
+    let podcastName = 'PodCore';
+    try { const s = JSON.parse(settings?.value || '{}'); podcastName = s?.branding?.podcastName || podcastName; } catch (_) {}
+    // Header
+    doc.rect(0, 0, doc.page.width, 80).fill(primaryColor);
+    doc.fontSize(22).font('Helvetica-Bold').fillColor('#fff')
+      .text('ANGEBOT', m, 20);
+    doc.fontSize(10).font('Helvetica').fillColor('rgba(255,255,255,0.85)')
+      .text(`${podcastName} · ${now}`, m, 48);
+    doc.fontSize(10).font('Helvetica').fillColor('rgba(255,255,255,0.85)')
+      .text(`Angebotsnummer: ${offer.offer_number || '–'}`, m, 60);
+    doc.moveDown(4);
+    // Sponsor-Info
+    doc.fontSize(14).font('Helvetica-Bold').fillColor('#1a1a2e')
+      .text(`Angebot für: ${sponsor.name}`, m, 100);
+    if (sponsor.contact_name) {
+      doc.fontSize(10).font('Helvetica').fillColor('#555')
+        .text(`Ansprechpartner: ${sponsor.contact_name}`, m, 118);
+    }
+    if (offer.valid_until) {
+      doc.fontSize(10).font('Helvetica').fillColor('#555')
+        .text(`Gültig bis: ${new Date(offer.valid_until).toLocaleDateString('de-DE')}`,
+          m, sponsor.contact_name ? 130 : 118);
+    }
+    let y = offer.valid_until || sponsor.contact_name ? 155 : 130;
+    // Intro-Text
+    if (offer.intro_text) {
+      doc.fontSize(11).font('Helvetica').fillColor('#333')
+        .text(offer.intro_text, m, y, { width: contentW });
+      y += doc.heightOfString(offer.intro_text, { width: contentW }) + 20;
+    }
+    // Angebots-Titel
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(primaryColor)
+      .text(offer.title, m, y);
+    y += 30;
+    // Positionen-Tabelle
+    if (positions.length > 0) {
+      // Tabellen-Header
+      doc.rect(m, y, contentW, 22).fill(primaryColor);
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#fff');
+      doc.text('Pos.', m + 5, y + 7, { width: 30 });
+      doc.text('Beschreibung', m + 40, y + 7, { width: contentW - 180 });
+      doc.text('Menge', m + contentW - 135, y + 7, { width: 45, align: 'right' });
+      doc.text('Einzelpreis', m + contentW - 85, y + 7, { width: 55, align: 'right' });
+      doc.text('Gesamt', m + contentW - 25, y + 7, { width: 25, align: 'right' });
+      y += 22;
+      let subtotal = 0;
+      positions.forEach((pos: any, idx: number) => {
+        const qty = pos.quantity || 1;
+        const unitPrice = pos.unitPrice || 0;
+        const lineTotal = qty * unitPrice;
+        subtotal += lineTotal;
+        const rowH = 20;
+        if (idx % 2 === 0) doc.rect(m, y, contentW, rowH).fill('#f8f8ff');
+        else doc.rect(m, y, contentW, rowH).fill('#fff');
+        doc.fontSize(9).font('Helvetica').fillColor('#333');
+        doc.text(`${idx + 1}.`, m + 5, y + 6, { width: 30 });
+        doc.text(pos.description || pos.title || '–', m + 40, y + 6, { width: contentW - 180 });
+        doc.text(String(qty), m + contentW - 135, y + 6, { width: 45, align: 'right' });
+        doc.text(`${unitPrice.toFixed(2)} €`, m + contentW - 85, y + 6, { width: 55, align: 'right' });
+        doc.text(`${lineTotal.toFixed(2)} €`, m + contentW - 25, y + 6, { width: 25, align: 'right' });
+        y += rowH;
+      });
+      // Trennlinie
+      doc.rect(m, y, contentW, 1).fill('#ddd');
+      y += 10;
+      // Zwischensumme
+      doc.fontSize(10).font('Helvetica').fillColor('#333')
+        .text('Zwischensumme:', m + contentW - 160, y, { width: 120, align: 'right' })
+        .text(`${subtotal.toFixed(2)} €`, m + contentW - 35, y, { width: 35, align: 'right' });
+      y += 16;
+      // Rabatt
+      if (offer.discount && offer.discount > 0) {
+        const discAmt = offer.discount_type === 'percent'
+          ? subtotal * (offer.discount / 100)
+          : offer.discount;
+        const discLabel = offer.discount_type === 'percent'
+          ? `Rabatt (${offer.discount}%):`
+          : 'Rabatt:';
+        doc.fontSize(10).font('Helvetica').fillColor('#e53e3e')
+          .text(discLabel, m + contentW - 160, y, { width: 120, align: 'right' })
+          .text(`-${discAmt.toFixed(2)} €`, m + contentW - 35, y, { width: 35, align: 'right' });
+        y += 16;
+      }
+      // Gesamtpreis
+      doc.rect(m + contentW - 200, y - 2, 200, 22).fill(primaryColor);
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('#fff')
+        .text('Gesamtpreis (netto):', m + contentW - 195, y + 4, { width: 130, align: 'right' })
+        .text(`${offer.total_price.toFixed(2)} €`, m + contentW - 60, y + 4, { width: 55, align: 'right' });
+      y += 30;
+    }
+    // Outro-Text
+    if (offer.outro_text) {
+      y += 10;
+      doc.fontSize(11).font('Helvetica').fillColor('#333')
+        .text(offer.outro_text, m, y, { width: contentW });
+      y += doc.heightOfString(offer.outro_text, { width: contentW }) + 10;
+    }
+    // Notizen
+    if (offer.notes) {
+      y += 10;
+      doc.fontSize(9).font('Helvetica').fillColor('#888')
+        .text(`Hinweis: ${offer.notes}`, m, y, { width: contentW });
+    }
+    // Footer
+    const footerY = doc.page.height - 35;
+    doc.rect(m, footerY - 8, contentW, 0.5).fill('#ddd');
+    doc.fontSize(8).font('Helvetica').fillColor('#aaa')
+      .text(`${podcastName} · Angebot ${offer.offer_number || ''} · ${sponsor.name} · Erstellt am ${now}`,
+        m, footerY, { align: 'center', width: contentW });
+    doc.end();
+  } catch (err: any) {
+    console.error('[Angebots-PDF]', err);
+    return res.status(500).json({ success: false, error: 'PDF-Fehler: ' + err.message });
+  }
 });
 
 export default router;

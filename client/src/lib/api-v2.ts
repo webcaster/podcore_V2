@@ -45,6 +45,20 @@ export const sponsorsV2Api = {
     const qs = filter && filter !== 'alle' ? `?filter=${encodeURIComponent(filter)}` : '';
     return `/api/sponsors/v2/${sponsorId}/bookings/confirmation-pdf-all${qs}`;
   },
+
+  // Sponsor Offers (Angebote)
+  listOffers: (sponsorId: string) =>
+    api.get<any[]>(`/sponsors/v2/${sponsorId}/offers`),
+  createOffer: (sponsorId: string, data: any) =>
+    api.post<any>(`/sponsors/v2/${sponsorId}/offers`, data),
+  updateOffer: (offerId: string, data: any) =>
+    api.put<any>(`/sponsors/v2/offers/${offerId}`, data),
+  deleteOffer: (offerId: string) =>
+    api.delete(`/sponsors/v2/offers/${offerId}`),
+  acceptOffer: (offerId: string, data: any) =>
+    api.post<any>(`/sponsors/v2/offers/${offerId}/accept`, data),
+  getOfferPdfUrl: (offerId: string) =>
+    `/api/sponsors/v2/offers/${offerId}/pdf`,
 };
 
 // Episoden-Vorlagen API

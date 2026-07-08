@@ -781,6 +781,31 @@ function initializeSchema(db: any): void {
   // v2.12.3: ad_bookings – Rabatt und Rabatttyp
   try { db.exec('ALTER TABLE ad_bookings ADD COLUMN discount REAL DEFAULT 0'); } catch (_) {}
   try { db.exec("ALTER TABLE ad_bookings ADD COLUMN discount_type TEXT DEFAULT 'absolute'"); } catch (_) {}
+  // v2.12.7: ad_bookings – Preisanpassung, Hörerbeteiligung, Gesamtfolgen sicherstellen
+  try { db.exec('ALTER TABLE ad_bookings ADD COLUMN price_adjustment REAL DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_bookings ADD COLUMN listener_fee REAL DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_bookings ADD COLUMN total_episodes INTEGER DEFAULT NULL'); } catch (_) {}
+  // v2.12.8: sponsor_offers – Angebots-Funktion
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS sponsor_offers (
+      id TEXT PRIMARY KEY,
+      sponsor_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      offer_number TEXT,
+      valid_until TEXT,
+      status TEXT NOT NULL DEFAULT 'entwurf',
+      intro_text TEXT,
+      outro_text TEXT,
+      positions TEXT NOT NULL DEFAULT '[]',
+      total_price REAL DEFAULT 0,
+      discount REAL DEFAULT 0,
+      discount_type TEXT NOT NULL DEFAULT 'absolute',
+      notes TEXT,
+      created_by TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+  } catch (_) {}
   // v2.12.3: episode_templates – Episoden-Vorlagen
   try { db.exec(`CREATE TABLE IF NOT EXISTS episode_templates (
     id TEXT PRIMARY KEY,

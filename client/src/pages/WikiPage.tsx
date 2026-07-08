@@ -960,6 +960,57 @@ const wikiData: WikiCategory[] = [
         ],
       },
       {
+        id: 'v2-12-8',
+        title: 'v2.12.8 — Angebots-Funktion, Buchungsformular-Erweiterung, PDF-Layout-Manager-Update',
+        icon: <Package size={18} />,
+        tags: ['update', 'angebot', 'buchung', 'pdf', 'abrechnung', 'v2.12.8'],
+        summary: 'Neue Angebots-Funktion im Sponsor mit PDF-Export und Annahme-Workflow, Buchungsformular um Preisanpassung/Hörerbeteiligung/Folgenanzahl erweitert, PDF-Layout-Manager um neue Typen ergänzt.',
+        content: [
+          {
+            heading: 'Angebots-Funktion im Sponsor',
+            list: [
+              'Neuer Tab "Angebote" in jeder Sponsor-Detailseite',
+              'Angebote erstellen mit Titel, Angebotsnummer, Gültigkeitsdatum, Einleitungs- und Abschlusstext',
+              'Positionen mit Beschreibung, Anzahl, Einzelpreis und Einheit (Pauschal, Folge, Monat, Woche, Spot)',
+              'Gesamtrabatt auf das Angebot (absolut oder prozentual)',
+              'Live-Preisberechnung mit Zwischensumme, Rabatt und Gesamtbetrag',
+              'PDF-Export des Angebots mit eigenem Layout ("Sponsor-Angebot Standard" im PDF-Layout-Manager)',
+              'Status-Verwaltung: Entwurf, Gesendet, Angenommen, Abgelehnt',
+              'Ablauf-Erkennung: Angebote mit überschrittenem Gültigkeitsdatum werden markiert',
+            ],
+          },
+          {
+            heading: 'Annahme-Workflow',
+            list: [
+              'Button "Annehmen" bei jedem Angebot',
+              'Alle Positionen werden automatisch als Buchungen im Sponsor angelegt',
+              'Optional: Kontaktdaten aus dem Angebot in Sponsor-Stammdaten übernehmen',
+              'Optional: Notizen aus dem Angebot in Sponsor-Notizen übertragen',
+              'Gesamtbudget wird bewusst NICHT automatisch übernommen',
+            ],
+          },
+          {
+            heading: 'Buchungsformular-Erweiterung',
+            list: [
+              'Neues Feld "Preisanpassung" – manueller Auf-/Abschlag auf den Grundpreis (z.B. +50 € Sonderaufschlag)',
+              'Neues Feld "Hörerbeteiligung" – zusätzliche Fee pro 1.000 Hörer (Listener Fee)',
+              'Neues Feld "Gesamtanzahl Folgen im Vertrag" – wie viele Folgen sind im Vertrag enthalten',
+              'Endpreis-Vorschau berechnet alle Felder: Grundpreis + Preisanpassung + Hörerbeteiligung – Rabatt',
+              'Alle Felder werden korrekt gespeichert und beim Bearbeiten vorbelegt',
+            ],
+          },
+          {
+            heading: 'PDF-Layout-Manager',
+            list: [
+              'Neuer Typ "Sponsor-Dossier" im Layout-Manager verwaltbar',
+              'Neuer Typ "Sponsor-Angebot" im Layout-Manager verwaltbar',
+              'Neuer Typ "Leistungsübersicht (Sponsor)" im Layout-Manager verwaltbar',
+              'Alle neuen Typen können über Admin > PDF-Layouts angepasst werden',
+            ],
+          },
+        ],
+      },
+      {
         id: 'v2-12-7',
         title: 'v2.12.7 — Episoden-Vorplanung, Sponsor-Dossier, GitHub-Update, Buchungskalender-Fix',
         icon: <Package size={18} />,
