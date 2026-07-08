@@ -376,6 +376,10 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE episodes ADD COLUMN approval_notes TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE episodes ADD COLUMN approval_requested_by TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE episodes ADD COLUMN approval_requested_at TEXT DEFAULT NULL'); } catch (_) {}
+  // v2.12.1: Fehlende Freigabe-Spalten
+  try { db.exec('ALTER TABLE episodes ADD COLUMN approval_processed_at TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN approval_processed_by TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN approval_comment TEXT DEFAULT NULL'); } catch (_) {}
   // Interview questions: add approved/released workflow fields
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN approved INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN approved_by TEXT DEFAULT NULL'); } catch (_) {}

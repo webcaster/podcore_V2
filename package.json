@@ -1,6 +1,6 @@
 {
   "name": "podcore",
-  "version": "2.12.0",
+  "version": "2.12.1",
   "description": "PodCore - Professionelles Podcast Management System",
   "private": true,
   "scripts": {
@@ -16,5 +16,8 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1"
   }
 }

@@ -35,9 +35,9 @@ const pkgPath = path.join(__dirname, '..', 'package.json');
 const APP_VERSION: string = (() => {
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    return pkg.version || '2.12.0';
+    return pkg.version || '2.12.1';
   } catch (_) {
-    return '2.12.0';
+    return '2.12.1';
   }
 })();
 // Always bind to 0.0.0.0 so the app is reachable in LAN
@@ -192,7 +192,7 @@ if (fs.existsSync(publicDir)) {
 } else {
   app.get('/', (req, res) => {
     res.json({
-      message: 'PodCore API Server v2.9.14',
+      message: 'PodCore API Server v2.12.1',
       note: 'Frontend build not found. Run: npm run build:client',
       api: '/api',
     });
@@ -232,7 +232,7 @@ app.listen(PORT, HOST, () => {
 
   console.log('');
   console.log('╔══════════════════════════════════════════════╗');
-  console.log('║           PodCore v2.9.14 Server              ║');
+  console.log('║           PodCore v2.12.1 Server              ║');
   console.log('╠══════════════════════════════════════════════╣');
   console.log(`║  Lokal:   http://localhost:${PORT}               ║`);
   if (ips.length > 0) {

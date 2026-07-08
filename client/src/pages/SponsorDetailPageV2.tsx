@@ -62,7 +62,7 @@ export default function SponsorDetailPageV2() {
         sponsorsApi.get(id),
         sponsorsV2Api.listContracts(id),
         sponsorsV2Api.listBookings(id),
-        sponsorsApi.listSlots(id),
+        sponsorsV2Api.listAllSlots(), // v2.12.1: Werbekategorien statt sponsor-spezifische Slots
       ]);
 
       setSponsor(spData);
@@ -367,19 +367,28 @@ export default function SponsorDetailPageV2() {
                 {slots.map((slot: any) => (
                   <div key={slot.id} className="p-4 bg-gray-900/50 border border-gray-800 rounded-lg">
                     <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-medium text-white">{slot.name}</h3>
-                      <span className="text-sm px-2 py-1 bg-purple-900/30 text-purple-400 rounded">
-                        {slot.category}
+                      <div className="flex items-center gap-2">
+                        {slot.color && (
+                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: slot.color }} />
+                        )}
+                        <h3 className="font-medium text-white">{slot.name}</h3>
+                        {slot.is_exclusive === 1 && (
+                          <span className="text-xs px-1.5 py-0.5 bg-yellow-900/40 text-yellow-400 border border-yellow-700/40 rounded">Exklusiv</span>
+                        )}
+                      </div>
+                      <span className="text-sm px-2 py-1 bg-purple-900/30 text-purple-400 rounded capitalize">
+                        {slot.default_position || slot.category || '—'}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-400">
-                      Dauer: {slot.duration}s | Status: {slot.status}
-                    </p>
-                    {slot.price && (
-                      <p className="text-sm text-gray-300 mt-1">
-                        Preis: {slot.price} {slot.currency}
-                      </p>
+                    {slot.description && (
+                      <p className="text-xs text-gray-400 mb-2">{slot.description}</p>
                     )}
+                    <div className="flex flex-wrap gap-3 text-xs text-gray-400">
+                      {slot.default_duration && <span>Dauer: {slot.default_duration}s</span>}
+                      {slot.base_price > 0 && <span className="text-green-400">Basis: {slot.base_price} {slot.currency || 'EUR'}</span>}
+                      {slot.price_per_episode > 0 && <span className="text-blue-400">{slot.price_per_episode} EUR/Folge</span>}
+                      {slot.price_per_1000_listens > 0 && <span className="text-orange-400">{slot.price_per_1000_listens} EUR/1000 Hörer</span>}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -605,13 +614,20 @@ export default function SponsorDetailPageV2() {
             <label className="block text-sm font-medium text-gray-300 mb-1">Werbe-Slot *</label>
             <select
               value={bookingForm.slotId}
-              onChange={(e) => setBookingForm({ ...bookingForm, slotId: e.target.value })}
+              onChange={(e) => {
+                const selectedSlot = slots.find((s: any) => s.id === e.target.value);
+                setBookingForm({
+                  ...bookingForm,
+                  slotId: e.target.value,
+                  price: selectedSlot ? String(selectedSlot.price_per_episode || selectedSlot.base_price || '') : bookingForm.price,
+                });
+              }}
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500"
             >
-              <option value="">-- Slot auswählen --</option>
+              <option value="">-- Werbekategorie auswählen --</option>
               {slots.map((slot: any) => (
                 <option key={slot.id} value={slot.id}>
-                  {slot.name}
+                  {slot.name}{slot.default_position ? ` (${slot.default_position})` : ''}{slot.price_per_episode ? ` – ${slot.price_per_episode} EUR/Folge` : ''}
                 </option>
               ))}
             </select>
