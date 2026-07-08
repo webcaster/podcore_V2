@@ -13,6 +13,7 @@ const EditorialHubPage = lazy(() => import('./pages/EditorialHubPage'));
 const MediaLibraryPage = lazy(() => import('./pages/MediaLibraryPage'));
 const SponsorsPage = lazy(() => import('./pages/SponsorsPage'));
 const SponsorDetailPage = lazy(() => import('./pages/SponsorDetailPage'));
+const SponsorDetailPageV2 = lazy(() => import('./pages/SponsorDetailPageV2'));
 const SponsorReportsPage = lazy(() => import('./pages/SponsorReportsPage'));
 const SponsorRevenuePage = lazy(() => import('./pages/SponsorRevenuePage'));
 const SponsorBookingCalendarPage = lazy(() => import('./pages/SponsorBookingCalendarPage'));
@@ -87,7 +88,8 @@ function AppRoutes() {
         <Route path="editorial/ideas/:id" element={<Suspense fallback={<LoadingSpinner />}><IdeaDetailPage /></Suspense>} />
         <Route path="media" element={<Suspense fallback={<LoadingSpinner />}><MediaLibraryPage /></Suspense>} />
         <Route path="sponsors" element={<Suspense fallback={<LoadingSpinner />}><SponsorsPage /></Suspense>} />
-        <Route path="sponsors/:id" element={<Suspense fallback={<LoadingSpinner />}><SponsorDetailPage /></Suspense>} />
+        <Route path="sponsors/:id" element={<Suspense fallback={<LoadingSpinner />}><SponsorDetailPageV2 /></Suspense>} />
+        <Route path="sponsors/:id/legacy" element={<Suspense fallback={<LoadingSpinner />}><SponsorDetailPage /></Suspense>} />
         <Route path="sponsors/reports" element={<Suspense fallback={<LoadingSpinner />}><SponsorReportsPage /></Suspense>} />
         <Route path="sponsors/revenue" element={<Suspense fallback={<LoadingSpinner />}><SponsorRevenuePage /></Suspense>} />
         <Route path="sponsors/calendar" element={<Suspense fallback={<LoadingSpinner />}><SponsorBookingCalendarPage /></Suspense>} />

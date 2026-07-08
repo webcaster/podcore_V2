@@ -361,3 +361,68 @@ export interface PaginatedResponse<T> {
   pageSize: number;
   totalPages: number;
 }
+
+// --- v2.12.0: Sponsoring-System Überarbeitung ---
+
+export type SponsorContractStatus = 'aktiv' | 'auslaufend' | 'beendet';
+export type AdBookingStatus = 'geplant' | 'bestätigt' | 'ausgestrahlt' | 'abgerechnet';
+export type InvoiceStatus = 'offen' | 'versendet' | 'bezahlt' | 'storniert';
+export type AdSlotType = 'episode_specific' | 'timeframe' | 'recurring';
+export type PriceModel = 'fixed' | 'per_episode' | 'per_1000_listeners';
+
+export interface SponsorContract {
+  id: string;
+  sponsorId: string;
+  contractStart: string;
+  contractEnd: string;
+  contactPerson?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  notes?: string;
+  status: SponsorContractStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdSlotV2 {
+  id: string;
+  sponsorId?: string;
+  slotName: string;
+  position: 'pre-roll' | 'mid-roll' | 'post-roll' | 'folgensponsor';
+  durationSeconds: number;
+  categoryId?: string;
+  priceModel: PriceModel;
+  basePrice?: number;
+  pricePerEpisode?: number;
+  pricePer1000Listeners?: number;
+  slotType: AdSlotType;
+  episodeId?: string;
+  timeframeStart?: string;
+  timeframeEnd?: string;
+  status: 'aktiv' | 'inaktiv' | 'archiviert';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdBooking {
+  id: string;
+  slotId: string;
+  sponsorId: string;
+  episodeId?: string;
+  bookingDate: string;
+  bookingEndDate?: string;
+  price: number;
+  priceAdjustment?: number;
+  listenerFee?: number;
+  finalPrice: number;
+  invoiceStatus: InvoiceStatus;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  deliveryConfirmed: boolean;
+  listenerCount?: number;
+  status: AdBookingStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}

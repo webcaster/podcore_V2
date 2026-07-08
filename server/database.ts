@@ -666,6 +666,58 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE ad_placements ADD COLUMN listener_fee REAL DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE ad_placements ADD COLUMN price_adjustment REAL DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE ad_placements ADD COLUMN manual_price REAL DEFAULT NULL'); } catch (_) {}
+
+  // ============================================================
+  // v2.12.0: Sponsoring-System Überarbeitung
+  // ============================================================
+  // Neue Tabelle: sponsor_contracts (Sponsoring-Verträge)
+  try { db.exec(`CREATE TABLE IF NOT EXISTS sponsor_contracts (
+    id TEXT PRIMARY KEY,
+    sponsor_id TEXT NOT NULL,
+    contract_start TEXT NOT NULL,
+    contract_end TEXT NOT NULL,
+    contact_person TEXT,
+    contact_email TEXT,
+    contact_phone TEXT,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'aktiv',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (sponsor_id) REFERENCES sponsors(id)
+  )`); } catch (_) {}
+
+  // Neue Tabelle: ad_bookings (Konkrete Buchungen)
+  try { db.exec(`CREATE TABLE IF NOT EXISTS ad_bookings (
+    id TEXT PRIMARY KEY,
+    slot_id TEXT NOT NULL,
+    sponsor_id TEXT NOT NULL,
+    episode_id TEXT,
+    booking_date TEXT NOT NULL,
+    booking_end_date TEXT,
+    price REAL NOT NULL DEFAULT 0,
+    price_adjustment REAL DEFAULT 0,
+    listener_fee REAL DEFAULT 0,
+    final_price REAL NOT NULL DEFAULT 0,
+    invoice_status TEXT NOT NULL DEFAULT 'offen',
+    invoice_number TEXT,
+    invoice_date TEXT,
+    delivery_confirmed INTEGER NOT NULL DEFAULT 0,
+    listener_count INTEGER,
+    status TEXT NOT NULL DEFAULT 'geplant',
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (slot_id) REFERENCES ad_slots(id),
+    FOREIGN KEY (sponsor_id) REFERENCES sponsors(id),
+    FOREIGN KEY (episode_id) REFERENCES episodes(id)
+  )`); } catch (_) {}
+
+  // Indizes für bessere Performance
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_sponsor_contracts_sponsor ON sponsor_contracts(sponsor_id)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_ad_bookings_sponsor ON ad_bookings(sponsor_id)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_ad_bookings_episode ON ad_bookings(episode_id)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_ad_bookings_slot ON ad_bookings(slot_id)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_ad_bookings_date ON ad_bookings(booking_date)'); } catch (_) {}
   
   // Roles table migration (v2.11.5)
   try {
