@@ -1014,13 +1014,37 @@ export default function EpisodeDetailPage() {
                             </div>
                           ) : (
                             <>
-                              {/* ── Ad-Block: Sponsor-Verknüpfung ── */}
+                              {/* ── Ad-Block: Vorplanungs-Hinweis mit optionaler Sponsor-Verlinkung ── */}
                               {block.type === 'ad' && (
                                 <div className="px-4 py-3 border-b border-surface-border/50 bg-accent-orange/5">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Megaphone size={13} className="text-accent-orange" />
-                                    <span className="text-xs font-semibold text-accent-orange">Werbeplatzierung</span>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <Megaphone size={13} className="text-accent-orange" />
+                                      <span className="text-xs font-semibold text-accent-orange">Werbeplatzierung</span>
+                                      <span className="text-[10px] px-1.5 py-0.5 bg-accent-orange/20 text-accent-orange/80 rounded">Vorplanung</span>
+                                    </div>
+                                    {block.linkedSponsorId && (() => {
+                                      const sp = allSponsors.find((s: any) => s.id === block.linkedSponsorId);
+                                      return sp ? (
+                                        <a
+                                          href={`/sponsors/${sp.id}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-1 text-[10px] text-accent-orange/70 hover:text-accent-orange transition-colors"
+                                          title="Sponsor-Profil öffnen"
+                                        >
+                                          <ExternalLink size={9} /> Sponsor-Profil
+                                        </a>
+                                      ) : null;
+                                    })()}
                                   </div>
+
+                                  {/* Hinweis-Banner */}
+                                  <div className="flex items-start gap-2 p-2 mb-3 bg-accent-orange/10 border border-accent-orange/20 rounded text-[10px] text-accent-orange/80">
+                                    <Info size={11} className="mt-0.5 shrink-0" />
+                                    <span>Dieser Block markiert eine geplante Werbeplatzierung im Script. Die eigentliche Buchung und Abrechnung erfolgt im Sponsoren-Bereich.</span>
+                                  </div>
+
                                   <div className="grid grid-cols-2 gap-2">
                                     <div>
                                       <label className="text-[10px] text-text-muted uppercase mb-1 block">Position</label>
@@ -1036,28 +1060,31 @@ export default function EpisodeDetailPage() {
                                       </select>
                                     </div>
                                     <div>
-                                      <label className="text-[10px] text-text-muted uppercase mb-1 block">Verknüpfte Buchung</label>
+                                      <label className="text-[10px] text-text-muted uppercase mb-1 block">Sponsor verlinken <span className="normal-case text-text-muted/60">(optional)</span></label>
                                       <select
-                                        value={block.adBookingId || ''}
-                                        onChange={e => updateBlock(block.id, 'adBookingId', e.target.value)}
+                                        value={block.linkedSponsorId || ''}
+                                        onChange={e => updateBlock(block.id, 'linkedSponsorId', e.target.value)}
                                         className="input text-xs py-1"
                                       >
-                                        <option value="">— Keine Buchung —</option>
-                                        {adBookings.map(b => (
-                                          <option key={b.id} value={b.id}>{b.sponsor_name} ({b.position})</option>
+                                        <option value="">— Kein Sponsor verlinkt —</option>
+                                        {allSponsors.filter((s: any) => s.status === 'aktiv' || !s.status).map((sp: any) => (
+                                          <option key={sp.id} value={sp.id}>{sp.name}{sp.company ? ` (${sp.company})` : ''}</option>
                                         ))}
                                       </select>
                                     </div>
                                   </div>
-                                  {block.adBookingId && (() => {
-                                    const linked = adBookings.find(b => b.id === block.adBookingId);
-                                    return linked ? (
-                                      <div className="mt-2 flex items-center gap-2 text-[10px] text-accent-orange/80">
-                                        <span className={`px-1.5 py-0.5 rounded ${linked.confirmed ? 'bg-accent-green/20 text-accent-green' : 'bg-accent-orange/20 text-accent-orange'}`}>
-                                          {linked.confirmed ? 'Bestätigt' : 'Angefragt'}
-                                        </span>
-                                        <span>{linked.slot_name || 'Sonderbuchung'}</span>
-                                        {linked.time_position != null && <span><Timer size={9} className="inline" /> {formatTime(linked.time_position)}</span>}
+
+                                  {/* Verlinkter Sponsor Info */}
+                                  {block.linkedSponsorId && (() => {
+                                    const sp = allSponsors.find((s: any) => s.id === block.linkedSponsorId);
+                                    return sp ? (
+                                      <div className="mt-2 flex items-center gap-2 p-2 bg-accent-orange/10 rounded text-[10px]">
+                                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sp.color || '#f97316' }} />
+                                        <span className="text-accent-orange font-medium">{sp.name}</span>
+                                        {sp.company && <span className="text-text-muted">{sp.company}</span>}
+                                        <span className={`ml-auto px-1.5 py-0.5 rounded text-[9px] ${
+                                          sp.status === 'aktiv' ? 'bg-accent-green/20 text-accent-green' : 'bg-surface-overlay text-text-muted'
+                                        }`}>{sp.status || 'unbekannt'}</span>
                                       </div>
                                     ) : null;
                                   })()}

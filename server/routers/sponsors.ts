@@ -1940,27 +1940,28 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
     // Performance-Notizen
     const notes = showPerformanceNotes ? (p.performance_notes || p.performanceNotes || p.notes || '') : '';
 
-    // Zeilenhoehe berechnen
+    // Zeilenhoehe berechnen – alle mehrzeiligen Spalten einbeziehen
     const h1 = doc.heightOfString(title, { width: tblW * 0.29 });
+    const h2 = doc.heightOfString(posLabel, { width: tblW * 0.16 });
     const hNotes = notes ? doc.heightOfString(notes, { width: tblW * 0.60, fontSize: layout.typography.smallSize - 1 }) + 4 : 0;
-    const rowHeight = Math.max(18, h1) + hNotes + 6;
+    const rowHeight = Math.max(18, h1, h2) + hNotes + 8;
 
     if (rowY + rowHeight > maxY) { doc.addPage(); rowY = m; }
     doc.rect(m, rowY, tblW, rowHeight).fill(bg);
     // v2-Buchungen mit leichtem Akzent-Hintergrund
     if (p.is_v2) doc.rect(m, rowY, 3, rowHeight).fill(layout.colors.accent);
     doc.fillColor(layout.colors.text).fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
-    doc.text(title, c1, rowY + 5, { width: tblW * 0.29 });
-    doc.text(posLabel, c2, rowY + 5, { width: tblW * 0.16 });
-    doc.text(dateStr, c3, rowY + 5, { width: tblW * 0.13 });
+    doc.text(title, c1, rowY + 5, { width: tblW * 0.29, lineBreak: true });
+    doc.text(posLabel, c2, rowY + 5, { width: tblW * 0.16, lineBreak: true });
+    doc.text(dateStr, c3, rowY + 5, { width: tblW * 0.13, lineBreak: false });
     const statusColor = (statusStr === 'bezahlt' || statusStr === 'paid') ? '#16a34a'
       : (statusStr === 'versendet' || statusStr === 'sent') ? '#d97706' : '#6b7280';
-    doc.fillColor(statusColor).text(statusStr, c4, rowY + 5, { width: tblW * 0.11 });
+    doc.fillColor(statusColor).text(statusStr, c4, rowY + 5, { width: tblW * 0.11, lineBreak: false });
     if (showPriceBreakdown) {
-      doc.fillColor(layout.colors.muted).text(basePriceStr, c5, rowY + 5, { width: tblW * 0.09, align: 'right' });
-      doc.fillColor(layout.colors.text).font(`${layout.typography.fontFamily}-Bold`).text(priceStr, c6, rowY + 5, { width: tblW * 0.10, align: 'right' });
+      doc.fillColor(layout.colors.muted).text(basePriceStr, c5, rowY + 5, { width: tblW * 0.09, align: 'right', lineBreak: false });
+      doc.fillColor(layout.colors.text).font(`${layout.typography.fontFamily}-Bold`).text(priceStr, c6, rowY + 5, { width: tblW * 0.10, align: 'right', lineBreak: false });
     } else {
-      doc.fillColor(layout.colors.text).text(priceStr, c5, rowY + 5, { width: tblW * 0.12, align: 'right' });
+      doc.fillColor(layout.colors.text).text(priceStr, c5, rowY + 5, { width: tblW * 0.12, align: 'right', lineBreak: false });
     }
     if (notes) {
       doc.font(layout.typography.fontFamily).fillColor(layout.colors.muted)

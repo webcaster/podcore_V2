@@ -765,6 +765,12 @@ function initializeSchema(db: any): void {
       console.log('[DB] v2.12.1: ad_bookings FK-Constraint auf ad_slots entfernt');
     }
   } catch (e) { console.error('[DB] v2.12.1 ad_bookings migration error:', e); }
+
+  // v2.12.2: ad_bookings – Vertragszuordnung, Platzierungsanzahl, Folgenreferenzen
+  try { db.exec('ALTER TABLE ad_bookings ADD COLUMN contract_id TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ad_bookings ADD COLUMN placement_count INTEGER DEFAULT 1'); } catch (_) {}
+  // episode_refs: JSON-Array mit Folgenangaben, z.B. [{"episodeId":"...","episodeTitle":"...","count":2}]
+  try { db.exec('ALTER TABLE ad_bookings ADD COLUMN episode_refs TEXT DEFAULT NULL'); } catch (_) {}
   
   // Roles table migration (v2.11.5)
   try {

@@ -39,4 +39,10 @@ export const sponsorsV2Api = {
   // Booking Confirmation PDF URL (direct download link)
   getConfirmationPdfUrl: (bookingId: string) =>
     `/api/sponsors/v2/bookings/${bookingId}/confirmation-pdf`,
+
+  // Sammel-Buchungsbestätigung: alle Buchungen eines Sponsors als ein PDF
+  getAllConfirmationsPdfUrl: (sponsorId: string, filter?: string) => {
+    const qs = filter && filter !== 'alle' ? `?filter=${encodeURIComponent(filter)}` : '';
+    return `/api/sponsors/v2/${sponsorId}/bookings/confirmation-pdf-all${qs}`;
+  },
 };

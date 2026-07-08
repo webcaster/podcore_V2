@@ -185,6 +185,9 @@ router.get('/:sponsorId/bookings', requirePermission('canViewSponsors') as any, 
       sponsorName: b.sponsor_name,
       episodeTitle: b.episode_title,
       episodeNumber: b.episode_number,
+      contractId: b.contract_id,
+      placementCount: b.placement_count ?? 1,
+      episodeRefs: b.episode_refs ? (() => { try { return JSON.parse(b.episode_refs); } catch { return []; } })() : [],
       createdAt: b.created_at,
       updatedAt: b.updated_at,
     })),
@@ -202,6 +205,11 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
     priceAdjustment = 0,
     listenerFee = 0,
     notes,
+    invoiceStatus,
+    status,
+    contractId,
+    placementCount,
+    episodeRefs,
   } = req.body;
 
   if (!slotId || !bookingDate) {
@@ -220,8 +228,8 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
   const id = uuidv4();
 
   db.run(
-    `INSERT INTO ad_bookings (id, slot_id, sponsor_id, episode_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, status, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'geplant', ?)`,
+    `INSERT INTO ad_bookings (id, slot_id, sponsor_id, episode_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       slotId,
@@ -233,7 +241,12 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
       priceAdjustment || 0,
       listenerFee || 0,
       finalPrice,
+      status || 'geplant',
+      invoiceStatus || 'offen',
       notes || null,
+      contractId || null,
+      placementCount != null ? Number(placementCount) : 1,
+      episodeRefs ? JSON.stringify(episodeRefs) : null,
     ]
   );
 
@@ -272,6 +285,9 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
       notes: booking.notes,
       slotName: slotName,
       sponsorName: booking.sponsor_name,
+      contractId: booking.contract_id,
+      placementCount: booking.placement_count ?? 1,
+      episodeRefs: booking.episode_refs ? JSON.parse(booking.episode_refs) : [],
       createdAt: booking.created_at,
       updatedAt: booking.updated_at,
     },
@@ -291,6 +307,9 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
     listenerCount,
     status,
     notes,
+    contractId,
+    placementCount,
+    episodeRefs,
   } = req.body;
 
   // Berechne finalPrice neu wenn Preiskomponenten geändert werden
@@ -352,6 +371,18 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
     updates.push('notes = ?');
     values.push(notes);
   }
+  if (contractId !== undefined) {
+    updates.push('contract_id = ?');
+    values.push(contractId || null);
+  }
+  if (placementCount !== undefined) {
+    updates.push('placement_count = ?');
+    values.push(Number(placementCount));
+  }
+  if (episodeRefs !== undefined) {
+    updates.push('episode_refs = ?');
+    values.push(episodeRefs ? JSON.stringify(episodeRefs) : null);
+  }
 
   if (updates.length === 0) {
     return res.status(400).json({ success: false, error: 'Keine Änderungen' });
@@ -394,6 +425,9 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
       notes: booking.notes,
       slotName: booking.slot_name,
       sponsorName: booking.sponsor_name,
+      contractId: booking.contract_id,
+      placementCount: booking.placement_count ?? 1,
+      episodeRefs: booking.episode_refs ? JSON.parse(booking.episode_refs) : [],
       createdAt: booking.created_at,
       updatedAt: booking.updated_at,
     },
@@ -660,6 +694,194 @@ router.get('/calendar/bookings', requirePermission('canViewSponsors') as any, (r
       })),
     },
   });
+});
+
+// ============================================================
+// SAMMEL-BUCHUNGSBESTÄTIGUNG ALS PDF (alle Buchungen eines Sponsors)
+// ============================================================
+
+router.get('/:sponsorId/bookings/confirmation-pdf-all', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [req.params.sponsorId]) as any;
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
+
+  const filterStatus = req.query.filter as string | undefined;
+  let query = `
+    SELECT ab.*,
+           COALESCE(s.name, c.name) as slot_name,
+           COALESCE(s.category, c.default_position) as slot_position,
+           COALESCE(s.duration, c.default_duration) as slot_duration,
+           c.base_price as cat_base_price, c.price_per_episode as cat_price_per_episode, c.price_per_1000_listens as cat_price_per_1000,
+           sc.contract_start, sc.contract_end
+    FROM ad_bookings ab
+    LEFT JOIN ad_slots s ON ab.slot_id = s.id
+    LEFT JOIN ad_categories c ON ab.slot_id = c.id
+    LEFT JOIN sponsor_contracts sc ON ab.contract_id = sc.id
+    WHERE ab.sponsor_id = ?
+  `;
+  const params: any[] = [req.params.sponsorId];
+  if (filterStatus && filterStatus !== 'alle') {
+    query += ' AND ab.invoice_status = ?';
+    params.push(filterStatus);
+  }
+  query += ' ORDER BY ab.booking_date ASC';
+  const bookings = db.all(query, params) as any[];
+
+  const PDFDocument = require('pdfkit');
+  const doc = new PDFDocument({ margin: 50, size: 'A4', autoFirstPage: false });
+  const chunks: Buffer[] = [];
+  doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+  doc.on('end', () => {
+    const pdfBuffer = Buffer.concat(chunks);
+    const filename = `Buchungsbestaetigung_Alle_${sponsor.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+  });
+
+  const accentColor = sponsor.color || '#7c3aed';
+  const now = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const pageW = 595.28;
+  const m = 50;
+  const tblW = pageW - m * 2;
+
+  if (bookings.length === 0) {
+    doc.addPage();
+    doc.rect(0, 0, pageW, 80).fill(accentColor);
+    doc.fillColor('white').fontSize(20).font('Helvetica-Bold').text('Buchungsbestätigungen', m, 25);
+    doc.fontSize(10).font('Helvetica').text(`${sponsor.name} · Erstellt am ${now}`, m, 55);
+    doc.fillColor('#555').fontSize(12).text('Keine Buchungen vorhanden.', m, 120);
+    doc.end();
+    return;
+  }
+
+  bookings.forEach((booking: any, idx: number) => {
+    doc.addPage();
+    const priceModelLabel = booking.cat_price_per_episode ? 'Pro Folge'
+      : booking.cat_price_per_1000 ? 'CPM (pro 1.000 Hörer)'
+      : booking.cat_base_price ? 'Basis-Preis' : '–';
+
+    // Header
+    doc.rect(0, 0, pageW, 80).fill(accentColor);
+    doc.fillColor('white').fontSize(18).font('Helvetica-Bold').text('Buchungsbestätigung', m, 20);
+    doc.fontSize(9).font('Helvetica').text(`${idx + 1} von ${bookings.length} · Erstellt am ${now}`, m, 48);
+    if (filterStatus && filterStatus !== 'alle') {
+      doc.text(`Filter: ${filterStatus}`, m, 60);
+    }
+
+    // Sponsor-Block
+    doc.fillColor('#f8f8ff').rect(m, 95, tblW, 70).fill('#f8f8ff');
+    doc.fillColor('#333').fontSize(12).font('Helvetica-Bold').text('Sponsor', m + 10, 103);
+    doc.fontSize(10).font('Helvetica').fillColor('#555');
+    doc.text(sponsor.name || '–', m + 10, 120);
+    if (sponsor.company) doc.text(sponsor.company, m + 10, 134);
+    if (sponsor.customer_number) {
+      doc.fillColor('#888').fontSize(9).text(`Kundennummer: ${sponsor.customer_number}`, m + tblW / 2, 120);
+    }
+    if (sponsor.contact_name) doc.text(`Ansprechpartner: ${sponsor.contact_name}`, m + tblW / 2, 134);
+    if (sponsor.contact_email) doc.fillColor('#555').text(`E-Mail: ${sponsor.contact_email}`, m + tblW / 2, 148);
+
+    // Vertragszeitraum (falls vorhanden)
+    let yPos = 180;
+    if (booking.contract_start || booking.contract_end) {
+      doc.fillColor('#333').fontSize(11).font('Helvetica-Bold').text('Vertragslaufzeit', m, yPos);
+      yPos += 16;
+      doc.moveTo(m, yPos).lineTo(pageW - m, yPos).strokeColor(accentColor).lineWidth(1.5).stroke();
+      yPos += 8;
+      const contractStr = [
+        booking.contract_start ? new Date(booking.contract_start).toLocaleDateString('de-DE') : '?',
+        '–',
+        booking.contract_end ? new Date(booking.contract_end).toLocaleDateString('de-DE') : '?',
+      ].join(' ');
+      doc.fillColor('#555').fontSize(10).font('Helvetica').text(contractStr, m, yPos);
+      yPos += 24;
+    }
+
+    // Buchungsdetails
+    doc.fillColor('#333').fontSize(11).font('Helvetica-Bold').text('Buchungsdetails', m, yPos);
+    yPos += 16;
+    doc.moveTo(m, yPos).lineTo(pageW - m, yPos).strokeColor(accentColor).lineWidth(1.5).stroke();
+    yPos += 8;
+
+    const details: [string, string][] = [
+      ['Buchungs-ID', booking.id.slice(0, 8).toUpperCase()],
+      ['Werbeplatz', `${booking.slot_name || '–'} (${booking.slot_position || '–'})`],
+      ['Preismodell', priceModelLabel],
+      ['Buchungszeitraum', booking.booking_date
+        ? `${new Date(booking.booking_date).toLocaleDateString('de-DE')}${booking.booking_end_date ? ' – ' + new Date(booking.booking_end_date).toLocaleDateString('de-DE') : ''}`
+        : '–'],
+      ['Platzierungen', String(booking.placement_count || 1)],
+      ['Status', booking.status || '–'],
+      ['Rechnungsstatus', booking.invoice_status || '–'],
+    ];
+
+    // Folgenreferenzen
+    let episodeRefsArr: any[] = [];
+    if (booking.episode_refs) {
+      try { episodeRefsArr = JSON.parse(booking.episode_refs); } catch (_) {}
+    }
+
+    details.forEach(([label, value], i) => {
+      if (i % 2 === 0) doc.rect(m, yPos, tblW, 20).fill('#f0f0f8');
+      doc.fillColor('#555').fontSize(9).font('Helvetica-Bold').text(label, m + 8, yPos + 5);
+      doc.fillColor('#222').fontSize(9).font('Helvetica').text(String(value), m + 180, yPos + 5, { width: tblW - 190 });
+      yPos += 20;
+    });
+
+    // Folgenangaben
+    if (episodeRefsArr.length > 0) {
+      yPos += 10;
+      doc.fillColor('#333').fontSize(10).font('Helvetica-Bold').text('Folgenangaben', m, yPos);
+      yPos += 14;
+      episodeRefsArr.forEach((ref: any, ri: number) => {
+        if (ri % 2 === 0) doc.rect(m, yPos, tblW, 18).fill('#f8f8ff');
+        const refLabel = ref.episodeTitle || ref.episodeId || `Folge ${ri + 1}`;
+        const refCount = ref.count ? ` · ${ref.count}× platziert` : '';
+        doc.fillColor('#444').fontSize(9).font('Helvetica').text(`${refLabel}${refCount}`, m + 8, yPos + 4, { width: tblW - 16 });
+        yPos += 18;
+      });
+    }
+
+    // Preisblock
+    yPos += 15;
+    doc.fillColor('#333').fontSize(11).font('Helvetica-Bold').text('Preisübersicht', m, yPos);
+    yPos += 16;
+    doc.moveTo(m, yPos).lineTo(pageW - m, yPos).strokeColor(accentColor).lineWidth(1.5).stroke();
+    yPos += 8;
+
+    const priceRows: [string, string, boolean][] = [
+      ['Buchungspreis', `${(booking.price || 0).toFixed(2)} €`, false],
+      ['Preisanpassung', `${(booking.price_adjustment || 0).toFixed(2)} €`, false],
+      ['Gesamtpreis', `${(booking.final_price || booking.price || 0).toFixed(2)} €`, true],
+    ];
+    priceRows.forEach(([label, value, isFinal]) => {
+      if (isFinal) {
+        doc.rect(m, yPos, tblW, 24).fill(accentColor);
+        doc.fillColor('white').fontSize(11).font('Helvetica-Bold').text(label, m + 8, yPos + 6);
+        doc.text(value, pageW - m - 80, yPos + 6, { width: 70, align: 'right' });
+        yPos += 24;
+      } else {
+        doc.fillColor('#555').fontSize(10).font('Helvetica').text(label, m + 8, yPos + 4);
+        doc.fillColor('#222').text(value, pageW - m - 80, yPos + 4, { width: 70, align: 'right' });
+        yPos += 20;
+      }
+    });
+
+    if (booking.notes) {
+      yPos += 12;
+      doc.fillColor('#333').fontSize(10).font('Helvetica-Bold').text('Notizen', m, yPos);
+      yPos += 14;
+      doc.fillColor('#555').fontSize(9).font('Helvetica').text(booking.notes, m, yPos, { width: tblW });
+    }
+
+    // Footer
+    doc.fillColor('#aaa').fontSize(8).text(
+      `PodCore · Buchungsbestätigung · ${sponsor.name} · ${now}`,
+      m, doc.page.height - 35, { align: 'center', width: tblW }
+    );
+  });
+
+  doc.end();
 });
 
 export default router;
