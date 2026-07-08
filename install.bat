@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title PodCore - Startup
+title PodCore - Installer
 chcp 65001 >nul 2>&1
 
 :: Ins Verzeichnis des Skripts wechseln
@@ -13,7 +13,7 @@ for /f "tokens=2 delims=:, " %%v in ('findstr "\"version\"" package.json') do (
 set APP_VERSION=%RAW_VERSION:"=%
 
 echo ===================================================
-echo PodCore v%APP_VERSION% - Podcast Management System
+echo PodCore v%APP_VERSION% - Installer
 echo ===================================================
 echo.
 
@@ -29,32 +29,31 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+for /f %%v in ('node -v') do set NODE_VER=%%v
+echo [INFO] Node.js %NODE_VER% gefunden.
+
 :: Server-Abhaengigkeiten installieren
-if not exist "server\node_modules" (
-    echo [INFO] Installiere Server-Abhaengigkeiten (einmalig)...
+echo [INFO] Installiere Server-Abhaengigkeiten...
+cd server
+call npm install --production --silent
+cd ..
+echo [INFO] Server-Abhaengigkeiten installiert.
+
+:: TypeScript-Compiler installieren
+if not exist "server\node_modules\.bin\tsc.cmd" (
+    echo [INFO] Installiere TypeScript-Compiler...
     cd server
-    call npm install --production --silent
+    call npm install --save-dev typescript --silent
     cd ..
-    echo [INFO] Server-Abhaengigkeiten installiert.
+    echo [INFO] TypeScript-Compiler installiert.
 )
 
-:: Server kompilieren falls dist\index.js fehlt
-if not exist "server\dist\index.js" (
-    echo [INFO] Kompiliere Server (TypeScript zu JavaScript)...
-    echo        (Dies ist nur beim ersten Start oder nach Updates noetig)
-
-    if not exist "server\node_modules\.bin\tsc.cmd" (
-        echo [INFO] Installiere TypeScript-Compiler...
-        cd server
-        call npm install --save-dev typescript --silent
-        cd ..
-    )
-
-    cd server
-    call node_modules\.bin\tsc
-    cd ..
-    echo [INFO] Server kompiliert.
-)
+:: Server kompilieren
+echo [INFO] Kompiliere Server (TypeScript zu JavaScript)...
+cd server
+call node_modules\.bin\tsc
+cd ..
+echo [INFO] Server kompiliert.
 
 :: Frontend-Build synchronisieren
 if exist "server\public" (
@@ -67,12 +66,13 @@ if exist "server\public" (
 )
 
 echo.
-echo [INFO] Starte PodCore Server v%APP_VERSION%...
-echo [INFO] Lokal:    http://localhost:3001
-echo [INFO] Druecken Sie STRG+C, um den Server zu beenden.
+echo ===================================================
+echo Installation abgeschlossen!
 echo.
-
-:: Server starten
-cd server
-node dist\index.js
+echo Starten Sie PodCore mit:
+echo   start-windows.bat
+echo.
+echo Das System ist dann unter http://localhost:3001 erreichbar.
+echo ===================================================
+echo.
 pause
