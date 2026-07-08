@@ -1379,8 +1379,20 @@ router.put('/:id', requirePermission('canEditSponsors') as any, (req: AuthReques
 
 router.delete('/:id', requirePermission('canDeleteSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  db.run('DELETE FROM sponsors WHERE id = ?', [req.params.id]);
-  return res.json({ success: true, message: 'Sponsor gelöscht' });
+  try {
+    // FK-sichere Reihenfolge: erst alle abhängigen Daten löschen
+    db.run('PRAGMA foreign_keys = OFF');
+    db.run('DELETE FROM ad_bookings WHERE sponsor_id = ?', [req.params.id]);
+    db.run('DELETE FROM sponsor_contracts WHERE sponsor_id = ?', [req.params.id]);
+    db.run('DELETE FROM ad_slots WHERE sponsor_id = ?', [req.params.id]);
+    db.run('DELETE FROM episode_ad_bookings WHERE sponsor_id = ?', [req.params.id]);
+    db.run('DELETE FROM sponsors WHERE id = ?', [req.params.id]);
+    db.run('PRAGMA foreign_keys = ON');
+    return res.json({ success: true, message: 'Sponsor gelöscht' });
+  } catch (err: any) {
+    db.run('PRAGMA foreign_keys = ON');
+    return res.status(500).json({ success: false, message: err.message || 'Fehler beim Löschen' });
+  }
 });
 
 // ============================================================

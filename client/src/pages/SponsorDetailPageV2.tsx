@@ -66,6 +66,7 @@ export default function SponsorDetailPageV2() {
 
   // Billing Tab State
   const [billingFilter, setBillingFilter] = useState<'alle' | 'offen' | 'versendet' | 'bezahlt'>('alle');
+  const [billingContractFilter, setBillingContractFilter] = useState<string>('alle');
   const [leistungIntro, setLeistungIntro] = useState('');
   const [leistungOutro, setLeistungOutro] = useState('');
   const [pdfFileName, setPdfFileName] = useState('');
