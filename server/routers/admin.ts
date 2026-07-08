@@ -511,7 +511,7 @@ router.get('/system', requirePermission('canManageSettings') as any, (req: AuthR
     sponsors: (db.get('SELECT COUNT(*) as count FROM sponsors', []) as any)?.count || 0,
     users: (db.get('SELECT COUNT(*) as count FROM users', []) as any)?.count || 0,
     errorLogs: (db.get('SELECT COUNT(*) as count FROM error_logs', []) as any)?.count || 0,
-    version: '2.0.0',
+    version: (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')).version || '?'; } catch { return '?'; } })(),
     nodeVersion: process.version,
     uptime: process.uptime(),
     platform: process.platform,
