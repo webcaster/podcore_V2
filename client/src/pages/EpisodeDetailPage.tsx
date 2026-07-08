@@ -2053,27 +2053,59 @@ export default function EpisodeDetailPage() {
         <div className="space-y-4">
           <div className="p-3 bg-purple-900/20 border border-purple-700/40 rounded-lg">
             <p className="text-xs text-purple-400 font-medium">Buchung im Sponsoring-System v2.12.0</p>
-            <p className="text-[10px] text-text-muted mt-1">Die Buchung gilt für eine Laufzeit (Von – Bis) und ist nicht an ein einzelnes Datum gebunden.</p>
+            <p className="text-[10px] text-text-muted mt-1">Wähle Sponsor und Werbekategorie. Die Buchung gilt für eine Laufzeit (Von – Bis).</p>
           </div>
+
+          {/* Sponsor auswählen */}
           <div>
-            <label className="label">Werbeplatz (Slot) *</label>
+            <label className="label">Sponsor *</label>
+            <select
+              value={v2BookingForm.sponsorId || ''}
+              onChange={e => setV2BookingForm((f: any) => ({ ...f, sponsorId: e.target.value, slotId: '' }))}
+              className="select w-full"
+            >
+              <option value="">— Sponsor auswählen —</option>
+              {allSponsors.map((sp: any) => (
+                <option key={sp.id} value={sp.id}>{sp.name}{sp.company ? ` (${sp.company})` : ''}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Werbekategorie auswählen */}
+          <div>
+            <label className="label">Werbekategorie *</label>
             <select
               value={v2BookingForm.slotId}
               onChange={e => {
-                const slot = v2SponsorSlots.find((s: any) => s.id === e.target.value);
+                const cat = v2SponsorSlots.find((s: any) => s.id === e.target.value);
                 setV2BookingForm((f: any) => ({
                   ...f,
                   slotId: e.target.value,
-                  price: slot?.basePrice || slot?.price_per_episode || f.price || '',
+                  price: cat?.pricePerEpisode || cat?.basePrice || f.price || '',
                 }));
               }}
               className="select w-full"
             >
-              <option value="">Slot auswählen...</option>
+              <option value="">— Werbekategorie auswählen —</option>
               {v2SponsorSlots.map((s: any) => (
-                <option key={s.id} value={s.id}>{s.sponsorName} – {s.name} ({s.category || s.position || '–'})</option>
+                <option key={s.id} value={s.id}>
+                  {s.name}{s.position ? ` · ${s.position}` : ''}{s.pricePerEpisode ? ` – ${s.pricePerEpisode} €/Folge` : s.basePrice ? ` – ${s.basePrice} €` : ''}
+                </option>
               ))}
             </select>
+            {v2BookingForm.slotId && (() => {
+              const cat = v2SponsorSlots.find((s: any) => s.id === v2BookingForm.slotId);
+              if (!cat) return null;
+              return (
+                <div className="mt-1.5 flex flex-wrap gap-2 text-[10px]">
+                  {cat.position && <span className="px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-400">{cat.position}</span>}
+                  {cat.duration && <span className="px-1.5 py-0.5 rounded bg-obsidian-700 text-text-muted">{cat.duration}s</span>}
+                  {cat.isExclusive && <span className="px-1.5 py-0.5 rounded bg-yellow-900/30 text-yellow-400">Exklusiv</span>}
+                  {cat.pricePerEpisode && <span className="px-1.5 py-0.5 rounded bg-green-900/30 text-green-400">{cat.pricePerEpisode} €/Folge</span>}
+                  {cat.pricePer1000 && <span className="px-1.5 py-0.5 rounded bg-blue-900/30 text-blue-400">{cat.pricePer1000} €/1000 Hörer</span>}
+                </div>
+              );
+            })()}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -2124,13 +2156,11 @@ export default function EpisodeDetailPage() {
           <div className="flex gap-2 pt-2">
             <button onClick={() => setShowV2BookingModal(false)} className="btn-ghost flex-1">Abbrechen</button>
             <button
-              disabled={!v2BookingForm.slotId || !v2BookingForm.startDate || !v2BookingForm.endDate}
+              disabled={!v2BookingForm.sponsorId || !v2BookingForm.slotId || !v2BookingForm.startDate || !v2BookingForm.endDate}
               onClick={async () => {
-                if (!v2BookingForm.slotId || !v2BookingForm.startDate || !v2BookingForm.endDate) return;
-                const slot = v2SponsorSlots.find((s: any) => s.id === v2BookingForm.slotId);
-                if (!slot) return;
+                if (!v2BookingForm.sponsorId || !v2BookingForm.slotId || !v2BookingForm.startDate || !v2BookingForm.endDate) return;
                 try {
-                  await sponsorsV2Api.createBooking(slot.sponsorId, {
+                  await sponsorsV2Api.createBooking(v2BookingForm.sponsorId, {
                     slotId: v2BookingForm.slotId,
                     episodeId: id,
                     bookingDate: v2BookingForm.startDate,
@@ -2140,7 +2170,7 @@ export default function EpisodeDetailPage() {
                   });
                   showSuccess('Buchung erstellt');
                   setShowV2BookingModal(false);
-                  setV2BookingForm({ slotId: '', startDate: '', endDate: '', price: '', notes: '' });
+                  setV2BookingForm({ sponsorId: '', slotId: '', startDate: '', endDate: '', price: '', notes: '' });
                   loadV2Bookings();
                 } catch (e: any) { showError(e.message); }
               }}

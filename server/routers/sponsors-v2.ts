@@ -130,12 +130,14 @@ router.get('/:sponsorId/bookings', requirePermission('canViewSponsors') as any, 
   const { from, to, status } = req.query;
 
   let query = `
-    SELECT ab.*, 
-           s.name as slot_name, s.category as slot_position,
+    SELECT ab.*,
+           COALESCE(s.name, c.name) as slot_name,
+           COALESCE(s.category, c.default_position) as slot_position,
            sp.name as sponsor_name,
            e.title as episode_title, e.number as episode_number
     FROM ad_bookings ab
-    JOIN ad_slots s ON ab.slot_id = s.id
+    LEFT JOIN ad_slots s ON ab.slot_id = s.id
+    LEFT JOIN ad_categories c ON ab.slot_id = c.id
     JOIN sponsors sp ON ab.sponsor_id = sp.id
     LEFT JOIN episodes e ON ab.episode_id = e.id
     WHERE ab.sponsor_id = ?
@@ -206,7 +208,15 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
     return res.status(400).json({ success: false, error: 'slotId und bookingDate erforderlich' });
   }
 
-  const finalPrice = price + (priceAdjustment || 0) + (listenerFee || 0);
+  // slotId kann entweder eine ad_slots ID oder eine ad_categories ID sein
+  // Preis aus der Kategorie vorausfüllen wenn nicht angegeben
+  let resolvedPrice = price;
+  const category = db.get('SELECT * FROM ad_categories WHERE id = ?', [slotId]) as any;
+  if (category && (!price || price === 0)) {
+    resolvedPrice = category.price_per_episode || category.base_price || 0;
+  }
+
+  const finalPrice = resolvedPrice + (priceAdjustment || 0) + (listenerFee || 0);
   const id = uuidv4();
 
   db.run(
@@ -219,7 +229,7 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
       episodeId || null,
       bookingDate,
       bookingEndDate || null,
-      price,
+      resolvedPrice,
       priceAdjustment || 0,
       listenerFee || 0,
       finalPrice,
@@ -227,10 +237,14 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
     ]
   );
 
+  // Slot-Name aus ad_slots ODER ad_categories laden
+  const slotFromSlots = db.get('SELECT name FROM ad_slots WHERE id = ?', [slotId]) as any;
+  const slotFromCats = db.get('SELECT name FROM ad_categories WHERE id = ?', [slotId]) as any;
+  const slotName = slotFromSlots?.name || slotFromCats?.name || slotId;
+
   const booking = db.get(
-    `SELECT ab.*, s.name as slot_name, sp.name as sponsor_name
+    `SELECT ab.*, sp.name as sponsor_name
      FROM ad_bookings ab
-     JOIN ad_slots s ON ab.slot_id = s.id
      JOIN sponsors sp ON ab.sponsor_id = sp.id
      WHERE ab.id = ?`,
     [id]
@@ -256,7 +270,7 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
       listenerCount: booking.listener_count,
       status: booking.status,
       notes: booking.notes,
-      slotName: booking.slot_name,
+      slotName: slotName,
       sponsorName: booking.sponsor_name,
       createdAt: booking.created_at,
       updatedAt: booking.updated_at,
@@ -397,31 +411,29 @@ router.delete('/bookings/:bookingId', requirePermission('canEditSponsors') as an
 
 router.get('/slots', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const slots = db.all(`
-    SELECT s.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color, sp.status as sponsor_status
-    FROM ad_slots s
-    JOIN sponsors sp ON s.sponsor_id = sp.id
-    WHERE sp.status != 'archiviert'
-    ORDER BY sp.name ASC, s.name ASC
+  // Gibt Werbekategorien als buchbare Slot-Typen zurück
+  const categories = db.all(`
+    SELECT * FROM ad_categories
+    WHERE is_active = 1
+    ORDER BY sort_order ASC, name ASC
   `) as any[];
   return res.json({
     success: true,
-    data: slots.map((s: any) => ({
-      id: s.id,
-      sponsorId: s.sponsor_id,
-      sponsorName: s.sponsor_name,
-      sponsorCompany: s.sponsor_company,
-      sponsorColor: s.sponsor_color,
-      name: s.name,
-      category: s.category,
-      position: s.category,
-      duration: s.duration,
-      basePrice: s.base_price || s.price,
-      priceModel: s.price_model,
-      status: s.status,
-      startDate: s.start_date || s.placement_start,
-      endDate: s.end_date || s.placement_end,
-      notes: s.notes,
+    data: categories.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      color: c.color,
+      position: c.default_position,
+      defaultPosition: c.default_position,
+      duration: c.default_duration,
+      isExclusive: !!c.is_exclusive,
+      basePrice: c.base_price,
+      pricePerEpisode: c.price_per_episode,
+      pricePer1000: c.price_per_1000_listens,
+      currency: c.currency || 'EUR',
+      presentationTemplate: c.presentation_template,
+      isActive: !!c.is_active,
     })),
   });
 });
@@ -550,12 +562,14 @@ router.get('/calendar/bookings', requirePermission('canViewSponsors') as any, (r
   const { from, to } = req.query;
 
   let query = `
-    SELECT ab.*, 
-           s.name as slot_name, s.category as slot_position,
+    SELECT ab.*,
+           COALESCE(s.name, c.name) as slot_name,
+           COALESCE(s.category, c.default_position) as slot_position,
            sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
            e.title as episode_title, e.number as episode_number
     FROM ad_bookings ab
-    JOIN ad_slots s ON ab.slot_id = s.id
+    LEFT JOIN ad_slots s ON ab.slot_id = s.id
+    LEFT JOIN ad_categories c ON ab.slot_id = c.id
     JOIN sponsors sp ON ab.sponsor_id = sp.id
     LEFT JOIN episodes e ON ab.episode_id = e.id
     WHERE 1=1
