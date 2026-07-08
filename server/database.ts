@@ -813,7 +813,7 @@ function initializeSchema(db: any): void {
       const finalPerms = isSystem ? latestPerms : merged;
       db.run('UPDATE roles SET permissions = ? WHERE id = ?', [JSON.stringify(finalPerms), role.id]);
     }
-    if (existingRoles.length > 0) console.log('[DB] Roles permissions updated to latest defaults (v2.9.12)');
+    if (existingRoles.length > 0) console.log('[DB] Roles permissions updated to latest defaults (v2.12.0)');
   } catch (e) { console.error('[DB] Roles migration error:', e); }
 
   // Default roles
@@ -872,6 +872,10 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
     canManageAdBookings: false,
     canBookAds: false,
     canViewAdBookings: false,
+    // Sponsoring-System v2.12.0
+    canManageSponsorContracts: false,
+    canManageAdBookingsV2: false,
+    canViewSponsorContracts: false,
   };
 
   switch (role) {
@@ -902,6 +906,9 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canExportMarkers: true,
         canBookAds: true,
         canViewAdBookings: true,
+        // v2.12.0
+        canViewSponsorContracts: true,
+        canManageAdBookingsV2: true,
       };
     case 'moderator':
       return {
@@ -927,6 +934,10 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canManageAdBookings: true,
         canBookAds: true,
         canViewAdBookings: true,
+        // v2.12.0
+        canViewSponsorContracts: true,
+        canManageSponsorContracts: true,
+        canManageAdBookingsV2: true,
       };
     case 'produktion':
       return {
@@ -947,6 +958,9 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canUseAudioEditor: true,
         canExportMarkers: true,
         canViewAdBookings: true,
+        // v2.12.0
+        canViewSponsorContracts: true,
+        canManageAdBookingsV2: true,
       };
     default:
       return base;

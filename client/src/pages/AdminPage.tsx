@@ -63,6 +63,10 @@ const ALL_PERMISSIONS = [
   { key: 'canManageAdBookings', label: 'Werbebuchungen verwalten', group: 'Sponsoring' },
   { key: 'canBookAds', label: 'Werbung nachbuchen (spontan)', group: 'Sponsoring' },
   { key: 'canViewAdBookings', label: 'Werbebuchungen ansehen', group: 'Sponsoring' },
+  // Sponsoring-System v2.12.0 – Verträge & neue Buchungen
+  { key: 'canManageSponsorContracts', label: 'Sponsoring-Verträge verwalten (v2)', group: 'Sponsoring' },
+  { key: 'canManageAdBookingsV2', label: 'Neue Buchungen (v2) verwalten', group: 'Sponsoring' },
+  { key: 'canViewSponsorContracts', label: 'Verträge & v2-Buchungen ansehen', group: 'Sponsoring' },
 ];
 
 const PERMISSION_GROUPS = [...new Set(ALL_PERMISSIONS.map(p => p.group))];

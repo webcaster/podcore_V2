@@ -35,9 +35,9 @@ const pkgPath = path.join(__dirname, '..', 'package.json');
 const APP_VERSION: string = (() => {
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    return pkg.version || '2.11.0';
+    return pkg.version || '2.12.0';
   } catch (_) {
-    return '2.11.0';
+    return '2.12.0';
   }
 })();
 // Always bind to 0.0.0.0 so the app is reachable in LAN

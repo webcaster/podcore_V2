@@ -525,6 +525,72 @@ const wikiData: WikiCategory[] = [
           },
         ],
       },
+      {
+        id: 'sponsoring-v2',
+        title: 'Sponsoring-System v2.12.0',
+        summary: 'Das neue 3-Ebenen-Modell: Verträge, Slots und Buchungen für professionelles Sponsoring-Management.',
+        icon: <Megaphone size={18} />,
+        tags: ['v2.12.0', 'vertrag', 'buchung', 'slot', 'episoden-editor', 'schnellbuchung'],
+        content: [
+          {
+            text: 'Mit Version 2.12.0 wurde das Sponsoring-System grundlegend überarbeitet. Das neue 3-Ebenen-Modell (Vertrag → Slot → Buchung) ermöglicht eine präzisere Verwaltung von Sponsoring-Kampagnen und eine nahtlose Integration in den Episoden-Editor.',
+          },
+          {
+            heading: 'Das neue 3-Ebenen-Modell',
+            table: {
+              headers: ['Ebene', 'Beschreibung', 'Beispiel'],
+              rows: [
+                ['Vertrag', 'Rahmenvereinbarung mit dem Sponsor', 'Jahresvertrag 2025 mit Sponsor XY'],
+                ['Slot', 'Konkreter Werbeplatz innerhalb eines Vertrags', 'Pre-Roll 30s, Mid-Roll 60s'],
+                ['Buchung', 'Zuweisung eines Slots zu einer Episode', 'Episode #42 – Pre-Roll von Sponsor XY'],
+              ],
+            },
+          },
+          {
+            heading: 'Verträge verwalten',
+            text: 'Im Sponsor-Detail-Bereich (Tab „Verträge“) können Rahmenverträge mit Laufzeit, Gesamtbudget und Kontaktdaten hinterlegt werden. Jeder Vertrag kann mehrere Slots enthalten.',
+          },
+          {
+            heading: 'Buchungen im Episoden-Editor',
+            text: 'Im Werbung-Tab des Episoden-Editors gibt es jetzt einen neuen Abschnitt „Buchungen v2“. Dort werden alle Buchungen aus dem neuen System angezeigt. Über den Button „Buchung erstellen“ kann direkt aus dem Episoden-Kontext gebucht werden.',
+          },
+          {
+            heading: 'Schnellbuchung mit Slot-Vorschlägen',
+            text: 'Unterhalb der bestehenden Buchungen werden automatisch verfügbare Slots als Vorschläge angezeigt. Ein Klick auf „+ Buchen“ erstellt sofort eine Buchung für die aktuelle Episode – ohne den Episoden-Editor verlassen zu müssen.',
+          },
+          {
+            heading: 'Buchungs-Status',
+            table: {
+              headers: ['Status', 'Bedeutung'],
+              rows: [
+                ['angefragt', 'Buchung wurde erstellt, Sponsor noch nicht bestätigt'],
+                ['bestätigt', 'Sponsor hat die Buchung bestätigt'],
+                ['ausgestrahlt', 'Episode wurde veröffentlicht, Werbung wurde ausgestrahlt'],
+                ['storniert', 'Buchung wurde abgesagt'],
+              ],
+            },
+          },
+          {
+            heading: 'Rechnungs-Status',
+            table: {
+              headers: ['Status', 'Bedeutung'],
+              rows: [
+                ['offen', 'Rechnung noch nicht erstellt'],
+                ['versendet', 'Rechnung an den Sponsor gesendet'],
+                ['bezahlt', 'Zahlung eingegangen'],
+                ['storniert', 'Rechnung storniert'],
+              ],
+            },
+          },
+          {
+            heading: 'Berechtigungen',
+            text: 'Für das neue System sind folgende Berechtigungen relevant: „Sponsoren bearbeiten“ (canEditSponsors) für das Erstellen und Löschen von v2-Buchungen im Episoden-Editor, „Verträge verwalten“ (canManageSponsorContracts) für die Vertragsverwaltung und „Buchungen verwalten“ (canManageAdBookingsV2) für die vollständige Buchungsverwaltung.',
+          },
+          {
+            tip: 'Das alte Buchungssystem (Platzierungen) bleibt vollständig erhalten und funktioniert parallel zum neuen System. Beide Systeme werden im Episoden-Editor angezeigt.',
+          },
+        ],
+      },
     ],
   },
   {
@@ -829,6 +895,50 @@ const wikiData: WikiCategory[] = [
     icon: <Package size={16} />,
     color: 'text-accent-green',
     articles: [
+      {
+        id: 'v2-12-0',
+        title: 'v2.12.0 — Neues Sponsoring-System, Episoden-Editor Integration & Berechtigungen',
+        icon: <Package size={18} />,
+        tags: ['sponsoring', 'v2.12.0', 'episoden-editor', 'buchung', 'vertrag', 'berechtigungen'],
+        summary: 'Vollständige Überarbeitung des Sponsoring-Systems mit 3-Ebenen-Modell (Vertrag → Slot → Buchung), Integration in den Episoden-Editor mit Schnellbuchung und Slot-Vorschlägen sowie neue Sponsoring-Berechtigungen.',
+        content: [
+          {
+            heading: 'Neues Sponsoring-System (3-Ebenen-Modell)',
+            list: [
+              'Neue Tabellen: sponsor_contracts (Rahmenverträge) und ad_bookings (Buchungen)',
+              'Vertrag → Slot → Buchung: klare Hierarchie für präzises Kampagnen-Management',
+              'Neue Sponsor-Detailseite (v2) mit 4 Tabs: Verträge, Slots, Buchungen, Abrechnung',
+              'Buchungs-Status: angefragt, bestätigt, ausgestrahlt, storniert',
+              'Rechnungs-Status: offen, versendet, bezahlt, storniert',
+            ],
+          },
+          {
+            heading: 'Episoden-Editor Integration',
+            list: [
+              'Neuer Abschnitt „Buchungen v2“ im Werbung-Tab des Episoden-Editors',
+              'Schnellbuchung: Verfügbare Slots werden als Vorschläge angezeigt, 1-Klick-Buchung',
+              'Buchungsmodal: Slot auswählen, Preis festlegen, Notizen hinzufügen',
+              'Buchungen können direkt aus dem Episoden-Kontext gelöscht werden',
+              'Altes Buchungssystem (Platzierungen) bleibt vollständig erhalten',
+            ],
+          },
+          {
+            heading: 'Neue Berechtigungen',
+            list: [
+              'canManageSponsorContracts: Sponsoring-Verträge verwalten',
+              'canManageAdBookingsV2: Neue Buchungen (v2) vollständig verwalten',
+              'canViewSponsorContracts: Verträge und Buchungen ansehen',
+            ],
+          },
+          {
+            heading: 'Wiki aktualisiert',
+            list: [
+              'Neuer Artikel „Sponsoring-System v2.12.0“ mit vollständiger Dokumentation',
+              'Berechtigungstabelle im Admin-Bereich um Sponsoring-Verträge erweitert',
+            ],
+          },
+        ],
+      },
       {
         id: 'v2-11-7',
         title: 'v2.11.7 — Freigabe-Center Fixes, Wiki-Updates & Versionsverwaltung',

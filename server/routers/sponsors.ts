@@ -758,6 +758,556 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
   doc.end();
 });
 
+
+// ── Buchungskalender ─────────────────────────────────────────────────────────
+router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { from, to } = req.query as any;
+
+  // 1. Episodengebundene Buchungen (alte episode_ad_bookings)
+  const episodeBookings = db.all(`
+    SELECT b.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
+           c.name as category_name, c.color as category_color, c.is_exclusive,
+           e.title as episode_title, e.number as episode_number, e.publish_date, e.status as episode_status
+    FROM episode_ad_bookings b
+    JOIN sponsors sp ON b.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON b.ad_category_id = c.id
+    LEFT JOIN episodes e ON b.episode_id = e.id
+    ORDER BY e.publish_date ASC, b.sort_order ASC
+  `) as any[];
+
+  // 2. Zeitraum-Buchungen (ad_slots mit Laufzeit)
+  const slotBookings = db.all(`
+    SELECT sl.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
+           c.name as category_name, c.color as category_color, c.is_exclusive
+    FROM ad_slots sl
+    JOIN sponsors sp ON sl.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON sl.category_id = c.id
+    WHERE sl.placement_start IS NOT NULL OR sl.start_date IS NOT NULL
+    ORDER BY COALESCE(sl.placement_start, sl.start_date) ASC
+  `) as any[];
+
+  // 3. ad_placements (neue Buchungen über Plus-Button in Sponsor-Detailseite)
+  const adPlacements = db.all(`
+    SELECT p.*, sl.name as slot_name, sl.category_id,
+           sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
+           c.name as category_name, c.color as category_color, c.is_exclusive,
+           e.title as ep_title, e.number as ep_number, e.status as ep_status
+    FROM ad_placements p
+    JOIN ad_slots sl ON p.ad_slot_id = sl.id
+    JOIN sponsors sp ON sl.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON sl.category_id = c.id
+    LEFT JOIN episodes e ON p.episode_id = e.id
+    ORDER BY COALESCE(p.publish_date, p.created_at) ASC
+  `) as any[];
+
+  // 4. Konflikte erkennen: Exklusive Kategorien an gleichen Terminen
+  const conflicts: any[] = [];
+  const exclusiveBookings = episodeBookings.filter((b: any) => b.is_exclusive);
+  const byDate: Record<string, any[]> = {};
+  exclusiveBookings.forEach((b: any) => {
+    const key = `${b.publish_date || 'no-date'}_${b.ad_category_id}`;
+    if (!byDate[key]) byDate[key] = [];
+    byDate[key].push(b);
+  });
+  Object.values(byDate).forEach((group: any[]) => {
+    if (group.length > 1) {
+      conflicts.push({
+        type: 'exclusive_conflict',
+        date: group[0].publish_date,
+        categoryName: group[0].category_name,
+        bookings: group.map((b: any) => ({ id: b.id, sponsorName: b.sponsor_name, episodeTitle: b.episode_title })),
+        message: `Exklusive Kategorie "${group[0].category_name}" ist am ${group[0].publish_date} mehrfach gebucht`,
+      });
+    }
+  });
+
+  // 5. Datum-Filter anwenden
+  let filteredEpisodeBookings = episodeBookings;
+  if (from) filteredEpisodeBookings = filteredEpisodeBookings.filter((b: any) => !b.publish_date || b.publish_date >= from);
+  if (to) filteredEpisodeBookings = filteredEpisodeBookings.filter((b: any) => !b.publish_date || b.publish_date <= to);
+
+  let filteredSlotBookings = slotBookings;
+  if (from) filteredSlotBookings = filteredSlotBookings.filter((b: any) => {
+    const start = b.placement_start || b.start_date;
+    return !start || start >= from;
+  });
+  if (to) filteredSlotBookings = filteredSlotBookings.filter((b: any) => {
+    const end = b.placement_end || b.end_date;
+    return !end || end <= to;
+  });
+
+  let filteredAdPlacements = adPlacements;
+  if (from) filteredAdPlacements = filteredAdPlacements.filter((p: any) => {
+    const d = p.publish_date || p.air_date;
+    return !d || d >= from;
+  });
+  if (to) filteredAdPlacements = filteredAdPlacements.filter((p: any) => {
+    const d = p.publish_date || p.air_date;
+    return !d || d <= to;
+  });
+
+  const episodeBookingsList = filteredEpisodeBookings.map((b: any) => ({
+    id: b.id,
+    type: 'episode',
+    sponsorId: b.sponsor_id,
+    sponsorName: b.sponsor_name,
+    sponsorCompany: b.sponsor_company,
+    sponsorColor: b.sponsor_color || '#7c3aed',
+    categoryName: b.category_name,
+    categoryColor: b.category_color || '#6b7280',
+    isExclusive: b.is_exclusive === 1,
+    position: b.position,
+    episodeId: b.episode_id,
+    episodeTitle: b.episode_title,
+    episodeNumber: b.episode_number,
+    date: b.publish_date,
+    confirmed: b.confirmed === 1,
+    episodeStatus: b.episode_status,
+  }));
+
+  const slotBookingsList = filteredSlotBookings.map((b: any) => ({
+    id: b.id,
+    type: 'slot',
+    sponsorId: b.sponsor_id,
+    sponsorName: b.sponsor_name,
+    sponsorCompany: b.sponsor_company,
+    sponsorColor: b.sponsor_color || '#7c3aed',
+    categoryName: b.category_name,
+    categoryColor: b.category_color || '#6b7280',
+    isExclusive: b.is_exclusive === 1,
+    position: b.category || b.production_type,
+    startDate: b.placement_start || b.start_date,
+    endDate: b.placement_end || b.end_date,
+    label: b.placement_label || b.name,
+    status: b.status,
+    basePrice: b.base_price,
+    pricePerEpisode: b.price_per_episode,
+  }));
+
+  const adPlacementsList = filteredAdPlacements.map((p: any) => ({
+    id: p.id,
+    type: 'placement',
+    sponsorId: p.sponsor_id,
+    sponsorName: p.sponsor_name,
+    sponsorCompany: p.sponsor_company,
+    sponsorColor: p.sponsor_color || '#059669',
+    categoryName: p.category_name,
+    categoryColor: p.category_color || '#6b7280',
+    isExclusive: p.is_exclusive === 1,
+    position: p.position || 'pre-roll',
+    episodeId: p.episode_id,
+    episodeTitle: p.episode_title || p.ep_title,
+    episodeNumber: p.episode_number || p.ep_number,
+    date: p.publish_date,
+    slotName: p.slot_name,
+    price: p.price,
+    invoiceStatus: p.invoice_status,
+    status: p.status,
+    notes: p.notes,
+  }));
+
+  const plannedSlotsList = (() => {
+    // BUGFIX v2.11.10: Zeige ALLE Slots mit Vorplanungs-Daten, nicht nur unggebuchte
+    const allSlots = db.all(`
+      SELECT sl.*, sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
+             c.name as category_name, c.color as category_color, c.is_exclusive
+      FROM ad_slots sl
+      JOIN sponsors sp ON sl.sponsor_id = sp.id
+      LEFT JOIN ad_categories c ON sl.category_id = c.id
+      WHERE sl.status NOT IN ('inaktiv', 'archiviert', 'abgelehnt', 'storniert')
+        AND (sl.placement_start IS NOT NULL OR sl.placement_end IS NOT NULL)
+    `) as any[];
+    
+    // BUGFIX v2.11.10: Filtere nach Datum-Bereich mit Overlap-Logik
+    let filtered = allSlots;
+    
+    // Overlap-Logik: Zeige Slots wenn sie sich mit dem Zeitraum [from, to] ueberschneiden
+    if (from || to) {
+      filtered = filtered.filter((s: any) => {
+        // Normalisiere Daten zu ISO-String Format (YYYY-MM-DD)
+        const normalize = (d: any) => {
+          if (!d) return null;
+          if (typeof d === 'string') {
+            // Wenn bereits ISO-Format, nutze es
+            if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.substring(0, 10);
+            // Versuche zu parsen
+            const parsed = new Date(d);
+            if (!isNaN(parsed.getTime())) {
+              return parsed.toISOString().substring(0, 10);
+            }
+          }
+          return null;
+        };
+        
+        const slotStart = normalize(s.placement_start);
+        const slotEnd = normalize(s.placement_end);
+        const fromNorm = from ? normalize(from) : null;
+        const toNorm = to ? normalize(to) : null;
+        
+        // Slots ohne Datum werden immer angezeigt
+        if (!slotStart && !slotEnd) return true;
+        
+        // Wenn nur Start-Datum: Zeige wenn start <= to
+        if (slotStart && !slotEnd) {
+          return !toNorm || slotStart <= toNorm;
+        }
+        
+        // Wenn nur End-Datum: Zeige wenn end >= from
+        if (!slotStart && slotEnd) {
+          return !fromNorm || slotEnd >= fromNorm;
+        }
+        
+        // Wenn beide Daten: Zeige wenn [start, end] und [from, to] sich ueberschneiden
+        // Ueberschneidung: start <= to AND end >= from
+        const startOk = !toNorm || (slotStart && slotStart <= toNorm);
+        const endOk = !fromNorm || (slotEnd && slotEnd >= fromNorm);
+        return startOk && endOk;
+      });
+    }
+    
+    return filtered.map((s: any) => ({
+      id: `planned_${s.id}`,
+      type: 'planned',
+      sponsorId: s.sponsor_id,
+      sponsorName: s.sponsor_name,
+      sponsorCompany: s.sponsor_company,
+      sponsorColor: s.sponsor_color || '#f59e0b',
+      categoryName: s.category_name,
+      categoryColor: s.category_color || '#6b7280',
+      isExclusive: s.is_exclusive === 1,
+      position: s.category || 'pre-roll',
+      startDate: s.placement_start,
+      endDate: s.placement_end,
+      label: s.placement_label || s.name,
+      status: s.status,
+      basePrice: s.base_price,
+      pricePerEpisode: s.price_per_episode,
+      price: s.base_price,
+      notes: s.notes,
+    }));
+  })();
+
+  if (req.query.format === 'csv') {
+    const headers = ['Typ', 'Sponsor', 'Firma', 'Kategorie', 'Position', 'Episode', 'Datum', 'Preis', 'Status', 'Notizen'];
+    const rows = [
+      ...episodeBookingsList.map(b => ['Episodenbuchung', b.sponsorName, b.sponsorCompany || '', b.categoryName || '', b.position, b.episodeTitle || '', b.date || '', '', b.confirmed ? 'Bestätigt' : 'Offen', '']),
+      ...slotBookingsList.map(b => ['Zeitraum-Slot', b.sponsorName, b.sponsorCompany || '', b.categoryName || '', b.position, '', `${b.startDate || ''} - ${b.endDate || ''}`, b.basePrice || '', b.status, '']),
+      ...adPlacementsList.map(p => ['Werbeplatz-Buchung', p.sponsorName, p.sponsorCompany || '', p.categoryName || '', p.position, p.episodeTitle || '', p.date || '', p.price || '', p.invoiceStatus, p.notes || '']),
+      ...plannedSlotsList.map(s => ['Vorplanung', s.sponsorName, s.sponsorCompany || '', s.categoryName || '', s.position, '', `${s.startDate || ''} - ${s.endDate || ''}`, s.price || '', 'Geplant', ''])
+    ];
+    
+    let csv = headers.join(';') + '\n';
+    rows.forEach(row => {
+      csv += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';') + '\n';
+    });
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=buchungskalender_${new Date().toISOString().split('T')[0]}.csv`);
+    return res.send(Buffer.from('\ufeff' + csv, 'utf-8'));
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      episodeBookings: episodeBookingsList,
+      slotBookings: slotBookingsList,
+      adPlacements: adPlacementsList,
+      plannedSlots: plannedSlotsList,
+      conflicts,
+    },
+  });
+});
+
+// Folgensponsor-Automatisierung
+router.post('/placements/:placementId/auto-assign', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const placement = db.get('SELECT * FROM ad_placements WHERE id = ?', [req.params.placementId]) as any;
+  if (!placement) return res.status(404).json({ success: false, error: 'Platzierung nicht gefunden' });
+
+  // Nächste unveröffentlichte Episode finden, die noch keinen Folgensponsor hat
+  const nextEpisode = db.get(`
+    SELECT e.* FROM episodes e
+    WHERE e.status != 'veröffentlicht'
+    AND e.id NOT IN (SELECT episode_id FROM ad_placements WHERE position = 'folgensponsor' AND episode_id IS NOT NULL)
+    ORDER BY COALESCE(e.publish_date, '9999-12-31') ASC
+    LIMIT 1
+  `) as any;
+
+  if (!nextEpisode) return res.status(400).json({ success: false, error: 'Keine freie Episode gefunden' });
+
+  db.run('UPDATE ad_placements SET episode_id = ?, episode_title = ?, episode_number = ?, publish_date = ?, status = ? WHERE id = ?',
+    [nextEpisode.id, nextEpisode.title, nextEpisode.number, nextEpisode.publish_date, 'bestätigt', req.params.placementId]);
+
+  return res.json({ success: true, data: { episodeId: nextEpisode.id, episodeTitle: nextEpisode.title } });
+});
+
+
+// GET /api/sponsors/booking-calendar/export — CSV-Export des Buchungskalenders
+router.get('/booking-calendar/export', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { from, to, format = 'csv' } = req.query as any;
+
+  // Alle Buchungen laden (gleiche Logik wie booking-calendar)
+  const episodeBookings = db.all(`
+    SELECT b.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
+           c.name as category_name, e.title as episode_title, e.number as episode_number, e.publish_date
+    FROM episode_ad_bookings b
+    JOIN sponsors sp ON b.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON b.ad_category_id = c.id
+    LEFT JOIN episodes e ON b.episode_id = e.id
+    ORDER BY e.publish_date ASC
+  `) as any[];
+
+  const adPlacements = db.all(`
+    SELECT p.*, sl.name as slot_name, sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
+           c.name as category_name, e.title as ep_title, e.number as ep_number
+    FROM ad_placements p
+    JOIN ad_slots sl ON p.ad_slot_id = sl.id
+    JOIN sponsors sp ON sl.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON sl.category_id = c.id
+    LEFT JOIN episodes e ON p.episode_id = e.id
+    ORDER BY COALESCE(p.publish_date, p.created_at) ASC
+  `) as any[];
+
+  const plannedSlots = db.all(`
+    SELECT sl.*, sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company,
+           c.name as category_name
+    FROM ad_slots sl
+    JOIN sponsors sp ON sl.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON sl.category_id = c.id
+    WHERE sl.status NOT IN ('inaktiv', 'archiviert', 'abgelehnt', 'storniert')
+  `) as any[];
+  const bookedSlotIds = new Set(adPlacements.map((p: any) => p.ad_slot_id));
+  const unbooked = plannedSlots.filter((s: any) => !bookedSlotIds.has(s.id));
+
+  if (format === 'csv') {
+    const BOM = '\uFEFF';
+    const header = 'Typ;Sponsor;Firma;Kategorie;Position;Episode;Datum;Preis (EUR);Rechnungsstatus;Status;Notizen\n';
+    const rows: string[] = [];
+
+    episodeBookings.forEach((b: any) => {
+      const date = b.publish_date || '';
+      if (from && date && date < from) return;
+      if (to && date && date > to) return;
+      rows.push([
+        'Episodenbuchung',
+        b.sponsor_name || '',
+        b.sponsor_company || '',
+        b.category_name || '',
+        b.position || '',
+        b.episode_title ? `#${b.episode_number || ''} ${b.episode_title}` : '',
+        date,
+        '',
+        b.confirmed ? 'Bestätigt' : 'Ausstehend',
+        '',
+        '',
+      ].map((v: string) => `"${String(v).replace(/"/g, '""')}"`).join(';'));
+    });
+
+    adPlacements.forEach((p: any) => {
+      const date = p.publish_date || '';
+      if (from && date && date < from) return;
+      if (to && date && date > to) return;
+      rows.push([
+        'Werbeplatz-Buchung',
+        p.sponsor_name || '',
+        p.sponsor_company || '',
+        p.category_name || '',
+        p.position || '',
+        p.ep_title ? `#${p.ep_number || ''} ${p.ep_title}` : (p.slot_name || ''),
+        date,
+        p.price != null ? String(p.price.toFixed(2)) : '',
+        p.invoice_status || 'offen',
+        p.status || '',
+        p.notes || '',
+      ].map((v: string) => `"${String(v).replace(/"/g, '""')}"`).join(';'));
+    });
+
+    unbooked.forEach((s: any) => {
+      rows.push([
+        'Vorplanung',
+        s.sponsor_name || '',
+        s.sponsor_company || '',
+        s.category_name || '',
+        s.category || '',
+        s.name || '',
+        s.placement_start ? `${s.placement_start} – ${s.placement_end || '?'}` : '',
+        s.base_price != null ? String(s.base_price.toFixed(2)) : '',
+        'geplant',
+        s.status || '',
+        s.notes || '',
+      ].map((v: string) => `"${String(v).replace(/"/g, '""')}"`).join(';'));
+    });
+
+    const csv = BOM + header + rows.join('\n');
+    const filename = `buchungskalender_${from || 'alle'}_${to || 'alle'}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(csv);
+  }
+
+  return res.status(400).json({ success: false, error: 'Unbekanntes Format. Unterstützt: csv' });
+});
+
+// ============================================================
+// FOLGENSPONSOR-AUTOMATISIERUNG – Neue Episode einem aktiven Folgensponsor zuordnen
+// ============================================================
+
+// ── Auto-Assign Episode ──────────────────────────────────────────────────────
+router.post('/auto-assign-episode', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { episodeId } = req.body;
+  if (!episodeId) return res.status(400).json({ success: false, error: 'episodeId erforderlich' });
+
+  const episode = db.get('SELECT id, publish_date, recording_date FROM episodes WHERE id = ?', [episodeId]) as any;
+  if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
+
+  const epDate = episode.publish_date || episode.recording_date;
+  if (!epDate) return res.json({ success: true, data: { assigned: [], message: 'Kein Datum – keine automatische Zuordnung möglich' } });
+
+  // Alle aktiven Slots mit Laufzeit finden, die dieses Datum abdecken
+  const activeSlots = db.all(`
+    SELECT sl.*, sp.name as sponsor_name, c.is_exclusive, c.name as category_name
+    FROM ad_slots sl
+    JOIN sponsors sp ON sl.sponsor_id = sp.id
+    LEFT JOIN ad_categories c ON sl.category_id = c.id
+    WHERE sl.status IN ('aktiv', 'angefragt', 'bestätigt')
+      AND (
+        (sl.placement_start IS NOT NULL AND sl.placement_end IS NOT NULL
+         AND ? BETWEEN sl.placement_start AND sl.placement_end)
+        OR
+        (sl.start_date IS NOT NULL AND sl.end_date IS NOT NULL
+         AND ? BETWEEN sl.start_date AND sl.end_date)
+      )
+  `, [epDate, epDate]) as any[];
+
+  const assigned: any[] = [];
+  const skipped: any[] = [];
+
+  for (const slot of activeSlots) {
+    // Bereits gebucht?
+    const existing = db.get('SELECT id FROM episode_ad_bookings WHERE episode_id = ? AND ad_slot_id = ?', [episodeId, slot.id]);
+    if (existing) { skipped.push({ slotId: slot.id, reason: 'Bereits gebucht' }); continue; }
+
+    // Exklusivitäts-Check
+    if (slot.is_exclusive && slot.category_id) {
+      const conflict = db.get(`
+        SELECT b.id FROM episode_ad_bookings b
+        WHERE b.episode_id = ? AND b.ad_category_id = ?
+      `, [episodeId, slot.category_id]) as any;
+      if (conflict) { skipped.push({ slotId: slot.id, reason: 'Exklusive Kategorie bereits belegt' }); continue; }
+    }
+
+    // Buchung anlegen
+    const bookingId = uuidv4();
+    const position = slot.category || 'mid-roll';
+    db.run(`INSERT INTO episode_ad_bookings
+      (id, episode_id, ad_slot_id, ad_category_id, sponsor_id, position, confirmed, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))`,
+      [bookingId, episodeId, slot.id, slot.category_id || null, slot.sponsor_id, position]);
+
+    assigned.push({ bookingId, slotId: slot.id, sponsorName: slot.sponsor_name, categoryName: slot.category_name, position });
+  }
+
+  return res.json({
+    success: true,
+    data: { assigned, skipped, message: `${assigned.length} Platzierung(en) automatisch zugeordnet, ${skipped.length} übersprungen` },
+  });
+});
+
+// ============================================================
+// KONFLIKT-PRÜFUNG – Prüfe ob ein Slot für einen Zeitraum Konflikte hat
+// ============================================================
+
+// ── Konflikt-Prüfung ─────────────────────────────────────────────────────────
+router.get('/check-conflicts', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { slotId, from, to, categoryId, isExclusive } = req.query as any;
+
+  const conflicts: any[] = [];
+
+  if (from && to && isExclusive === 'true' && categoryId) {
+    // Episoden im Zeitraum finden
+    const episodes = db.all(`
+      SELECT e.id, e.title, e.number, e.publish_date
+      FROM episodes e
+      WHERE e.publish_date BETWEEN ? AND ?
+      ORDER BY e.publish_date ASC
+    `, [from, to]) as any[];
+
+    for (const ep of episodes) {
+      const existingExclusive = db.all(`
+        SELECT b.id, sp.name as sponsor_name, c.name as category_name
+        FROM episode_ad_bookings b
+        JOIN sponsors sp ON b.sponsor_id = sp.id
+        LEFT JOIN ad_categories c ON b.ad_category_id = c.id
+        WHERE b.episode_id = ? AND b.ad_category_id = ?
+        ${slotId ? 'AND b.ad_slot_id != ?' : ''}
+      `, slotId ? [ep.id, categoryId, slotId] : [ep.id, categoryId]) as any[];
+
+      if (existingExclusive.length > 0) {
+        conflicts.push({
+          episodeId: ep.id,
+          episodeTitle: ep.title,
+          episodeNumber: ep.number,
+          date: ep.publish_date,
+          conflictingBookings: existingExclusive,
+        });
+      }
+    }
+  }
+
+  return res.json({ success: true, data: { conflicts, hasConflicts: conflicts.length > 0 } });
+});
+
+// ============================================================
+// TKP-BERECHNUNG – Dynamische Preisberechnung für eine Buchung
+// ============================================================
+
+// ── Preis-Berechnung ─────────────────────────────────────────────────────────
+router.post('/calculate-price', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const { basePrice = 0, pricePerEpisode = 0, pricePer1000Listens = 0, episodeCount = 1, totalListens = 0, priceModel = 'fixed' } = req.body;
+
+  let episodeTotal = 0;
+  let tkpTotal = 0;
+  let total = 0;
+
+  if (priceModel === 'fixed') {
+    total = Number(basePrice);
+  } else if (priceModel === 'per_episode') {
+    episodeTotal = Number(pricePerEpisode) * Number(episodeCount);
+    total = Number(basePrice) + episodeTotal;
+  } else if (priceModel === 'per_1000') {
+    tkpTotal = (Number(totalListens) / 1000) * Number(pricePer1000Listens);
+    episodeTotal = Number(pricePerEpisode) * Number(episodeCount);
+    total = Number(basePrice) + episodeTotal + tkpTotal;
+  } else if (priceModel === 'combined') {
+    episodeTotal = Number(pricePerEpisode) * Number(episodeCount);
+    tkpTotal = (Number(totalListens) / 1000) * Number(pricePer1000Listens);
+    total = Number(basePrice) + episodeTotal + tkpTotal;
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      basePrice: Number(basePrice),
+      episodeTotal,
+      tkpTotal,
+      total,
+      breakdown: {
+        basispreis: Number(basePrice),
+        folgenpreis: episodeTotal,
+        tkpGebuehr: tkpTotal,
+        gesamt: total,
+      },
+    },
+  });
+});
+
+export default router;
+
+
 // SPONSOR DETAIL (MUSS nach allen statischen Routen stehen!)
 // ============================================================
 
@@ -1554,542 +2104,3 @@ router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any,
 // ============================================================
 // BUCHUNGSKALENDER – Alle Buchungen/Platzierungen für Kalenderansicht
 // ============================================================
-router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const { from, to } = req.query as any;
-
-  // 1. Episodengebundene Buchungen (alte episode_ad_bookings)
-  const episodeBookings = db.all(`
-    SELECT b.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
-           c.name as category_name, c.color as category_color, c.is_exclusive,
-           e.title as episode_title, e.number as episode_number, e.publish_date, e.status as episode_status
-    FROM episode_ad_bookings b
-    JOIN sponsors sp ON b.sponsor_id = sp.id
-    LEFT JOIN ad_categories c ON b.ad_category_id = c.id
-    LEFT JOIN episodes e ON b.episode_id = e.id
-    ORDER BY e.publish_date ASC, b.sort_order ASC
-  `) as any[];
-
-  // 2. Zeitraum-Buchungen (ad_slots mit Laufzeit)
-  const slotBookings = db.all(`
-    SELECT sl.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
-           c.name as category_name, c.color as category_color, c.is_exclusive
-    FROM ad_slots sl
-    JOIN sponsors sp ON sl.sponsor_id = sp.id
-    LEFT JOIN ad_categories c ON sl.category_id = c.id
-    WHERE sl.placement_start IS NOT NULL OR sl.start_date IS NOT NULL
-    ORDER BY COALESCE(sl.placement_start, sl.start_date) ASC
-  `) as any[];
-
-  // 3. ad_placements (neue Buchungen über Plus-Button in Sponsor-Detailseite)
-  const adPlacements = db.all(`
-    SELECT p.*, sl.name as slot_name, sl.category_id,
-           sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
-           c.name as category_name, c.color as category_color, c.is_exclusive,
-           e.title as ep_title, e.number as ep_number, e.status as ep_status
-    FROM ad_placements p
-    JOIN ad_slots sl ON p.ad_slot_id = sl.id
-    JOIN sponsors sp ON sl.sponsor_id = sp.id
-    LEFT JOIN ad_categories c ON sl.category_id = c.id
-    LEFT JOIN episodes e ON p.episode_id = e.id
-    ORDER BY COALESCE(p.publish_date, p.created_at) ASC
-  `) as any[];
-
-  // 4. Konflikte erkennen: Exklusive Kategorien an gleichen Terminen
-  const conflicts: any[] = [];
-  const exclusiveBookings = episodeBookings.filter((b: any) => b.is_exclusive);
-  const byDate: Record<string, any[]> = {};
-  exclusiveBookings.forEach((b: any) => {
-    const key = `${b.publish_date || 'no-date'}_${b.ad_category_id}`;
-    if (!byDate[key]) byDate[key] = [];
-    byDate[key].push(b);
-  });
-  Object.values(byDate).forEach((group: any[]) => {
-    if (group.length > 1) {
-      conflicts.push({
-        type: 'exclusive_conflict',
-        date: group[0].publish_date,
-        categoryName: group[0].category_name,
-        bookings: group.map((b: any) => ({ id: b.id, sponsorName: b.sponsor_name, episodeTitle: b.episode_title })),
-        message: `Exklusive Kategorie "${group[0].category_name}" ist am ${group[0].publish_date} mehrfach gebucht`,
-      });
-    }
-  });
-
-  // 5. Datum-Filter anwenden
-  let filteredEpisodeBookings = episodeBookings;
-  if (from) filteredEpisodeBookings = filteredEpisodeBookings.filter((b: any) => !b.publish_date || b.publish_date >= from);
-  if (to) filteredEpisodeBookings = filteredEpisodeBookings.filter((b: any) => !b.publish_date || b.publish_date <= to);
-
-  let filteredSlotBookings = slotBookings;
-  if (from) filteredSlotBookings = filteredSlotBookings.filter((b: any) => {
-    const start = b.placement_start || b.start_date;
-    return !start || start >= from;
-  });
-  if (to) filteredSlotBookings = filteredSlotBookings.filter((b: any) => {
-    const end = b.placement_end || b.end_date;
-    return !end || end <= to;
-  });
-
-  let filteredAdPlacements = adPlacements;
-  if (from) filteredAdPlacements = filteredAdPlacements.filter((p: any) => {
-    const d = p.publish_date || p.air_date;
-    return !d || d >= from;
-  });
-  if (to) filteredAdPlacements = filteredAdPlacements.filter((p: any) => {
-    const d = p.publish_date || p.air_date;
-    return !d || d <= to;
-  });
-
-  const episodeBookingsList = filteredEpisodeBookings.map((b: any) => ({
-    id: b.id,
-    type: 'episode',
-    sponsorId: b.sponsor_id,
-    sponsorName: b.sponsor_name,
-    sponsorCompany: b.sponsor_company,
-    sponsorColor: b.sponsor_color || '#7c3aed',
-    categoryName: b.category_name,
-    categoryColor: b.category_color || '#6b7280',
-    isExclusive: b.is_exclusive === 1,
-    position: b.position,
-    episodeId: b.episode_id,
-    episodeTitle: b.episode_title,
-    episodeNumber: b.episode_number,
-    date: b.publish_date,
-    confirmed: b.confirmed === 1,
-    episodeStatus: b.episode_status,
-  }));
-
-  const slotBookingsList = filteredSlotBookings.map((b: any) => ({
-    id: b.id,
-    type: 'slot',
-    sponsorId: b.sponsor_id,
-    sponsorName: b.sponsor_name,
-    sponsorCompany: b.sponsor_company,
-    sponsorColor: b.sponsor_color || '#7c3aed',
-    categoryName: b.category_name,
-    categoryColor: b.category_color || '#6b7280',
-    isExclusive: b.is_exclusive === 1,
-    position: b.category || b.production_type,
-    startDate: b.placement_start || b.start_date,
-    endDate: b.placement_end || b.end_date,
-    label: b.placement_label || b.name,
-    status: b.status,
-    basePrice: b.base_price,
-    pricePerEpisode: b.price_per_episode,
-  }));
-
-  const adPlacementsList = filteredAdPlacements.map((p: any) => ({
-    id: p.id,
-    type: 'placement',
-    sponsorId: p.sponsor_id,
-    sponsorName: p.sponsor_name,
-    sponsorCompany: p.sponsor_company,
-    sponsorColor: p.sponsor_color || '#059669',
-    categoryName: p.category_name,
-    categoryColor: p.category_color || '#6b7280',
-    isExclusive: p.is_exclusive === 1,
-    position: p.position || 'pre-roll',
-    episodeId: p.episode_id,
-    episodeTitle: p.episode_title || p.ep_title,
-    episodeNumber: p.episode_number || p.ep_number,
-    date: p.publish_date,
-    slotName: p.slot_name,
-    price: p.price,
-    invoiceStatus: p.invoice_status,
-    status: p.status,
-    notes: p.notes,
-  }));
-
-  const plannedSlotsList = (() => {
-    // BUGFIX v2.11.10: Zeige ALLE Slots mit Vorplanungs-Daten, nicht nur unggebuchte
-    const allSlots = db.all(`
-      SELECT sl.*, sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
-             c.name as category_name, c.color as category_color, c.is_exclusive
-      FROM ad_slots sl
-      JOIN sponsors sp ON sl.sponsor_id = sp.id
-      LEFT JOIN ad_categories c ON sl.category_id = c.id
-      WHERE sl.status NOT IN ('inaktiv', 'archiviert', 'abgelehnt', 'storniert')
-        AND (sl.placement_start IS NOT NULL OR sl.placement_end IS NOT NULL)
-    `) as any[];
-    
-    // BUGFIX v2.11.10: Filtere nach Datum-Bereich mit Overlap-Logik
-    let filtered = allSlots;
-    
-    // Overlap-Logik: Zeige Slots wenn sie sich mit dem Zeitraum [from, to] ueberschneiden
-    if (from || to) {
-      filtered = filtered.filter((s: any) => {
-        // Normalisiere Daten zu ISO-String Format (YYYY-MM-DD)
-        const normalize = (d: any) => {
-          if (!d) return null;
-          if (typeof d === 'string') {
-            // Wenn bereits ISO-Format, nutze es
-            if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.substring(0, 10);
-            // Versuche zu parsen
-            const parsed = new Date(d);
-            if (!isNaN(parsed.getTime())) {
-              return parsed.toISOString().substring(0, 10);
-            }
-          }
-          return null;
-        };
-        
-        const slotStart = normalize(s.placement_start);
-        const slotEnd = normalize(s.placement_end);
-        const fromNorm = from ? normalize(from) : null;
-        const toNorm = to ? normalize(to) : null;
-        
-        // Slots ohne Datum werden immer angezeigt
-        if (!slotStart && !slotEnd) return true;
-        
-        // Wenn nur Start-Datum: Zeige wenn start <= to
-        if (slotStart && !slotEnd) {
-          return !toNorm || slotStart <= toNorm;
-        }
-        
-        // Wenn nur End-Datum: Zeige wenn end >= from
-        if (!slotStart && slotEnd) {
-          return !fromNorm || slotEnd >= fromNorm;
-        }
-        
-        // Wenn beide Daten: Zeige wenn [start, end] und [from, to] sich ueberschneiden
-        // Ueberschneidung: start <= to AND end >= from
-        const startOk = !toNorm || (slotStart && slotStart <= toNorm);
-        const endOk = !fromNorm || (slotEnd && slotEnd >= fromNorm);
-        return startOk && endOk;
-      });
-    }
-    
-    return filtered.map((s: any) => ({
-      id: `planned_${s.id}`,
-      type: 'planned',
-      sponsorId: s.sponsor_id,
-      sponsorName: s.sponsor_name,
-      sponsorCompany: s.sponsor_company,
-      sponsorColor: s.sponsor_color || '#f59e0b',
-      categoryName: s.category_name,
-      categoryColor: s.category_color || '#6b7280',
-      isExclusive: s.is_exclusive === 1,
-      position: s.category || 'pre-roll',
-      startDate: s.placement_start,
-      endDate: s.placement_end,
-      label: s.placement_label || s.name,
-      status: s.status,
-      basePrice: s.base_price,
-      pricePerEpisode: s.price_per_episode,
-      price: s.base_price,
-      notes: s.notes,
-    }));
-  })();
-
-  if (req.query.format === 'csv') {
-    const headers = ['Typ', 'Sponsor', 'Firma', 'Kategorie', 'Position', 'Episode', 'Datum', 'Preis', 'Status', 'Notizen'];
-    const rows = [
-      ...episodeBookingsList.map(b => ['Episodenbuchung', b.sponsorName, b.sponsorCompany || '', b.categoryName || '', b.position, b.episodeTitle || '', b.date || '', '', b.confirmed ? 'Bestätigt' : 'Offen', '']),
-      ...slotBookingsList.map(b => ['Zeitraum-Slot', b.sponsorName, b.sponsorCompany || '', b.categoryName || '', b.position, '', `${b.startDate || ''} - ${b.endDate || ''}`, b.basePrice || '', b.status, '']),
-      ...adPlacementsList.map(p => ['Werbeplatz-Buchung', p.sponsorName, p.sponsorCompany || '', p.categoryName || '', p.position, p.episodeTitle || '', p.date || '', p.price || '', p.invoiceStatus, p.notes || '']),
-      ...plannedSlotsList.map(s => ['Vorplanung', s.sponsorName, s.sponsorCompany || '', s.categoryName || '', s.position, '', `${s.startDate || ''} - ${s.endDate || ''}`, s.price || '', 'Geplant', ''])
-    ];
-    
-    let csv = headers.join(';') + '\n';
-    rows.forEach(row => {
-      csv += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';') + '\n';
-    });
-    
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename=buchungskalender_${new Date().toISOString().split('T')[0]}.csv`);
-    return res.send(Buffer.from('\ufeff' + csv, 'utf-8'));
-  }
-
-  return res.json({
-    success: true,
-    data: {
-      episodeBookings: episodeBookingsList,
-      slotBookings: slotBookingsList,
-      adPlacements: adPlacementsList,
-      plannedSlots: plannedSlotsList,
-      conflicts,
-    },
-  });
-});
-
-// Folgensponsor-Automatisierung
-router.post('/placements/:placementId/auto-assign', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const placement = db.get('SELECT * FROM ad_placements WHERE id = ?', [req.params.placementId]) as any;
-  if (!placement) return res.status(404).json({ success: false, error: 'Platzierung nicht gefunden' });
-
-  // Nächste unveröffentlichte Episode finden, die noch keinen Folgensponsor hat
-  const nextEpisode = db.get(`
-    SELECT e.* FROM episodes e
-    WHERE e.status != 'veröffentlicht'
-    AND e.id NOT IN (SELECT episode_id FROM ad_placements WHERE position = 'folgensponsor' AND episode_id IS NOT NULL)
-    ORDER BY COALESCE(e.publish_date, '9999-12-31') ASC
-    LIMIT 1
-  `) as any;
-
-  if (!nextEpisode) return res.status(400).json({ success: false, error: 'Keine freie Episode gefunden' });
-
-  db.run('UPDATE ad_placements SET episode_id = ?, episode_title = ?, episode_number = ?, publish_date = ?, status = ? WHERE id = ?',
-    [nextEpisode.id, nextEpisode.title, nextEpisode.number, nextEpisode.publish_date, 'bestätigt', req.params.placementId]);
-
-  return res.json({ success: true, data: { episodeId: nextEpisode.id, episodeTitle: nextEpisode.title } });
-});
-
-// GET /api/sponsors/booking-calendar/export — CSV-Export des Buchungskalenders
-router.get('/booking-calendar/export', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const { from, to, format = 'csv' } = req.query as any;
-
-  // Alle Buchungen laden (gleiche Logik wie booking-calendar)
-  const episodeBookings = db.all(`
-    SELECT b.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
-           c.name as category_name, e.title as episode_title, e.number as episode_number, e.publish_date
-    FROM episode_ad_bookings b
-    JOIN sponsors sp ON b.sponsor_id = sp.id
-    LEFT JOIN ad_categories c ON b.ad_category_id = c.id
-    LEFT JOIN episodes e ON b.episode_id = e.id
-    ORDER BY e.publish_date ASC
-  `) as any[];
-
-  const adPlacements = db.all(`
-    SELECT p.*, sl.name as slot_name, sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
-           c.name as category_name, e.title as ep_title, e.number as ep_number
-    FROM ad_placements p
-    JOIN ad_slots sl ON p.ad_slot_id = sl.id
-    JOIN sponsors sp ON sl.sponsor_id = sp.id
-    LEFT JOIN ad_categories c ON sl.category_id = c.id
-    LEFT JOIN episodes e ON p.episode_id = e.id
-    ORDER BY COALESCE(p.publish_date, p.created_at) ASC
-  `) as any[];
-
-  const plannedSlots = db.all(`
-    SELECT sl.*, sp.id as sponsor_id, sp.name as sponsor_name, sp.company as sponsor_company,
-           c.name as category_name
-    FROM ad_slots sl
-    JOIN sponsors sp ON sl.sponsor_id = sp.id
-    LEFT JOIN ad_categories c ON sl.category_id = c.id
-    WHERE sl.status NOT IN ('inaktiv', 'archiviert', 'abgelehnt', 'storniert')
-  `) as any[];
-  const bookedSlotIds = new Set(adPlacements.map((p: any) => p.ad_slot_id));
-  const unbooked = plannedSlots.filter((s: any) => !bookedSlotIds.has(s.id));
-
-  if (format === 'csv') {
-    const BOM = '\uFEFF';
-    const header = 'Typ;Sponsor;Firma;Kategorie;Position;Episode;Datum;Preis (EUR);Rechnungsstatus;Status;Notizen\n';
-    const rows: string[] = [];
-
-    episodeBookings.forEach((b: any) => {
-      const date = b.publish_date || '';
-      if (from && date && date < from) return;
-      if (to && date && date > to) return;
-      rows.push([
-        'Episodenbuchung',
-        b.sponsor_name || '',
-        b.sponsor_company || '',
-        b.category_name || '',
-        b.position || '',
-        b.episode_title ? `#${b.episode_number || ''} ${b.episode_title}` : '',
-        date,
-        '',
-        b.confirmed ? 'Bestätigt' : 'Ausstehend',
-        '',
-        '',
-      ].map((v: string) => `"${String(v).replace(/"/g, '""')}"`).join(';'));
-    });
-
-    adPlacements.forEach((p: any) => {
-      const date = p.publish_date || '';
-      if (from && date && date < from) return;
-      if (to && date && date > to) return;
-      rows.push([
-        'Werbeplatz-Buchung',
-        p.sponsor_name || '',
-        p.sponsor_company || '',
-        p.category_name || '',
-        p.position || '',
-        p.ep_title ? `#${p.ep_number || ''} ${p.ep_title}` : (p.slot_name || ''),
-        date,
-        p.price != null ? String(p.price.toFixed(2)) : '',
-        p.invoice_status || 'offen',
-        p.status || '',
-        p.notes || '',
-      ].map((v: string) => `"${String(v).replace(/"/g, '""')}"`).join(';'));
-    });
-
-    unbooked.forEach((s: any) => {
-      rows.push([
-        'Vorplanung',
-        s.sponsor_name || '',
-        s.sponsor_company || '',
-        s.category_name || '',
-        s.category || '',
-        s.name || '',
-        s.placement_start ? `${s.placement_start} – ${s.placement_end || '?'}` : '',
-        s.base_price != null ? String(s.base_price.toFixed(2)) : '',
-        'geplant',
-        s.status || '',
-        s.notes || '',
-      ].map((v: string) => `"${String(v).replace(/"/g, '""')}"`).join(';'));
-    });
-
-    const csv = BOM + header + rows.join('\n');
-    const filename = `buchungskalender_${from || 'alle'}_${to || 'alle'}.csv`;
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    return res.send(csv);
-  }
-
-  return res.status(400).json({ success: false, error: 'Unbekanntes Format. Unterstützt: csv' });
-});
-
-// ============================================================
-// FOLGENSPONSOR-AUTOMATISIERUNG – Neue Episode einem aktiven Folgensponsor zuordnen
-// ============================================================
-router.post('/auto-assign-episode', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const { episodeId } = req.body;
-  if (!episodeId) return res.status(400).json({ success: false, error: 'episodeId erforderlich' });
-
-  const episode = db.get('SELECT id, publish_date, recording_date FROM episodes WHERE id = ?', [episodeId]) as any;
-  if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
-
-  const epDate = episode.publish_date || episode.recording_date;
-  if (!epDate) return res.json({ success: true, data: { assigned: [], message: 'Kein Datum – keine automatische Zuordnung möglich' } });
-
-  // Alle aktiven Slots mit Laufzeit finden, die dieses Datum abdecken
-  const activeSlots = db.all(`
-    SELECT sl.*, sp.name as sponsor_name, c.is_exclusive, c.name as category_name
-    FROM ad_slots sl
-    JOIN sponsors sp ON sl.sponsor_id = sp.id
-    LEFT JOIN ad_categories c ON sl.category_id = c.id
-    WHERE sl.status IN ('aktiv', 'angefragt', 'bestätigt')
-      AND (
-        (sl.placement_start IS NOT NULL AND sl.placement_end IS NOT NULL
-         AND ? BETWEEN sl.placement_start AND sl.placement_end)
-        OR
-        (sl.start_date IS NOT NULL AND sl.end_date IS NOT NULL
-         AND ? BETWEEN sl.start_date AND sl.end_date)
-      )
-  `, [epDate, epDate]) as any[];
-
-  const assigned: any[] = [];
-  const skipped: any[] = [];
-
-  for (const slot of activeSlots) {
-    // Bereits gebucht?
-    const existing = db.get('SELECT id FROM episode_ad_bookings WHERE episode_id = ? AND ad_slot_id = ?', [episodeId, slot.id]);
-    if (existing) { skipped.push({ slotId: slot.id, reason: 'Bereits gebucht' }); continue; }
-
-    // Exklusivitäts-Check
-    if (slot.is_exclusive && slot.category_id) {
-      const conflict = db.get(`
-        SELECT b.id FROM episode_ad_bookings b
-        WHERE b.episode_id = ? AND b.ad_category_id = ?
-      `, [episodeId, slot.category_id]) as any;
-      if (conflict) { skipped.push({ slotId: slot.id, reason: 'Exklusive Kategorie bereits belegt' }); continue; }
-    }
-
-    // Buchung anlegen
-    const bookingId = uuidv4();
-    const position = slot.category || 'mid-roll';
-    db.run(`INSERT INTO episode_ad_bookings
-      (id, episode_id, ad_slot_id, ad_category_id, sponsor_id, position, confirmed, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))`,
-      [bookingId, episodeId, slot.id, slot.category_id || null, slot.sponsor_id, position]);
-
-    assigned.push({ bookingId, slotId: slot.id, sponsorName: slot.sponsor_name, categoryName: slot.category_name, position });
-  }
-
-  return res.json({
-    success: true,
-    data: { assigned, skipped, message: `${assigned.length} Platzierung(en) automatisch zugeordnet, ${skipped.length} übersprungen` },
-  });
-});
-
-// ============================================================
-// KONFLIKT-PRÜFUNG – Prüfe ob ein Slot für einen Zeitraum Konflikte hat
-// ============================================================
-router.get('/check-conflicts', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
-  const db = getDb();
-  const { slotId, from, to, categoryId, isExclusive } = req.query as any;
-
-  const conflicts: any[] = [];
-
-  if (from && to && isExclusive === 'true' && categoryId) {
-    // Episoden im Zeitraum finden
-    const episodes = db.all(`
-      SELECT e.id, e.title, e.number, e.publish_date
-      FROM episodes e
-      WHERE e.publish_date BETWEEN ? AND ?
-      ORDER BY e.publish_date ASC
-    `, [from, to]) as any[];
-
-    for (const ep of episodes) {
-      const existingExclusive = db.all(`
-        SELECT b.id, sp.name as sponsor_name, c.name as category_name
-        FROM episode_ad_bookings b
-        JOIN sponsors sp ON b.sponsor_id = sp.id
-        LEFT JOIN ad_categories c ON b.ad_category_id = c.id
-        WHERE b.episode_id = ? AND b.ad_category_id = ?
-        ${slotId ? 'AND b.ad_slot_id != ?' : ''}
-      `, slotId ? [ep.id, categoryId, slotId] : [ep.id, categoryId]) as any[];
-
-      if (existingExclusive.length > 0) {
-        conflicts.push({
-          episodeId: ep.id,
-          episodeTitle: ep.title,
-          episodeNumber: ep.number,
-          date: ep.publish_date,
-          conflictingBookings: existingExclusive,
-        });
-      }
-    }
-  }
-
-  return res.json({ success: true, data: { conflicts, hasConflicts: conflicts.length > 0 } });
-});
-
-// ============================================================
-// TKP-BERECHNUNG – Dynamische Preisberechnung für eine Buchung
-// ============================================================
-router.post('/calculate-price', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
-  const { basePrice = 0, pricePerEpisode = 0, pricePer1000Listens = 0, episodeCount = 1, totalListens = 0, priceModel = 'fixed' } = req.body;
-
-  let episodeTotal = 0;
-  let tkpTotal = 0;
-  let total = 0;
-
-  if (priceModel === 'fixed') {
-    total = Number(basePrice);
-  } else if (priceModel === 'per_episode') {
-    episodeTotal = Number(pricePerEpisode) * Number(episodeCount);
-    total = Number(basePrice) + episodeTotal;
-  } else if (priceModel === 'per_1000') {
-    tkpTotal = (Number(totalListens) / 1000) * Number(pricePer1000Listens);
-    episodeTotal = Number(pricePerEpisode) * Number(episodeCount);
-    total = Number(basePrice) + episodeTotal + tkpTotal;
-  } else if (priceModel === 'combined') {
-    episodeTotal = Number(pricePerEpisode) * Number(episodeCount);
-    tkpTotal = (Number(totalListens) / 1000) * Number(pricePer1000Listens);
-    total = Number(basePrice) + episodeTotal + tkpTotal;
-  }
-
-  return res.json({
-    success: true,
-    data: {
-      basePrice: Number(basePrice),
-      episodeTotal,
-      tkpTotal,
-      total,
-      breakdown: {
-        basispreis: Number(basePrice),
-        folgenpreis: episodeTotal,
-        tkpGebuehr: tkpTotal,
-        gesamt: total,
-      },
-    },
-  });
-});
-
-export default router;

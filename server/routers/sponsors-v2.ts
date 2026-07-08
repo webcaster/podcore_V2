@@ -131,7 +131,7 @@ router.get('/:sponsorId/bookings', requirePermission('canViewSponsors') as any, 
 
   let query = `
     SELECT ab.*, 
-           s.name as slot_name, s.position as slot_position,
+           s.name as slot_name, s.category as slot_position,
            sp.name as sponsor_name,
            e.title as episode_title, e.number as episode_number
     FROM ad_bookings ab
@@ -401,7 +401,7 @@ router.get('/calendar/bookings', requirePermission('canViewSponsors') as any, (r
 
   let query = `
     SELECT ab.*, 
-           s.name as slot_name, s.position as slot_position,
+           s.name as slot_name, s.category as slot_position,
            sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
            e.title as episode_title, e.number as episode_number
     FROM ad_bookings ab

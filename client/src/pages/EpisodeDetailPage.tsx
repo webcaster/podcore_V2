@@ -11,6 +11,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi } from '../lib/api';
+import { sponsorsV2Api } from '../lib/api-v2';
 import Modal from '../components/ui/Modal';
 import IdeaImportModal from '../components/ui/IdeaImportModal';
 import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
@@ -220,6 +221,12 @@ export default function EpisodeDetailPage() {
   const [adCategories, setAdCategories] = useState<any[]>([]);
   const [adBookingMode, setAdBookingMode] = useState<'slot' | 'special'>('special');
   const [specialBookingForm, setSpecialBookingForm] = useState<any>({ sponsorId: '', adCategoryId: '', position: 'mid-roll', scriptText: '', note: '', timePosition: '' });
+  // v2.12.0: Neue Buchungen aus ad_bookings
+  const [v2Bookings, setV2Bookings] = useState<any[]>([]);
+  const [isLoadingV2Bookings, setIsLoadingV2Bookings] = useState(false);
+  const [showV2BookingModal, setShowV2BookingModal] = useState(false);
+  const [v2BookingForm, setV2BookingForm] = useState<any>({ slotId: '', price: '', notes: '' });
+  const [v2SponsorSlots, setV2SponsorSlots] = useState<any[]>([]);
 
   useEffect(() => {
     if (activeTab === 'hub') loadHubData();
@@ -356,6 +363,34 @@ export default function EpisodeDetailPage() {
     finally { setIsLoadingAds(false); }
   };
 
+  // v2.12.0: Neue Buchungen laden
+  const loadV2Bookings = async () => {
+    if (!id) return;
+    setIsLoadingV2Bookings(true);
+    try {
+      // Alle Sponsoren laden um deren v2-Buchungen für diese Episode zu finden
+      const allSponsorsData = await sponsorsApi.list();
+      const sponsorList = Array.isArray(allSponsorsData) ? allSponsorsData : (allSponsorsData as any)?.data || [];
+      const allV2Bookings: any[] = [];
+      const allSlots: any[] = [];
+      for (const sp of sponsorList) {
+        try {
+          const [bkgs, slots] = await Promise.all([
+            sponsorsV2Api.listBookings(sp.id, {}),
+            sponsorsApi.listSlots(sp.id),
+          ]);
+          const episodeBookings = (Array.isArray(bkgs) ? bkgs : (bkgs as any)?.data || [])
+            .filter((b: any) => b.episodeId === id);
+          allV2Bookings.push(...episodeBookings);
+          allSlots.push(...(Array.isArray(slots) ? slots : (slots as any)?.data || []).map((s: any) => ({ ...s, sponsorId: sp.id, sponsorName: sp.name })));
+        } catch (_) {}
+      }
+      setV2Bookings(allV2Bookings);
+      setV2SponsorSlots(allSlots);
+    } catch (err: any) { /* Stille Fehler – v2 ist optional */ }
+    finally { setIsLoadingV2Bookings(false); }
+  };
+
   const handleApprovalAction = async () => {
     if (!id || !approvalAction) return;
     setIsApproving(true);
@@ -410,6 +445,7 @@ export default function EpisodeDetailPage() {
         setScriptReady(ep.scriptReady || false);
         if (ep.ideaId) setLinkedIdeaId(ep.ideaId);
         loadAdBookings();
+        loadV2Bookings();
         const globalTech = settings?.technicalDefaults || {};
         const episodeTech = (ep.technicalData && typeof ep.technicalData === 'object') ? ep.technicalData : {};
         setTechnicalData(prev => ({ ...prev, ...globalTech, ...episodeTech }));
@@ -1448,6 +1484,122 @@ export default function EpisodeDetailPage() {
                   </div>
                 </div>
               )}
+
+              {/* ── v2.12.0: Neue Buchungen (ad_bookings) ─────────────────── */}
+              <div className="card border-purple-700/30 bg-purple-900/5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="font-semibold text-text-primary flex items-center gap-2">
+                      <Megaphone size={16} className="text-accent-purple" /> Buchungen v2
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-400 border border-purple-700/50">v2.12.0</span>
+                    </h2>
+                    <p className="text-xs text-text-muted mt-0.5">Buchungen aus dem neuen Sponsoring-System (Verträge → Slots → Buchungen)</p>
+                  </div>
+                  {can('canEditSponsors') && (
+                    <button
+                      onClick={() => { setV2BookingForm({ slotId: '', price: '', notes: '' }); setShowV2BookingModal(true); }}
+                      className="btn-primary text-xs py-1.5"
+                    >
+                      <Plus size={14} /> Buchung erstellen
+                    </button>
+                  )}
+                </div>
+
+                {isLoadingV2Bookings ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 size={18} className="animate-spin text-accent-purple" />
+                  </div>
+                ) : v2Bookings.length === 0 ? (
+                  <div className="text-center py-8 border border-dashed border-purple-700/30 rounded-xl">
+                    <Megaphone size={28} className="mx-auto mb-2 text-purple-600 opacity-40" />
+                    <p className="text-text-muted text-sm">Keine v2-Buchungen für diese Episode</p>
+                    <p className="text-text-muted text-xs mt-1">Buchungen werden über die Sponsor-Detailseite oder hier erstellt.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {v2Bookings.map((b: any) => (
+                      <div key={b.id} className="flex items-center justify-between p-3 rounded-xl border border-purple-700/30 bg-purple-900/10">
+                        <div>
+                          <p className="text-sm font-bold text-text-primary">{b.sponsorName}</p>
+                          <p className="text-xs text-text-muted">{b.slotName} · {new Date(b.bookingDate).toLocaleDateString('de-DE')}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                              b.status === 'bestätigt' ? 'bg-green-900/30 text-green-400 border-green-700/40' :
+                              b.status === 'ausgestrahlt' ? 'bg-blue-900/30 text-blue-400 border-blue-700/40' :
+                              'bg-yellow-900/30 text-yellow-400 border-yellow-700/40'
+                            }`}>{b.status}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                              b.invoiceStatus === 'bezahlt' ? 'bg-green-900/30 text-green-400 border-green-700/40' :
+                              b.invoiceStatus === 'versendet' ? 'bg-blue-900/30 text-blue-400 border-blue-700/40' :
+                              'bg-gray-700/50 text-gray-400 border-gray-600/40'
+                            }`}>Rechnung: {b.invoiceStatus}</span>
+                            {b.finalPrice > 0 && (
+                              <span className="text-[10px] text-accent-green font-medium">{b.finalPrice.toFixed(2)} €</span>
+                            )}
+                          </div>
+                        </div>
+                        {can('canEditSponsors') && (
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm('Buchung wirklich löschen?')) return;
+                              try {
+                                await sponsorsV2Api.deleteBooking(b.id);
+                                showSuccess('Buchung gelöscht');
+                                loadV2Bookings();
+                              } catch (e: any) { showError(e.message); }
+                            }}
+                            className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors ml-3"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Verfügbare Slots als Vorschläge */}
+                {v2SponsorSlots.length > 0 && can('canEditSponsors') && (
+                  <div className="mt-4 pt-4 border-t border-purple-700/20">
+                    <p className="text-xs font-semibold text-text-muted mb-2">Verfügbare Slots für Schnellbuchung</p>
+                    <div className="space-y-1.5">
+                      {v2SponsorSlots
+                        .filter((s: any) => !v2Bookings.some((b: any) => b.slotId === s.id))
+                        .slice(0, 5)
+                        .map((slot: any) => (
+                          <div key={slot.id} className="flex items-center justify-between text-xs p-2 rounded-lg bg-obsidian-800/60 border border-surface-border">
+                            <div>
+                              <span className="font-medium text-text-primary">{slot.sponsorName}</span>
+                              <span className="text-text-muted ml-2">{slot.name}</span>
+                              {(slot.price_per_episode || slot.base_price) && (
+                                <span className="text-accent-green ml-2">{slot.price_per_episode || slot.base_price} €</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const today = new Date().toISOString().split('T')[0];
+                                  await sponsorsV2Api.createBooking(slot.sponsorId, {
+                                    slotId: slot.id,
+                                    episodeId: id,
+                                    bookingDate: today,
+                                    price: slot.price_per_episode || slot.base_price || 0,
+                                  });
+                                  showSuccess(`${slot.sponsorName} gebucht`);
+                                  loadV2Bookings();
+                                } catch (e: any) { showError(e.message); }
+                              }}
+                              className="text-[10px] px-2 py-0.5 rounded-full bg-purple-900/40 text-purple-300 border border-purple-700/50 hover:bg-purple-800/60 transition-colors"
+                            >
+                              + Buchen
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
 
@@ -2074,6 +2226,77 @@ export default function EpisodeDetailPage() {
               {approvalAction === 'approve' ? <><CheckCircle size={15} /> Freigeben</>
                : approvalAction === 'reject' ? <><X size={15} /> Zur Überarbeitung</>
                : <><UserCheck size={15} /> Freigabe anfordern</>}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* v2.12.0 Buchungsmodal */}
+      <Modal isOpen={showV2BookingModal} onClose={() => setShowV2BookingModal(false)} title="Neue v2-Buchung erstellen">
+        <div className="space-y-4">
+          <div className="p-3 bg-purple-900/20 border border-purple-700/40 rounded-lg">
+            <p className="text-xs text-purple-400 font-medium">Buchung im neuen Sponsoring-System (v2.12.0)</p>
+            <p className="text-[10px] text-text-muted mt-1">Erstellt eine Buchung direkt in der neuen <code>ad_bookings</code>-Tabelle, verknüpft mit einem Sponsor-Slot.</p>
+          </div>
+          <div>
+            <label className="label">Werbeplatz (Slot) *</label>
+            <select
+              value={v2BookingForm.slotId}
+              onChange={e => setV2BookingForm((f: any) => ({...f, slotId: e.target.value}))}
+              className="select w-full"
+            >
+              <option value="">Slot auswählen...</option>
+              {v2SponsorSlots.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.sponsorName} – {s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Preis (€)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={v2BookingForm.price}
+              onChange={e => setV2BookingForm((f: any) => ({...f, price: e.target.value}))}
+              placeholder="z.B. 250.00"
+              className="input w-full"
+            />
+          </div>
+          <div>
+            <label className="label">Notizen</label>
+            <textarea
+              value={v2BookingForm.notes}
+              onChange={e => setV2BookingForm((f: any) => ({...f, notes: e.target.value}))}
+              placeholder="Interne Notizen zur Buchung..."
+              className="input w-full"
+              rows={2}
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setShowV2BookingModal(false)} className="btn-ghost flex-1">Abbrechen</button>
+            <button
+              disabled={!v2BookingForm.slotId}
+              onClick={async () => {
+                if (!v2BookingForm.slotId) return;
+                const slot = v2SponsorSlots.find((s: any) => s.id === v2BookingForm.slotId);
+                if (!slot) return;
+                try {
+                  const today = new Date().toISOString().split('T')[0];
+                  await sponsorsV2Api.createBooking(slot.sponsorId, {
+                    slotId: v2BookingForm.slotId,
+                    episodeId: id,
+                    bookingDate: today,
+                    price: parseFloat(v2BookingForm.price) || 0,
+                    notes: v2BookingForm.notes,
+                  });
+                  showSuccess('Buchung erstellt');
+                  setShowV2BookingModal(false);
+                  loadV2Bookings();
+                } catch (e: any) { showError(e.message); }
+              }}
+              className="btn-primary flex-1 disabled:opacity-50"
+            >
+              Buchung erstellen
             </button>
           </div>
         </div>
