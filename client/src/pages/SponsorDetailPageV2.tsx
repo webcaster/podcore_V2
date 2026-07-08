@@ -48,6 +48,7 @@ export default function SponsorDetailPageV2() {
     bookingDate: '',
     bookingEndDate: '',
     price: '',
+    priceModel: 'per_episode', // 'base' | 'per_episode' | 'cpm'
     priceAdjustment: '',
     listenerFee: '',
     notes: '',
@@ -630,10 +631,14 @@ export default function SponsorDetailPageV2() {
               value={bookingForm.slotId}
               onChange={(e) => {
                 const selectedSlot = slots.find((s: any) => s.id === e.target.value);
+                const defaultPrice = selectedSlot
+                  ? String(selectedSlot.price_per_episode || selectedSlot.base_price || '')
+                  : '';
                 setBookingForm({
                   ...bookingForm,
                   slotId: e.target.value,
-                  price: selectedSlot ? String(selectedSlot.price_per_episode || selectedSlot.base_price || '') : bookingForm.price,
+                  priceModel: selectedSlot?.price_per_episode ? 'per_episode' : selectedSlot?.base_price ? 'base' : 'per_episode',
+                  price: defaultPrice,
                 });
               }}
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500"
@@ -641,10 +646,64 @@ export default function SponsorDetailPageV2() {
               <option value="">-- Werbekategorie auswählen --</option>
               {slots.map((slot: any) => (
                 <option key={slot.id} value={slot.id}>
-                  {slot.name}{slot.default_position ? ` (${slot.default_position})` : ''}{slot.price_per_episode ? ` – ${slot.price_per_episode} EUR/Folge` : ''}
+                  {slot.name}{slot.default_position ? ` (${slot.default_position})` : ''}
                 </option>
               ))}
             </select>
+            {/* Preismodell-Auswahl nach Slot-Wahl */}
+            {bookingForm.slotId && (() => {
+              const sel = slots.find((s: any) => s.id === bookingForm.slotId);
+              if (!sel) return null;
+              return (
+                <div className="mt-3 p-3 bg-gray-800/60 rounded-lg border border-gray-700 space-y-2">
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Preismodell wählen</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {sel.base_price && (
+                      <button
+                        type="button"
+                        onClick={() => setBookingForm({ ...bookingForm, priceModel: 'base', price: String(sel.base_price) })}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+                          bookingForm.priceModel === 'base'
+                            ? 'bg-purple-600 border-purple-500 text-white'
+                            : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        <div>Basis</div>
+                        <div className="font-bold">{sel.base_price} EUR</div>
+                      </button>
+                    )}
+                    {sel.price_per_episode && (
+                      <button
+                        type="button"
+                        onClick={() => setBookingForm({ ...bookingForm, priceModel: 'per_episode', price: String(sel.price_per_episode) })}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+                          bookingForm.priceModel === 'per_episode'
+                            ? 'bg-purple-600 border-purple-500 text-white'
+                            : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        <div>Pro Folge</div>
+                        <div className="font-bold">{sel.price_per_episode} EUR</div>
+                      </button>
+                    )}
+                    {sel.price_per_1000 && (
+                      <button
+                        type="button"
+                        onClick={() => setBookingForm({ ...bookingForm, priceModel: 'cpm', price: String(sel.price_per_1000) })}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+                          bookingForm.priceModel === 'cpm'
+                            ? 'bg-purple-600 border-purple-500 text-white'
+                            : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        <div>CPM</div>
+                        <div className="font-bold">{sel.price_per_1000} EUR/1k</div>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
