@@ -783,15 +783,7 @@ export function updateLayout(id: string, data: Partial<PdfLayout>): PdfLayout | 
   const db = getDb();
   const existing = getLayoutById(id);
   if (!existing) return null;
-  // System-Layouts: nur is_enabled darf geändert werden
-  if (existing.isSystem) {
-    if (data.isEnabled !== undefined) {
-      db.run('UPDATE pdf_layouts SET is_enabled = ?, updated_at = datetime(\'now\') WHERE id = ?',
-        [data.isEnabled ? 1 : 0, id]);
-      return getLayoutById(id);
-    }
-    throw new Error('System-Layouts können nicht bearbeitet werden. Erstelle eine Kopie.');
-  }
+  // System-Layouts: können vollständig bearbeitet werden, nur Löschen ist gesperrt
 
   db.run(`UPDATE pdf_layouts SET
     name = COALESCE(?, name),

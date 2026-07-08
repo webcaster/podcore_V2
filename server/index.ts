@@ -26,6 +26,7 @@ import chatRouter from './routers/chat';
 import pdfLayoutsRouter from './routers/pdfLayouts';
 import approvalsRouter from './routers/approvals';
 import sponsorsV2Router from './routers/sponsors-v2';
+import updateRouter from './routers/update';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -135,6 +136,7 @@ app.use('/api/seasons', seasonsRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/pdf-layouts', pdfLayoutsRouter);
+app.use('/api/update', updateRouter);
 
 // Serve branding assets publicly (no auth needed for display)
 const brandingDir = path.join(DATA_DIR, 'branding');

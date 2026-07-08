@@ -3,7 +3,7 @@ import {
   Shield, Users, Plus, Edit2, Trash2, Key, Check, X, Eye, EyeOff,
   Server, Database, HardDrive, Activity, RefreshCw, Loader2, Lock, Tag, Save,
   UserX, ArrowRight, AlertTriangle, ToggleLeft, ToggleRight, Layers, RotateCcw,
-  Upload, FileText, Download, Info, CheckCircle2, XCircle
+  Upload, FileText, Download, Info, CheckCircle2, XCircle, GitBranch
 } from 'lucide-react';
 import { adminApi, backupApi } from '../lib/api';
 import { useApp, useFeatures } from '../contexts/AppContext';
@@ -116,6 +116,66 @@ export default function AdminPage() {
   const [deleteLinkedData, setDeleteLinkedData] = useState<any>(null);
   const [transferToUserId, setTransferToUserId] = useState<string>('global');
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // ── Update-System State ──────────────────────────────────
+  const [updateInfo, setUpdateInfo] = useState<any>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateLog, setUpdateLog] = useState<{ type: string; message: string; timestamp: string }[]>([]);
+  const [updateDone, setUpdateDone] = useState(false);
+  const [changelog, setChangelog] = useState<any[]>([]);
+  const [showChangelog, setShowChangelog] = useState(false);
+
+  const checkForUpdate = async () => {
+    setIsCheckingUpdate(true);
+    try {
+      const res = await fetch('/api/update/check', { credentials: 'include' });
+      const json = await res.json();
+      if (json.success) setUpdateInfo(json.data);
+    } catch (e) {
+      setUpdateInfo({ error: 'GitHub nicht erreichbar', upToDate: true, currentVersion: '—' });
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const loadChangelog = async () => {
+    try {
+      const res = await fetch('/api/update/changelog', { credentials: 'include' });
+      const json = await res.json();
+      if (json.success) setChangelog(json.data);
+    } catch {}
+    setShowChangelog(true);
+  };
+
+  const startUpdate = () => {
+    setIsUpdating(true);
+    setUpdateLog([]);
+    setUpdateDone(false);
+
+    // SSE-Stream verbinden
+    const es = new EventSource('/api/update/stream');
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'done') {
+          setUpdateDone(true);
+          setIsUpdating(false);
+          es.close();
+        } else if (data.type === 'failed') {
+          setIsUpdating(false);
+          es.close();
+        }
+        if (data.message) {
+          setUpdateLog(prev => [...prev, { type: data.type || 'log', message: data.message, timestamp: data.timestamp || new Date().toISOString() }]);
+        }
+      } catch {}
+    };
+    es.onerror = () => { es.close(); setIsUpdating(false); };
+
+    // Update auslösen
+    fetch('/api/update/install', { method: 'POST', credentials: 'include' }).catch(() => {});
+  };
 
   // ── Backup Import State ──────────────────────────────────
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -651,6 +711,128 @@ export default function AdminPage() {
                     <HardDrive size={16} /><span>Backup exportieren</span>
                   </button>
                 </div>
+              </div>
+
+              {/* ── APP-UPDATE ── */}
+              <div className="card">
+                <h3 className="font-semibold text-text-primary mb-1 flex items-center gap-2">
+                  <RefreshCw size={16} className="text-accent-purple" />
+                  App-Update
+                </h3>
+                <p className="text-text-secondary text-sm mb-4">Prüft GitHub auf neue Versionen und installiert Updates automatisch (git pull + Build + Neustart).</p>
+
+                {/* Version-Check Bereich */}
+                <div className="flex flex-wrap gap-3 mb-4">
+                  <button
+                    onClick={checkForUpdate}
+                    disabled={isCheckingUpdate || isUpdating}
+                    className="btn-secondary"
+                  >
+                    {isCheckingUpdate ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    <span>{isCheckingUpdate ? 'Prüfe...' : 'Auf Updates prüfen'}</span>
+                  </button>
+                  <button onClick={loadChangelog} disabled={isUpdating} className="btn-secondary">
+                    <FileText size={16} /><span>Changelog</span>
+                  </button>
+                </div>
+
+                {/* Update-Status */}
+                {updateInfo && (
+                  <div className={`rounded-xl p-4 mb-4 ${
+                    updateInfo.error ? 'bg-surface-overlay border border-surface-border' :
+                    updateInfo.hasUpdate ? 'bg-accent-orange/10 border border-accent-orange/30' :
+                    'bg-accent-green/10 border border-accent-green/30'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 ${
+                        updateInfo.error ? 'text-text-muted' :
+                        updateInfo.hasUpdate ? 'text-accent-orange' : 'text-accent-green'
+                      }`}>
+                        {updateInfo.error ? <AlertTriangle size={18} /> :
+                         updateInfo.hasUpdate ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-text-primary text-sm">
+                          {updateInfo.error ? 'GitHub nicht erreichbar' :
+                           updateInfo.hasUpdate ? `Update verfügbar: v${updateInfo.latestVersion}` :
+                           'App ist aktuell'}
+                        </p>
+                        <div className="text-xs text-text-muted mt-1 space-y-0.5">
+                          <p>Installiert: <span className="font-mono text-text-secondary">v{updateInfo.currentVersion}</span></p>
+                          {updateInfo.latestVersion && updateInfo.latestVersion !== updateInfo.currentVersion && (
+                            <p>Verfügbar: <span className="font-mono text-accent-orange">v{updateInfo.latestVersion}</span></p>
+                          )}
+                          {updateInfo.commitMessage && (
+                            <p className="mt-1 text-text-secondary">Ünderung: {updateInfo.commitMessage}</p>
+                          )}
+                        </div>
+                        {updateInfo.hasUpdate && !isUpdating && !updateDone && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm('Update jetzt installieren? Der Server wird danach automatisch neu gestartet.')) {
+                                startUpdate();
+                              }
+                            }}
+                            className="mt-3 px-4 py-2 bg-accent-purple text-white rounded-lg text-sm font-medium hover:bg-accent-purple/80 transition-colors flex items-center gap-2"
+                          >
+                            <Download size={14} />
+                            Update installieren
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Update-Log */}
+                {(isUpdating || updateLog.length > 0) && (
+                  <div className="bg-obsidian-900 rounded-xl p-4 font-mono text-xs max-h-64 overflow-y-auto">
+                    {updateLog.map((entry, i) => (
+                      <div key={i} className={`mb-1 ${
+                        entry.type === 'error' ? 'text-red-400' :
+                        entry.type === 'success' ? 'text-green-400' :
+                        entry.type === 'start' || entry.type === 'step' ? 'text-accent-purple' :
+                        entry.type === 'done' ? 'text-green-300 font-bold' :
+                        'text-text-secondary'
+                      }`}>
+                        {entry.message}
+                      </div>
+                    ))}
+                    {isUpdating && (
+                      <div className="flex items-center gap-2 text-accent-purple mt-2">
+                        <Loader2 size={12} className="animate-spin" />
+                        <span>Update läuft...</span>
+                      </div>
+                    )}
+                    {updateDone && (
+                      <div className="mt-3 p-3 bg-accent-green/10 border border-accent-green/30 rounded-lg text-accent-green">
+                        ✅ Update abgeschlossen! Seite in 5 Sekunden neu laden...
+                        {setTimeout(() => window.location.reload(), 5000) as any && null}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Changelog Modal */}
+                {showChangelog && (
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-text-primary text-sm">Letzte Änderungen (GitHub)</h4>
+                      <button onClick={() => setShowChangelog(false)} className="text-text-muted hover:text-text-primary"><X size={14} /></button>
+                    </div>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {changelog.length === 0 ? (
+                        <p className="text-text-muted text-sm">Keine Commits geladen.</p>
+                      ) : changelog.map((c: any) => (
+                        <div key={c.sha} className="flex gap-3 text-xs py-2 border-b border-surface-border/50">
+                          <span className="font-mono text-text-muted w-12 shrink-0">{c.sha}</span>
+                          <span className="text-text-secondary flex-1">{c.message}</span>
+                          <span className="text-text-muted shrink-0">{c.date ? new Date(c.date).toLocaleDateString('de-DE') : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* ── BACKUP IMPORT ── */}

@@ -896,6 +896,70 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-12-4',
+        title: 'v2.12.4 — Auto-Update, Episoden-Vorlagen, Rabatt/CPM & Abrechnungs-Erweiterungen',
+        icon: <Package size={18} />,
+        tags: ['update', 'vorlagen', 'rabatt', 'cpm', 'abrechnung', 'buchungskalender', 'v2.12.4'],
+        summary: 'Auto-Update-System im Admin-Panel, Episoden-Vorlagen im Skript-Editor, Rabatt und CPM-Berechnung bei Buchungen, erweiterter Abrechnungs-Tab mit Vertragsfilter und Sammel-PDFs.',
+        content: [
+          {
+            heading: 'Auto-Update-System',
+            text: 'Im Admin-Bereich unter System > App-Update kann die App jetzt direkt auf neue GitHub-Versionen geprüft werden. Ein Klick auf „Update installieren“ führt automatisch git pull, npm install, den Build-Prozess und den Server-Neustart durch. Der Fortschritt wird live im Log angezeigt.',
+          },
+          {
+            heading: 'Episoden-Vorlagen',
+            list: [
+              'Im Skript-Editor gibt es zwei neue Buttons: „Vorlage speichern“ und „Vorlage laden“',
+              'Vorlagen speichern alle aktuellen Blöcke (Typ, Titel, Inhalt, Dauer)',
+              'Beim Laden werden die aktuellen Blöcke durch die Vorlage ersetzt',
+              'Vorlagen können benannt und gelöscht werden',
+            ],
+          },
+          {
+            heading: 'Buchungsmodal – Rabatt & CPM',
+            table: {
+              headers: ['Feld', 'Funktion'],
+              rows: [
+                ['Hörerzahl', 'Erscheint nur bei CPM-Preismodell – berechnet den Endbetrag automatisch'],
+                ['Rabatt', 'Absolut (EUR) oder prozentual (%) – Endpreis wird live angezeigt'],
+                ['Platzierungen pro Folge', 'Wie oft die Werbung in einer Folge geschaltet wird'],
+                ['Folgen in der Laufzeit', 'Beliebig viele Folgen mit Platzierungsanzahl eintragbar'],
+              ],
+            },
+          },
+          {
+            heading: 'Abrechnungs-Tab Erweiterungen',
+            list: [
+              'Vertragsfilter: Alle Buchungen eines Vertrags zusammenfassen und exportieren',
+              'Sammel-PDF: Alle Buchungsbestätigungen in einem einzigen PDF',
+              'Hinweistext am Ende der Leistungsübersicht ist anpassbar',
+              'PDF-Textabschneidung behoben – alle Spalten umbrechen korrekt',
+            ],
+          },
+          {
+            heading: 'Vertragsmanagement',
+            list: [
+              'Sponsoring-Art im Vertrag eintragbar (z.B. „Folgensponsor“, „Pre-Roll Paket“)',
+              'Kontaktdaten können direkt aus den Stammdaten übernommen werden',
+              'Buchungen können einem Vertrag zugeordnet werden',
+            ],
+          },
+          {
+            heading: 'Buchungskalender',
+            text: 'Der Buchungskalender wurde komplett überarbeitet. Monatsübergreifende Buchungen werden jetzt korrekt angezeigt (Overlap-Filterung). Legacy-Backend-Fehler blockieren nicht mehr die Anzeige von v2-Buchungen.',
+          },
+          {
+            heading: 'Bugfixes',
+            list: [
+              'Schwarze Seite beim Öffnen eines Sponsors behoben (fehlende State-Deklaration)',
+              'Sponsor löschen: Foreign-Key-Constraints werden jetzt korrekt aufgelöst',
+              'Episoden-Vorlagen-Route: Konflikt mit /:id-Route behoben',
+              'DB-Migration: ad_bookings_new enthält jetzt alle Spalten beim Serverstart',
+            ],
+          },
+        ],
+      },
+      {
         id: 'v2-12-0',
         title: 'v2.12.0 — Neues Sponsoring-System, Episoden-Editor Integration & Berechtigungen',
         icon: <Package size={18} />,

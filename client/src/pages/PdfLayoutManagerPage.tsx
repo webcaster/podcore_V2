@@ -409,7 +409,7 @@ export default function PdfLayoutManagerPage() {
                   {EXPORT_TYPES.find(t => t.value === editForm.exportType)?.label}
                 </p>
               </div>
-              {can('canManageSettings') && !editForm.isSystem && (
+              {can('canManageSettings') && (
                 <div className="flex items-center gap-2">
                   {isDirty && (
                     <button
@@ -429,12 +429,7 @@ export default function PdfLayoutManagerPage() {
                   </button>
                 </div>
               )}
-              {editForm.isSystem && (
-                <div className="flex items-center gap-2 text-xs text-text-muted bg-surface-overlay px-3 py-2 rounded-lg">
-                  <Info size={14} />
-                  System-Layouts sind schreibgeschützt. Dupliziere das Layout zum Bearbeiten.
-                </div>
-              )}
+
               {/* Vorschau-Button — immer sichtbar */}
               <button
                 onClick={() => handlePreview()}
@@ -514,8 +509,7 @@ export default function PdfLayoutManagerPage() {
             <div className="flex-1 overflow-y-auto p-6 space-y-3">
 
               {/* Allgemein */}
-              {!editForm.isSystem && (
-                <div className="bg-obsidian-900 border border-surface-border rounded-xl p-4 space-y-3">
+              <div className="bg-obsidian-900 border border-surface-border rounded-xl p-4 space-y-3">
                   <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
                     <Edit2 size={14} className="text-accent-purple" /> Allgemein
                   </h3>
@@ -559,7 +553,6 @@ export default function PdfLayoutManagerPage() {
                     </div>
                   </div>
                 </div>
-              )}
 
               {/* Seite */}
               <div className="bg-obsidian-900 border border-surface-border rounded-xl overflow-hidden">
@@ -579,7 +572,7 @@ export default function PdfLayoutManagerPage() {
                       <select
                         value={editForm.pageSize}
                         onChange={e => update('pageSize', e.target.value)}
-                        disabled={editForm.isSystem}
+                        disabled={false}
                         className="bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary disabled:opacity-50"
                       >
                         {PAGE_SIZES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -591,8 +584,8 @@ export default function PdfLayoutManagerPage() {
                         {PAGE_ORIENTATIONS.map(o => (
                           <button
                             key={o.value}
-                            onClick={() => !editForm.isSystem && update('pageOrientation', o.value)}
-                            disabled={editForm.isSystem}
+                            onClick={() => update('pageOrientation', o.value)}
+                            disabled={false}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs border transition-colors disabled:opacity-50 ${
                               (editForm.pageOrientation || 'portrait') === o.value
                                 ? 'bg-accent-blue/20 border-accent-blue text-accent-blue'
@@ -661,7 +654,7 @@ export default function PdfLayoutManagerPage() {
                       <select
                         value={editForm.typography?.fontFamily}
                         onChange={e => update('typography.fontFamily', e.target.value)}
-                        disabled={editForm.isSystem}
+                        disabled={false}
                         className="bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary disabled:opacity-50"
                       >
                         {FONT_FAMILIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
@@ -704,7 +697,7 @@ export default function PdfLayoutManagerPage() {
                       <select
                         value={editForm.header?.style}
                         onChange={e => update('header.style', e.target.value)}
-                        disabled={editForm.isSystem}
+                        disabled={false}
                         className="bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary disabled:opacity-50"
                       >
                         {HEADER_STYLES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -721,7 +714,7 @@ export default function PdfLayoutManagerPage() {
                           id={`header-${key}`}
                           checked={editForm.header?.[key] ?? true}
                           onChange={e => update(`header.${key}`, e.target.checked)}
-                          disabled={editForm.isSystem}
+                          disabled={false}
                           className="rounded disabled:opacity-50"
                         />
                         <label htmlFor={`header-${key}`} className="text-sm text-text-primary">{label}</label>
@@ -755,7 +748,7 @@ export default function PdfLayoutManagerPage() {
                           id={`footer-${key}`}
                           checked={editForm.footer?.[key] ?? true}
                           onChange={e => update(`footer.${key}`, e.target.checked)}
-                          disabled={editForm.isSystem}
+                          disabled={false}
                           className="rounded disabled:opacity-50"
                         />
                         <label htmlFor={`footer-${key}`} className="text-sm text-text-primary">{label}</label>
@@ -766,7 +759,7 @@ export default function PdfLayoutManagerPage() {
                       <input
                         value={editForm.footer?.customText || ''}
                         onChange={e => update('footer.customText', e.target.value)}
-                        disabled={editForm.isSystem}
+                        disabled={false}
                         className="w-full bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary disabled:opacity-50"
                         placeholder="z.B. Vertraulich · Intern"
                       />
@@ -804,7 +797,7 @@ export default function PdfLayoutManagerPage() {
                                   id={`sec-${key}`}
                                   checked={(editForm.sections?.[key] ?? true) as boolean}
                                   onChange={e => update(`sections.${key}`, e.target.checked)}
-                                  disabled={editForm.isSystem}
+                                  disabled={false}
                                   className="rounded disabled:opacity-50"
                                 />
                                 <label htmlFor={`sec-${key}`} className="text-sm text-text-primary">
@@ -839,7 +832,7 @@ export default function PdfLayoutManagerPage() {
                         id="wm-enabled"
                         checked={editForm.watermark?.enabled ?? false}
                         onChange={e => update('watermark.enabled', e.target.checked)}
-                        disabled={editForm.isSystem}
+                        disabled={false}
                         className="rounded disabled:opacity-50"
                       />
                       <label htmlFor="wm-enabled" className="text-sm text-text-primary">Wasserzeichen aktivieren</label>
@@ -852,7 +845,7 @@ export default function PdfLayoutManagerPage() {
                             type="text"
                             value={editForm.watermark?.text || ''}
                             onChange={e => update('watermark.text', e.target.value)}
-                            disabled={editForm.isSystem}
+                            disabled={false}
                             placeholder="z.B. ENTWURF, VERTRAULICH"
                             className="flex-1 bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary disabled:opacity-50"
                           />
@@ -873,7 +866,7 @@ export default function PdfLayoutManagerPage() {
                           <select
                             value={editForm.watermark?.position || 'center'}
                             onChange={e => update('watermark.position', e.target.value)}
-                            disabled={editForm.isSystem}
+                            disabled={false}
                             className="bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary disabled:opacity-50"
                           >
                             {WATERMARK_POSITIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -909,7 +902,7 @@ export default function PdfLayoutManagerPage() {
                       <select
                         value={editForm.lineSpacing || 'normal'}
                         onChange={e => update('lineSpacing', e.target.value)}
-                        disabled={editForm.isSystem}
+                        disabled={false}
                         className="bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary disabled:opacity-50"
                       >
                         {LINE_SPACING_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -920,7 +913,7 @@ export default function PdfLayoutManagerPage() {
                       <select
                         value={editForm.dividerStyle || 'solid'}
                         onChange={e => update('dividerStyle', e.target.value)}
-                        disabled={editForm.isSystem}
+                        disabled={false}
                         className="bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary disabled:opacity-50"
                       >
                         {DIVIDER_STYLES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}

@@ -53,4 +53,5 @@ export const episodeTemplatesApi = {
   create: (data: any) => api.post<any>('/episodes/templates', data),
   update: (templateId: string, data: any) => api.put<any>(`/episodes/templates/${templateId}`, data),
   remove: (templateId: string) => api.delete(`/episodes/templates/${templateId}`),
+  delete: (templateId: string) => api.delete(`/episodes/templates/${templateId}`),
 };
