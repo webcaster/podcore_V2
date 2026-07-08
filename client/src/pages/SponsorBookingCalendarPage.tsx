@@ -133,15 +133,19 @@ export default function SponsorBookingCalendarPage() {
       const firstDay = toIso(year, month, 1);
       const lastDay = toIso(year, month, getDaysInMonth(year, month));
 
-      const [legacyRes, v2Res] = await Promise.all([
+      // Legacy und v2 separat laden – Legacy-Fehler sollen v2-Daten nicht blockieren
+      const [legacyResult, v2Result] = await Promise.allSettled([
         sponsorsApi.getBookingCalendar({ from: firstDay, to: lastDay }),
         sponsorsV2Api.getBookingCalendar({ from: firstDay, to: lastDay }),
       ]);
 
+      const legacyRes = legacyResult.status === 'fulfilled' ? legacyResult.value : null;
+      const v2Res = v2Result.status === 'fulfilled' ? v2Result.value : null;
+
       const all: CalendarEntry[] = [];
 
       // Legacy: Episodenbuchungen
-      for (const b of (legacyRes.data?.episodeBookings || [])) {
+      for (const b of (legacyRes?.data?.episodeBookings || [])) {
         all.push({
           id: `ep_${b.id}`,
           type: 'episode',
@@ -163,7 +167,7 @@ export default function SponsorBookingCalendarPage() {
       }
 
       // Legacy: Zeitraum-Slots
-      for (const b of (legacyRes.data?.slotBookings || [])) {
+      for (const b of (legacyRes?.data?.slotBookings || [])) {
         all.push({
           id: `sl_${b.id}`,
           type: 'slot',
@@ -183,7 +187,7 @@ export default function SponsorBookingCalendarPage() {
       }
 
       // Legacy: Werbeplatz-Buchungen
-      for (const p of (legacyRes.data?.adPlacements || [])) {
+      for (const p of (legacyRes?.data?.adPlacements || [])) {
         all.push({
           id: `pl_${p.id}`,
           type: 'placement',
@@ -206,8 +210,8 @@ export default function SponsorBookingCalendarPage() {
       }
 
       // Legacy: Vorplanungen (nur wenn kein Duplikat mit Slot)
-      const slotIds = new Set((legacyRes.data?.slotBookings || []).map((b: any) => b.id));
-      for (const p of (legacyRes.data?.plannedSlots || [])) {
+      const slotIds = new Set((legacyRes?.data?.slotBookings || []).map((b: any) => b.id));
+      for (const p of (legacyRes?.data?.plannedSlots || [])) {
         const rawId = p.id?.toString().replace('planned_', '');
         if (slotIds.has(rawId)) continue; // Duplikat vermeiden
         all.push({
@@ -275,7 +279,7 @@ export default function SponsorBookingCalendarPage() {
       }
 
       setEntries(all);
-      setConflicts(legacyRes.data?.conflicts || []);
+      setConflicts(legacyRes?.data?.conflicts || []);
     } catch (e) {
       console.error('Kalender-Ladefehler:', e);
     } finally {

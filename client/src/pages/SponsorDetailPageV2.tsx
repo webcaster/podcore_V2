@@ -30,6 +30,9 @@ interface BookingForm {
   contractId: string;
   placementCount: string;
   episodeRefs: EpisodeRef[];
+  discount: string;
+  discountType: 'absolute' | 'percent';
+  listenerCount: string;
 }
 
 export default function SponsorDetailPageV2() {
@@ -60,6 +63,7 @@ export default function SponsorDetailPageV2() {
     slotId: '', bookingDate: '', bookingEndDate: '', price: '',
     priceModel: 'per_episode', notes: '', invoiceStatus: 'offen',
     status: 'geplant', contractId: '', placementCount: '1', episodeRefs: [],
+    discount: '0', discountType: 'absolute', listenerCount: '',
   };
   const [bookingForm, setBookingForm] = useState<BookingForm>(emptyBookingForm);
   const [newEpisodeRef, setNewEpisodeRef] = useState<EpisodeRef>({ episodeTitle: '', count: 1 });
@@ -134,17 +138,40 @@ export default function SponsorDetailPageV2() {
     if (!id) return;
     setIsSaving(true);
     try {
+      const rawPrice = parseFloat(bookingForm.price) || 0;
+      const discount = parseFloat(bookingForm.discount) || 0;
+      const discountType = bookingForm.discountType;
+      const listenerCount = parseInt(bookingForm.listenerCount) || null;
+      // Endpreis berechnen
+      let finalPrice = rawPrice;
+      if (discount > 0) {
+        finalPrice = discountType === 'percent'
+          ? rawPrice * (1 - discount / 100)
+          : rawPrice - discount;
+      }
+      if (bookingForm.priceModel === 'cpm' && listenerCount) {
+        finalPrice = (rawPrice / 1000) * listenerCount;
+        if (discount > 0) {
+          finalPrice = discountType === 'percent'
+            ? finalPrice * (1 - discount / 100)
+            : finalPrice - discount;
+        }
+      }
       const payload = {
         slotId: bookingForm.slotId,
         bookingDate: bookingForm.bookingDate,
         bookingEndDate: bookingForm.bookingEndDate || null,
-        price: parseFloat(bookingForm.price) || 0,
+        price: rawPrice,
+        finalPrice: Math.max(0, finalPrice),
         notes: bookingForm.notes || null,
         invoiceStatus: bookingForm.invoiceStatus,
         status: bookingForm.status,
         contractId: bookingForm.contractId || null,
         placementCount: parseInt(bookingForm.placementCount) || 1,
         episodeRefs: parseEpisodeRefs(bookingForm.episodeRefs).length > 0 ? parseEpisodeRefs(bookingForm.episodeRefs) : null,
+        discount,
+        discountType,
+        listenerCount,
       };
       if (editingBooking) {
         await sponsorsV2Api.updateBooking(editingBooking.id, payload);
@@ -595,13 +622,16 @@ export default function SponsorDetailPageV2() {
                                 bookingDate: booking.bookingDate?.split('T')[0] || '',
                                 bookingEndDate: booking.bookingEndDate?.split('T')[0] || '',
                                 price: String(booking.price ?? ''),
-                                priceModel: 'per_episode',
+                                priceModel: booking.pricePerEpisode ? 'per_episode' : booking.pricePer1000 ? 'cpm' : 'base',
                                 notes: booking.notes || '',
                                 invoiceStatus: booking.invoiceStatus || 'offen',
                                 status: booking.status || 'geplant',
                                 contractId: booking.contractId || '',
                                 placementCount: String(booking.placementCount || 1),
                                 episodeRefs: parseEpisodeRefs(booking.episodeRefs),
+                                discount: String(booking.discount || 0),
+                                discountType: booking.discountType || 'absolute',
+                                listenerCount: String(booking.listenerCount || ''),
                               });
                               setShowBookingModal(true);
                             }}
@@ -1172,11 +1202,54 @@ export default function SponsorDetailPageV2() {
 
           {/* Preis */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Preis (EUR)</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              {bookingForm.priceModel === 'cpm' ? 'CPM-Preis (EUR pro 1.000 Hörer)' : 'Preis (EUR)'}
+            </label>
             <input type="number" step="0.01" value={bookingForm.price}
               onChange={e => setBookingForm({ ...bookingForm, price: e.target.value })}
               placeholder="0.00"
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+          </div>
+
+          {/* Hörerzahl (nur bei CPM) */}
+          {bookingForm.priceModel === 'cpm' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Anzahl Hörer (für CPM-Berechnung)</label>
+              <input type="number" min="0" value={bookingForm.listenerCount}
+                onChange={e => setBookingForm({ ...bookingForm, listenerCount: e.target.value })}
+                placeholder="z.B. 5000"
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+              {bookingForm.listenerCount && bookingForm.price && (
+                <p className="text-xs text-cyan-400 mt-1">
+                  CPM-Betrag: {((parseFloat(bookingForm.price) / 1000) * parseInt(bookingForm.listenerCount)).toFixed(2)} EUR
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Rabatt */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Rabatt</label>
+            <div className="flex gap-2">
+              <input type="number" min="0" step="0.01" value={bookingForm.discount}
+                onChange={e => setBookingForm({ ...bookingForm, discount: e.target.value })}
+                placeholder="0"
+                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+              <select value={bookingForm.discountType}
+                onChange={e => setBookingForm({ ...bookingForm, discountType: e.target.value as 'absolute' | 'percent' })}
+                className="px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500">
+                <option value="absolute">EUR</option>
+                <option value="percent">%</option>
+              </select>
+            </div>
+            {parseFloat(bookingForm.discount) > 0 && parseFloat(bookingForm.price) > 0 && (
+              <p className="text-xs text-green-400 mt-1">
+                Endpreis: {Math.max(0, bookingForm.discountType === 'percent'
+                  ? parseFloat(bookingForm.price) * (1 - parseFloat(bookingForm.discount) / 100)
+                  : parseFloat(bookingForm.price) - parseFloat(bookingForm.discount)
+                ).toFixed(2)} EUR
+              </p>
+            )}
           </div>
 
           {/* Status */}

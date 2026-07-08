@@ -193,6 +193,8 @@ router.get('/:sponsorId/bookings', requirePermission('canViewSponsors') as any, 
       contractId: b.contract_id,
       placementCount: b.placement_count ?? 1,
       episodeRefs: b.episode_refs ? (() => { try { return JSON.parse(b.episode_refs); } catch { return []; } })() : [],
+      discount: b.discount ?? 0,
+      discountType: b.discount_type ?? 'absolute',
       createdAt: b.created_at,
       updatedAt: b.updated_at,
     })),
@@ -215,6 +217,9 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
     contractId,
     placementCount,
     episodeRefs,
+    discount = 0,
+    discountType = 'absolute',
+    listenerCount,
   } = req.body;
 
   if (!slotId || !bookingDate) {
@@ -229,12 +234,21 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
     resolvedPrice = category.price_per_episode || category.base_price || 0;
   }
 
-  const finalPrice = resolvedPrice + (priceAdjustment || 0) + (listenerFee || 0);
+  // CPM-Gebühr berechnen: listenerFee = (listenerCount / 1000) * pricePer1000
+  let resolvedListenerFee = listenerFee || 0;
+  if (category && category.price_per_1000 && listenerCount && listenerCount > 0) {
+    resolvedListenerFee = (listenerCount / 1000) * category.price_per_1000;
+  }
+  // Rabatt berechnen
+  const discountAmount = discountType === 'percent'
+    ? (resolvedPrice * (discount || 0)) / 100
+    : (discount || 0);
+  const finalPrice = Math.max(0, resolvedPrice + (priceAdjustment || 0) + resolvedListenerFee - discountAmount);
   const id = uuidv4();
 
   db.run(
-    `INSERT INTO ad_bookings (id, slot_id, sponsor_id, episode_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO ad_bookings (id, slot_id, sponsor_id, episode_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs, discount, discount_type, listener_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       slotId,
@@ -244,7 +258,7 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
       bookingEndDate || null,
       resolvedPrice,
       priceAdjustment || 0,
-      listenerFee || 0,
+      resolvedListenerFee,
       finalPrice,
       status || 'geplant',
       invoiceStatus || 'offen',
@@ -252,6 +266,9 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
       contractId || null,
       placementCount != null ? Number(placementCount) : 1,
       episodeRefs ? JSON.stringify(episodeRefs) : null,
+      discount || 0,
+      discountType || 'absolute',
+      listenerCount || null,
     ]
   );
 
@@ -293,6 +310,8 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
       contractId: booking.contract_id,
       placementCount: booking.placement_count ?? 1,
       episodeRefs: booking.episode_refs ? JSON.parse(booking.episode_refs) : [],
+      discount: booking.discount ?? 0,
+      discountType: booking.discount_type ?? 'absolute',
       createdAt: booking.created_at,
       updatedAt: booking.updated_at,
     },
@@ -315,18 +334,25 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
     contractId,
     placementCount,
     episodeRefs,
+    discount,
+    discountType,
   } = req.body;
 
   // Berechne finalPrice neu wenn Preiskomponenten geändert werden
   let finalPrice: number | null = null;
-  if (price !== undefined || priceAdjustment !== undefined || listenerFee !== undefined) {
-    const existing = db.get('SELECT price, price_adjustment, listener_fee FROM ad_bookings WHERE id = ?', [
+  if (price !== undefined || priceAdjustment !== undefined || listenerFee !== undefined || discount !== undefined || discountType !== undefined) {
+    const existing = db.get('SELECT price, price_adjustment, listener_fee, discount, discount_type FROM ad_bookings WHERE id = ?', [
       req.params.bookingId,
     ]) as any;
-    finalPrice =
-      (price ?? existing.price) +
-      (priceAdjustment ?? existing.price_adjustment) +
-      (listenerFee ?? existing.listener_fee);
+    const effectivePrice = price ?? existing.price;
+    const effectiveAdj = priceAdjustment ?? existing.price_adjustment;
+    const effectiveFee = listenerFee ?? existing.listener_fee;
+    const effectiveDiscount = discount ?? existing.discount ?? 0;
+    const effectiveDiscountType = discountType ?? existing.discount_type ?? 'absolute';
+    const discountAmt = effectiveDiscountType === 'percent'
+      ? (effectivePrice * effectiveDiscount) / 100
+      : effectiveDiscount;
+    finalPrice = Math.max(0, effectivePrice + effectiveAdj + effectiveFee - discountAmt);
   }
 
   const updates: string[] = [];
@@ -388,6 +414,18 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
     updates.push('episode_refs = ?');
     values.push(episodeRefs ? JSON.stringify(episodeRefs) : null);
   }
+  if (discount !== undefined) {
+    updates.push('discount = ?');
+    values.push(discount ?? 0);
+  }
+  if (discountType !== undefined) {
+    updates.push('discount_type = ?');
+    values.push(discountType || 'absolute');
+  }
+  if (listenerCount !== undefined) {
+    updates.push('listener_count = ?');
+    values.push(listenerCount ?? null);
+  }
 
   if (updates.length === 0) {
     return res.status(400).json({ success: false, error: 'Keine Änderungen' });
@@ -433,6 +471,8 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
       contractId: booking.contract_id,
       placementCount: booking.placement_count ?? 1,
       episodeRefs: booking.episode_refs ? JSON.parse(booking.episode_refs) : [],
+      discount: booking.discount ?? 0,
+      discountType: booking.discount_type ?? 'absolute',
       createdAt: booking.created_at,
       updatedAt: booking.updated_at,
     },

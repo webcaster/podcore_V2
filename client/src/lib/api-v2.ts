@@ -46,3 +46,11 @@ export const sponsorsV2Api = {
     return `/api/sponsors/v2/${sponsorId}/bookings/confirmation-pdf-all${qs}`;
   },
 };
+
+// Episoden-Vorlagen API
+export const episodeTemplatesApi = {
+  list: () => api.get<any[]>('/episodes/templates'),
+  create: (data: any) => api.post<any>('/episodes/templates', data),
+  update: (templateId: string, data: any) => api.put<any>(`/episodes/templates/${templateId}`, data),
+  remove: (templateId: string) => api.delete(`/episodes/templates/${templateId}`),
+};

@@ -696,4 +696,110 @@ router.post('/schedule-pdf', requirePermission('canViewEpisodes') as any, (req: 
   doc.end();
 });
 
+// ============================================================
+// EPISODEN-VORLAGEN
+// ============================================================
+
+// Alle Vorlagen laden
+router.get('/templates', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const templates = db.all(
+    'SELECT * FROM episode_templates ORDER BY created_at DESC'
+  ) as any[];
+  return res.json({
+    success: true,
+    data: templates.map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      blocks: JSON.parse(t.blocks || '[]'),
+      hosts: JSON.parse(t.hosts || '[]'),
+      tags: JSON.parse(t.tags || '[]'),
+      defaultDuration: t.default_duration,
+      createdAt: t.created_at,
+      updatedAt: t.updated_at,
+      createdBy: t.created_by,
+    })),
+  });
+});
+
+// Vorlage erstellen
+router.post('/templates', requirePermission('canEditEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { name, description, blocks, hosts, tags, defaultDuration } = req.body;
+  if (!name) return res.status(400).json({ success: false, error: 'Name erforderlich' });
+  const id = uuidv4();
+  db.run(
+    `INSERT INTO episode_templates (id, name, description, blocks, hosts, tags, default_duration, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      name,
+      description || null,
+      JSON.stringify(blocks || []),
+      JSON.stringify(hosts || []),
+      JSON.stringify(tags || []),
+      defaultDuration || null,
+      (req as any).user?.id || null,
+    ]
+  );
+  const template = db.get('SELECT * FROM episode_templates WHERE id = ?', [id]) as any;
+  return res.status(201).json({
+    success: true,
+    data: {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      blocks: JSON.parse(template.blocks || '[]'),
+      hosts: JSON.parse(template.hosts || '[]'),
+      tags: JSON.parse(template.tags || '[]'),
+      defaultDuration: template.default_duration,
+      createdAt: template.created_at,
+      updatedAt: template.updated_at,
+      createdBy: template.created_by,
+    },
+  });
+});
+
+// Vorlage aktualisieren
+router.put('/templates/:templateId', requirePermission('canEditEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { name, description, blocks, hosts, tags, defaultDuration } = req.body;
+  db.run(
+    `UPDATE episode_templates SET name = ?, description = ?, blocks = ?, hosts = ?, tags = ?, default_duration = ?, updated_at = datetime('now') WHERE id = ?`,
+    [
+      name,
+      description || null,
+      JSON.stringify(blocks || []),
+      JSON.stringify(hosts || []),
+      JSON.stringify(tags || []),
+      defaultDuration || null,
+      req.params.templateId,
+    ]
+  );
+  const template = db.get('SELECT * FROM episode_templates WHERE id = ?', [req.params.templateId]) as any;
+  if (!template) return res.status(404).json({ success: false, error: 'Vorlage nicht gefunden' });
+  return res.json({
+    success: true,
+    data: {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      blocks: JSON.parse(template.blocks || '[]'),
+      hosts: JSON.parse(template.hosts || '[]'),
+      tags: JSON.parse(template.tags || '[]'),
+      defaultDuration: template.default_duration,
+      createdAt: template.created_at,
+      updatedAt: template.updated_at,
+      createdBy: template.created_by,
+    },
+  });
+});
+
+// Vorlage löschen
+router.delete('/templates/:templateId', requirePermission('canEditEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  db.run('DELETE FROM episode_templates WHERE id = ?', [req.params.templateId]);
+  return res.json({ success: true });
+});
+
 export default router;

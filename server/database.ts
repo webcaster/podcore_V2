@@ -752,12 +752,17 @@ function initializeSchema(db: any): void {
           status TEXT NOT NULL DEFAULT 'geplant',
           notes TEXT,
           performance_notes TEXT,
+          contract_id TEXT DEFAULT NULL,
+          placement_count INTEGER DEFAULT 1,
+          episode_refs TEXT DEFAULT NULL,
+          discount REAL DEFAULT 0,
+          discount_type TEXT DEFAULT 'absolute',
           created_at TEXT NOT NULL DEFAULT (datetime('now')),
           updated_at TEXT NOT NULL DEFAULT (datetime('now')),
           FOREIGN KEY (sponsor_id) REFERENCES sponsors(id),
           FOREIGN KEY (episode_id) REFERENCES episodes(id)
         );
-        INSERT OR IGNORE INTO ad_bookings_new SELECT id, slot_id, sponsor_id, episode_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, invoice_status, invoice_number, invoice_date, delivery_confirmed, listener_count, status, notes, NULL, created_at, updated_at FROM ad_bookings;
+        INSERT OR IGNORE INTO ad_bookings_new SELECT id, slot_id, sponsor_id, episode_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, invoice_status, invoice_number, invoice_date, delivery_confirmed, listener_count, status, notes, NULL, NULL, 1, NULL, 0, 'absolute', created_at, updated_at FROM ad_bookings;
         DROP TABLE ad_bookings;
         ALTER TABLE ad_bookings_new RENAME TO ad_bookings;
         PRAGMA foreign_keys = ON;
@@ -773,6 +778,22 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE ad_bookings ADD COLUMN episode_refs TEXT DEFAULT NULL'); } catch (_) {}
   // v2.12.2: sponsor_contracts – Sponsoring-Art
   try { db.exec('ALTER TABLE sponsor_contracts ADD COLUMN sponsoring_type TEXT DEFAULT NULL'); } catch (_) {}
+  // v2.12.3: ad_bookings – Rabatt und Rabatttyp
+  try { db.exec('ALTER TABLE ad_bookings ADD COLUMN discount REAL DEFAULT 0'); } catch (_) {}
+  try { db.exec("ALTER TABLE ad_bookings ADD COLUMN discount_type TEXT DEFAULT 'absolute'"); } catch (_) {}
+  // v2.12.3: episode_templates – Episoden-Vorlagen
+  try { db.exec(`CREATE TABLE IF NOT EXISTS episode_templates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    blocks TEXT NOT NULL DEFAULT '[]',
+    hosts TEXT NOT NULL DEFAULT '[]',
+    tags TEXT NOT NULL DEFAULT '[]',
+    default_duration INTEGER,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
   
   // Roles table migration (v2.11.5)
   try {

@@ -8,10 +8,10 @@ import {
   AlertTriangle, Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle,
   Search, Star, CheckSquare, Square, BookOpen, UserCheck, Layers, ExternalLink, X,
   MessageSquare, HelpCircle, FileEdit, StickyNote, Target, Timer, Timer as TimerIcon,
-  RotateCcw
+  RotateCcw, FolderOpen
 } from 'lucide-react';
 import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi } from '../lib/api';
-import { sponsorsV2Api } from '../lib/api-v2';
+import { sponsorsV2Api, episodeTemplatesApi } from '../lib/api-v2';
 import Modal from '../components/ui/Modal';
 import IdeaImportModal from '../components/ui/IdeaImportModal';
 import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
@@ -174,6 +174,15 @@ export default function EpisodeDetailPage() {
   // Script-fertig Status
   const [scriptReady, setScriptReady] = useState(false);
   const [isTogglingScriptReady, setIsTogglingScriptReady] = useState(false);
+
+  // Episoden-Vorlagen
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [showTemplateSaveModal, setShowTemplateSaveModal] = useState(false);
+  const [showTemplateLoadModal, setShowTemplateLoadModal] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
 
   // Block collapse state
   const [collapsedBlocks, setCollapsedBlocks] = useState<Record<string, boolean>>({});
@@ -708,6 +717,55 @@ export default function EpisodeDetailPage() {
     finally { setIsTogglingScriptReady(false); }
   };
 
+  // ── Template Handlers ────────────────────────────────────────────────────
+  const handleLoadTemplates = async () => {
+    setIsLoadingTemplates(true);
+    try {
+      const res = await episodeTemplatesApi.list();
+      setTemplates(res.data || []);
+    } catch (err: any) { showError(err.message); }
+    finally { setIsLoadingTemplates(false); }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!templateName.trim()) { showError('Bitte einen Namen eingeben'); return; }
+    setIsSavingTemplate(true);
+    try {
+      await episodeTemplatesApi.create({
+        name: templateName.trim(),
+        description: templateDescription.trim() || null,
+        blocks: blocks,
+      });
+      showSuccess('Vorlage gespeichert');
+      setShowTemplateSaveModal(false);
+      setTemplateName('');
+      setTemplateDescription('');
+    } catch (err: any) { showError(err.message); }
+    finally { setIsSavingTemplate(false); }
+  };
+
+  const handleApplyTemplate = (template: any) => {
+    if (!confirm(`Vorlage "${template.name}" laden? Aktuelle Blöcke werden ersetzt.`)) return;
+    const newBlocks = (template.blocks || []).map((b: any, i: number) => ({
+      ...b,
+      id: `block_${Date.now()}_${i}`,
+      content: b.content || '',
+    }));
+    setBlocks(newBlocks);
+    setIsDirty(true);
+    setShowTemplateLoadModal(false);
+    showSuccess(`Vorlage "${template.name}" geladen`);
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    if (!confirm('Vorlage wirklich löschen?')) return;
+    try {
+      await episodeTemplatesApi.delete(templateId);
+      setTemplates(prev => prev.filter(t => t.id !== templateId));
+      showSuccess('Vorlage gelöscht');
+    } catch (err: any) { showError(err.message); }
+  };
+
   if (isLoading) return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-accent-purple" size={32} /></div>;
   if (!episode) return <div className="card text-center py-12"><p className="text-text-secondary">Episode nicht gefunden.</p></div>;
 
@@ -816,6 +874,21 @@ export default function EpisodeDetailPage() {
                   {BLOCK_TYPES.map(bt => (
                     <button key={bt.value} onClick={() => addBlock(bt.value)} className={`text-xs px-2 py-1 rounded-md ${bt.bg} ${bt.color} hover:opacity-80 transition-opacity`}>+ {bt.label}</button>
                   ))}
+                  <div className="w-px h-4 bg-surface-border mx-1" />
+                  <button
+                    onClick={() => { setShowTemplateSaveModal(true); }}
+                    className="text-xs px-2 py-1 rounded-md bg-accent-purple/20 text-accent-purple hover:bg-accent-purple/30 transition-colors flex items-center gap-1"
+                    title="Aktuelle Blöcke als Vorlage speichern"
+                  >
+                    <Save size={11} /> Vorlage speichern
+                  </button>
+                  <button
+                    onClick={() => { handleLoadTemplates(); setShowTemplateLoadModal(true); }}
+                    className="text-xs px-2 py-1 rounded-md bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors flex items-center gap-1"
+                    title="Vorlage laden"
+                  >
+                    <FolderOpen size={11} /> Vorlage laden
+                  </button>
                 </div>
               </div>
 
@@ -2205,6 +2278,90 @@ export default function EpisodeDetailPage() {
             >
               Buchung erstellen
             </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Vorlage speichern Modal */}
+      <Modal isOpen={showTemplateSaveModal} onClose={() => setShowTemplateSaveModal(false)} title="Vorlage speichern">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-400">Aktuelle Blöcke ({blocks.length}) als wiederverwendbare Vorlage speichern.</p>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Name der Vorlage *</label>
+            <input
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500"
+              value={templateName}
+              onChange={e => setTemplateName(e.target.value)}
+              placeholder="z.B. Standard-Interview, Soloepisode, News-Format"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Beschreibung (optional)</label>
+            <textarea
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500"
+              rows={2}
+              value={templateDescription}
+              onChange={e => setTemplateDescription(e.target.value)}
+              placeholder="Kurze Beschreibung für was diese Vorlage geeignet ist..."
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setShowTemplateSaveModal(false)} className="btn-ghost flex-1">Abbrechen</button>
+            <button
+              onClick={handleSaveTemplate}
+              disabled={!templateName.trim() || isSavingTemplate}
+              className="btn-primary flex-1 disabled:opacity-50"
+            >
+              {isSavingTemplate ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Speichern
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Vorlage laden Modal */}
+      <Modal isOpen={showTemplateLoadModal} onClose={() => setShowTemplateLoadModal(false)} title="Vorlage laden">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-400">Vorlage auswählen – aktuelle Blöcke werden ersetzt.</p>
+          {isLoadingTemplates ? (
+            <div className="flex items-center justify-center py-8"><Loader2 size={24} className="animate-spin text-purple-400" /></div>
+          ) : templates.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <FolderOpen size={32} className="mx-auto mb-2 opacity-40" />
+              <p className="text-sm">Noch keine Vorlagen gespeichert.</p>
+              <p className="text-xs mt-1">Erstelle eine Vorlage über "Vorlage speichern".</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {templates.map(t => (
+                <div key={t.id} className="flex items-start justify-between p-3 bg-gray-800 border border-gray-700 rounded-lg hover:border-purple-500/50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-white text-sm">{t.name}</p>
+                    {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
+                    <p className="text-xs text-gray-500 mt-1">{(t.blocks || []).length} Blöcke • {new Date(t.createdAt || t.created_at).toLocaleDateString('de-DE')}</p>
+                  </div>
+                  <div className="flex items-center gap-1 ml-3">
+                    <button
+                      onClick={() => handleApplyTemplate(t)}
+                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-md transition-colors"
+                    >
+                      Laden
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTemplate(t.id)}
+                      className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors"
+                      title="Vorlage löschen"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end pt-1">
+            <button onClick={() => setShowTemplateLoadModal(false)} className="btn-ghost">Schließen</button>
           </div>
         </div>
       </Modal>
