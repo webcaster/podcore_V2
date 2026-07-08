@@ -143,7 +143,7 @@ export default function SponsorDetailPageV2() {
         status: bookingForm.status,
         contractId: bookingForm.contractId || null,
         placementCount: parseInt(bookingForm.placementCount) || 1,
-        episodeRefs: bookingForm.episodeRefs.length > 0 ? bookingForm.episodeRefs : null,
+        episodeRefs: parseEpisodeRefs(bookingForm.episodeRefs).length > 0 ? parseEpisodeRefs(bookingForm.episodeRefs) : null,
       };
       if (editingBooking) {
         await sponsorsV2Api.updateBooking(editingBooking.id, payload);
@@ -167,6 +167,16 @@ export default function SponsorDetailPageV2() {
       showSuccess('Buchung gelöscht');
       load();
     } catch (err: any) { showError(err.message); }
+  };
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  const parseEpisodeRefs = (refs: any): EpisodeRef[] => {
+    if (!refs) return [];
+    if (Array.isArray(refs)) return refs;
+    if (typeof refs === 'string') {
+      try { const p = JSON.parse(refs); return Array.isArray(p) ? p : []; } catch { return []; }
+    }
+    return [];
   };
 
   // ── Billing Exports ───────────────────────────────────────────────────────
@@ -563,9 +573,9 @@ export default function SponsorDetailPageV2() {
                               <FileText size={9} /> Vertrag: {contractLabel}
                             </div>
                           )}
-                          {booking.episodeRefs?.length > 0 && (
+                          {parseEpisodeRefs(booking.episodeRefs).length > 0 && (
                             <div className="text-xs text-gray-500 mt-0.5">
-                              Folgen: {booking.episodeRefs.map((r: EpisodeRef) => `${r.episodeTitle}${r.count > 1 ? ` (${r.count}×)` : ''}`).join(', ')}
+                              Folgen: {parseEpisodeRefs(booking.episodeRefs).map((r: EpisodeRef) => `${r.episodeTitle}${r.count > 1 ? ` (${r.count}×)` : ''}`).join(', ')}
                             </div>
                           )}
                         </div>
@@ -590,7 +600,7 @@ export default function SponsorDetailPageV2() {
                                 status: booking.status || 'geplant',
                                 contractId: booking.contractId || '',
                                 placementCount: String(booking.placementCount || 1),
-                                episodeRefs: booking.episodeRefs || [],
+                                episodeRefs: parseEpisodeRefs(booking.episodeRefs),
                               });
                               setShowBookingModal(true);
                             }}
@@ -1121,14 +1131,14 @@ export default function SponsorDetailPageV2() {
               Folgen in der Laufzeit
               <span className="text-gray-500 font-normal text-xs ml-1">(in welchen Folgen die Platzierung stattfand)</span>
             </label>
-            {bookingForm.episodeRefs.length > 0 && (
+            {parseEpisodeRefs(bookingForm.episodeRefs).length > 0 && (
               <div className="space-y-1 mb-2">
-                {bookingForm.episodeRefs.map((ref, idx) => (
+                {parseEpisodeRefs(bookingForm.episodeRefs).map((ref, idx) => (
                   <div key={idx} className="flex items-center gap-2 p-2 bg-gray-800 rounded-lg text-sm">
                     <span className="flex-1 text-white truncate">{ref.episodeTitle}</span>
                     {ref.count > 1 && <span className="text-xs text-gray-400 shrink-0">{ref.count}× platziert</span>}
                     <button type="button"
-                      onClick={() => setBookingForm({ ...bookingForm, episodeRefs: bookingForm.episodeRefs.filter((_, i) => i !== idx) })}
+                      onClick={() => setBookingForm({ ...bookingForm, episodeRefs: parseEpisodeRefs(bookingForm.episodeRefs).filter((_, i) => i !== idx) })}
                       className="p-0.5 text-gray-500 hover:text-red-400 transition-colors shrink-0">
                       <X size={12} />
                     </button>
@@ -1148,7 +1158,7 @@ export default function SponsorDetailPageV2() {
               <button type="button"
                 onClick={() => {
                   if (!newEpisodeRef.episodeTitle.trim()) return;
-                  setBookingForm({ ...bookingForm, episodeRefs: [...bookingForm.episodeRefs, { ...newEpisodeRef }] });
+                  setBookingForm({ ...bookingForm, episodeRefs: [...parseEpisodeRefs(bookingForm.episodeRefs), { ...newEpisodeRef }] });
                   setNewEpisodeRef({ episodeTitle: '', count: 1 });
                 }}
                 disabled={!newEpisodeRef.episodeTitle.trim()}
