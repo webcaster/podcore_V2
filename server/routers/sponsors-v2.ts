@@ -962,6 +962,12 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
   const fs = require('fs');
   const path = require('path');
   const { DATA_DIR } = require('../database');
+  // Layout-System integrieren
+  let dossierLayout: any = null;
+  try {
+    const { getDefaultLayoutForType } = require('../pdfLayouts');
+    dossierLayout = getDefaultLayoutForType('sponsor_dossier');
+  } catch (_) {}
 
   const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
   const settings = settingsRow ? JSON.parse(settingsRow.value) : {};
@@ -975,8 +981,10 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
 
   const docTitle = rawTitle ? decodeURIComponent(rawTitle) : `Sponsor-Dossier ${sponsor.name}`;
   const now = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const m = 40;
-  const accentColor = '#7c3aed';
+  const m = dossierLayout?.pageMargin ?? 40;
+  const accentColor = dossierLayout?.colors?.secondary ?? '#7c3aed';
+  const headerBgColor = dossierLayout?.colors?.background ?? '#1e3a5f';
+  const headerTextColor = dossierLayout?.colors?.headerText ?? '#ffffff';
   const lightGray = '#f0f0f0';
 
   const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true });
@@ -990,13 +998,16 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
   const pageW = doc.page.width;
   const contentW = pageW - 2 * m;
 
-  // Header
+  // Header mit Layout-Farben
+  const headerH = dossierLayout?.headerHeight ?? 70;
+  doc.rect(0, 0, doc.page.width, headerH).fill(headerBgColor);
   if (logoPath && fs.existsSync(logoPath)) {
-    try { doc.image(logoPath, m, m, { height: 36 }); } catch (_) {}
+    try { doc.image(logoPath, m, 12, { height: 36 }); } catch (_) {}
   }
-  doc.fontSize(20).font('Helvetica-Bold').fillColor(accentColor).text(docTitle, m, m + 5, { align: 'right', width: contentW });
-  doc.fontSize(9).font('Helvetica').fillColor('#888').text(`Erstellt am ${now} \u00b7 ${podcastName}`, m, doc.y, { align: 'right', width: contentW });
-  doc.moveDown(0.5);
+  doc.fontSize(18).font('Helvetica-Bold').fillColor(headerTextColor).text(docTitle, m, 14, { align: 'right', width: contentW });
+  doc.fontSize(9).font('Helvetica').fillColor(headerTextColor).opacity(0.7).text(`${podcastName} \u00b7 Erstellt am ${now}`, m, 40, { align: 'right', width: contentW });
+  doc.opacity(1);
+  doc.y = headerH + 12;
   doc.rect(m, doc.y, contentW, 1).fill(accentColor);
   doc.moveDown(1);
 

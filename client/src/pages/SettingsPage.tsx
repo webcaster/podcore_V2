@@ -54,6 +54,19 @@ export default function SettingsPage() {
   const [isApplying, setIsApplying] = useState(false);
   const [applyLog, setApplyLog] = useState<string[]>([]);
   const [applyDone, setApplyDone] = useState(false);
+  // GitHub Update Check
+  const [githubCheck, setGithubCheck] = useState<any>(null);
+  const [isCheckingGithub, setIsCheckingGithub] = useState(false);
+  const handleCheckGithub = async () => {
+    setIsCheckingGithub(true);
+    setGithubCheck(null);
+    try {
+      const result = await updateApi.checkGithub();
+      setGithubCheck(result);
+    } catch (err: any) {
+      setGithubCheck({ hasUpdate: false, message: `Fehler: ${err.message}`, releaseUrl: 'https://github.com/webcaster/podcore_V2' });
+    } finally { setIsCheckingGithub(false); }
+  };
 
   const loadUpdateStatus = useCallback(async () => {
     setIsLoadingUpdateStatus(true);
@@ -1074,6 +1087,78 @@ export default function SettingsPage() {
               <RefreshCw size={14} className={isLoadingUpdateStatus ? 'animate-spin' : ''} />
               Aktualisieren
             </button>
+          </div>
+
+          {/* GitHub Update Check */}
+          <div className="card">
+            <h3 className="font-semibold text-text-primary mb-2 flex items-center gap-2">
+              <RefreshCw size={16} /> Auf Updates prüfen (GitHub)
+            </h3>
+            <p className="text-text-muted text-sm mb-4">
+              Prüft ob eine neuere Version von PodCore auf GitHub verfügbar ist.
+              Das Repository <span className="font-mono text-accent-purple">webcaster/podcore_V2</span> wird abgefragt.
+            </p>
+            <button onClick={handleCheckGithub} disabled={isCheckingGithub} className="btn-primary mb-4">
+              {isCheckingGithub ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              {isCheckingGithub ? 'Wird geprüft...' : 'Jetzt auf Updates prüfen'}
+            </button>
+            {githubCheck && (
+              <div className={`rounded-lg p-4 border ${
+                githubCheck.hasUpdate
+                  ? 'bg-amber-500/10 border-amber-500/30'
+                  : 'bg-green-500/10 border-green-500/30'
+              }`}>
+                <div className="flex items-start gap-3">
+                  {githubCheck.hasUpdate
+                    ? <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
+                    : <CheckCircle size={18} className="text-green-400 shrink-0 mt-0.5" />}
+                  <div className="flex-1">
+                    <p className={`font-semibold text-sm ${
+                      githubCheck.hasUpdate ? 'text-amber-300' : 'text-green-300'
+                    }`}>{githubCheck.message}</p>
+                    {githubCheck.latestVersion && (
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-surface-raised rounded p-2">
+                          <div className="text-text-muted">Aktuell installiert</div>
+                          <div className="font-mono font-bold text-accent-purple">v{githubCheck.currentVersion}</div>
+                        </div>
+                        <div className="bg-surface-raised rounded p-2">
+                          <div className="text-text-muted">Neueste Version</div>
+                          <div className={`font-mono font-bold ${
+                            githubCheck.hasUpdate ? 'text-amber-400' : 'text-green-400'
+                          }`}>v{githubCheck.latestVersion}</div>
+                        </div>
+                      </div>
+                    )}
+                    {githubCheck.publishedAt && (
+                      <p className="text-text-muted text-xs mt-2">
+                        Veröffentlicht: {new Date(githubCheck.publishedAt).toLocaleDateString('de-DE')}
+                      </p>
+                    )}
+                    {githubCheck.releaseNotes && (
+                      <details className="mt-2">
+                        <summary className="text-xs text-text-muted cursor-pointer hover:text-text-primary">Release Notes anzeigen</summary>
+                        <pre className="text-xs text-text-secondary mt-1 whitespace-pre-wrap bg-surface-raised rounded p-2 max-h-32 overflow-y-auto">{githubCheck.releaseNotes}</pre>
+                      </details>
+                    )}
+                    <div className="flex gap-2 mt-3">
+                      {githubCheck.releaseUrl && (
+                        <a href={githubCheck.releaseUrl} target="_blank" rel="noopener noreferrer"
+                          className="btn-secondary text-xs py-1 px-3">
+                          <Download size={12} /> GitHub öffnen
+                        </a>
+                      )}
+                      {githubCheck.downloadUrl && (
+                        <a href={githubCheck.downloadUrl} target="_blank" rel="noopener noreferrer"
+                          className="btn-primary text-xs py-1 px-3">
+                          <Download size={12} /> ZIP herunterladen
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ZIP Upload */}

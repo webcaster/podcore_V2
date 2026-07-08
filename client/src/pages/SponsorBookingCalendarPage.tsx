@@ -145,7 +145,7 @@ export default function SponsorBookingCalendarPage() {
       const all: CalendarEntry[] = [];
 
       // Legacy: Episodenbuchungen
-      for (const b of (legacyRes?.data?.episodeBookings || [])) {
+      for (const b of ((legacyRes as any)?.episodeBookings || [])) {
         all.push({
           id: `ep_${b.id}`,
           type: 'episode',
@@ -167,7 +167,7 @@ export default function SponsorBookingCalendarPage() {
       }
 
       // Legacy: Zeitraum-Slots
-      for (const b of (legacyRes?.data?.slotBookings || [])) {
+      for (const b of ((legacyRes as any)?.slotBookings || [])) {
         all.push({
           id: `sl_${b.id}`,
           type: 'slot',
@@ -187,7 +187,7 @@ export default function SponsorBookingCalendarPage() {
       }
 
       // Legacy: Werbeplatz-Buchungen
-      for (const p of (legacyRes?.data?.adPlacements || [])) {
+      for (const p of ((legacyRes as any)?.adPlacements || [])) {
         all.push({
           id: `pl_${p.id}`,
           type: 'placement',
@@ -210,8 +210,8 @@ export default function SponsorBookingCalendarPage() {
       }
 
       // Legacy: Vorplanungen (nur wenn kein Duplikat mit Slot)
-      const slotIds = new Set((legacyRes?.data?.slotBookings || []).map((b: any) => b.id));
-      for (const p of (legacyRes?.data?.plannedSlots || [])) {
+      const slotIds = new Set(((legacyRes as any)?.slotBookings || []).map((b: any) => b.id));
+      for (const p of ((legacyRes as any)?.plannedSlots || [])) {
         const rawId = p.id?.toString().replace('planned_', '');
         if (slotIds.has(rawId)) continue; // Duplikat vermeiden
         all.push({
@@ -233,7 +233,7 @@ export default function SponsorBookingCalendarPage() {
       }
 
       // v2: Verträge
-      for (const c of ((v2Res as any)?.data?.contracts || [])) {
+      for (const c of ((v2Res as any)?.contracts || [])) {
         all.push({
           id: `ct_${c.id}`,
           type: 'contract',
@@ -252,7 +252,7 @@ export default function SponsorBookingCalendarPage() {
       }
 
       // v2: Buchungen
-      for (const b of ((v2Res as any)?.data?.bookings || [])) {
+      for (const b of ((v2Res as any)?.bookings || [])) {
         const priceLabel = b.pricePerEpisode ? 'Pro Folge' : b.pricePer1000 ? 'CPM' : b.basePrice ? 'Basis' : '';
         all.push({
           id: `v2_${b.id}`,
@@ -279,7 +279,7 @@ export default function SponsorBookingCalendarPage() {
       }
 
       setEntries(all);
-      setConflicts(legacyRes?.data?.conflicts || []);
+      setConflicts((legacyRes as any)?.conflicts || []);
     } catch (e) {
       console.error('Kalender-Ladefehler:', e);
     } finally {

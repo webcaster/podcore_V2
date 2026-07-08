@@ -19,7 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
-export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report';
+export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report' | 'sponsor_dossier';
 
 export interface PdfLayoutColors {
   primary: string;       // Hauptfarbe (Überschriften, Akzente)
@@ -677,6 +677,33 @@ export function ensureDefaultLayouts(): void {
   const hasConfirmationModern = db.get("SELECT id FROM pdf_layouts WHERE name = 'Buchungsbestätigung Modern' LIMIT 1");
   if (!hasConfirmationModern) {
     const layout = CONFIRMATION_MODERN_LAYOUT;
+    db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation, header_height, line_spacing, divider_style, watermark)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuidv4(), layout.name, layout.description, layout.exportType,
+        layout.isDefault ? 1 : 0, layout.isSystem ? 1 : 0,
+        JSON.stringify(layout.colors), JSON.stringify(layout.typography),
+        JSON.stringify(layout.header), JSON.stringify(layout.footer),
+        JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
+        layout.pageOrientation || 'portrait',
+        layout.headerHeight || 70, layout.lineSpacing || 'normal',
+        layout.dividerStyle || 'line', JSON.stringify(layout.watermark),
+      ]);
+  }
+
+  // v2.12.7: Sponsor-Dossier Layout
+  const hasDossier = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'sponsor_dossier' LIMIT 1");
+  if (!hasDossier) {
+    const layout = {
+      ...DEFAULT_LAYOUT,
+      name: 'Sponsor-Dossier Standard',
+      description: 'Vollständiges Sponsor-Dossier mit Stammdaten, Verträgen, Buchungen und Abrechnung',
+      exportType: 'sponsor_dossier' as PdfExportType,
+      isDefault: true,
+      isSystem: true,
+      colors: { primary: '#1e3a5f', secondary: '#7c3aed', accent: '#2563eb', text: '#111111', muted: '#6b7280', background: '#1e3a5f', headerText: '#ffffff' },
+      footer: { showPageNumbers: true, showDate: true, showPodcastName: true, customText: 'Vertraulich – nur für internen Gebrauch' },
+    };
     db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation, header_height, line_spacing, divider_style, watermark)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [

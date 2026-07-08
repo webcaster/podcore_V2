@@ -849,4 +849,72 @@ router.get('/db/migration-log', requirePermission('canManageSettings') as any, (
   return res.json({ success: true, data: logs });
 });
 
+// GET /api/admin/update/check-github — Neueste Version auf GitHub prüfen (v2.12.7)
+router.get('/update/check-github', requirePermission('canManageSettings') as any, async (req: AuthRequest, res: Response) => {
+  const https = require('https');
+  const pkgPath = path.join(__dirname, '..', '..', 'package.json');
+  let currentVersion = '?';
+  try { currentVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || '?'; } catch {}
+
+  const options = {
+    hostname: 'api.github.com',
+    path: '/repos/webcaster/podcore_V2/releases/latest',
+    method: 'GET',
+    headers: { 'User-Agent': 'PodCore-App/2.12.7', 'Accept': 'application/vnd.github.v3+json' },
+  };
+
+  try {
+    const data = await new Promise<any>((resolve, reject) => {
+      const request = https.request(options, (response: any) => {
+        let body = '';
+        response.on('data', (chunk: any) => body += chunk);
+        response.on('end', () => { try { resolve(JSON.parse(body)); } catch { reject(new Error('Ungültige Antwort')); } });
+      });
+      request.on('error', reject);
+      request.setTimeout(10000, () => { request.destroy(); reject(new Error('Timeout')); });
+      request.end();
+    });
+
+    if (!data.tag_name) {
+      return res.json({
+        success: true,
+        data: {
+          currentVersion, latestVersion: null, hasUpdate: false,
+          message: 'Kein öffentlicher Release gefunden. Bitte manuell prüfen.',
+          releaseUrl: 'https://github.com/webcaster/podcore_V2/releases',
+          downloadUrl: null, releaseNotes: null, publishedAt: null,
+        },
+      });
+    }
+
+    const latestVersion = data.tag_name.replace(/^v/, '');
+    const hasUpdate = latestVersion !== currentVersion;
+    const zipAsset = (data.assets || []).find((a: any) => a.name.endsWith('.zip'));
+
+    return res.json({
+      success: true,
+      data: {
+        currentVersion, latestVersion, hasUpdate,
+        message: hasUpdate
+          ? `Neue Version ${latestVersion} verfügbar (aktuell: ${currentVersion})`
+          : `Version ${currentVersion} ist aktuell`,
+        releaseUrl: data.html_url,
+        downloadUrl: zipAsset?.browser_download_url || null,
+        releaseNotes: data.body || null,
+        publishedAt: data.published_at || null,
+      },
+    });
+  } catch (err: any) {
+    return res.json({
+      success: true,
+      data: {
+        currentVersion, latestVersion: null, hasUpdate: false,
+        message: `GitHub nicht erreichbar: ${err.message}`,
+        releaseUrl: 'https://github.com/webcaster/podcore_V2',
+        downloadUrl: null, releaseNotes: null, publishedAt: null,
+      },
+    });
+  }
+});
+
 export default router;

@@ -960,6 +960,73 @@ const wikiData: WikiCategory[] = [
         ],
       },
       {
+        id: 'v2-12-7',
+        title: 'v2.12.7 — Episoden-Vorplanung, Sponsor-Dossier, GitHub-Update, Buchungskalender-Fix',
+        icon: <Package size={18} />,
+        tags: ['update', 'vorplanung', 'dossier', 'pdf', 'github', 'buchungskalender', 'v2.12.7'],
+        summary: 'Episoden-Vorplanungs-Datum, Sponsor-Dossier PDF-Export mit wählbaren Inhalten, GitHub-Update-Prüfung im Admin, Buchungskalender-Fix, Episoden-Dashboard-Fix und Freigaben-Bug behoben.',
+        content: [
+          {
+            heading: 'Episoden-Vorplanungs-Datum',
+            list: [
+              'Im Meta-Tab jeder Episode gibt es ein neues Feld "Vorplanungs-Datum"',
+              'Solange die Episode im Status Entwurf ist, wird das Datum als "noch nicht verbindlich" angezeigt',
+              'Ab Status Aufnahme, Produktion, Geplant oder Veröffentlicht wird das Datum als verbindlich markiert',
+              'In der Episodenliste wird das Vorplanungs-Datum lila angezeigt (bei Entwurf-Status)',
+              'Das Datum wird im Episoden-Dashboard im Kalender berücksichtigt',
+            ],
+          },
+          {
+            heading: 'Sponsor-Dossier PDF-Export',
+            text: 'Im Header jeder Sponsor-Detailseite gibt es den neuen Button "Dossier exportieren". Ein Modal ermöglicht die Auswahl der Inhalte:',
+            list: [
+              'Stammdaten (Kontakt, Kategorie, Status, Notizen)',
+              'Verträge (Laufzeit, Typ, Wert)',
+              'Buchungen (Tabellenübersicht mit Slot, Zeitraum, Status, Preis)',
+              'Abrechnungsübersicht (Gesamt, bezahlt, offen, Rabatte, CPM)',
+              'Interne Notizen',
+              'Eigener Dokumenten-Titel wählbar',
+              'PDF verwendet das Sponsor-Dossier Layout aus dem PDF-Layout-Manager',
+            ],
+          },
+          {
+            heading: 'GitHub-Update-Prüfung im Admin',
+            text: 'Im Einstellungs-Tab "Update" gibt es eine neue Karte "Auf Updates prüfen (GitHub)". Ein Klick auf den Button prüft ob eine neuere Version im Repository webcaster/podcore_V2 verfügbar ist.',
+            list: [
+              'Zeigt aktuelle und neueste Version nebeneinander an',
+              'Bei verfügbarem Update: Gelbe Warnung mit Versions-Vergleich',
+              'Bei aktuellem Stand: Grüne Bestätigung',
+              'Release Notes können direkt in der App eingesehen werden',
+              'Direkter Link zu GitHub und Download-Link für das ZIP',
+            ],
+          },
+          {
+            heading: 'Buchungskalender-Fix',
+            text: 'Der Buchungskalender hat Buchungen nicht angezeigt, weil die API-Response falsch ausgelesen wurde (doppeltes .data-Wrapping). Jetzt werden alle Buchungen und Verträge korrekt im Kalender dargestellt.',
+          },
+          {
+            heading: 'Episoden-Dashboard-Fix',
+            text: 'Das Episoden-Dashboard hat alle Zähler auf 0 angezeigt, weil die API-Response-Struktur falsch ausgelesen wurde. Jetzt werden alle Episoden korrekt in Statistiken, Kalender und Listen angezeigt.',
+          },
+          {
+            heading: 'Freigaben-Bug behoben',
+            text: 'Die Freigaben-Seite hat einen 403-Fehler gezeigt wenn der Nutzer nur canRequestApproval hatte (nicht canApproveEpisodes). Der Endpunkt ist jetzt für beide Berechtigungen zugänglich.',
+          },
+          {
+            heading: 'Abrechnungs-Tab: Rabatt/CPM-Anzeige',
+            list: [
+              'Buchungen mit Rabatt zeigen jetzt Listenpreis, Rabatt und Nettobetrag',
+              'CPM-Buchungen erhalten ein Badge mit der Berechnungsformel',
+              'Folgen-Platzierungen werden als Tags unter der Buchung angezeigt',
+            ],
+          },
+          {
+            heading: 'PDF-Layout-System: Sponsor-Dossier',
+            text: 'Ein neues Standard-Layout "Sponsor-Dossier Standard" wurde dem PDF-Layout-Manager hinzugefügt. Es verwendet ein dunkles Header-Design mit Podcast-Branding und ist über den Layout-Manager anpassbar.',
+          },
+        ],
+      },
+      {
         id: 'v2-12-0',
         title: 'v2.12.0 — Neues Sponsoring-System, Episoden-Editor Integration & Berechtigungen',
         icon: <Package size={18} />,

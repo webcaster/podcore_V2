@@ -511,6 +511,7 @@ export const pdfLayoutsApi = {
 // ============================================================
 export const updateApi = {
   getStatus: () => api.get<any>('/admin/update/status'),
+  checkGithub: () => api.get<any>('/admin/update/check-github'),
   uploadZip: async (file: File, onProgress?: (pct: number) => void): Promise<any> => {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
