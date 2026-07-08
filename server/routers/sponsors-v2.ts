@@ -363,9 +363,10 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
   db.run(`UPDATE ad_bookings SET ${updates.join(', ')} WHERE id = ?`, values);
 
   const booking = db.get(
-    `SELECT ab.*, s.name as slot_name, sp.name as sponsor_name
+    `SELECT ab.*, COALESCE(s.name, c.name) as slot_name, sp.name as sponsor_name
      FROM ad_bookings ab
-     JOIN ad_slots s ON ab.slot_id = s.id
+     LEFT JOIN ad_slots s ON ab.slot_id = s.id
+     LEFT JOIN ad_categories c ON ab.slot_id = c.id
      JOIN sponsors sp ON ab.sponsor_id = sp.id
      WHERE ab.id = ?`,
     [req.params.bookingId]
@@ -446,11 +447,16 @@ router.get('/bookings/:bookingId/confirmation-pdf', requirePermission('canViewSp
   const db = getDb();
   const booking = db.get(`
     SELECT ab.*,
-           s.name as slot_name, s.category as slot_position, s.duration as slot_duration,
+           COALESCE(s.name, c.name) as slot_name,
+           COALESCE(s.category, c.default_position) as slot_position,
+           COALESCE(s.duration, c.default_duration) as slot_duration,
+           c.base_price as cat_base_price, c.price_per_episode as cat_price_per_episode, c.price_per_1000_listens as cat_price_per_1000,
            sp.name as sponsor_name, sp.company as sponsor_company, sp.contact_name, sp.contact_email, sp.website, sp.color as sponsor_color,
+           sp.customer_number,
            e.title as episode_title, e.number as episode_number, e.publish_date
     FROM ad_bookings ab
-    JOIN ad_slots s ON ab.slot_id = s.id
+    LEFT JOIN ad_slots s ON ab.slot_id = s.id
+    LEFT JOIN ad_categories c ON ab.slot_id = c.id
     JOIN sponsors sp ON ab.sponsor_id = sp.id
     LEFT JOIN episodes e ON ab.episode_id = e.id
     WHERE ab.id = ?
@@ -491,16 +497,20 @@ router.get('/bookings/:bookingId/confirmation-pdf', requirePermission('canViewSp
   doc.fillColor('#333').fontSize(14).font('Helvetica-Bold').text('Buchungsdetails', 50, 200);
   doc.moveTo(50, 218).lineTo(doc.page.width - 50, 218).strokeColor(accentColor).lineWidth(2).stroke();
 
+  // Preismodell ableiten
+  const priceModelLabel = booking.cat_price_per_episode ? 'Pro Folge' : booking.cat_price_per_1000 ? 'CPM (pro 1.000 Hörer)' : booking.cat_base_price ? 'Basis-Preis' : '–';
+
   const details = [
-    ['Buchungs-ID', booking.id],
-    ['Werbeplatz', `${booking.slot_name} (${booking.slot_position || '–'})`],
+    ['Buchungs-ID', booking.id.slice(0, 8).toUpperCase()],
+    booking.customer_number ? ['Kundennummer', booking.customer_number] : null,
+    ['Werbeplatz', `${booking.slot_name || '–'} (${booking.slot_position || '–'})`],
+    ['Preismodell', priceModelLabel],
     ['Dauer', booking.slot_duration ? `${booking.slot_duration} Sekunden` : '–'],
     ['Episode', booking.episode_title ? `#${booking.episode_number || ''} ${booking.episode_title}` : '–'],
-    ['Ausstrahlungsdatum', booking.publish_date ? new Date(booking.publish_date).toLocaleDateString('de-DE') : '–'],
     ['Buchungszeitraum', booking.booking_date ? `${new Date(booking.booking_date).toLocaleDateString('de-DE')}${booking.booking_end_date ? ' – ' + new Date(booking.booking_end_date).toLocaleDateString('de-DE') : ''}` : '–'],
     ['Status', booking.status || '–'],
-    ['Abrechnungsstatus', booking.invoice_status || '–'],
-  ];
+    ['Rechnungsstatus', booking.invoice_status || '–'],
+  ].filter(Boolean) as [string, string][];
 
   let y = 230;
   details.forEach(([label, value], i) => {
