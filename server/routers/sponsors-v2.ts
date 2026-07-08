@@ -1313,8 +1313,8 @@ router.post('/offers/:offerId/accept', requirePermission('canEditSponsors') as a
   if (createBookings && positions.length > 0) {
     for (const pos of positions) {
       const bookingId = uuidv4();
-      const unitPrice = pos.unitPrice || 0;
-      const qty = pos.quantity || 1;
+      const unitPrice = Number(pos.unitPrice) || 0;
+      const qty = Number(pos.quantity) || 1;
       const posDiscount = effectiveDiscountType === 'percent'
         ? unitPrice * qty * (effectiveDiscount / 100)
         : (effectiveDiscount / Math.max(positions.length, 1));
@@ -1369,12 +1369,28 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
   if (!offer) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
   const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [offer.sponsor_id]) as any;
   if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
-  const positions = offer.positions ? JSON.parse(offer.positions) : [];
+  // Positionen sicher parsen und Werte normalisieren
+  let positions: any[] = [];
+  try {
+    const raw = offer.positions ? JSON.parse(offer.positions) : [];
+    positions = raw.map((p: any) => ({
+      ...p,
+      quantity: Number(p.quantity) || 1,
+      unitPrice: Number(p.unitPrice) || 0,
+    }));
+  } catch (_) { positions = []; }
   try {
     const { getDefaultLayoutForType } = require('../pdfLayouts');
     const layout = getDefaultLayoutForType('sponsor_offer');
     const PDFDocument = require('pdfkit');
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const doc = new PDFDocument({ margin: 50, size: 'A4', autoFirstPage: true });
+    // Error-Handler VOR dem Pipen registrieren
+    doc.on('error', (err: any) => {
+      console.error('[Angebots-PDF Stream-Fehler]', err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'PDF-Stream-Fehler: ' + err.message });
+      }
+    });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="Angebot-${offer.offer_number || offer.id}.pdf"`);
     doc.pipe(res);
@@ -1431,11 +1447,17 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
       y += 22;
       let subtotal = 0;
       positions.forEach((pos: any, idx: number) => {
-        const qty = pos.quantity || 1;
-        const unitPrice = pos.unitPrice || 0;
+        // Sicherheitskonvertierung: Werte können als Strings aus der DB kommen
+        const qty = Number(pos.quantity) || 1;
+        const unitPrice = Number(pos.unitPrice) || 0;
         const lineTotal = qty * unitPrice;
         subtotal += lineTotal;
         const rowH = 20;
+        // Seitenüberlauf prüfen: neue Seite wenn nötig
+        if (y + rowH > doc.page.height - 80) {
+          doc.addPage();
+          y = 50;
+        }
         if (idx % 2 === 0) doc.rect(m, y, contentW, rowH).fill('#f8f8ff');
         else doc.rect(m, y, contentW, rowH).fill('#fff');
         doc.fontSize(9).font('Helvetica').fillColor('#333');
@@ -1455,12 +1477,13 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
         .text(`${subtotal.toFixed(2)} €`, m + contentW - 35, y, { width: 35, align: 'right' });
       y += 16;
       // Rabatt
-      if (offer.discount && offer.discount > 0) {
+      const effDiscount = Number(offer.discount) || 0;
+      if (effDiscount > 0) {
         const discAmt = offer.discount_type === 'percent'
-          ? subtotal * (offer.discount / 100)
-          : offer.discount;
+          ? subtotal * (effDiscount / 100)
+          : effDiscount;
         const discLabel = offer.discount_type === 'percent'
-          ? `Rabatt (${offer.discount}%):`
+          ? `Rabatt (${effDiscount}%):`
           : 'Rabatt:';
         doc.fontSize(10).font('Helvetica').fillColor('#e53e3e')
           .text(discLabel, m + contentW - 160, y, { width: 120, align: 'right' })
@@ -1468,10 +1491,11 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
         y += 16;
       }
       // Gesamtpreis
+      const totalPrice = Number(offer.total_price) || subtotal;
       doc.rect(m + contentW - 200, y - 2, 200, 22).fill(primaryColor);
       doc.fontSize(12).font('Helvetica-Bold').fillColor('#fff')
         .text('Gesamtpreis (netto):', m + contentW - 195, y + 4, { width: 130, align: 'right' })
-        .text(`${offer.total_price.toFixed(2)} €`, m + contentW - 60, y + 4, { width: 55, align: 'right' });
+        .text(`${totalPrice.toFixed(2)} €`, m + contentW - 60, y + 4, { width: 55, align: 'right' });
       y += 30;
     }
     // Outro-Text
@@ -1496,7 +1520,9 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
     doc.end();
   } catch (err: any) {
     console.error('[Angebots-PDF]', err);
-    return res.status(500).json({ success: false, error: 'PDF-Fehler: ' + err.message });
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, error: 'PDF-Fehler: ' + err.message });
+    }
   }
 });
 
