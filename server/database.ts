@@ -845,6 +845,58 @@ function initializeSchema(db: any): void {
     console.log('[DB] Default roles created');
   }
 
+  // Seed default ad_categories if empty
+  try {
+    const catCount = db.get('SELECT COUNT(*) as count FROM ad_categories') as any;
+    if (!catCount || catCount.count === 0) {
+      const { v4: uuidv4 } = require('uuid');
+      const defaultCategories = [
+        {
+          id: uuidv4(), name: 'Pre-Roll', description: 'Pre-Roll – Kategorie Sponsor, oder Eigenwerbung Kurz',
+          color: '#3b82f6', default_position: 'pre-roll', default_duration: 15,
+          presentation_template: 'präsentiert von', is_exclusive: 0,
+          base_price: 50.00, price_per_episode: 60.00, price_per_1000_listens: 12.00,
+          currency: 'EUR', is_active: 1, sort_order: 1
+        },
+        {
+          id: uuidv4(), name: 'Mid-Roll', description: 'Mid-Roll // Hauptwerbeplatz',
+          color: '#f97316', default_position: 'mid-roll', default_duration: 30,
+          presentation_template: 'präsentiert von', is_exclusive: 0,
+          base_price: 80.00, price_per_episode: 100.00, price_per_1000_listens: 18.00,
+          currency: 'EUR', is_active: 1, sort_order: 2
+        },
+        {
+          id: uuidv4(), name: 'Post-Roll', description: 'Post-Roll',
+          color: '#22c55e', default_position: 'post-roll', default_duration: 15,
+          presentation_template: 'präsentiert von', is_exclusive: 0,
+          base_price: 30.00, price_per_episode: 40.00, price_per_1000_listens: 8.00,
+          currency: 'EUR', is_active: 1, sort_order: 3
+        },
+        {
+          id: uuidv4(), name: 'Host-Read', description: 'Persönlich vom Moderator gesprochen in der laufenden Episode.',
+          color: '#a855f7', default_position: 'mid-roll', default_duration: 90,
+          presentation_template: 'präsentiert von', is_exclusive: 0,
+          base_price: 120.00, price_per_episode: 150.00, price_per_1000_listens: 40.00,
+          currency: 'EUR', is_active: 1, sort_order: 4
+        },
+        {
+          id: uuidv4(), name: 'Folgensponsoring', description: 'Folgensponsoring - Exklusiv',
+          color: '#ef4444', default_position: 'pre-roll', default_duration: 30,
+          presentation_template: 'präsentiert von', is_exclusive: 1,
+          base_price: 150.00, price_per_episode: 200.00, price_per_1000_listens: 25.00,
+          currency: 'EUR', is_active: 1, sort_order: 5
+        },
+      ];
+      for (const cat of defaultCategories) {
+        db.run(
+          `INSERT INTO ad_categories (id, name, description, color, default_position, default_duration, presentation_template, is_exclusive, base_price, price_per_episode, price_per_1000_listens, currency, is_active, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [cat.id, cat.name, cat.description, cat.color, cat.default_position, cat.default_duration, cat.presentation_template, cat.is_exclusive, cat.base_price, cat.price_per_episode, cat.price_per_1000_listens, cat.currency, cat.is_active, cat.sort_order]
+        );
+      }
+      console.log('[DB] Default ad_categories seeded (5 categories)');
+    }
+  } catch (e) { console.error('[DB] Ad categories seed error:', e); }
+
   console.log('[DB] Database initialized at:', DB_PATH);
 }
 

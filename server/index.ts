@@ -79,8 +79,8 @@ getDb();
 app.use('/api/auth', authRouter);
 app.use('/api/episodes', episodesRouter);
 app.use('/api/editorial', editorialRouter);
+app.use('/api/sponsors/v2', sponsorsV2Router); // MUSS vor /api/sponsors stehen!
 app.use('/api/sponsors', sponsorsRouter);
-app.use('/api/sponsors/v2', sponsorsV2Router);
 app.use('/api/approvals', approvalsRouter);
 
 // Stream endpoint BEFORE mediaRouter — accepts cookie OR query token for <audio> elements
