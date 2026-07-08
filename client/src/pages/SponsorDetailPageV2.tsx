@@ -50,7 +50,7 @@ export default function SponsorDetailPageV2() {
   const [editingContract, setEditingContract] = useState<any>(null);
   const [contractForm, setContractForm] = useState({
     contractStart: '', contractEnd: '', contactPerson: '',
-    contactEmail: '', contactPhone: '', notes: '',
+    contactEmail: '', contactPhone: '', sponsoringType: '', notes: '',
   });
 
   // Booking Modal
@@ -113,7 +113,7 @@ export default function SponsorDetailPageV2() {
       }
       setShowContractModal(false);
       setEditingContract(null);
-      setContractForm({ contractStart: '', contractEnd: '', contactPerson: '', contactEmail: '', contactPhone: '', notes: '' });
+      setContractForm({ contractStart: '', contractEnd: '', contactPerson: '', contactEmail: '', contactPhone: '', sponsoringType: '', notes: '' });
       load();
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
@@ -170,8 +170,13 @@ export default function SponsorDetailPageV2() {
   };
 
   // ── Billing Exports ───────────────────────────────────────────────────────
-  const filteredBookings = billingFilter === 'alle' ? bookings
-    : bookings.filter(b => b.invoiceStatus === billingFilter);
+  const filteredBookings = bookings
+    .filter(b => billingFilter === 'alle' || b.invoiceStatus === billingFilter)
+    .filter(b => {
+      if (billingContractFilter === 'alle') return true;
+      if (billingContractFilter === '__none__') return !b.contractId;
+      return b.contractId === billingContractFilter;
+    });
 
   const totalRevenue = bookings.reduce((s, b) => s + (b.finalPrice || b.price || 0), 0);
   const openRevenue = bookings.filter(b => b.invoiceStatus !== 'bezahlt' && b.invoiceStatus !== 'storniert')
@@ -184,6 +189,7 @@ export default function SponsorDetailPageV2() {
     try {
       const params = new URLSearchParams();
       if (billingFilter !== 'alle') params.set('filter', billingFilter);
+      if (billingContractFilter !== 'alle') params.set('contractId', billingContractFilter);
       if (leistungIntro) params.set('intro', leistungIntro);
       if (leistungOutro) params.set('outro', leistungOutro);
       if (pdfDocTitle) params.set('documentTitle', encodeURIComponent(pdfDocTitle));
@@ -378,7 +384,7 @@ export default function SponsorDetailPageV2() {
               <button
                 onClick={() => {
                   setEditingContract(null);
-                  setContractForm({ contractStart: '', contractEnd: '', contactPerson: '', contactEmail: '', contactPhone: '', notes: '' });
+                  setContractForm({ contractStart: '', contractEnd: '', contactPerson: '', contactEmail: '', contactPhone: '', sponsoringType: '', notes: '' });
                   setShowContractModal(true);
                 }}
                 className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
@@ -441,6 +447,7 @@ export default function SponsorDetailPageV2() {
                                 contactPerson: contract.contactPerson || '',
                                 contactEmail: contract.contactEmail || '',
                                 contactPhone: contract.contactPhone || '',
+                                sponsoringType: contract.sponsoringType || '',
                                 notes: contract.notes || '',
                               });
                               setShowContractModal(true);
@@ -629,6 +636,90 @@ export default function SponsorDetailPageV2() {
               </div>
             </div>
 
+            {/* Vertrags-Abrechnung Übersicht */}
+            {contracts.length > 0 && (
+              <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+                <h3 className="font-semibold text-white text-sm mb-3 flex items-center gap-2">
+                  <CalendarRange size={15} className="text-purple-400" />
+                  Abrechnung nach Vertrag
+                </h3>
+                <div className="space-y-2">
+                  {contracts.map(c => {
+                    const contractBookings = bookings.filter(b => b.contractId === c.id);
+                    const contractRevenue = contractBookings.reduce((s, b) => s + (b.finalPrice || b.price || 0), 0);
+                    const contractOpen = contractBookings.filter(b => b.invoiceStatus !== 'bezahlt' && b.invoiceStatus !== 'storniert').reduce((s, b) => s + (b.finalPrice || b.price || 0), 0);
+                    const contractPaid = contractBookings.filter(b => b.invoiceStatus === 'bezahlt').length;
+                    const from = c.contractStart ? new Date(c.contractStart).toLocaleDateString('de-DE') : '?';
+                    const to = c.contractEnd ? new Date(c.contractEnd).toLocaleDateString('de-DE') : '?';
+                    const isExpiring = c.contractEnd && new Date(c.contractEnd) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+                    return (
+                      <div key={c.id}
+                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                          billingContractFilter === c.id
+                            ? 'border-purple-500 bg-purple-900/20'
+                            : 'border-gray-700 bg-gray-800/40 hover:border-gray-600'
+                        }`}
+                        onClick={() => setBillingContractFilter(billingContractFilter === c.id ? 'alle' : c.id)}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {c.sponsoringType && (
+                                <span className="text-xs font-semibold text-purple-300">{c.sponsoringType}</span>
+                              )}
+                              <span className="text-xs text-gray-400">{from} – {to}</span>
+                              {isExpiring && (
+                                <span className="text-[10px] text-orange-400 bg-orange-900/30 px-1.5 py-0.5 rounded-full">Läuft bald ab</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-gray-500 mt-0.5">
+                              {contractBookings.length} Buchungen · {contractPaid} bezahlt
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-bold text-white">{contractRevenue.toFixed(2)} €</div>
+                            {contractOpen > 0 && (
+                              <div className="text-[10px] text-yellow-400">{contractOpen.toFixed(2)} € offen</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Buchungen ohne Vertrag */}
+                  {(() => {
+                    const noContractBookings = bookings.filter(b => !b.contractId);
+                    if (noContractBookings.length === 0) return null;
+                    const rev = noContractBookings.reduce((s, b) => s + (b.finalPrice || b.price || 0), 0);
+                    return (
+                      <div
+                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                          billingContractFilter === '__none__'
+                            ? 'border-purple-500 bg-purple-900/20'
+                            : 'border-gray-700 bg-gray-800/40 hover:border-gray-600'
+                        }`}
+                        onClick={() => setBillingContractFilter(billingContractFilter === '__none__' ? 'alle' : '__none__')}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-xs text-gray-400">Buchungen ohne Vertrag</span>
+                            <div className="text-[10px] text-gray-500">{noContractBookings.length} Buchungen</div>
+                          </div>
+                          <div className="text-sm font-bold text-white">{rev.toFixed(2)} €</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+                {billingContractFilter !== 'alle' && (
+                  <button onClick={() => setBillingContractFilter('alle')}
+                    className="mt-2 text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1">
+                    <X size={10} /> Filter aufheben
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Leistungsübersicht */}
             <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5 space-y-4">
               <div className="flex items-center gap-2">
@@ -642,7 +733,22 @@ export default function SponsorDetailPageV2() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Buchungen filtern</label>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Nach Vertrag filtern</label>
+                  <select value={billingContractFilter} onChange={e => setBillingContractFilter(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500">
+                    <option value="alle">Alle Verträge</option>
+                    <option value="__none__">Ohne Vertrag</option>
+                    {contracts.map(c => {
+                      const from = c.contractStart ? new Date(c.contractStart).toLocaleDateString('de-DE') : '?';
+                      const to = c.contractEnd ? new Date(c.contractEnd).toLocaleDateString('de-DE') : '?';
+                      const label = c.sponsoringType ? `${c.sponsoringType} (${from}–${to})` : `${from} – ${to}`;
+                      const count = bookings.filter(b => b.contractId === c.id).length;
+                      return <option key={c.id} value={c.id}>{label} [{count} Buchungen]</option>;
+                    })}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Rechnungsstatus filtern</label>
                   <select value={billingFilter} onChange={e => setBillingFilter(e.target.value as any)}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500">
                     <option value="alle">Alle Buchungen ({bookings.length})</option>
@@ -800,6 +906,8 @@ export default function SponsorDetailPageV2() {
         title={editingContract ? 'Vertrag bearbeiten' : 'Neuer Vertrag'}>
         <div className="space-y-4">
           <p className="text-xs text-gray-400">Vertragslaufzeit und Ansprechpartner für {sponsor.name}. Buchungen können diesem Vertrag zugeordnet werden.</p>
+
+          {/* Laufzeit */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Vertragsbeginn *</label>
@@ -814,8 +922,36 @@ export default function SponsorDetailPageV2() {
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
             </div>
           </div>
+
+          {/* Sponsoring-Art */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Ansprechpartner beim Sponsor</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Sponsoring-Art</label>
+            <input type="text" value={contractForm.sponsoringType}
+              onChange={e => setContractForm({ ...contractForm, sponsoringType: e.target.value })}
+              placeholder="z.B. Folgensponsor, Pre-Roll Paket, Exklusiv-Sponsoring..."
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+          </div>
+
+          {/* Kontaktdaten */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-300">Ansprechpartner beim Sponsor</label>
+              {(sponsor.contactName || sponsor.contact_name || sponsor.contactEmail || sponsor.contact_email) && (
+                <button
+                  type="button"
+                  onClick={() => setContractForm(prev => ({
+                    ...prev,
+                    contactPerson: sponsor.contactName || sponsor.contact_name || prev.contactPerson,
+                    contactEmail: sponsor.contactEmail || sponsor.contact_email || prev.contactEmail,
+                    contactPhone: sponsor.contactPhone || sponsor.contact_phone || prev.contactPhone,
+                  }))}
+                  className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+                  Aus Stammdaten übernehmen
+                </button>
+              )}
+            </div>
             <input type="text" value={contractForm.contactPerson}
               onChange={e => setContractForm({ ...contractForm, contactPerson: e.target.value })}
               placeholder="Vor- und Nachname"

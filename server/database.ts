@@ -771,6 +771,8 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE ad_bookings ADD COLUMN placement_count INTEGER DEFAULT 1'); } catch (_) {}
   // episode_refs: JSON-Array mit Folgenangaben, z.B. [{"episodeId":"...","episodeTitle":"...","count":2}]
   try { db.exec('ALTER TABLE ad_bookings ADD COLUMN episode_refs TEXT DEFAULT NULL'); } catch (_) {}
+  // v2.12.2: sponsor_contracts – Sponsoring-Art
+  try { db.exec('ALTER TABLE sponsor_contracts ADD COLUMN sponsoring_type TEXT DEFAULT NULL'); } catch (_) {}
   
   // Roles table migration (v2.11.5)
   try {

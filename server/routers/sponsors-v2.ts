@@ -27,6 +27,7 @@ router.get('/:sponsorId/contracts', requirePermission('canViewSponsors') as any,
       contactPerson: c.contact_person,
       contactEmail: c.contact_email,
       contactPhone: c.contact_phone,
+      sponsoringType: c.sponsoring_type,
       notes: c.notes,
       status: c.status,
       createdAt: c.created_at,
@@ -37,7 +38,7 @@ router.get('/:sponsorId/contracts', requirePermission('canViewSponsors') as any,
 
 router.post('/:sponsorId/contracts', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { contractStart, contractEnd, contactPerson, contactEmail, contactPhone, notes } = req.body;
+  const { contractStart, contractEnd, contactPerson, contactEmail, contactPhone, sponsoringType, notes } = req.body;
 
   if (!contractStart || !contractEnd) {
     return res.status(400).json({ success: false, error: 'contractStart und contractEnd erforderlich' });
@@ -45,9 +46,9 @@ router.post('/:sponsorId/contracts', requirePermission('canEditSponsors') as any
 
   const id = uuidv4();
   db.run(
-    `INSERT INTO sponsor_contracts (id, sponsor_id, contract_start, contract_end, contact_person, contact_email, contact_phone, notes, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aktiv')`,
-    [id, req.params.sponsorId, contractStart, contractEnd, contactPerson || null, contactEmail || null, contactPhone || null, notes || null]
+    `INSERT INTO sponsor_contracts (id, sponsor_id, contract_start, contract_end, contact_person, contact_email, contact_phone, sponsoring_type, notes, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aktiv')`,
+    [id, req.params.sponsorId, contractStart, contractEnd, contactPerson || null, contactEmail || null, contactPhone || null, sponsoringType || null, notes || null]
   );
 
   const contract = db.get('SELECT * FROM sponsor_contracts WHERE id = ?', [id]) as any;
@@ -61,6 +62,7 @@ router.post('/:sponsorId/contracts', requirePermission('canEditSponsors') as any
       contactPerson: contract.contact_person,
       contactEmail: contract.contact_email,
       contactPhone: contract.contact_phone,
+      sponsoringType: contract.sponsoring_type,
       notes: contract.notes,
       status: contract.status,
       createdAt: contract.created_at,
@@ -71,7 +73,7 @@ router.post('/:sponsorId/contracts', requirePermission('canEditSponsors') as any
 
 router.put('/contracts/:contractId', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { contractStart, contractEnd, contactPerson, contactEmail, contactPhone, notes, status } = req.body;
+  const { contractStart, contractEnd, contactPerson, contactEmail, contactPhone, sponsoringType, notes, status } = req.body;
 
   db.run(
     `UPDATE sponsor_contracts SET
@@ -80,6 +82,7 @@ router.put('/contracts/:contractId', requirePermission('canEditSponsors') as any
       contact_person = ?,
       contact_email = ?,
       contact_phone = ?,
+      sponsoring_type = ?,
       notes = ?,
       status = COALESCE(?, status),
       updated_at = datetime('now')
@@ -90,6 +93,7 @@ router.put('/contracts/:contractId', requirePermission('canEditSponsors') as any
       contactPerson ?? null,
       contactEmail ?? null,
       contactPhone ?? null,
+      sponsoringType ?? null,
       notes ?? null,
       status ?? null,
       req.params.contractId,
@@ -107,6 +111,7 @@ router.put('/contracts/:contractId', requirePermission('canEditSponsors') as any
       contactPerson: contract.contact_person,
       contactEmail: contract.contact_email,
       contactPhone: contract.contact_phone,
+      sponsoringType: contract.sponsoring_type,
       notes: contract.notes,
       status: contract.status,
       createdAt: contract.created_at,
