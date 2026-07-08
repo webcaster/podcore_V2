@@ -1890,9 +1890,18 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
 
   // Filter anwenden
   const filterStatus = req.query.filter as string | undefined;
-  const filteredRows = filterStatus && filterStatus !== 'alle'
-    ? allRows.filter((p: any) => (p.invoice_status || 'offen') === filterStatus)
-    : allRows;
+  const filterContractId = req.query.contractId as string | undefined;
+  let filteredRows = allRows;
+  if (filterStatus && filterStatus !== 'alle') {
+    filteredRows = filteredRows.filter((p: any) => (p.invoice_status || 'offen') === filterStatus);
+  }
+  if (filterContractId && filterContractId !== 'alle') {
+    if (filterContractId === '__none__') {
+      filteredRows = filteredRows.filter((p: any) => !p.contract_id && p.is_v2);
+    } else {
+      filteredRows = filteredRows.filter((p: any) => p.contract_id === filterContractId || p.is_v2 && p.contract_id === filterContractId);
+    }
+  }
 
   // Table header (nur wenn showDetails aktiv)
   const tblW = doc.page.width - m * 2;

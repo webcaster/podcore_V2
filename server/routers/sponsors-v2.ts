@@ -628,13 +628,16 @@ router.get('/calendar/bookings', requirePermission('canViewSponsors') as any, (r
   `;
   const params: any[] = [];
 
-  if (from) {
-    query += ' AND ab.booking_date >= ?';
+  // Overlap-Logik: Buchung liegt im Zeitraum wenn booking_date <= to UND (booking_end_date IS NULL OR booking_end_date >= from)
+  if (from && to) {
+    query += ' AND ab.booking_date <= ? AND (ab.booking_end_date IS NULL OR ab.booking_end_date >= ?)';
+    params.push(to, from);
+  } else if (from) {
+    query += ' AND (ab.booking_end_date IS NULL OR ab.booking_end_date >= ?)';
     params.push(from);
-  }
-  if (to) {
-    query += ' AND (ab.booking_end_date IS NULL AND ab.booking_date <= ? OR ab.booking_end_date >= ?)';
-    params.push(to, from || to);
+  } else if (to) {
+    query += ' AND ab.booking_date <= ?';
+    params.push(to);
   }
 
   query += ' ORDER BY ab.booking_date ASC';
