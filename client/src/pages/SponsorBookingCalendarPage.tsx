@@ -1,61 +1,57 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, Clock,
   Calendar, Filter, RefreshCw, Info, Megaphone, Tag, ExternalLink, Euro,
-  Download, FileText, CalendarRange,
+  Download, FileText, CalendarRange, X, FileSpreadsheet,
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
 import { sponsorsV2Api } from '../lib/api-v2';
 
-// ─── Typen ────────────────────────────────────────────────────────────────────
-interface EpisodeBooking {
-  id: string; type: 'episode'; sponsorId: string; sponsorName: string;
-  sponsorCompany?: string; sponsorColor: string; categoryName?: string;
-  categoryColor: string; isExclusive: boolean; position: string;
-  episodeId?: string; episodeTitle?: string; episodeNumber?: number;
-  date?: string; confirmed: boolean; episodeStatus?: string;
+// ─── Einheitliches Kalender-Eintrag-Modell ───────────────────────────────────
+type EntryType = 'episode' | 'slot' | 'placement' | 'planned' | 'contract' | 'v2booking';
+
+interface CalendarEntry {
+  id: string;
+  type: EntryType;
+  sponsorId: string;
+  sponsorName: string;
+  sponsorCompany?: string;
+  sponsorColor: string;
+  // Zeitraum
+  startDate?: string;   // ISO YYYY-MM-DD
+  endDate?: string;     // ISO YYYY-MM-DD
+  singleDate?: string;  // ISO YYYY-MM-DD (für episodengebundene Buchungen)
+  // Details
+  label?: string;
+  position?: string;
+  slotName?: string;
+  categoryName?: string;
+  episodeId?: string;
+  episodeTitle?: string;
+  episodeNumber?: number;
+  // Finanzen
+  price?: number;
+  finalPrice?: number;
+  invoiceStatus?: string;
+  // Status
+  status?: string;
+  confirmed?: boolean;
+  isExclusive?: boolean;
+  // Preismodell (v2)
+  basePrice?: number;
+  pricePerEpisode?: number;
+  pricePer1000?: number;
+  // Sonstiges
+  notes?: string;
+  contactPerson?: string;
+  contactEmail?: string;
 }
-interface SlotBooking {
-  id: string; type: 'slot'; sponsorId: string; sponsorName: string;
-  sponsorCompany?: string; sponsorColor: string; categoryName?: string;
-  categoryColor: string; isExclusive: boolean; position?: string;
-  startDate?: string; endDate?: string; label?: string; status?: string;
-  basePrice?: number; pricePerEpisode?: number;
-}
-interface AdPlacement {
-  id: string; type: 'placement'; sponsorId: string; sponsorName: string;
-  sponsorCompany?: string; sponsorColor: string; categoryName?: string;
-  categoryColor: string; isExclusive: boolean; position?: string;
-  episodeId?: string; episodeTitle?: string; episodeNumber?: number;
-  date?: string; slotName?: string; price?: number;
-  invoiceStatus?: string; status?: string; notes?: string;
-}
-interface PlannedSlot {
-  id: string; type: 'planned'; sponsorId: string; sponsorName: string;
-  sponsorCompany?: string; sponsorColor: string; categoryName?: string;
-  categoryColor: string; isExclusive: boolean; position?: string;
-  startDate?: string; endDate?: string; label?: string; status?: string;
-  basePrice?: number; pricePerEpisode?: number; notes?: string;
-}
+
 interface Conflict {
   type: string; date: string; categoryName: string;
   bookings: { id: string; sponsorName: string; episodeTitle?: string }[];
   message: string;
-}
-interface V2Contract {
-  id: string; type: 'contract'; sponsorId: string; sponsorName: string;
-  sponsorCompany?: string; sponsorColor: string;
-  startDate?: string; endDate?: string;
-  contactPerson?: string; contactEmail?: string;
-  status?: string; notes?: string;
-}
-interface V2Booking {
-  id: string; type: 'v2booking'; sponsorId: string; sponsorName: string;
-  sponsorColor: string; slotName?: string; position?: string;
-  date?: string; endDate?: string; episodeTitle?: string;
-  price?: number; finalPrice?: number; invoiceStatus?: string; status?: string;
-  basePrice?: number; pricePerEpisode?: number; pricePer1000?: number;
 }
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
@@ -72,18 +68,45 @@ function getFirstDayOfMonth(year: number, month: number) {
 function toIso(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
+function normDate(d: any): string | null {
+  if (!d) return null;
+  const s = String(d);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) return parsed.toISOString().substring(0, 10);
+  return null;
+}
+
+// Prüft ob ein Eintrag an einem bestimmten Tag sichtbar ist
+function entryOnDay(entry: CalendarEntry, dateStr: string): boolean {
+  if (entry.singleDate) return normDate(entry.singleDate) === dateStr;
+  const start = normDate(entry.startDate);
+  const end = normDate(entry.endDate);
+  if (!start && !end) return false;
+  if (start && !end) return start === dateStr;
+  if (!start && end) return end === dateStr;
+  return dateStr >= start! && dateStr <= end!;
+}
 
 const positionLabels: Record<string, string> = {
   'pre-roll': 'Pre-Roll', 'mid-roll': 'Mid-Roll', 'post-roll': 'Post-Roll',
   'folgensponsor': 'Folgensponsor', 'sonderbuchung': 'Sonderbuchung',
 };
 
+const typeConfig: Record<EntryType, { label: string; color: string; borderStyle: string; bg: string; textColor: string }> = {
+  episode:   { label: 'Episodenbuchung', color: '#7c3aed', borderStyle: 'solid',  bg: '#7c3aed20', textColor: '#a78bfa' },
+  slot:      { label: 'Zeitraum-Slot',   color: '#2563eb', borderStyle: 'dashed', bg: '#2563eb15', textColor: '#93c5fd' },
+  placement: { label: 'Werbeplatz',      color: '#059669', borderStyle: 'dotted', bg: '#05966920', textColor: '#6ee7b7' },
+  planned:   { label: 'Vorplanung',      color: '#d97706', borderStyle: 'dashed', bg: '#d9770615', textColor: '#fcd34d' },
+  contract:  { label: 'Vertrag',         color: '#9333ea', borderStyle: 'double', bg: '#9333ea15', textColor: '#d8b4fe' },
+  v2booking: { label: 'Buchung (v2)',    color: '#0891b2', borderStyle: 'solid',  bg: '#0891b225', textColor: '#67e8f9' },
+};
+
 const invoiceStatusColors: Record<string, string> = {
-  'offen': 'bg-yellow-900/50 text-yellow-400',
-  'versendet': 'bg-blue-900/50 text-blue-400',
-  'bezahlt': 'bg-green-900/50 text-green-400',
+  'offen':     'bg-yellow-900/50 text-yellow-300',
+  'versendet': 'bg-blue-900/50 text-blue-300',
+  'bezahlt':   'bg-green-900/50 text-green-300',
   'storniert': 'bg-gray-700 text-gray-400',
-  'geplant': 'bg-amber-900/50 text-amber-400',
 };
 
 // ─── Haupt-Komponente ─────────────────────────────────────────────────────────
@@ -92,52 +115,169 @@ export default function SponsorBookingCalendarPage() {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
-  const [episodeBookings, setEpisodeBookings] = useState<EpisodeBooking[]>([]);
-  const [slotBookings, setSlotBookings] = useState<SlotBooking[]>([]);
-  const [adPlacements, setAdPlacements] = useState<AdPlacement[]>([]);
-  const [plannedSlots, setPlannedSlots] = useState<PlannedSlot[]>([]);
+  const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [filterSponsor, setFilterSponsor] = useState('');
-  const [filterPosition, setFilterPosition] = useState('');
+  const [filterType, setFilterType] = useState<EntryType | ''>('');
   const [showConflictsOnly, setShowConflictsOnly] = useState(false);
-  const [showPlanned, setShowPlanned] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
-  const [v2Contracts, setV2Contracts] = useState<V2Contract[]>([]);
-  const [v2Bookings, setV2Bookings] = useState<V2Booking[]>([]);
-  const [showContracts, setShowContracts] = useState(true);
-  const [showV2Bookings, setShowV2Bookings] = useState(true);
 
   // Alle Sponsoren für Filter
-  const allSponsors = Array.from(new Set([
-    ...episodeBookings.map(b => b.sponsorName),
-    ...slotBookings.map(b => b.sponsorName),
-    ...adPlacements.map(p => p.sponsorName),
-    ...plannedSlots.map(p => p.sponsorName),
-    ...v2Contracts.map(c => c.sponsorName),
-    ...v2Bookings.map(b => b.sponsorName),
-  ])).sort();
+  const allSponsors = Array.from(new Set(entries.map(e => e.sponsorName))).sort();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const firstDay = toIso(year, month, 1);
       const lastDay = toIso(year, month, getDaysInMonth(year, month));
-      const [res, v2Res] = await Promise.all([
+
+      const [legacyRes, v2Res] = await Promise.all([
         sponsorsApi.getBookingCalendar({ from: firstDay, to: lastDay }),
         sponsorsV2Api.getBookingCalendar({ from: firstDay, to: lastDay }),
       ]);
-      setEpisodeBookings(res.data?.episodeBookings || []);
-      setSlotBookings(res.data?.slotBookings || []);
-      setAdPlacements(res.data?.adPlacements || []);
-      setPlannedSlots(res.data?.plannedSlots || []);
-      setConflicts(res.data?.conflicts || []);
-      // v2.12.0: Verträge und neue Buchungen
-      setV2Contracts((v2Res as any)?.data?.contracts || []);
-      setV2Bookings((v2Res as any)?.data?.bookings || []);
+
+      const all: CalendarEntry[] = [];
+
+      // Legacy: Episodenbuchungen
+      for (const b of (legacyRes.data?.episodeBookings || [])) {
+        all.push({
+          id: `ep_${b.id}`,
+          type: 'episode',
+          sponsorId: b.sponsorId,
+          sponsorName: b.sponsorName,
+          sponsorCompany: b.sponsorCompany,
+          sponsorColor: b.sponsorColor || '#7c3aed',
+          singleDate: b.date,
+          label: b.categoryName,
+          position: b.position,
+          categoryName: b.categoryName,
+          episodeId: b.episodeId,
+          episodeTitle: b.episodeTitle,
+          episodeNumber: b.episodeNumber,
+          confirmed: b.confirmed,
+          isExclusive: b.isExclusive,
+          status: b.episodeStatus,
+        });
+      }
+
+      // Legacy: Zeitraum-Slots
+      for (const b of (legacyRes.data?.slotBookings || [])) {
+        all.push({
+          id: `sl_${b.id}`,
+          type: 'slot',
+          sponsorId: b.sponsorId,
+          sponsorName: b.sponsorName,
+          sponsorCompany: b.sponsorCompany,
+          sponsorColor: b.sponsorColor || '#2563eb',
+          startDate: b.startDate,
+          endDate: b.endDate,
+          label: b.label,
+          position: b.position,
+          categoryName: b.categoryName,
+          price: b.basePrice || b.pricePerEpisode,
+          status: b.status,
+          isExclusive: b.isExclusive,
+        });
+      }
+
+      // Legacy: Werbeplatz-Buchungen
+      for (const p of (legacyRes.data?.adPlacements || [])) {
+        all.push({
+          id: `pl_${p.id}`,
+          type: 'placement',
+          sponsorId: p.sponsorId,
+          sponsorName: p.sponsorName,
+          sponsorCompany: p.sponsorCompany,
+          sponsorColor: p.sponsorColor || '#059669',
+          singleDate: p.date,
+          slotName: p.slotName,
+          position: p.position,
+          categoryName: p.categoryName,
+          episodeId: p.episodeId,
+          episodeTitle: p.episodeTitle,
+          episodeNumber: p.episodeNumber,
+          price: p.price,
+          invoiceStatus: p.invoiceStatus,
+          status: p.status,
+          notes: p.notes,
+        });
+      }
+
+      // Legacy: Vorplanungen (nur wenn kein Duplikat mit Slot)
+      const slotIds = new Set((legacyRes.data?.slotBookings || []).map((b: any) => b.id));
+      for (const p of (legacyRes.data?.plannedSlots || [])) {
+        const rawId = p.id?.toString().replace('planned_', '');
+        if (slotIds.has(rawId)) continue; // Duplikat vermeiden
+        all.push({
+          id: `ps_${p.id}`,
+          type: 'planned',
+          sponsorId: p.sponsorId,
+          sponsorName: p.sponsorName,
+          sponsorCompany: p.sponsorCompany,
+          sponsorColor: p.sponsorColor || '#d97706',
+          startDate: p.startDate,
+          endDate: p.endDate,
+          label: p.label,
+          position: p.position,
+          categoryName: p.categoryName,
+          price: p.basePrice || p.pricePerEpisode,
+          status: p.status,
+          notes: p.notes,
+        });
+      }
+
+      // v2: Verträge
+      for (const c of ((v2Res as any)?.data?.contracts || [])) {
+        all.push({
+          id: `ct_${c.id}`,
+          type: 'contract',
+          sponsorId: c.sponsorId,
+          sponsorName: c.sponsorName,
+          sponsorCompany: c.sponsorCompany,
+          sponsorColor: c.sponsorColor || '#9333ea',
+          startDate: c.startDate,
+          endDate: c.endDate,
+          label: `Vertrag ${c.contactPerson ? `(${c.contactPerson})` : ''}`.trim(),
+          status: c.status,
+          contactPerson: c.contactPerson,
+          contactEmail: c.contactEmail,
+          notes: c.notes,
+        });
+      }
+
+      // v2: Buchungen
+      for (const b of ((v2Res as any)?.data?.bookings || [])) {
+        const priceLabel = b.pricePerEpisode ? 'Pro Folge' : b.pricePer1000 ? 'CPM' : b.basePrice ? 'Basis' : '';
+        all.push({
+          id: `v2_${b.id}`,
+          type: 'v2booking',
+          sponsorId: b.sponsorId,
+          sponsorName: b.sponsorName,
+          sponsorCompany: b.sponsorCompany,
+          sponsorColor: b.sponsorColor || '#0891b2',
+          startDate: b.date,
+          endDate: b.endDate,
+          singleDate: (!b.endDate && b.date) ? b.date : undefined,
+          slotName: b.slotName,
+          position: b.position,
+          label: priceLabel ? `${b.slotName || 'Buchung'} · ${priceLabel}` : b.slotName,
+          episodeTitle: b.episodeTitle,
+          episodeNumber: b.episodeNumber,
+          price: b.finalPrice ?? b.price,
+          invoiceStatus: b.invoiceStatus,
+          status: b.status,
+          basePrice: b.basePrice,
+          pricePerEpisode: b.pricePerEpisode,
+          pricePer1000: b.pricePer1000,
+        });
+      }
+
+      setEntries(all);
+      setConflicts(legacyRes.data?.conflicts || []);
     } catch (e) {
-      console.error(e);
+      console.error('Kalender-Ladefehler:', e);
     } finally {
       setLoading(false);
     }
@@ -160,82 +300,13 @@ export default function SponsorBookingCalendarPage() {
     a.click();
   };
 
-  // Buchungen für einen Tag filtern
-  const getBookingsForDay = (dateStr: string) => {
-    let ep = episodeBookings.filter(b => b.date === dateStr);
-    let sl = slotBookings.filter(b => b.startDate && b.endDate && dateStr >= b.startDate && dateStr <= b.endDate);
-    let pl = adPlacements.filter(p => p.date === dateStr);
-    // v2.12.0: Verträge (Laufzeit)
-    let ct: V2Contract[] = [];
-    if (showContracts) {
-      ct = v2Contracts.filter(c => {
-        if (!c.startDate || !c.endDate) return false;
-        return dateStr >= c.startDate && dateStr <= c.endDate;
-      });
-    }
-    // v2.12.0: Neue Buchungen (Laufzeit)
-    let v2b: V2Booking[] = [];
-    if (showV2Bookings) {
-      v2b = v2Bookings.filter(b => {
-        if (b.date && b.endDate) return dateStr >= b.date && dateStr <= b.endDate;
-        if (b.date) return b.date === dateStr;
-        return false;
-      });
-    }
-    // BUGFIX v2.11.11: Vorplanungen mit verbesserter Logik
-    let ps: PlannedSlot[] = [];
-    if (showPlanned && plannedSlots.length > 0) {
-      ps = plannedSlots.filter(p => {
-        // Slots ohne Daten werden nicht angezeigt
-        if (!p.startDate && !p.endDate) return false;
-        if (!p.startDate || !p.endDate) return false;
-        
-        // Normalisiere zu ISO-Format
-        const normalize = (d: any) => {
-          if (!d) return null;
-          const str = String(d);
-          // Wenn bereits ISO-Format, nutze es
-          if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
-          // Versuche zu parsen
-          const date = new Date(str);
-          if (!isNaN(date.getTime())) {
-            return date.toISOString().substring(0, 10);
-          }
-          return null;
-        };
-        
-        const pStart = normalize(p.startDate);
-        const pEnd = normalize(p.endDate);
-        const date = normalize(dateStr);
-        
-        if (!pStart || !pEnd || !date) return false;
-        
-        // Zeige wenn date zwischen start und end liegt
-        return date >= pStart && date <= pEnd;
-      });
-    }
-    if (filterSponsor) {
-      ep = ep.filter(b => b.sponsorName === filterSponsor);
-      sl = sl.filter(b => b.sponsorName === filterSponsor);
-      pl = pl.filter(p => p.sponsorName === filterSponsor);
-      ps = ps.filter(p => p.sponsorName === filterSponsor);
-      ct = ct.filter(c => c.sponsorName === filterSponsor);
-      v2b = v2b.filter(b => b.sponsorName === filterSponsor);
-    }
-    if (filterPosition) {
-      ep = ep.filter(b => b.position === filterPosition);
-      sl = sl.filter(b => b.position === filterPosition);
-      pl = pl.filter(p => p.position === filterPosition);
-      ps = ps.filter(p => p.position === filterPosition);
-      v2b = v2b.filter(b => b.position === filterPosition);
-    }
-    return { ep, sl, pl, ps, ct, v2b };
+  // Einträge für einen Tag filtern
+  const getEntriesForDay = (dateStr: string): CalendarEntry[] => {
+    let result = entries.filter(e => entryOnDay(e, dateStr));
+    if (filterSponsor) result = result.filter(e => e.sponsorName === filterSponsor);
+    if (filterType) result = result.filter(e => e.type === filterType);
+    return result;
   };
-
-  // Placements ohne Datum: im aktuellen Monat anzeigen
-  const undatedPlacements = adPlacements.filter(p => !p.date);
-  // Vorplanungen ohne Datum
-  const undatedPlanned = plannedSlots.filter(p => !p.startDate && !p.endDate);
 
   const hasConflict = (dateStr: string) => conflicts.some(c => c.date === dateStr);
 
@@ -244,11 +315,30 @@ export default function SponsorBookingCalendarPage() {
   const firstDay = getFirstDayOfMonth(year, month);
   const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
 
-  // Detail-Panel für ausgewählten Tag
-  const selectedBookings = selectedDay ? getBookingsForDay(selectedDay) : null;
-  const selectedConflicts = selectedDay ? conflicts.filter(c => c.date === selectedDay) : [];
+  // Monatsstatistiken
+  const monthEntries = entries.filter(e => {
+    const firstDay = toIso(year, month, 1);
+    const lastDay = toIso(year, month, daysInMonth);
+    // Prüfe ob Eintrag im Monat liegt
+    if (e.singleDate) {
+      const d = normDate(e.singleDate);
+      return d && d >= firstDay && d <= lastDay;
+    }
+    const start = normDate(e.startDate);
+    const end = normDate(e.endDate);
+    if (!start && !end) return false;
+    const startOk = !end || end >= firstDay;
+    const endOk = !start || start <= lastDay;
+    return startOk && endOk;
+  });
 
-  const totalBookings = episodeBookings.length + slotBookings.length + adPlacements.length;
+  const v2BookingEntries = monthEntries.filter(e => e.type === 'v2booking');
+  const v2Revenue = v2BookingEntries.reduce((s, e) => s + (e.price || 0), 0);
+  const totalBookingsCount = monthEntries.filter(e => e.type !== 'contract' && e.type !== 'planned').length;
+
+  // Detail-Panel
+  const selectedEntries = selectedDay ? getEntriesForDay(selectedDay) : [];
+  const selectedConflicts = selectedDay ? conflicts.filter(c => c.date === selectedDay) : [];
 
   return (
     <div className="flex flex-col h-full bg-gray-950 text-gray-100 min-h-screen">
@@ -258,807 +348,392 @@ export default function SponsorBookingCalendarPage() {
           <Calendar size={22} className="text-purple-400" />
           <h1 className="text-xl font-bold text-white">Buchungskalender</h1>
           {conflicts.length > 0 && (
-            <span className="flex items-center gap-1 text-xs bg-red-900/60 text-red-300 px-2 py-0.5 rounded-full border border-red-700">
-              <AlertTriangle size={12} /> {conflicts.length} Konflikt{conflicts.length !== 1 ? 'e' : ''}
-            </span>
-          )}
-          {plannedSlots.length > 0 && (
-            <span className="flex items-center gap-1 text-xs bg-amber-900/60 text-amber-300 px-2 py-0.5 rounded-full border border-amber-700">
-              <Clock size={12} /> {plannedSlots.length} Vorplanung{plannedSlots.length !== 1 ? 'en' : ''}
+            <span className="flex items-center gap-1 text-xs text-red-400 bg-red-900/30 px-2 py-0.5 rounded-full border border-red-700/50">
+              <AlertTriangle size={11} /> {conflicts.length} Konflikt{conflicts.length !== 1 ? 'e' : ''}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* Export CSV */}
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 rounded-lg transition-colors"
-            title="Als CSV exportieren"
-          >
-            <Download size={13} />
-            CSV Export
+          <button onClick={handleExportCsv}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-lg transition-colors">
+            <FileSpreadsheet size={13} /> CSV
           </button>
-          <button onClick={load} className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors" title="Aktualisieren">
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button onClick={() => navigate('/sponsors')} className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
-            ← Sponsoring
+          <button onClick={load} disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-lg transition-colors disabled:opacity-50">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Aktualisieren
           </button>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Kalender-Bereich */}
-        <div className="flex-1 flex flex-col overflow-auto p-4">
-          {/* Monat-Navigation */}
+        {/* Haupt-Kalenderbereich */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {/* Monats-Navigation */}
           <div className="flex items-center justify-between mb-4">
             <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
-              <ChevronLeft size={20} />
+              <ChevronLeft size={18} />
             </button>
-            <h2 className="text-lg font-semibold text-white">
-              {MONTHS_DE[month]} {year}
-            </h2>
+            <div className="text-center">
+              <h2 className="text-lg font-bold text-white">{MONTHS_DE[month]} {year}</h2>
+              <p className="text-xs text-gray-500">{totalBookingsCount} Buchung{totalBookingsCount !== 1 ? 'en' : ''} im Monat</p>
+            </div>
             <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
-              <ChevronRight size={20} />
+              <ChevronRight size={18} />
             </button>
           </div>
 
-          {/* Filter-Zeile */}
+          {/* Filter-Leiste */}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <Filter size={14} className="text-gray-500" />
-            <select
-              value={filterSponsor}
-              onChange={e => setFilterSponsor(e.target.value)}
-              className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:border-purple-500"
-            >
-              <option value="">Alle Sponsoren</option>
-              {allSponsors.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select
-              value={filterPosition}
-              onChange={e => setFilterPosition(e.target.value)}
-              className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:border-purple-500"
-            >
-              <option value="">Alle Positionen</option>
-              {Object.entries(positionLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            <div className="flex items-center gap-2">
+              <Filter size={13} className="text-gray-500" />
+              <select value={filterSponsor} onChange={e => setFilterSponsor(e.target.value)}
+                className="px-2 py-1 bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg focus:outline-none focus:border-purple-500">
+                <option value="">Alle Sponsoren</option>
+                {allSponsors.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <select value={filterType} onChange={e => setFilterType(e.target.value as EntryType | '')}
+              className="px-2 py-1 bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg focus:outline-none focus:border-purple-500">
+              <option value="">Alle Typen</option>
+              {(Object.keys(typeConfig) as EntryType[]).map(t => (
+                <option key={t} value={t}>{typeConfig[t].label}</option>
+              ))}
             </select>
             <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-              <input type="checkbox" checked={showConflictsOnly} onChange={e => setShowConflictsOnly(e.target.checked)} className="rounded" />
+              <input type="checkbox" checked={showConflictsOnly} onChange={e => setShowConflictsOnly(e.target.checked)}
+                className="w-3 h-3 accent-red-500" />
               Nur Konflikte
             </label>
-            <label className="flex items-center gap-1.5 text-xs text-amber-400 cursor-pointer">
-              <input type="checkbox" checked={showPlanned} onChange={e => setShowPlanned(e.target.checked)} className="rounded" />
-              Vorplanungen anzeigen
-            </label>
-            {(filterSponsor || filterPosition || showConflictsOnly) && (
-              <button onClick={() => { setFilterSponsor(''); setFilterPosition(''); setShowConflictsOnly(false); }}
-                className="text-xs text-purple-400 hover:text-purple-300">Filter zurücksetzen</button>
+            {(filterSponsor || filterType || showConflictsOnly) && (
+              <button onClick={() => { setFilterSponsor(''); setFilterType(''); setShowConflictsOnly(false); }}
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300">
+                <X size={11} /> Filter zurücksetzen
+              </button>
             )}
           </div>
 
-          {/* Wochentage-Header */}
-          <div className="grid grid-cols-7 mb-1">
-            {DAYS_DE.map(d => (
-              <div key={d} className="text-center text-xs font-semibold text-gray-500 py-1">{d}</div>
-            ))}
-          </div>
-
-          {/* Kalender-Grid */}
           {loading ? (
             <div className="flex items-center justify-center h-64 text-gray-500">
-              <RefreshCw size={24} className="animate-spin mr-2" /> Lade Buchungen…
+              <RefreshCw size={20} className="animate-spin mr-2" /> Lade Buchungen...
             </div>
           ) : (
-            <div className="grid grid-cols-7 gap-0.5">
-              {Array.from({ length: totalCells }).map((_, i) => {
-                const dayNum = i - firstDay + 1;
-                if (dayNum < 1 || dayNum > daysInMonth) {
-                  return <div key={i} className="min-h-[80px] bg-gray-900/30 rounded-lg" />;
-                }
-                const dateStr = toIso(year, month, dayNum);
-                const { ep, sl, pl, ps, ct, v2b } = getBookingsForDay(dateStr);
-                const isConflict = hasConflict(dateStr);
-                const isToday = dateStr === today.toISOString().split('T')[0];
-                const isSelected = dateStr === selectedDay;
-                const hasBookings = ep.length > 0 || sl.length > 0 || pl.length > 0 || ps.length > 0 || ct.length > 0 || v2b.length > 0;
-                if (showConflictsOnly && !isConflict) {
-                  return <div key={i} className="min-h-[80px] bg-gray-900/20 rounded-lg opacity-30" />;
-                }
+            <>
+              {/* Wochentag-Header */}
+              <div className="grid grid-cols-7 gap-0.5 mb-1">
+                {DAYS_DE.map(d => (
+                  <div key={d} className="text-center text-xs font-medium text-gray-500 py-1">{d}</div>
+                ))}
+              </div>
 
-                return (
-                  <div
-                    key={i}
-                    onClick={() => setSelectedDay(isSelected ? null : dateStr)}
-                    className={`min-h-[80px] rounded-lg p-1.5 cursor-pointer transition-all border ${
-                      isSelected ? 'border-purple-500 bg-purple-900/20' :
-                      isConflict ? 'border-red-700 bg-red-900/10' :
-                      hasBookings ? 'border-gray-700 bg-gray-800/50 hover:border-purple-600' :
-                      'border-gray-800 bg-gray-900/30 hover:border-gray-700'
-                    }`}
-                  >
-                    <div className={`text-xs font-semibold mb-1 flex items-center justify-between ${
-                      isToday ? 'text-purple-400' : 'text-gray-400'
-                    }`}>
-                      <span className={isToday ? 'bg-purple-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]' : ''}>
-                        {dayNum}
-                      </span>
-                      {isConflict && <AlertTriangle size={10} className="text-red-400" />}
-                    </div>
-                    <div className="space-y-0.5">
-                      {ep.slice(0, 2).map(b => (
-                        <div key={b.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
-                          style={{ backgroundColor: b.sponsorColor + '30', borderLeft: `2px solid ${b.sponsorColor}` }}>
-                          <span className="truncate font-medium" style={{ color: b.sponsorColor }}>{b.sponsorName}</span>
-                        </div>
-                      ))}
-                      {sl.slice(0, 1).map(b => (
-                        <div key={b.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
-                          style={{ backgroundColor: b.sponsorColor + '20', borderLeft: `2px dashed ${b.sponsorColor}` }}>
-                          <span className="truncate text-gray-400">{b.sponsorName}</span>
-                        </div>
-                      ))}
-                      {pl.slice(0, 2).map(p => (
-                        <div key={p.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
-                          style={{ backgroundColor: p.sponsorColor + '25', borderLeft: `2px dotted ${p.sponsorColor}` }}>
-                          <span className="truncate" style={{ color: p.sponsorColor }}>● {p.sponsorName}</span>
-                        </div>
-                      ))}
-                      {ps.slice(0, 1).map(p => (
-                        <div key={p.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
-                          style={{ backgroundColor: '#f59e0b20', borderLeft: `2px dashed #f59e0b` }}>
-                          <span className="truncate text-amber-400">◷ {p.sponsorName}</span>
-                        </div>
-                      ))}
-                      {ct.slice(0, 1).map(c => (
-                        <div key={c.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
-                          style={{ backgroundColor: (c.sponsorColor || '#7c3aed') + '15', borderLeft: `2px solid ${c.sponsorColor || '#7c3aed'}`, borderStyle: 'double' }}>
-                          <span className="truncate text-purple-300">≡ {c.sponsorName}</span>
-                        </div>
-                      ))}
-                      {v2b.slice(0, 2).map(b => {
-                        // Preismodell ableiten
-                        const priceLabel = b.pricePerEpisode ? 'Folge' : b.pricePer1000 ? 'CPM' : b.basePrice ? 'Basis' : null;
-                        return (
-                          <div key={b.id} className="text-[10px] rounded px-1 py-0.5 truncate"
-                            style={{ backgroundColor: (b.sponsorColor || '#7c3aed') + '25', borderLeft: `3px solid ${b.sponsorColor || '#7c3aed'}` }}>
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="truncate font-medium" style={{ color: b.sponsorColor || '#a78bfa' }}>● {b.sponsorName}</span>
-                              {priceLabel && <span className="text-[9px] text-violet-400 shrink-0">{priceLabel}</span>}
+              {/* Kalender-Grid */}
+              <div className="grid grid-cols-7 gap-0.5">
+                {Array.from({ length: totalCells }).map((_, i) => {
+                  const dayNum = i - firstDay + 1;
+                  if (dayNum < 1 || dayNum > daysInMonth) {
+                    return <div key={i} className="min-h-[80px] bg-gray-900/20 rounded-lg" />;
+                  }
+                  const dateStr = toIso(year, month, dayNum);
+                  const dayEntries = getEntriesForDay(dateStr);
+                  const isConflict = hasConflict(dateStr);
+                  const isToday = dateStr === today.toISOString().split('T')[0];
+                  const isSelected = dateStr === selectedDay;
+                  const hasAny = dayEntries.length > 0;
+
+                  if (showConflictsOnly && !isConflict) {
+                    return <div key={i} className="min-h-[80px] bg-gray-900/10 rounded-lg opacity-20" />;
+                  }
+
+                  return (
+                    <div key={i}
+                      onClick={() => setSelectedDay(isSelected ? null : dateStr)}
+                      className={`min-h-[80px] rounded-lg p-1.5 cursor-pointer transition-all border ${
+                        isSelected ? 'border-purple-500 bg-purple-900/20' :
+                        isConflict ? 'border-red-700 bg-red-900/10' :
+                        hasAny ? 'border-gray-700 bg-gray-800/50 hover:border-purple-600' :
+                        'border-gray-800 bg-gray-900/30 hover:border-gray-700'
+                      }`}
+                    >
+                      {/* Tag-Nummer */}
+                      <div className={`text-xs font-semibold mb-1 flex items-center justify-between ${isToday ? 'text-purple-400' : 'text-gray-400'}`}>
+                        <span className={isToday ? 'bg-purple-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]' : ''}>
+                          {dayNum}
+                        </span>
+                        {isConflict && <AlertTriangle size={10} className="text-red-400" />}
+                      </div>
+
+                      {/* Eintrags-Chips */}
+                      <div className="space-y-0.5">
+                        {dayEntries.slice(0, 3).map(e => {
+                          const cfg = typeConfig[e.type];
+                          const color = e.sponsorColor || cfg.color;
+                          return (
+                            <div key={e.id}
+                              className="text-[10px] rounded px-1 py-0.5 truncate"
+                              style={{
+                                backgroundColor: color + '25',
+                                borderLeft: `2px ${cfg.borderStyle} ${color}`,
+                              }}>
+                              <span className="truncate font-medium" style={{ color }}>
+                                {e.sponsorName}
+                              </span>
+                              {e.slotName && (
+                                <span className="text-[9px] text-gray-400 ml-1 truncate">· {e.slotName}</span>
+                              )}
                             </div>
-                            {b.slotName && <div className="truncate text-gray-400 text-[9px]">{b.slotName}</div>}
-                          </div>
-                        );
-                      })}
-                      {(ep.length + sl.length + pl.length + ps.length + ct.length + v2b.length) > 5 && (
-                        <div className="text-[9px] text-gray-500 pl-1">+{ep.length + sl.length + pl.length + ps.length + ct.length + v2b.length - 5} weitere</div>
-                      )}
+                          );
+                        })}
+                        {dayEntries.length > 3 && (
+                          <div className="text-[9px] text-gray-500 pl-1">+{dayEntries.length - 3} weitere</div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Undatierte Einträge */}
-          {(undatedPlacements.length > 0 || undatedPlanned.length > 0) && (
-            <div className="mt-4 p-3 bg-amber-900/15 border border-amber-700/50 rounded-lg">
-              <div className="text-xs text-amber-400 font-semibold mb-2 flex items-center gap-1">
-                <Clock size={12} /> Vorplanungen & Buchungen ohne Datum
-                <span className="ml-auto text-[10px] text-amber-500/70 font-normal">Im Kalender nicht sichtbar</span>
+                  );
+                })}
               </div>
-              <div className="space-y-1.5">
-                {undatedPlanned.map(p => (
-                  <div key={p.id} className="flex items-center gap-2 text-xs text-amber-300 bg-amber-900/20 rounded px-2 py-1.5">
-                    <span className="text-amber-400">◷</span>
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium">{p.sponsorName}</span>
-                      {p.label && <span className="text-amber-500/70 ml-1">– {p.label}</span>}
-                    </div>
-                    {(p.basePrice || p.pricePerEpisode) && (
-                      <span className="text-[10px] text-amber-400 shrink-0">{(p.basePrice || p.pricePerEpisode || 0).toFixed(2)} €</span>
-                    )}
+
+              {/* Legende */}
+              <div className="flex items-center gap-4 mt-4 text-xs text-gray-500 flex-wrap">
+                {(Object.entries(typeConfig) as [EntryType, typeof typeConfig[EntryType]][]).map(([type, cfg]) => (
+                  <div key={type} className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded" style={{
+                      backgroundColor: cfg.bg,
+                      borderLeft: `2px ${cfg.borderStyle} ${cfg.color}`,
+                    }} />
+                    {cfg.label}
                   </div>
                 ))}
-                {undatedPlacements.map(p => (
-                  <div key={p.id} className="flex items-center gap-2 text-xs text-green-300 bg-green-900/20 rounded px-2 py-1.5">
-                    <span style={{ color: p.sponsorColor }}>●</span>
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium text-white">{p.sponsorName}</span>
-                      {p.slotName && <span className="text-gray-400 ml-1">– {p.slotName}</span>}
-                    </div>
-                    <span className="text-[10px] text-green-400 shrink-0">{p.price?.toFixed(2)} €</span>
-                  </div>
-                ))}
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded border border-red-700 bg-red-900/20" />
+                  Konflikt
+                </div>
               </div>
-              <div className="mt-2 text-[10px] text-amber-600/70">
-                Tipp: Laufzeit-Datum im Werbeplatz eintragen, damit Vorplanungen im Kalender erscheinen.
-              </div>
-            </div>
+            </>
           )}
-
-          {/* Legende */}
-          <div className="flex items-center gap-4 mt-4 text-xs text-gray-500 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded border-l-2 border-purple-500 bg-purple-500/20" />
-              Episodenbuchung
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded border-l-2 border-dashed border-purple-500 bg-purple-500/10" />
-              Zeitraum-Buchung
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded border-l-2 border-dotted border-green-500 bg-green-500/10" />
-              Werbeplatz-Buchung
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded border-l-2 border-dashed border-amber-500 bg-amber-500/10" />
-              Vorplanung
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded border border-red-700 bg-red-900/20" />
-              Konflikt
-            </div>
-          </div>
         </div>
 
         {/* Detail-Panel */}
         <div className="w-80 border-l border-gray-800 bg-gray-900 overflow-y-auto flex-shrink-0">
           {selectedDay ? (
             <div className="p-4">
+              {/* Header */}
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-white">
-                  {new Date(selectedDay + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
+                <h3 className="font-semibold text-white text-sm">
+                  {new Date(selectedDay + 'T12:00:00').toLocaleDateString('de-DE', {
+                    weekday: 'long', day: 'numeric', month: 'long'
+                  })}
                 </h3>
-                <button onClick={() => setSelectedDay(null)} className="text-gray-500 hover:text-gray-300 text-lg leading-none">×</button>
+                <button onClick={() => setSelectedDay(null)} className="text-gray-500 hover:text-gray-300">
+                  <X size={16} />
+                </button>
               </div>
 
               {/* Konflikte */}
               {selectedConflicts.length > 0 && (
                 <div className="mb-4 p-3 bg-red-900/20 border border-red-700 rounded-lg">
-                  <div className="flex items-center gap-2 text-red-400 font-semibold text-sm mb-2">
-                    <AlertTriangle size={14} /> Konflikte
+                  <div className="flex items-center gap-2 text-red-400 font-semibold text-xs mb-2">
+                    <AlertTriangle size={13} /> Konflikte
                   </div>
                   {selectedConflicts.map((c, i) => (
+                    <div key={i} className="text-xs text-red-300">{c.message}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Einträge */}
+              {selectedEntries.length === 0 ? (
+                <div className="text-center text-gray-500 text-sm py-8">
+                  <Calendar size={24} className="mx-auto mb-2 opacity-30" />
+                  Keine Buchungen an diesem Tag
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {selectedEntries.map(e => {
+                    const cfg = typeConfig[e.type];
+                    const color = e.sponsorColor || cfg.color;
+                    const displayPrice = e.finalPrice ?? e.price;
+                    return (
+                      <div key={e.id}
+                        className="p-3 rounded-lg border border-gray-700 bg-gray-800/50"
+                        style={{ borderLeftColor: color, borderLeftWidth: 3 }}>
+
+                        {/* Typ-Badge + Sponsor */}
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div>
+                            <div className="font-semibold text-sm text-white">{e.sponsorName}</div>
+                            {e.sponsorCompany && e.sponsorCompany !== e.sponsorName && (
+                              <div className="text-[10px] text-gray-500">{e.sponsorCompany}</div>
+                            )}
+                          </div>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                            style={{ backgroundColor: color + '25', color: cfg.textColor }}>
+                            {cfg.label}
+                          </span>
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-1 text-xs text-gray-400">
+                          {/* Slot / Kategorie */}
+                          {(e.slotName || e.label || e.categoryName) && (
+                            <div className="flex items-center gap-1">
+                              <Tag size={10} />
+                              <span className="text-gray-300">{e.slotName || e.label || e.categoryName}</span>
+                            </div>
+                          )}
+
+                          {/* Position */}
+                          {e.position && (
+                            <div className="text-gray-500">{positionLabels[e.position] || e.position}</div>
+                          )}
+
+                          {/* Episode */}
+                          {e.episodeTitle && (
+                            <div className="flex items-center gap-1">
+                              <Megaphone size={10} />
+                              <button onClick={() => e.episodeId && navigate(`/episodes/${e.episodeId}`)}
+                                className="hover:text-purple-400 transition-colors truncate max-w-[180px]">
+                                {e.episodeNumber ? `#${e.episodeNumber} ` : ''}{e.episodeTitle}
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Laufzeit */}
+                          {(e.startDate || e.endDate) && !e.singleDate && (
+                            <div className="flex items-center gap-1 text-gray-500">
+                              <CalendarRange size={10} />
+                              {e.startDate ? new Date(e.startDate + 'T12:00:00').toLocaleDateString('de-DE') : '?'}
+                              {' – '}
+                              {e.endDate ? new Date(e.endDate + 'T12:00:00').toLocaleDateString('de-DE') : '?'}
+                            </div>
+                          )}
+
+                          {/* Preismodell (v2) */}
+                          {e.type === 'v2booking' && (e.basePrice || e.pricePerEpisode || e.pricePer1000) && (
+                            <div className="text-[10px] text-cyan-400/70">
+                              {e.pricePerEpisode ? `Pro Folge: ${e.pricePerEpisode.toFixed(2)} €` :
+                               e.pricePer1000 ? `CPM: ${e.pricePer1000.toFixed(2)} €` :
+                               e.basePrice ? `Basis: ${e.basePrice.toFixed(2)} €` : ''}
+                            </div>
+                          )}
+
+                          {/* Preis + Rechnungsstatus */}
+                          {displayPrice != null && (
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-0.5 text-green-400">
+                                <Euro size={10} />{displayPrice.toFixed(2)} €
+                              </div>
+                              {e.invoiceStatus && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${invoiceStatusColors[e.invoiceStatus] || 'bg-gray-700 text-gray-400'}`}>
+                                  {e.invoiceStatus}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Bestätigt / Status */}
+                          {e.type === 'episode' && (
+                            e.confirmed
+                              ? <span className="flex items-center gap-1 text-green-400"><CheckCircle size={10} /> Bestätigt</span>
+                              : <span className="flex items-center gap-1 text-yellow-400"><Clock size={10} /> Ausstehend</span>
+                          )}
+
+                          {/* Kontakt (Vertrag) */}
+                          {e.type === 'contract' && e.contactPerson && (
+                            <div className="text-gray-500">
+                              {e.contactPerson}
+                              {e.contactEmail && <span className="ml-1">· {e.contactEmail}</span>}
+                            </div>
+                          )}
+
+                          {/* Notizen */}
+                          {e.notes && (
+                            <div className="text-gray-500 italic text-[10px] mt-1">{e.notes}</div>
+                          )}
+                        </div>
+
+                        {/* Sponsor-Link */}
+                        <button onClick={() => navigate(`/sponsors/${e.sponsorId}`)}
+                          className="mt-2 flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300 transition-colors">
+                          <ExternalLink size={9} /> Sponsor öffnen
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Monatsübersicht in der Sidebar */
+            <div className="p-4 space-y-4">
+              <h3 className="font-semibold text-white text-sm flex items-center gap-2">
+                <Info size={14} className="text-purple-400" />
+                {MONTHS_DE[month]} {year} – Übersicht
+              </h3>
+
+              {/* Monatsstatistiken */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-gray-800/60 rounded-lg p-3 border border-gray-700">
+                  <div className="text-xs text-gray-500 mb-1">Buchungen</div>
+                  <div className="text-xl font-bold text-white">{totalBookingsCount}</div>
+                </div>
+                <div className="bg-gray-800/60 rounded-lg p-3 border border-gray-700">
+                  <div className="text-xs text-gray-500 mb-1">Verträge aktiv</div>
+                  <div className="text-xl font-bold text-purple-400">
+                    {monthEntries.filter(e => e.type === 'contract').length}
+                  </div>
+                </div>
+                <div className="bg-gray-800/60 rounded-lg p-3 border border-gray-700">
+                  <div className="text-xs text-gray-500 mb-1">Vorplanungen</div>
+                  <div className="text-xl font-bold text-amber-400">
+                    {monthEntries.filter(e => e.type === 'planned').length}
+                  </div>
+                </div>
+                {v2Revenue > 0 && (
+                  <div className="bg-gray-800/60 rounded-lg p-3 border border-gray-700">
+                    <div className="text-xs text-gray-500 mb-1">Umsatz (v2)</div>
+                    <div className="text-lg font-bold text-cyan-400">{v2Revenue.toFixed(0)} €</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Typ-Verteilung */}
+              {monthEntries.length > 0 && (
+                <div className="bg-gray-800/40 rounded-lg p-3 border border-gray-700">
+                  <div className="text-xs font-medium text-gray-400 mb-2">Buchungen nach Typ</div>
+                  <div className="space-y-1.5">
+                    {(Object.keys(typeConfig) as EntryType[]).map(type => {
+                      const count = monthEntries.filter(e => e.type === type).length;
+                      if (count === 0) return null;
+                      const cfg = typeConfig[type];
+                      return (
+                        <div key={type} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
+                            <span className="text-gray-400">{cfg.label}</span>
+                          </div>
+                          <span className="font-medium text-white">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Konflikte */}
+              {conflicts.length > 0 && (
+                <div className="bg-red-900/15 border border-red-700/50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-red-400 font-semibold text-xs mb-2">
+                    <AlertTriangle size={12} /> {conflicts.length} Konflikt{conflicts.length !== 1 ? 'e' : ''}
+                  </div>
+                  {conflicts.slice(0, 3).map((c, i) => (
                     <div key={i} className="text-xs text-red-300 mb-1">{c.message}</div>
                   ))}
                 </div>
               )}
 
-              {/* Episodenbuchungen */}
-              {selectedBookings && selectedBookings.ep.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Episodenbuchungen</h4>
-                  <div className="space-y-2">
-                    {selectedBookings.ep.map(b => (
-                      <div key={b.id} className="p-3 rounded-lg border border-gray-700 bg-gray-800/50"
-                        style={{ borderLeftColor: b.sponsorColor, borderLeftWidth: 3 }}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-sm text-white">{b.sponsorName}</span>
-                          {b.confirmed ? (
-                            <span className="flex items-center gap-1 text-[10px] text-green-400"><CheckCircle size={10} /> Bestätigt</span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-[10px] text-yellow-400"><Clock size={10} /> Ausstehend</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-400 space-y-0.5">
-                          {b.episodeTitle && (
-                            <div className="flex items-center gap-1">
-                              <Megaphone size={10} />
-                              <button onClick={() => b.episodeId && navigate(`/episodes/${b.episodeId}`)}
-                                className="hover:text-purple-400 transition-colors truncate max-w-[180px]">
-                                {b.episodeNumber ? `#${b.episodeNumber} ` : ''}{b.episodeTitle}
-                              </button>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1">
-                            <Tag size={10} />
-                            {positionLabels[b.position] || b.position}
-                            {b.isExclusive && <span className="ml-1 text-[9px] bg-yellow-900/50 text-yellow-400 px-1 rounded">Exklusiv</span>}
-                          </div>
-                          {b.categoryName && <div className="text-gray-500">{b.categoryName}</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Zeitraum-Buchungen */}
-              {selectedBookings && selectedBookings.sl.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Zeitraum-Buchungen</h4>
-                  <div className="space-y-2">
-                    {selectedBookings.sl.map(b => (
-                      <div key={b.id} className="p-3 rounded-lg border border-dashed border-gray-700 bg-gray-800/30"
-                        style={{ borderLeftColor: b.sponsorColor, borderLeftWidth: 3, borderLeftStyle: 'solid' }}>
-                        <div className="font-semibold text-sm text-white mb-1">{b.sponsorName}</div>
-                        <div className="text-xs text-gray-400 space-y-0.5">
-                          {b.label && <div>{b.label}</div>}
-                          {b.categoryName && <div className="flex items-center gap-1"><Tag size={10} />{b.categoryName}</div>}
-                          {b.startDate && b.endDate && (
-                            <div className="flex items-center gap-1 text-gray-500">
-                              <CalendarRange size={10} />
-                              {new Date(b.startDate + 'T12:00:00').toLocaleDateString('de-DE')} – {new Date(b.endDate + 'T12:00:00').toLocaleDateString('de-DE')}
-                            </div>
-                          )}
-                          {b.status && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                              b.status === 'aktiv' ? 'bg-green-900/50 text-green-400' :
-                              b.status === 'angefragt' ? 'bg-yellow-900/50 text-yellow-400' :
-                              'bg-gray-700 text-gray-400'
-                            }`}>{b.status}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Werbeplatz-Buchungen (ad_placements) */}
-              {selectedBookings && selectedBookings.pl.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-2">Werbeplatz-Buchungen</h4>
-                  <div className="space-y-2">
-                    {selectedBookings.pl.map(p => (
-                      <div key={p.id} className="p-3 rounded-lg border border-gray-700 bg-gray-800/50"
-                        style={{ borderLeftColor: p.sponsorColor, borderLeftWidth: 3 }}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-sm text-white">{p.sponsorName}</span>
-                          {p.price != null && (
-                            <span className="flex items-center gap-0.5 text-[10px] text-green-400">
-                              <Euro size={9} />{p.price.toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-400 space-y-0.5">
-                          {p.slotName && <div className="text-gray-300 font-medium">{p.slotName}</div>}
-                          {p.episodeTitle && (
-                            <div className="flex items-center gap-1">
-                              <Megaphone size={10} />
-                              <button onClick={() => p.episodeId && navigate(`/episodes/${p.episodeId}`)}
-                                className="hover:text-purple-400 transition-colors truncate max-w-[180px]">
-                                {p.episodeNumber ? `#${p.episodeNumber} ` : ''}{p.episodeTitle}
-                              </button>
-                            </div>
-                          )}
-                          {!p.episodeTitle && <div className="text-gray-500 italic">Zeitraum-Buchung</div>}
-                          <div className="flex items-center gap-1">
-                            <Tag size={10} />
-                            {positionLabels[p.position || ''] || p.position || 'Pre-Roll'}
-                          </div>
-                          {p.invoiceStatus && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${invoiceStatusColors[p.invoiceStatus] || 'bg-gray-700 text-gray-400'}`}>
-                              {p.invoiceStatus}
-                            </span>
-                          )}
-                          {p.notes && <div className="text-gray-500 text-[10px] mt-1 italic">{p.notes}</div>}
-                        </div>
-                        <button
-                          onClick={() => navigate(`/sponsors/${p.sponsorId}`)}
-                          className="mt-2 flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300"
-                        >
-                          <ExternalLink size={9} /> Sponsor öffnen
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Vorplanungen */}
-              {selectedBookings && selectedBookings.ps.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Vorplanungen</h4>
-                  <div className="space-y-2">
-                    {selectedBookings.ps.map(p => (
-                      <div key={p.id} className="p-3 rounded-lg border border-dashed border-amber-700/50 bg-amber-900/10">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-sm text-white">{p.sponsorName}</span>
-                          <span className="text-[10px] text-amber-400 bg-amber-900/40 px-1.5 py-0.5 rounded-full">Geplant</span>
-                        </div>
-                        <div className="text-xs text-gray-400 space-y-0.5">
-                          {p.label && <div className="text-amber-300/80">{p.label}</div>}
-                          {p.categoryName && <div className="flex items-center gap-1"><Tag size={10} />{p.categoryName}</div>}
-                          {p.startDate && p.endDate && (
-                            <div className="flex items-center gap-1 text-amber-500/70">
-                              <CalendarRange size={10} />
-                              {new Date(p.startDate + 'T12:00:00').toLocaleDateString('de-DE')} – {new Date(p.endDate + 'T12:00:00').toLocaleDateString('de-DE')}
-                            </div>
-                          )}
-                          {(p.basePrice || p.pricePerEpisode) && (
-                            <div className="flex items-center gap-0.5 text-amber-400">
-                              <Euro size={9} />{(p.basePrice || p.pricePerEpisode || 0).toFixed(2)} (geplant)
-                            </div>
-                          )}
-                          {p.notes && <div className="text-gray-500 text-[10px] italic">{p.notes}</div>}
-                        </div>
-                        <button
-                          onClick={() => navigate(`/sponsors/${p.sponsorId}`)}
-                          className="mt-2 flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300"
-                        >
-                          <ExternalLink size={9} /> Sponsor öffnen & buchen
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* v2.12.0 Verträge */}
-              {selectedBookings && selectedBookings.ct.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <FileText size={11} /> Verträge (v2.12.0)
-                  </h4>
-                  <div className="space-y-2">
-                    {selectedBookings.ct.map(c => (
-                      <div key={c.id} className="p-3 rounded-lg border border-double border-purple-700/60 bg-purple-900/10">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-sm text-white">{c.sponsorName}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                            c.status === 'aktiv' ? 'bg-green-900/40 text-green-400 border border-green-700/40' :
-                            c.status === 'abgelaufen' ? 'bg-gray-700 text-gray-400' :
-                            'bg-yellow-900/40 text-yellow-400 border border-yellow-700/40'
-                          }`}>{c.status || 'Vertrag'}</span>
-                        </div>
-                        <div className="text-xs text-gray-400 space-y-0.5">
-                          {c.sponsorCompany && <div className="text-gray-300">{c.sponsorCompany}</div>}
-                          {c.startDate && c.endDate && (
-                            <div className="flex items-center gap-1 text-purple-400/80">
-                              <CalendarRange size={10} />
-                              {new Date(c.startDate + 'T12:00:00').toLocaleDateString('de-DE')} – {new Date(c.endDate + 'T12:00:00').toLocaleDateString('de-DE')}
-                            </div>
-                          )}
-                          {c.contactPerson && <div className="text-gray-400">{c.contactPerson}{c.contactEmail && ` · ${c.contactEmail}`}</div>}
-                          {c.notes && <div className="text-gray-500 text-[10px] italic">{c.notes}</div>}
-                        </div>
-                        <button onClick={() => navigate(`/sponsors/${c.sponsorId}`)} className="mt-2 flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300">
-                          <ExternalLink size={9} /> Sponsor öffnen
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* v2.12.0 Buchungen */}
-              {selectedBookings && selectedBookings.v2b.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-violet-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <Megaphone size={11} /> Buchungen v2.12.0
-                  </h4>
-                  <div className="space-y-2">
-                    {selectedBookings.v2b.map(b => {
-                      // Preismodell ableiten
-                      const priceModel = b.pricePerEpisode ? 'Pro Folge' : b.pricePer1000 ? 'CPM (pro 1.000 Hörer)' : b.basePrice ? 'Basis-Preis' : null;
-                      const displayPrice = b.finalPrice || b.price || 0;
-                      // Laufzeit in Tagen berechnen
-                      let durationDays: number | null = null;
-                      if (b.date && b.endDate) {
-                        const start = new Date(b.date + 'T12:00:00');
-                        const end = new Date(b.endDate + 'T12:00:00');
-                        durationDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-                      }
-                      return (
-                        <div key={b.id} className="p-3 rounded-lg border border-violet-700/50 bg-violet-900/10">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-semibold text-sm text-white">{b.sponsorName}</span>
-                            <div className="flex items-center gap-1">
-                              {b.status && (
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
-                                  b.status === 'bestätigt' ? 'bg-green-900/30 text-green-400 border-green-700/40' :
-                                  b.status === 'ausgestrahlt' ? 'bg-blue-900/30 text-blue-400 border-blue-700/40' :
-                                  'bg-yellow-900/30 text-yellow-400 border-yellow-700/40'
-                                }`}>{b.status}</span>
-                              )}
-                              <a href={`/api/sponsors/v2/bookings/${b.id}/confirmation-pdf`} target="_blank" rel="noopener noreferrer"
-                                className="p-1 text-gray-400 hover:text-violet-300 rounded transition-colors" title="Bestätigung als PDF">
-                                <FileText size={11} />
-                              </a>
-                            </div>
-                          </div>
-                          <div className="text-xs text-gray-400 space-y-1">
-                            {b.slotName && (
-                              <div className="flex items-center gap-1.5">
-                                <Tag size={10} className="text-violet-400 shrink-0" />
-                                <span className="text-violet-300">{b.slotName}</span>
-                                {b.position && <span className="text-gray-500">· {b.position}</span>}
-                              </div>
-                            )}
-                            {b.date && (
-                              <div className="flex items-center gap-1 text-violet-400/80">
-                                <CalendarRange size={10} />
-                                {new Date(b.date + 'T12:00:00').toLocaleDateString('de-DE')}
-                                {b.endDate && <> – {new Date(b.endDate + 'T12:00:00').toLocaleDateString('de-DE')}</>}
-                                {durationDays && <span className="text-gray-500 ml-1">({durationDays} Tage)</span>}
-                              </div>
-                            )}
-                            {priceModel && (
-                              <div className="flex items-center gap-1">
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-900/40 border border-violet-700/50 text-violet-300">
-                                  {priceModel}
-                                </span>
-                              </div>
-                            )}
-                            {displayPrice > 0 && (
-                              <div className="flex items-center gap-0.5 text-green-400 font-medium">
-                                <Euro size={10} />{displayPrice.toFixed(2)}
-                                {b.invoiceStatus && (
-                                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${
-                                    b.invoiceStatus === 'bezahlt' ? 'bg-green-900/30 text-green-400' :
-                                    b.invoiceStatus === 'versendet' ? 'bg-blue-900/30 text-blue-400' :
-                                    'bg-gray-700/50 text-gray-400'
-                                  }`}>{b.invoiceStatus}</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <button onClick={() => navigate(`/sponsors/${b.sponsorId}`)} className="mt-2 flex items-center gap-1 text-[10px] text-violet-400 hover:text-violet-300">
-                            <ExternalLink size={9} /> Sponsor öffnen
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {selectedBookings && selectedBookings.ep.length === 0 && selectedBookings.sl.length === 0 && selectedBookings.pl.length === 0 && selectedBookings.ps.length === 0 && selectedBookings.ct.length === 0 && selectedBookings.v2b.length === 0 && (
-                <div className="text-center text-gray-500 py-8 text-sm">
-                  <Calendar size={24} className="mx-auto mb-2 opacity-40" />
-                  Keine Buchungen an diesem Tag
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-4">
-              {/* Monats-Zusammenfassung */}
-              <h3 className="font-semibold text-white mb-4">Monatsübersicht</h3>
-              <div className="space-y-3">
-                <div className="p-3 bg-gray-800 rounded-lg">
-                  <div className="text-2xl font-bold text-white">{totalBookings + plannedSlots.length + v2Contracts.length + v2Bookings.length}</div>
-                  <div className="text-xs text-gray-400">Einträge gesamt</div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-3 bg-gray-800 rounded-lg">
-                    <div className="text-lg font-bold text-purple-400">{episodeBookings.length}</div>
-                    <div className="text-xs text-gray-400">Episodenbuchungen</div>
-                  </div>
-                  <div className="p-3 bg-gray-800 rounded-lg">
-                    <div className="text-lg font-bold text-blue-400">{slotBookings.length}</div>
-                    <div className="text-xs text-gray-400">Zeitraum-Buchungen</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-3 bg-gray-800 rounded-lg">
-                    <div className="text-lg font-bold text-green-400">{adPlacements.length}</div>
-                    <div className="text-xs text-gray-400">Werbeplatz-Buchungen</div>
-                  </div>
-                  <div className="p-3 bg-amber-900/20 border border-amber-700/50 rounded-lg">
-                    <div className="text-lg font-bold text-amber-400">{plannedSlots.length}</div>
-                    <div className="text-xs text-amber-500">Vorplanungen</div>
-                  </div>
-                </div>
-                {adPlacements.length > 0 && (
-                  <div className="p-3 bg-gray-800 rounded-lg">
-                    <div className="text-lg font-bold text-green-300">
-                      {adPlacements.filter(p => p.price).reduce((sum, p) => sum + (p.price || 0), 0).toFixed(2)} €
-                    </div>
-                    <div className="text-xs text-gray-400">Umsatz Werbeplätze</div>
-                  </div>
-                )}
-                {(v2Contracts.length > 0 || v2Bookings.length > 0) && (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
-                        <div className="text-lg font-bold text-purple-400">{v2Contracts.length}</div>
-                        <div className="text-xs text-purple-500">Verträge (v2)</div>
-                      </div>
-                      <div className="p-3 bg-violet-900/20 border border-violet-700/50 rounded-lg">
-                        <div className="text-lg font-bold text-violet-400">{v2Bookings.length}</div>
-                        <div className="text-xs text-violet-500">Buchungen (v2)</div>
-                      </div>
-                    </div>
-                    {v2Bookings.length > 0 && (() => {
-                      const v2Revenue = v2Bookings.reduce((sum, b) => sum + (b.finalPrice || b.price || 0), 0);
-                      return v2Revenue > 0 ? (
-                        <div className="p-3 bg-violet-900/20 border border-violet-700/50 rounded-lg">
-                          <div className="text-lg font-bold text-violet-300">
-                            {v2Revenue.toFixed(2)} €
-                          </div>
-                          <div className="text-xs text-violet-400">Umsatz Buchungen (v2)</div>
-                        </div>
-                      ) : null;
-                    })()}
-                  </>
-                )}
-                {conflicts.length > 0 && (
-                  <div className="p-3 bg-red-900/20 border border-red-700 rounded-lg">
-                    <div className="text-lg font-bold text-red-400">{conflicts.length}</div>
-                    <div className="text-xs text-red-300">Konflikte erkannt</div>
-                  </div>
-                )}
-              </div>
-
-              {/* v2.12.0 Verträge-Liste */}
-              {v2Contracts.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <FileText size={12} /> Aktive Verträge (v2.12.0)
-                  </h4>
-                  <div className="space-y-2">
-                    {v2Contracts.slice(0, 5).map(c => (
-                      <div key={c.id} className="p-2 bg-purple-900/10 border border-purple-700/40 rounded-lg cursor-pointer hover:border-purple-600"
-                        onClick={() => navigate(`/sponsors/${c.sponsorId}`)}>
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs text-purple-300 font-medium">{c.sponsorName}</div>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                            c.status === 'aktiv' ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-400'
-                          }`}>{c.status || '–'}</span>
-                        </div>
-                        {c.startDate && c.endDate && (
-                          <div className="text-[10px] text-gray-500 mt-0.5">
-                            {new Date(c.startDate + 'T12:00:00').toLocaleDateString('de-DE')} – {new Date(c.endDate + 'T12:00:00').toLocaleDateString('de-DE')}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {v2Contracts.length > 5 && (
-                      <div className="text-[11px] text-gray-500 pl-1">+{v2Contracts.length - 5} weitere Verträge</div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* v2-Buchungen-Liste */}
-              {v2Bookings.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-xs font-semibold text-violet-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <Megaphone size={12} /> Buchungen diesen Monat (v2)
-                  </h4>
-                  <div className="space-y-2">
-                    {v2Bookings.slice(0, 5).map(b => {
-                      const priceLabel = b.pricePerEpisode ? 'Folge' : b.pricePer1000 ? 'CPM' : b.basePrice ? 'Basis' : null;
-                      const displayPrice = b.finalPrice || b.price || 0;
-                      return (
-                        <div key={b.id} className="p-2 bg-violet-900/10 border border-violet-700/40 rounded-lg cursor-pointer hover:border-violet-600"
-                          onClick={() => navigate(`/sponsors/${b.sponsorId}`)}>
-                          <div className="flex items-center justify-between">
-                            <div className="text-xs text-violet-300 font-medium truncate">{b.sponsorName}</div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {priceLabel && <span className="text-[9px] text-violet-500">{priceLabel}</span>}
-                              {b.status && (
-                                <span className={`text-[9px] px-1 py-0.5 rounded-full ${
-                                  b.status === 'bestätigt' ? 'bg-green-900/30 text-green-400' :
-                                  b.status === 'ausgestrahlt' ? 'bg-blue-900/30 text-blue-400' :
-                                  'bg-yellow-900/30 text-yellow-400'
-                                }`}>{b.status}</span>
-                              )}
-                            </div>
-                          </div>
-                          {b.slotName && <div className="text-[10px] text-violet-400/70 mt-0.5 truncate">{b.slotName}</div>}
-                          <div className="flex items-center justify-between mt-0.5">
-                            {b.date && (
-                              <div className="text-[10px] text-gray-500">
-                                {new Date(b.date + 'T12:00:00').toLocaleDateString('de-DE')}
-                                {b.endDate && <> – {new Date(b.endDate + 'T12:00:00').toLocaleDateString('de-DE')}</>}
-                              </div>
-                            )}
-                            {displayPrice > 0 && (
-                              <div className="text-[10px] text-green-400 font-medium">{displayPrice.toFixed(2)} €</div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {v2Bookings.length > 5 && (
-                      <div className="text-[11px] text-gray-500 pl-1">+{v2Bookings.length - 5} weitere Buchungen</div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Vorplanungen-Liste */}
-              {plannedSlots.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <Clock size={12} /> Offene Vorplanungen
-                  </h4>
-                  <div className="space-y-2">
-                    {plannedSlots.slice(0, 5).map(p => (
-                      <div key={p.id} className="p-2 bg-amber-900/10 border border-amber-700/40 rounded-lg cursor-pointer hover:border-amber-600"
-                        onClick={() => navigate(`/sponsors/${p.sponsorId}`)}>
-                        <div className="text-xs text-amber-300 font-medium">{p.sponsorName}</div>
-                        <div className="text-[11px] text-amber-500/80 mt-0.5">{p.label}</div>
-                        {p.startDate && (
-                          <div className="text-[10px] text-gray-500 mt-0.5">
-                            {new Date(p.startDate + 'T12:00:00').toLocaleDateString('de-DE')} – {p.endDate ? new Date(p.endDate + 'T12:00:00').toLocaleDateString('de-DE') : '?'}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {plannedSlots.length > 5 && (
-                      <div className="text-[11px] text-gray-500 pl-1">+{plannedSlots.length - 5} weitere Vorplanungen</div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Konflikte-Liste */}
-              {conflicts.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <AlertTriangle size={12} /> Konflikte
-                  </h4>
-                  <div className="space-y-2">
-                    {conflicts.map((c, i) => (
-                      <div key={i} className="p-2 bg-red-900/20 border border-red-800 rounded-lg cursor-pointer hover:border-red-600"
-                        onClick={() => setSelectedDay(c.date)}>
-                        <div className="text-xs text-red-300 font-medium">
-                          {new Date(c.date + 'T12:00:00').toLocaleDateString('de-DE')}
-                        </div>
-                        <div className="text-[11px] text-red-400 mt-0.5">{c.message}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Export-Bereich */}
-              <div className="mt-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                <div className="text-xs text-gray-400 font-semibold mb-2 flex items-center gap-1">
-                  <Download size={12} /> Export
-                </div>
-                <button
-                  onClick={handleExportCsv}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg transition-colors"
-                >
-                  <FileText size={12} />
-                  CSV für {MONTHS_DE[month]} {year}
-                </button>
-              </div>
-
-              <div className="mt-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <Info size={12} />
-                  Klicke auf einen Tag um Details zu sehen.
-                </div>
-              </div>
-
-              {/* Legende */}
-              <div className="mt-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                <div className="text-xs font-semibold text-gray-400 mb-2">Legende</div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm bg-purple-500/30 border-l-2 border-purple-500"></div>
-                    <span className="text-[11px] text-gray-400">Episodenbuchung</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm bg-blue-500/30 border-l-2 border-blue-500"></div>
-                    <span className="text-[11px] text-gray-400">Zeitraum-Buchung</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm bg-green-500/30 border-l-2 border-green-500"></div>
-                    <span className="text-[11px] text-gray-400">Werbeplatz-Buchung</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm bg-amber-500/30 border-l-2 border-amber-500"></div>
-                    <span className="text-[11px] text-gray-400">Vorplanung</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm bg-violet-500/30 border border-violet-500/50 border-double"></div>
-                    <span className="text-[11px] text-gray-400">Vertrag (v2)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm bg-violet-600/30 border-l-2 border-violet-500"></div>
-                    <span className="text-[11px] text-gray-400">Buchung (v2) – Basis/Folge/CPM</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm bg-red-900/40 border border-red-700"></div>
-                    <span className="text-[11px] text-gray-400">Konflikt</span>
-                  </div>
-                </div>
+              {/* Hinweis */}
+              <div className="flex items-start gap-2 p-3 bg-blue-900/15 border border-blue-700/30 rounded-lg text-xs text-blue-300">
+                <Info size={12} className="mt-0.5 shrink-0" />
+                <span>Klicke auf einen Tag, um alle Buchungen dieses Tages zu sehen.</span>
               </div>
             </div>
           )}

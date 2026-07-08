@@ -70,6 +70,7 @@ export default function SponsorDetailPageV2() {
   const [leistungOutro, setLeistungOutro] = useState('');
   const [pdfFileName, setPdfFileName] = useState('');
   const [pdfDocTitle, setPdfDocTitle] = useState('');
+  const [pdfDisclaimer, setPdfDisclaimer] = useState('');
   const [isExportingLeistung, setIsExportingLeistung] = useState(false);
   const [isExportingAll, setIsExportingAll] = useState(false);
   const [lastExportTime, setLastExportTime] = useState('');
@@ -186,6 +187,7 @@ export default function SponsorDetailPageV2() {
       if (leistungIntro) params.set('intro', leistungIntro);
       if (leistungOutro) params.set('outro', leistungOutro);
       if (pdfDocTitle) params.set('documentTitle', encodeURIComponent(pdfDocTitle));
+      if (pdfDisclaimer) params.set('disclaimer', encodeURIComponent(pdfDisclaimer));
       const qs = params.toString() ? `?${params.toString()}` : '';
       const res = await fetch(`/api/sponsors/${id}/invoice-pdf${qs}`, { credentials: 'include' });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Fehler ${res.status}`);
@@ -679,6 +681,16 @@ export default function SponsorDetailPageV2() {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Hinweistext am Ende des Dokuments
+                  <span className="ml-1 text-gray-600 font-normal">(optional – überschreibt den Standardtext)</span>
+                </label>
+                <textarea value={pdfDisclaimer} onChange={e => setPdfDisclaimer(e.target.value)} rows={2}
+                  placeholder="Dieses Dokument ist eine Leistungsübersicht und dient als Grundlage für die Rechnungserstellung in Ihrer internen Software. Es stellt keine Rechnung im steuerrechtlichen Sinne dar."
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500 resize-none" />
+              </div>
+
               <div className="flex flex-wrap gap-3 pt-1">
                 <button onClick={handleExportLeistungPdf} disabled={isExportingLeistung || bookings.length === 0}
                   className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
@@ -1144,15 +1156,6 @@ function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (d
           <div><label className={labelClass}>E-Mail</label><input className={inputClass} type="email" value={form.contactEmail} onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))} placeholder="kontakt@firma.de" /></div>
           <div><label className={labelClass}>Telefon</label><input className={inputClass} value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} placeholder="+49 ..." /></div>
           <div><label className={labelClass}>Kontakt-Hinweis</label><input className={inputClass} value={form.contactHint} onChange={e => setForm(p => ({ ...p, contactHint: e.target.value }))} placeholder="z.B. Nur per E-Mail" /></div>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wide">Vertragsdaten</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className={labelClass}>Vertragsstart</label><input className={inputClass} type="date" value={form.contractStart} onChange={e => setForm(p => ({ ...p, contractStart: e.target.value }))} /></div>
-          <div><label className={labelClass}>Vertragsende</label><input className={inputClass} type="date" value={form.contractEnd} onChange={e => setForm(p => ({ ...p, contractEnd: e.target.value }))} /></div>
-          <div><label className={labelClass}>Gesamtbudget (EUR)</label><input className={inputClass} type="number" value={form.totalBudget} onChange={e => setForm(p => ({ ...p, totalBudget: e.target.value }))} placeholder="0.00" /></div>
         </div>
       </div>
 

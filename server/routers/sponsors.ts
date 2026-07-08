@@ -827,15 +827,25 @@ router.get('/booking-calendar', requirePermission('canViewSponsors') as any, (re
   if (from) filteredEpisodeBookings = filteredEpisodeBookings.filter((b: any) => !b.publish_date || b.publish_date >= from);
   if (to) filteredEpisodeBookings = filteredEpisodeBookings.filter((b: any) => !b.publish_date || b.publish_date <= to);
 
+  // Overlap-Logik: Slot ist sichtbar wenn er sich mit [from, to] überschneidet
+  // Bedingung: slotStart <= to AND slotEnd >= from
   let filteredSlotBookings = slotBookings;
-  if (from) filteredSlotBookings = filteredSlotBookings.filter((b: any) => {
-    const start = b.placement_start || b.start_date;
-    return !start || start >= from;
-  });
-  if (to) filteredSlotBookings = filteredSlotBookings.filter((b: any) => {
-    const end = b.placement_end || b.end_date;
-    return !end || end <= to;
-  });
+  if (from || to) {
+    filteredSlotBookings = filteredSlotBookings.filter((b: any) => {
+      const start = b.placement_start || b.start_date;
+      const end = b.placement_end || b.end_date;
+      // Kein Datum: immer anzeigen
+      if (!start && !end) return true;
+      // Nur Start: anzeigen wenn start <= to
+      if (start && !end) return !to || start <= to;
+      // Nur End: anzeigen wenn end >= from
+      if (!start && end) return !from || end >= from;
+      // Beide: Überlappung prüfen
+      const startOk = !to || start <= to;
+      const endOk = !from || end >= from;
+      return startOk && endOk;
+    });
+  }
 
   let filteredAdPlacements = adPlacements;
   if (from) filteredAdPlacements = filteredAdPlacements.filter((p: any) => {
@@ -1889,20 +1899,20 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
   doc.fontSize(layout.typography.smallSize).font(`${layout.typography.fontFamily}-Bold`);
   doc.rect(m, doc.y, tblW, 20).fill(layout.colors.secondary);
   const tableY = doc.y - 20;
-  // Spaltenbreiten anpassen je nach Preisaufschlüsselung
+  // Spaltenbreiten: Leistung 28%, Werbeplatz 18%, Laufzeit 18%, Status 11%, Preis
   const c1 = m + 5;
-  const c2 = m + tblW * 0.32;
+  const c2 = m + tblW * 0.30;
   const c3 = m + tblW * 0.50;
-  const c4 = m + tblW * (showPriceBreakdown ? 0.65 : 0.72);
-  const c5 = m + tblW * (showPriceBreakdown ? 0.78 : 0.86);
-  const c6 = m + tblW * 0.88; // Nur bei Preisaufschlüsselung
-  doc.fillColor('#ffffff').text('Leistung / Episode', c1, tableY + 6, { width: tblW * 0.29 });
-  doc.text('Werbeplatz', c2, tableY + 6, { width: tblW * 0.16 });
-  doc.text('Laufzeit', c3, tableY + 6, { width: tblW * 0.13 });
-  doc.text('Status', c4, tableY + 6, { width: tblW * 0.11 });
+  const c4 = m + tblW * (showPriceBreakdown ? 0.68 : 0.72);
+  const c5 = m + tblW * (showPriceBreakdown ? 0.80 : 0.86);
+  const c6 = m + tblW * 0.90; // Nur bei Preisaufschlüsselung
+  doc.fillColor('#ffffff').text('Leistung / Episode', c1, tableY + 6, { width: tblW * 0.27 });
+  doc.text('Werbeplatz', c2, tableY + 6, { width: tblW * 0.18 });
+  doc.text('Laufzeit', c3, tableY + 6, { width: tblW * 0.16 });
+  doc.text('Status', c4, tableY + 6, { width: tblW * 0.10 });
   if (showPriceBreakdown) {
     doc.text('Basis', c5, tableY + 6, { width: tblW * 0.09, align: 'right' });
-    doc.text('Gesamt', c6, tableY + 6, { width: tblW * 0.10, align: 'right' });
+    doc.text('Gesamt', c6, tableY + 6, { width: tblW * 0.09, align: 'right' });
   } else {
     doc.text('Preis', c5, tableY + 6, { width: tblW * 0.12, align: 'right' });
   }
@@ -1941,25 +1951,26 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
     const notes = showPerformanceNotes ? (p.performance_notes || p.performanceNotes || p.notes || '') : '';
 
     // Zeilenhoehe berechnen – alle mehrzeiligen Spalten einbeziehen
-    const h1 = doc.heightOfString(title, { width: tblW * 0.29 });
-    const h2 = doc.heightOfString(posLabel, { width: tblW * 0.16 });
+    const h1 = doc.heightOfString(title, { width: tblW * 0.27 });
+    const h2 = doc.heightOfString(posLabel, { width: tblW * 0.18 });
+    const h3 = doc.heightOfString(dateStr, { width: tblW * 0.16 });
     const hNotes = notes ? doc.heightOfString(notes, { width: tblW * 0.60, fontSize: layout.typography.smallSize - 1 }) + 4 : 0;
-    const rowHeight = Math.max(18, h1, h2) + hNotes + 8;
+    const rowHeight = Math.max(18, h1, h2, h3) + hNotes + 8;
 
     if (rowY + rowHeight > maxY) { doc.addPage(); rowY = m; }
     doc.rect(m, rowY, tblW, rowHeight).fill(bg);
     // v2-Buchungen mit leichtem Akzent-Hintergrund
     if (p.is_v2) doc.rect(m, rowY, 3, rowHeight).fill(layout.colors.accent);
     doc.fillColor(layout.colors.text).fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
-    doc.text(title, c1, rowY + 5, { width: tblW * 0.29, lineBreak: true });
-    doc.text(posLabel, c2, rowY + 5, { width: tblW * 0.16, lineBreak: true });
-    doc.text(dateStr, c3, rowY + 5, { width: tblW * 0.13, lineBreak: false });
+    doc.text(title, c1, rowY + 5, { width: tblW * 0.27, lineBreak: true });
+    doc.text(posLabel, c2, rowY + 5, { width: tblW * 0.18, lineBreak: true });
+    doc.text(dateStr, c3, rowY + 5, { width: tblW * 0.16, lineBreak: true });
     const statusColor = (statusStr === 'bezahlt' || statusStr === 'paid') ? '#16a34a'
       : (statusStr === 'versendet' || statusStr === 'sent') ? '#d97706' : '#6b7280';
-    doc.fillColor(statusColor).text(statusStr, c4, rowY + 5, { width: tblW * 0.11, lineBreak: false });
+    doc.fillColor(statusColor).text(statusStr, c4, rowY + 5, { width: tblW * 0.10, lineBreak: false });
     if (showPriceBreakdown) {
       doc.fillColor(layout.colors.muted).text(basePriceStr, c5, rowY + 5, { width: tblW * 0.09, align: 'right', lineBreak: false });
-      doc.fillColor(layout.colors.text).font(`${layout.typography.fontFamily}-Bold`).text(priceStr, c6, rowY + 5, { width: tblW * 0.10, align: 'right', lineBreak: false });
+      doc.fillColor(layout.colors.text).font(`${layout.typography.fontFamily}-Bold`).text(priceStr, c6, rowY + 5, { width: tblW * 0.09, align: 'right', lineBreak: false });
     } else {
       doc.fillColor(layout.colors.text).text(priceStr, c5, rowY + 5, { width: tblW * 0.12, align: 'right', lineBreak: false });
     }
@@ -2003,10 +2014,16 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
       .fillColor(layout.colors.primary)
       .text(`Gesamtbetrag: ${totalRevenue.toFixed(2)} €`, m, rowY, { align: 'right' });
     rowY += 20;
-    // Hinweis-Box
-    doc.rect(m, rowY, tblW, 28).fill('#f0f4ff').stroke();
-    doc.fontSize(layout.typography.smallSize).font(layout.typography.fontFamily).fillColor('#1e3a5f')
-      .text('ℹ️ Dieses Dokument ist eine Leistungsübersicht und dient als Grundlage für die Rechnungserstellung in Ihrer internen Software. Es stellt keine Rechnung im steuerrechtlichen Sinne dar.', m + 8, rowY + 8, { width: tblW - 16 });
+    // Hinweis-Box – dynamische Höhe, anpassbarer Text
+    const defaultDisclaimer = 'Dieses Dokument ist eine Leistungsübersicht und dient als Grundlage für die Rechnungserstellung in Ihrer internen Software. Es stellt keine Rechnung im steuerrechtlichen Sinne dar.';
+    const customDisclaimer = req.query.disclaimer ? decodeURIComponent(req.query.disclaimer as string) : defaultDisclaimer;
+    const disclaimerText = `ℹ️  ${customDisclaimer}`;
+    doc.fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
+    const disclaimerH = doc.heightOfString(disclaimerText, { width: tblW - 20 }) + 16;
+    if (rowY + disclaimerH > doc.page.height - m) { doc.addPage(); rowY = m; }
+    doc.rect(m, rowY, tblW, disclaimerH).fill('#f0f4ff').stroke();
+    doc.fillColor('#1e3a5f')
+      .text(disclaimerText, m + 10, rowY + 8, { width: tblW - 20, lineBreak: true });
   }
 
   // Export-Zeitstempel in der Datenbank speichern (v2.12.0)
