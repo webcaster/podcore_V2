@@ -1032,6 +1032,7 @@ export default function EpisodeDetailPage() {
                                         <option value="pre-roll">Pre-Roll</option>
                                         <option value="mid-roll">Mid-Roll</option>
                                         <option value="post-roll">Post-Roll</option>
+                                        <option value="folgensponsor">Folgensponsor (Exklusiv)</option>
                                       </select>
                                     </div>
                                     <div>
@@ -1128,6 +1129,21 @@ export default function EpisodeDetailPage() {
                     ))}
                   </div>
                   <div className="flex-1 h-px bg-accent-orange/30" />
+                </div>
+              )}
+
+              {/* Werbemarker: Folgensponsor (Exklusiv) */}
+              {adBookings.filter(b => b.position === 'folgensponsor').length > 0 && (
+                <div className="flex items-center gap-3 py-1">
+                  <div className="flex-1 h-px bg-yellow-500/40" />
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-yellow-500/15 border border-yellow-500/40">
+                    <Star size={11} className="text-yellow-400" />
+                    <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider">Folgensponsor (Exklusiv)</span>
+                    {adBookings.filter(b => b.position === 'folgensponsor').map(b => (
+                      <span key={b.id} className="text-[10px] text-yellow-400/80 ml-1">{b.sponsor_name}</span>
+                    ))}
+                  </div>
+                  <div className="flex-1 h-px bg-yellow-500/40" />
                 </div>
               )}
 
@@ -1266,226 +1282,9 @@ export default function EpisodeDetailPage() {
             <div className="space-y-4">
 
               {/* ── Sponsor-Status-Übersicht ─────────────────────────── */}
-              <div className="card">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="font-semibold text-text-primary flex items-center gap-2">
-                      <Megaphone size={16} className="text-accent-orange" /> Werbung dieser Episode
-                    </h2>
-                    <p className="text-xs text-text-muted mt-0.5">Übersicht der aktuell gebuchten Sponsoren-Werbung</p>
-                  </div>
-                  {can('canEditEpisodes') && (
-                    <button
-                      onClick={() => setShowAdBookingModal(true)}
-                      className="btn-primary text-xs py-1.5"
-                      title="Spontane Werbung nachbuchen"
-                    >
-                      <Plus size={14} /> Werbung nachbuchen
-                    </button>
-                  )}
-                </div>
+              {/* Konflikt-Warnung entfernt (v2.12.0) */}
 
-                {isLoadingAds ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 size={20} className="animate-spin text-accent-orange" />
-                  </div>
-                ) : adBookings.length === 0 ? (
-                  <div className="text-center py-10 border border-dashed border-surface-border rounded-xl">
-                    <Megaphone size={32} className="mx-auto mb-3 text-text-muted opacity-40" />
-                    <p className="text-text-muted text-sm font-medium">Keine Werbung gebucht</p>
-                    <p className="text-text-muted text-xs mt-1 mb-4">Für diese Episode ist momentan kein Sponsor gebucht.</p>
-                    {can('canEditEpisodes') && (
-                      <button
-                        onClick={() => setShowAdBookingModal(true)}
-                        className="btn-primary text-xs"
-                      >
-                        <Plus size={14} /> Werbung nachbuchen
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {/* Positions-Gruppen */}
-                    {(['pre-roll', 'mid-roll', 'post-roll'] as const).map(pos => {
-                      const posBookings = adBookings.filter(b => b.position === pos);
-                      if (posBookings.length === 0) return null;
-                      const posColors: Record<string, string> = { 'pre-roll': 'text-accent-orange border-accent-orange/30 bg-accent-orange/5', 'mid-roll': 'text-accent-purple border-accent-purple/30 bg-accent-purple/5', 'post-roll': 'text-accent-blue border-accent-blue/30 bg-accent-blue/5' };
-                      const posLabels: Record<string, string> = { 'pre-roll': 'Pre-Roll', 'mid-roll': 'Mid-Roll', 'post-roll': 'Post-Roll' };
-                      return (
-                        <div key={pos}>
-                          <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1 ${posColors[pos].split(' ')[0]}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full inline-block ${pos === 'pre-roll' ? 'bg-accent-orange' : pos === 'mid-roll' ? 'bg-accent-purple' : 'bg-accent-blue'}`} />
-                            {posLabels[pos]}
-                          </p>
-                          <div className="space-y-2">
-                            {posBookings.map(b => (
-                              <div key={b.id} className={`flex items-center justify-between p-3 rounded-xl border ${posColors[pos]}`}>
-                                <div className="flex items-center gap-3 flex-1 min-w-0">
-                                  <div className="w-9 h-9 rounded-lg bg-obsidian-800 border border-surface-border flex items-center justify-center flex-shrink-0">
-                                    <Megaphone size={16} className="text-accent-orange" />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-bold text-text-primary truncate">{b.sponsor_name}</p>
-                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                      <span className="text-[10px] text-text-muted">{b.slot_name || 'Sonderbuchung'}</span>
-                                      {b.category_name && (
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{backgroundColor: (b.category_color || '#f97316') + '22', color: b.category_color || '#f97316', border: `1px solid ${(b.category_color || '#f97316')}44`}}>{b.category_name}</span>
-                                      )}
-                                      {b.time_position != null && (
-                                        <span className="text-[10px] text-text-muted flex items-center gap-0.5">
-                                          <Timer size={9} /> {formatTime(b.time_position)}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                  <span className={`text-[10px] px-2 py-1 rounded-full font-medium border ${
-                                    b.confirmed
-                                      ? 'bg-accent-green/15 text-accent-green border-accent-green/30'
-                                      : 'bg-accent-orange/15 text-accent-orange border-accent-orange/30'
-                                  }`}>
-                                    {b.confirmed ? '✓ Bestätigt' : '⏳ Angefragt'}
-                                  </span>
-                                  {can('canEditEpisodes') && (
-                                    <button
-                                      onClick={async () => {
-                                        if (!window.confirm(`Buchung von "${b.sponsor_name}" wirklich löschen?`)) return;
-                                        try {
-                                          await sponsorsApi.deleteEpisodeBooking(b.id);
-                                          setAdBookings(prev => prev.filter(x => x.id !== b.id));
-                                          showSuccess('Buchung gelöscht');
-                                        } catch (err: any) { showError(err.message || 'Fehler beim Löschen'); }
-                                      }}
-                                      className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors"
-                                      title="Buchung löschen"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* ── Konflikt-Warnung: mehrere Sponsoren gleicher Kategorie ── */}
-              {(() => {
-                const categoryGroups: Record<string, any[]> = {};
-                adBookings.forEach(b => {
-                  if (b.category_name) {
-                    if (!categoryGroups[b.category_name]) categoryGroups[b.category_name] = [];
-                    categoryGroups[b.category_name].push(b);
-                  }
-                });
-                const conflicts = Object.entries(categoryGroups).filter(([, bks]) => bks.length > 1);
-                if (conflicts.length === 0) return null;
-                return (
-                  <div className="card border-yellow-700/50 bg-yellow-900/10">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle size={16} className="text-yellow-400 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-semibold text-yellow-400">Kategorie-Konflikt erkannt</p>
-                        <p className="text-xs text-text-muted mt-0.5">Mehrere Sponsoren aus derselben Kategorie sind in dieser Episode gebucht:</p>
-                        <div className="mt-2 space-y-1">
-                          {conflicts.map(([cat, bks]) => (
-                            <div key={cat} className="text-xs text-yellow-300">
-                              <span className="font-medium">{cat}:</span> {bks.map(b => b.sponsor_name).join(', ')}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* ── Folgensponsor-Hinweis: Slots mit Laufzeit die diese Episode abdecken ── */}
-              {availableSlots.filter((sl: any) => sl.startDate && sl.endDate && episode?.publishDate &&
-                sl.startDate <= episode.publishDate && sl.endDate >= episode.publishDate &&
-                !adBookings.some(b => b.ad_slot_id === sl.id)
-              ).length > 0 && (
-                <div className="card border-blue-700/50 bg-blue-900/10">
-                  <div className="flex items-start gap-3">
-                    <Info size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-blue-400">Folgensponsor-Hinweis</p>
-                      <p className="text-xs text-text-muted mt-0.5">Folgende Werbeplätze haben eine aktive Laufzeit, die diese Episode abdeckt, sind aber noch nicht zugewiesen:</p>
-                      <div className="mt-2 space-y-1.5">
-                        {availableSlots.filter((sl: any) => sl.startDate && sl.endDate && episode?.publishDate &&
-                          sl.startDate <= episode.publishDate && sl.endDate >= episode.publishDate &&
-                          !adBookings.some(b => b.ad_slot_id === sl.id)
-                        ).map((sl: any) => (
-                          <div key={sl.id} className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sl.sponsorColor || '#3b82f6' }} />
-                              <span className="text-text-primary font-medium">{sl.sponsorName}</span>
-                              <span className="text-text-muted">{sl.name}</span>
-                              <span className="text-text-muted opacity-60">{sl.startDate?.slice(0,10)} – {sl.endDate?.slice(0,10)}</span>
-                            </div>
-                            {can('canEditEpisodes') && (
-                              <button
-                                onClick={async () => {
-                                  try {
-                    // @ts-ignore
-                                    await sponsorsApi.createEpisodeBooking({ episodeId: id, adSlotId: sl.id, sponsorId: sl.sponsorId, position: sl.defaultPosition || 'mid-roll', confirmed: false });
-                                    const updated = await sponsorsApi.getEpisodeBookings(id);
-                                    setAdBookings(updated);
-                                    showSuccess(`${sl.sponsorName} zugewiesen`);
-                                  } catch (e: any) { showError(e.message); }
-                                }}
-                                className="text-[10px] px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-300 border border-blue-700/50 hover:bg-blue-800/60 transition-colors"
-                              >
-                                + Zuweisen
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Timeline-Visualisierung (nur wenn Buchungen + Dauer vorhanden) ── */}
-              {adBookings.length > 0 && totalDuration > 0 && (
-                <div className="card">
-                  <h3 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2"><Timer size={14} /> Werbe-Timeline</h3>
-                  <div className="relative h-10 bg-obsidian-900 rounded-lg border border-surface-border overflow-hidden">
-                    <div className="absolute inset-0 flex">
-                      <div className="h-full bg-accent-cyan/10" style={{width: '10%'}} title="Intro" />
-                      <div className="h-full bg-accent-blue/5" style={{width: '80%'}} title="Hauptinhalt" />
-                      <div className="h-full bg-accent-red/10" style={{width: '10%'}} title="Outro" />
-                    </div>
-                    {adBookings.filter(b => b.time_position != null).map((b, i) => {
-                      const pct = Math.min(100, Math.max(0, (b.time_position / totalDuration) * 100));
-                      const colors: Record<string, string> = { 'pre-roll': '#f97316', 'mid-roll': '#a855f7', 'post-roll': '#3b82f6' };
-                      const color = b.category_color || colors[b.position] || '#f97316';
-                      return (
-                        <div key={b.id} className="absolute top-0 bottom-0 flex flex-col items-center" style={{left: `${pct}%`, transform: 'translateX(-50%)'}}>
-                          <div className="w-0.5 h-full" style={{backgroundColor: color}} />
-                          <div className="absolute top-1 w-4 h-4 rounded-full border-2 border-obsidian-900 flex items-center justify-center text-[8px] font-bold" style={{backgroundColor: color, color: 'white'}}>{i+1}</div>
-                        </div>
-                      );
-                    })}
-                    <div className="absolute bottom-0 left-1 text-[9px] text-text-muted">0:00</div>
-                    <div className="absolute bottom-0 right-1 text-[9px] text-text-muted">{formatTime(totalDuration)}</div>
-                  </div>
-                  <div className="flex gap-3 mt-2">
-                    {[{p:'pre-roll',l:'Pre-Roll',c:'#f97316'},{p:'mid-roll',l:'Mid-Roll',c:'#a855f7'},{p:'post-roll',l:'Post-Roll',c:'#3b82f6'}].map(pos => (
-                      <div key={pos.p} className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full" style={{backgroundColor: pos.c}} />
-                        <span className="text-[10px] text-text-muted">{pos.l}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Folgensponsor-Hinweis und Timeline entfernt (v2.12.0) */}
 
               {/* ── v2.12.0: Neue Buchungen (ad_bookings) ─────────────────── */}
               <div className="card border-purple-700/30 bg-purple-900/5">
