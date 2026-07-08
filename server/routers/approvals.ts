@@ -1,6 +1,6 @@
 import express, { Response } from 'express';
 import { getDb } from '../database';
-import { requirePermission, AuthRequest } from '../middleware/auth';
+import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -27,26 +27,48 @@ function parseEpisode(row: any) {
 }
 
 // GET /api/approvals/pending — Alle ausstehenden Freigaben (Episoden & Interview-Fragen)
-router.get('/pending', requirePermission('canApproveEpisodes') as any, (req: AuthRequest, res: Response) => {
+// Zugänglich für: Admin, Moderator (canApproveEpisodes) und Redakteure (canRequestApproval)
+// Redakteure sehen nur ihre eigenen Anfragen; Moderatoren/Admins sehen alle
+router.get('/pending', requireAuth as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  
+  const user = req.user!;
+  const isApprover = user.role === 'admin' || user.permissions?.canApproveEpisodes;
+  const canRequest = user.role === 'admin' || user.permissions?.canRequestApproval;
+
+  // Wenn weder Freigabe-Recht noch Anfrage-Recht → leere Liste zurückgeben (kein Fehler)
+  if (!isApprover && !canRequest) {
+    return res.json({
+      success: true,
+      data: { episodes: [], questions: [], totalCount: 0 }
+    });
+  }
+
   // 1. Episoden mit Status 'angefragt'
-  const episodes = db.all(
-    `SELECT * FROM episodes WHERE approval_status = 'angefragt' ORDER BY approval_requested_at ASC`,
-    []
-  ).map(parseEpisode);
-  
-  // 2. Interview-Fragen mit Status 'angefragt' (oder approved = 0 falls status noch nicht migriert)
-  // Wir prüfen beides für maximale Kompatibilität während der Migration
-  const questions = db.all(
-    `SELECT q.*, p.name as partner_name, e.title as episode_title 
+  // Redakteure sehen nur ihre eigenen Anfragen
+  let episodeQuery = `SELECT * FROM episodes WHERE approval_status = 'angefragt'`;
+  const episodeParams: any[] = [];
+  if (!isApprover && canRequest) {
+    episodeQuery += ` AND approval_requested_by = ?`;
+    episodeParams.push(user.id);
+  }
+  episodeQuery += ` ORDER BY approval_requested_at ASC`;
+
+  const episodes = db.all(episodeQuery, episodeParams).map(parseEpisode);
+
+  // 2. Interview-Fragen mit Status 'angefragt'
+  let questionQuery = `SELECT q.*, p.name as partner_name, e.title as episode_title 
      FROM interview_questions q
      LEFT JOIN interview_partners p ON q.partner_id = p.id
      LEFT JOIN episodes e ON q.episode_id = e.id
-     WHERE q.approved = 0 AND (q.status = 'angefragt' OR q.status IS NULL)
-     ORDER BY q.created_at ASC`,
-    []
-  ).map((r: any) => ({
+     WHERE q.approved = 0 AND (q.status = 'angefragt' OR q.status IS NULL)`;
+  const questionParams: any[] = [];
+  if (!isApprover && canRequest) {
+    questionQuery += ` AND q.episode_id IN (SELECT id FROM episodes WHERE approval_requested_by = ?)`;
+    questionParams.push(user.id);
+  }
+  questionQuery += ` ORDER BY q.created_at ASC`;
+
+  const questions = db.all(questionQuery, questionParams).map((r: any) => ({
     ...r,
     approved: r.approved === 1,
     partnerName: r.partner_name,
@@ -59,7 +81,8 @@ router.get('/pending', requirePermission('canApproveEpisodes') as any, (req: Aut
     data: {
       episodes,
       questions,
-      totalCount: episodes.length + questions.length
+      totalCount: episodes.length + questions.length,
+      canApprove: isApprover,
     }
   });
 });

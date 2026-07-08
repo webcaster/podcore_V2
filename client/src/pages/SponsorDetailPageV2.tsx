@@ -4,7 +4,7 @@ import {
   ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, Mail, Phone,
   Building2, CalendarRange, CheckCircle, AlertCircle, Megaphone,
   FileText, Download, FileSpreadsheet, Info, Receipt, Files,
-  X, ChevronDown, ChevronUp
+  X, ChevronDown, ChevronUp, BookOpen, Star
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
 import { sponsorsV2Api } from '../lib/api-v2';
@@ -67,6 +67,18 @@ export default function SponsorDetailPageV2() {
   };
   const [bookingForm, setBookingForm] = useState<BookingForm>(emptyBookingForm);
   const [newEpisodeRef, setNewEpisodeRef] = useState<EpisodeRef>({ episodeTitle: '', count: 1 });
+
+  // Dossier Export State
+  const [showDossierModal, setShowDossierModal] = useState(false);
+  const [isExportingDossier, setIsExportingDossier] = useState(false);
+  const [dossierOptions, setDossierOptions] = useState({
+    stammdaten: true,
+    contracts: true,
+    bookings: true,
+    billing: true,
+    notes: true,
+  });
+  const [dossierTitle, setDossierTitle] = useState('');
 
   // Billing Tab State
   const [billingFilter, setBillingFilter] = useState<'alle' | 'offen' | 'versendet' | 'bezahlt'>('alle');
@@ -291,6 +303,29 @@ export default function SponsorDetailPageV2() {
     } catch (err: any) { showError(err.message); }
   };
 
+  const handleExportDossier = async () => {
+    if (!id) return;
+    setIsExportingDossier(true);
+    try {
+      const params = new URLSearchParams();
+      if (dossierTitle) params.set('title', encodeURIComponent(dossierTitle));
+      Object.entries(dossierOptions).forEach(([k, v]) => params.set(k, v ? '1' : '0'));
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const res = await fetch(`/api/sponsors/v2/${id}/dossier-pdf${qs}`, { credentials: 'include' });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Fehler ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sponsor-dossier-${sponsor?.name?.replace(/\s+/g, '-').toLowerCase() || id}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showSuccess('Sponsor-Dossier exportiert');
+      setShowDossierModal(false);
+    } catch (err: any) { showError(err.message); }
+    finally { setIsExportingDossier(false); }
+  };
+
   const handleExportAllConfirmations = async () => {
     if (!id) return;
     setIsExportingAll(true);
@@ -371,11 +406,21 @@ export default function SponsorDetailPageV2() {
             <p className="text-sm text-gray-400">{sponsor.company}{sponsor.customer_number ? ` · KD-Nr: ${sponsor.customer_number}` : ''}</p>
           </div>
         </div>
-        <span className={`px-2 py-1 text-xs rounded-full ${
-          sponsor.status === 'aktiv' ? 'bg-green-900/30 text-green-400' :
-          sponsor.status === 'inaktiv' ? 'bg-red-900/30 text-red-400' :
-          'bg-gray-700 text-gray-400'
-        }`}>{sponsor.status || 'unbekannt'}</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowDossierModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs rounded-lg border border-gray-700 transition-colors"
+            title="Sponsor-Dossier als PDF exportieren"
+          >
+            <BookOpen size={13} />
+            Dossier exportieren
+          </button>
+          <span className={`px-2 py-1 text-xs rounded-full ${
+            sponsor.status === 'aktiv' ? 'bg-green-900/30 text-green-400' :
+            sponsor.status === 'inaktiv' ? 'bg-red-900/30 text-red-400' :
+            'bg-gray-700 text-gray-400'
+          }`}>{sponsor.status || 'unbekannt'}</span>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -887,17 +932,29 @@ export default function SponsorDetailPageV2() {
               ) : (
                 <div className="space-y-2">
                   {filteredBookings.map((booking: any) => {
-                    const displayPrice = booking.finalPrice ?? booking.price ?? 0;
+                    const rawPrice = booking.price ?? 0;
+                    const displayPrice = booking.finalPrice ?? rawPrice;
+                    const hasDiscount = (booking.discount ?? 0) > 0;
+                    const isCpm = booking.priceModel === 'cpm' || (booking.listenerCount && booking.listenerCount > 0);
                     const contractLabel = booking.contractId ? getContractLabel(booking.contractId) : null;
+                    const episodeRefs = parseEpisodeRefs(booking.episodeRefs);
                     return (
                       <div key={booking.id} className="p-3 bg-gray-900/50 border border-gray-800 rounded-lg">
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm font-medium text-white truncate">{booking.slotName || '—'}</span>
                               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${bookingStatusBadge(booking.status)}`}>{booking.status || 'geplant'}</span>
                               {booking.placementCount > 1 && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded-full">{booking.placementCount}×</span>
+                                <span className="text-[10px] px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded-full">{booking.placementCount}× platziert</span>
+                              )}
+                              {isCpm && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-cyan-900/40 text-cyan-400 border border-cyan-700/40 rounded-full">CPM</span>
+                              )}
+                              {hasDiscount && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-green-900/30 text-green-400 border border-green-700/30 rounded-full">
+                                  -{booking.discountType === 'percent' ? `${booking.discount}%` : `${Number(booking.discount).toFixed(2)}€`}
+                                </span>
                               )}
                             </div>
                             <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
@@ -906,9 +963,35 @@ export default function SponsorDetailPageV2() {
                               {booking.bookingEndDate && <> – {new Date(booking.bookingEndDate).toLocaleDateString('de-DE')}</>}
                               {contractLabel && <span className="text-purple-400 ml-1">· Vertrag: {contractLabel}</span>}
                             </div>
+                            {/* Preisdetails */}
+                            {(isCpm || hasDiscount) && (
+                              <div className="mt-1 text-[10px] text-gray-500 space-y-0.5">
+                                {isCpm && booking.listenerCount > 0 && (
+                                  <div>CPM: {Number(rawPrice).toFixed(2)}€/1k × {Number(booking.listenerCount).toLocaleString('de-DE')} Hörer = {((rawPrice / 1000) * booking.listenerCount).toFixed(2)}€</div>
+                                )}
+                                {hasDiscount && (
+                                  <div>Listenpreis: {Number(rawPrice).toFixed(2)}€ → Rabatt: {booking.discountType === 'percent' ? `${booking.discount}%` : `${Number(booking.discount).toFixed(2)}€`} → Netto: {Number(displayPrice).toFixed(2)}€</div>
+                                )}
+                              </div>
+                            )}
+                            {/* Folgen-Platzierungen */}
+                            {episodeRefs.length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {episodeRefs.map((ref: any, i: number) => (
+                                  <span key={i} className="text-[10px] px-1.5 py-0.5 bg-gray-800 text-gray-400 rounded border border-gray-700">
+                                    {ref.episodeTitle}{ref.count > 1 ? ` ×${ref.count}` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <span className="text-sm font-bold text-green-400">{displayPrice > 0 ? `${displayPrice.toFixed(2)} €` : '–'}</span>
+                          <div className="flex items-start gap-3 shrink-0 pt-0.5">
+                            <div className="text-right">
+                              {hasDiscount && rawPrice !== displayPrice && (
+                                <div className="text-[10px] text-gray-500 line-through">{Number(rawPrice).toFixed(2)}€</div>
+                              )}
+                              <span className="text-sm font-bold text-green-400">{displayPrice > 0 ? `${Number(displayPrice).toFixed(2)} €` : '–'}</span>
+                            </div>
                             <select
                               value={booking.invoiceStatus || 'offen'}
                               onChange={async (e) => {
@@ -1295,6 +1378,64 @@ export default function SponsorDetailPageV2() {
             <button onClick={() => setShowBookingModal(false)}
               className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors">
               Abbrechen
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ─── Dossier Export Modal ─── */}
+      <Modal isOpen={showDossierModal} onClose={() => setShowDossierModal(false)} title="Sponsor-Dossier exportieren">
+        <div className="space-y-5">
+          <p className="text-sm text-gray-400">
+            Wähle aus, welche Inhalte das Dossier für <strong className="text-white">{sponsor?.name}</strong> enthalten soll.
+          </p>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Dokumententitel (optional)</label>
+            <input
+              type="text"
+              value={dossierTitle}
+              onChange={e => setDossierTitle(e.target.value)}
+              placeholder={`Sponsor-Dossier ${sponsor?.name || ''}`}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Inhalte auswählen</p>
+            {([
+              { key: 'stammdaten', label: 'Stammdaten', desc: 'Kontaktdaten, Kategorie, Status, Notizen' },
+              { key: 'contracts', label: 'Verträge', desc: `${contracts.length} Vertrag${contracts.length !== 1 ? 'äge' : ''}` },
+              { key: 'bookings', label: 'Buchungen', desc: `${bookings.length} Buchung${bookings.length !== 1 ? 'en' : ''}` },
+              { key: 'billing', label: 'Abrechnung', desc: 'Rechnungsstatus, Preise, Rabatte, CPM' },
+              { key: 'notes', label: 'Interne Notizen', desc: 'Alle Notizen zum Sponsor' },
+            ] as { key: keyof typeof dossierOptions; label: string; desc: string }[]).map(({ key, label, desc }) => (
+              <label key={key} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-lg border border-gray-700 cursor-pointer hover:border-gray-600 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={dossierOptions[key]}
+                  onChange={e => setDossierOptions(prev => ({ ...prev, [key]: e.target.checked }))}
+                  className="w-4 h-4 rounded accent-purple-500"
+                />
+                <div>
+                  <div className="text-sm font-medium text-white">{label}</div>
+                  <div className="text-xs text-gray-500">{desc}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={() => setShowDossierModal(false)} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">
+              Abbrechen
+            </button>
+            <button
+              onClick={handleExportDossier}
+              disabled={isExportingDossier || !Object.values(dossierOptions).some(Boolean)}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isExportingDossier ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              Dossier als PDF exportieren
             </button>
           </div>
         </div>

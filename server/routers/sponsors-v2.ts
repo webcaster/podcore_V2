@@ -932,4 +932,181 @@ router.get('/:sponsorId/bookings/confirmation-pdf-all', requirePermission('canVi
   doc.end();
 });
 
+// ── GET /:sponsorId/dossier-pdf — Sponsor-Dossier als PDF ──────────────────
+router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { sponsorId } = req.params;
+  const {
+    title: rawTitle,
+    stammdaten = '1',
+    contracts: inclContracts = '1',
+    bookings: inclBookings = '1',
+    billing: inclBilling = '1',
+    notes: inclNotes = '1',
+  } = req.query as Record<string, string>;
+
+  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [sponsorId]) as any;
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
+
+  const contracts = db.all('SELECT * FROM sponsor_contracts WHERE sponsor_id = ? ORDER BY contract_start DESC', [sponsorId]) as any[];
+  const bookings = db.all(
+    `SELECT ab.*, COALESCE(s.name, c.name) as slot_name
+     FROM ad_bookings ab
+     LEFT JOIN ad_slots s ON ab.slot_id = s.id
+     LEFT JOIN ad_categories c ON ab.slot_id = c.id
+     WHERE ab.sponsor_id = ? ORDER BY ab.booking_date DESC`,
+    [sponsorId]
+  ) as any[];
+
+  const PDFDocument = require('pdfkit');
+  const fs = require('fs');
+  const path = require('path');
+  const { DATA_DIR } = require('../database');
+
+  const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+  const settings = settingsRow ? JSON.parse(settingsRow.value) : {};
+  const podcastName = settings?.branding?.podcastName || settings?.general?.podcastName || 'PodCore';
+  let logoPath: string | null = null;
+  const brandingDir = path.join(DATA_DIR, 'branding');
+  if (fs.existsSync(brandingDir)) {
+    const lf = fs.readdirSync(brandingDir).find((f: string) => f.startsWith('logo.'));
+    if (lf) logoPath = path.join(brandingDir, lf);
+  }
+
+  const docTitle = rawTitle ? decodeURIComponent(rawTitle) : `Sponsor-Dossier ${sponsor.name}`;
+  const now = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const m = 40;
+  const accentColor = '#7c3aed';
+  const lightGray = '#f0f0f0';
+
+  const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true });
+  const filename = `Sponsor-Dossier_${sponsor.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  const chunks: Buffer[] = [];
+  doc.on('data', (c: Buffer) => chunks.push(c));
+  doc.on('end', () => res.send(Buffer.concat(chunks)));
+
+  const pageW = doc.page.width;
+  const contentW = pageW - 2 * m;
+
+  // Header
+  if (logoPath && fs.existsSync(logoPath)) {
+    try { doc.image(logoPath, m, m, { height: 36 }); } catch (_) {}
+  }
+  doc.fontSize(20).font('Helvetica-Bold').fillColor(accentColor).text(docTitle, m, m + 5, { align: 'right', width: contentW });
+  doc.fontSize(9).font('Helvetica').fillColor('#888').text(`Erstellt am ${now} \u00b7 ${podcastName}`, m, doc.y, { align: 'right', width: contentW });
+  doc.moveDown(0.5);
+  doc.rect(m, doc.y, contentW, 1).fill(accentColor);
+  doc.moveDown(1);
+
+  const sectionTitle = (title: string) => {
+    doc.moveDown(0.5);
+    const sy = doc.y;
+    doc.rect(m, sy, contentW, 20).fill(accentColor);
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('white').text(title, m + 8, sy + 4, { width: contentW - 16 });
+    doc.y = sy + 22;
+    doc.moveDown(0.3);
+  };
+
+  const infoRow = (label: string, value: string) => {
+    const yy = doc.y;
+    doc.fontSize(9).font('Helvetica-Bold').fillColor('#555').text(label + ':', m, yy, { width: 140, continued: false });
+    doc.fontSize(9).font('Helvetica').fillColor('#222').text(value || '\u2014', m + 145, yy, { width: contentW - 145 });
+    doc.y = doc.y + 2;
+  };
+
+  // Stammdaten
+  if (stammdaten === '1') {
+    sectionTitle('Stammdaten');
+    infoRow('Name', sponsor.name);
+    infoRow('Unternehmen', sponsor.company || '\u2014');
+    if (sponsor.customer_number) infoRow('Kundennummer', sponsor.customer_number);
+    infoRow('Status', sponsor.status || '\u2014');
+    infoRow('Kategorie', sponsor.category || '\u2014');
+    if (sponsor.contact_name) infoRow('Ansprechpartner', sponsor.contact_name);
+    if (sponsor.contact_email) infoRow('E-Mail', sponsor.contact_email);
+    if (sponsor.contact_phone) infoRow('Telefon', sponsor.contact_phone);
+    if (sponsor.website) infoRow('Website', sponsor.website);
+    if (inclNotes === '1' && sponsor.notes) {
+      doc.moveDown(0.3);
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#555').text('Notizen:', m);
+      doc.fontSize(9).font('Helvetica').fillColor('#333').text(sponsor.notes, m + 10, doc.y, { width: contentW - 10 });
+    }
+  }
+
+  // Vertr\u00e4ge
+  if (inclContracts === '1' && contracts.length > 0) {
+    sectionTitle(`Vertr\u00e4ge (${contracts.length})`);
+    contracts.forEach((c: any, i: number) => {
+      if (i > 0) { doc.moveDown(0.2); doc.rect(m, doc.y, contentW, 0.5).fill('#ddd'); doc.moveDown(0.2); }
+      const from = c.contract_start ? new Date(c.contract_start).toLocaleDateString('de-DE') : '\u2014';
+      const to = c.contract_end ? new Date(c.contract_end).toLocaleDateString('de-DE') : '\u2014';
+      infoRow('Laufzeit', `${from} \u2013 ${to}`);
+      if (c.sponsoring_type) infoRow('Sponsoring-Typ', c.sponsoring_type);
+      if (c.contract_value) infoRow('Vertragswert', `${Number(c.contract_value).toFixed(2)} \u20ac`);
+      if (c.contact_person) infoRow('Ansprechpartner', c.contact_person);
+      if (c.notes) infoRow('Notizen', c.notes);
+    });
+  }
+
+  // Buchungen
+  if (inclBookings === '1' && bookings.length > 0) {
+    sectionTitle(`Buchungen (${bookings.length})`);
+    const cols = [m, m + 120, m + 220, m + 310, m + 390];
+    const hY = doc.y;
+    doc.rect(m, hY, contentW, 16).fill(lightGray);
+    ['Slot', 'Zeitraum', 'Status', 'Rechnung', 'Preis'].forEach((h, i) => {
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#333').text(h, cols[i], hY + 3, { width: 90 });
+    });
+    doc.y = hY + 18;
+    bookings.forEach((b: any, i: number) => {
+      if (doc.y > doc.page.height - 80) { doc.addPage(); }
+      const bg = i % 2 === 0 ? 'white' : '#fafafa';
+      const rY = doc.y;
+      doc.rect(m, rY, contentW, 15).fill(bg);
+      const price = b.final_price ?? b.price ?? 0;
+      const from = b.booking_date ? new Date(b.booking_date).toLocaleDateString('de-DE') : '\u2014';
+      const to = b.booking_end_date ? new Date(b.booking_end_date).toLocaleDateString('de-DE') : '';
+      const dateStr = to ? `${from}\u2013${to}` : from;
+      doc.fontSize(8).font('Helvetica').fillColor('#222');
+      doc.text(b.slot_name || '\u2014', cols[0], rY + 2, { width: 115, ellipsis: true });
+      doc.text(dateStr, cols[1], rY + 2, { width: 95, ellipsis: true });
+      doc.text(b.status || 'geplant', cols[2], rY + 2, { width: 85 });
+      doc.text(b.invoice_status || 'offen', cols[3], rY + 2, { width: 75 });
+      doc.text(price > 0 ? `${Number(price).toFixed(2)} \u20ac` : '\u2014', cols[4], rY + 2, { width: 80, align: 'right' });
+      doc.y = rY + 17;
+    });
+  }
+
+  // Abrechnungs\u00fcbersicht
+  if (inclBilling === '1' && bookings.length > 0) {
+    sectionTitle('Abrechnungs\u00fcbersicht');
+    const total = bookings.reduce((s: number, b: any) => s + (b.final_price ?? b.price ?? 0), 0);
+    const paid = bookings.filter((b: any) => b.invoice_status === 'bezahlt').reduce((s: number, b: any) => s + (b.final_price ?? b.price ?? 0), 0);
+    const open = bookings.filter((b: any) => !b.invoice_status || b.invoice_status === 'offen').reduce((s: number, b: any) => s + (b.final_price ?? b.price ?? 0), 0);
+    const sent = bookings.filter((b: any) => b.invoice_status === 'versendet').reduce((s: number, b: any) => s + (b.final_price ?? b.price ?? 0), 0);
+    const withDiscount = bookings.filter((b: any) => (b.discount ?? 0) > 0).length;
+    const cpmBookings = bookings.filter((b: any) => b.price_model === 'cpm' || (b.listener_count && b.listener_count > 0)).length;
+    infoRow('Gesamtumsatz', `${total.toFixed(2)} \u20ac`);
+    infoRow('Davon bezahlt', `${paid.toFixed(2)} \u20ac`);
+    infoRow('Davon versendet', `${sent.toFixed(2)} \u20ac`);
+    infoRow('Davon offen', `${open.toFixed(2)} \u20ac`);
+    infoRow('Buchungen gesamt', `${bookings.length}`);
+    if (withDiscount > 0) infoRow('Buchungen mit Rabatt', `${withDiscount}`);
+    if (cpmBookings > 0) infoRow('CPM-Buchungen', `${cpmBookings}`);
+  }
+
+  // Footer
+  doc.moveDown(2);
+  const footerY = doc.page.height - 35;
+  doc.rect(m, footerY - 8, contentW, 0.5).fill('#ddd');
+  doc.fontSize(8).font('Helvetica').fillColor('#aaa').text(
+    `${podcastName} \u00b7 Sponsor-Dossier \u00b7 ${sponsor.name} \u00b7 Erstellt am ${now}`,
+    m, footerY, { align: 'center', width: contentW }
+  );
+
+  doc.end();
+});
+
 export default router;

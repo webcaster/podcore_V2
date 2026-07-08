@@ -444,6 +444,7 @@ export default function EpisodeDetailPage() {
           number: ep.number || '',
           recordingDate: ep.recordingDate?.slice(0, 10) || '',
           publishDate: ep.publishDate?.slice(0, 10) || '',
+          plannedDate: ep.plannedDate?.slice(0, 10) || '',
           hosts: ep.hosts?.join(', ') || '',
           guests: ep.guests?.join(', ') || '',
           tags: ep.tags || [],
@@ -722,7 +723,8 @@ export default function EpisodeDetailPage() {
     setIsLoadingTemplates(true);
     try {
       const res = await episodeTemplatesApi.list();
-      setTemplates(res.data || []);
+      // api.get() gibt bereits data.data zurück (unwrapped), daher direkt als Array verwenden
+      setTemplates(Array.isArray(res) ? res : ((res as any)?.data || []));
     } catch (err: any) { showError(err.message); }
     finally { setIsLoadingTemplates(false); }
   };
@@ -1271,9 +1273,54 @@ export default function EpisodeDetailPage() {
               </div>
               <div><label className="label">Untertitel</label><input type="text" value={form.subtitle} onChange={e => updateForm('subtitle', e.target.value)} className="input" /></div>
               <div><label className="label">Beschreibung</label><RichTextEditor value={form.description} onChange={html => updateForm('description', html)} minHeight={120} /></div>
+              {/* Vorplanungs-Datum */}
+              <div className="p-3 rounded-lg border border-surface-border bg-obsidian-800/40">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar size={14} className="text-accent-purple" />
+                  <span className="text-sm font-medium text-text-primary">Vorplanungs-Datum</span>
+                  <span className="text-xs text-text-muted">(geplantes Datum vor der Aufnahme)</span>
+                </div>
+                <input
+                  type="date"
+                  value={form.plannedDate}
+                  onChange={e => updateForm('plannedDate', e.target.value)}
+                  className="input"
+                />
+                {form.plannedDate && (['aufnahme', 'produktion', 'geplant', 'veroeffentlicht'].includes(form.status)) && (
+                  <p className="text-xs text-accent-green mt-1.5 flex items-center gap-1">
+                    <CheckCircle size={11} />
+                    Vorplanung aktiv – Aufnahme- und Veröffentlichungsdatum sind jetzt verbindlich.
+                  </p>
+                )}
+                {form.plannedDate && !(['aufnahme', 'produktion', 'geplant', 'veroeffentlicht'].includes(form.status)) && (
+                  <p className="text-xs text-text-muted mt-1.5 flex items-center gap-1">
+                    <Info size={11} />
+                    Vorplanung gesetzt – wird verbindlich sobald Status auf Aufnahme oder höher gesetzt wird.
+                  </p>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="label">Aufnahme</label><input type="date" value={form.recordingDate} onChange={e => updateForm('recordingDate', e.target.value)} className="input" /></div>
-                <div><label className="label">Veröffentlichung</label><input type="date" value={form.publishDate} onChange={e => updateForm('publishDate', e.target.value)} className="input" /></div>
+                <div>
+                  <label className="label flex items-center gap-1">
+                    Aufnahme
+                    {(['aufnahme', 'produktion', 'geplant', 'veroeffentlicht'].includes(form.status)) && (
+                      <span className="text-[10px] text-accent-orange font-semibold uppercase tracking-wide ml-1">Verbindlich</span>
+                    )}
+                  </label>
+                  <input type="date" value={form.recordingDate} onChange={e => updateForm('recordingDate', e.target.value)} className="input" />
+                </div>
+                <div>
+                  <label className="label flex items-center gap-1">
+                    Veröffentlichung
+                    {form.status === 'veroeffentlicht' && (
+                      <span className="text-[10px] text-accent-green font-semibold uppercase tracking-wide ml-1">Veröffentlicht</span>
+                    )}
+                    {form.status === 'geplant' && (
+                      <span className="text-[10px] text-accent-purple font-semibold uppercase tracking-wide ml-1">Geplant</span>
+                    )}
+                  </label>
+                  <input type="date" value={form.publishDate} onChange={e => updateForm('publishDate', e.target.value)} className="input" />
+                </div>
               </div>
               <div><label className="label">Hosts</label><input type="text" value={form.hosts} onChange={e => updateForm('hosts', e.target.value)} className="input" placeholder="Name 1, Name 2" /></div>
               <div><label className="label">Gäste</label><input type="text" value={form.guests} onChange={e => updateForm('guests', e.target.value)} className="input" placeholder="Gast 1, Gast 2" /></div>

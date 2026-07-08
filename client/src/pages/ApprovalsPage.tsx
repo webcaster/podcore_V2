@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle, XCircle, Clock, Mic2, MessageSquare, 
-  ChevronRight, AlertCircle, RefreshCw, Eye, User
+  ChevronRight, AlertCircle, RefreshCw, Eye, User, Lock
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { approvalsApi, episodesApi } from '../lib/api';
@@ -10,17 +10,24 @@ import { useApp } from '../contexts/AppContext';
 const ApprovalsPage: React.FC = () => {
   const { can, showSuccess, showError } = useApp();
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<{ episodes: any[], questions: any[] }>({ episodes: [], questions: [] });
+  const [data, setData] = useState<{ episodes: any[], questions: any[], canApprove?: boolean }>({ episodes: [], questions: [] });
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
     try {
       const res = await approvalsApi.getPending();
-      setData(res);
-    } catch (err) {
+      // api.get() gibt data.data zurück (unwrapped), also ist res = { episodes, questions, ... }
+      if (res && typeof res === 'object' && ('episodes' in res || 'questions' in res)) {
+        setData(res as any);
+      } else {
+        // Fallback: leere Daten
+        setData({ episodes: [], questions: [], canApprove: false });
+      }
+    } catch (err: any) {
       console.error('Failed to load approvals:', err);
-      showError('Fehler beim Laden der Freigaben');
+      // Kein showError – stattdessen leere Liste anzeigen
+      setData({ episodes: [], questions: [], canApprove: false });
     } finally {
       setLoading(false);
     }
@@ -72,14 +79,20 @@ const ApprovalsPage: React.FC = () => {
     }
   };
 
-  const canApprove = can('canApproveEpisodes') || can('canApproveInterviewQuestions');
+  // canApprove: entweder aus API-Response oder lokale Permission-Prüfung
+  const canApprove = data.canApprove ?? (can('canApproveEpisodes') || can('canApproveInterviewQuestions'));
+  const hasAny = data.episodes.length > 0 || data.questions.length > 0;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Freigabe-Center</h1>
-          <p className="text-obsidian-400">Alle ausstehenden Freigaben für Episoden und Interviews</p>
+          <p className="text-obsidian-400">
+            {canApprove
+              ? 'Alle ausstehenden Freigaben für Episoden und Interviews'
+              : 'Deine ausstehenden Freigabe-Anfragen'}
+          </p>
         </div>
         <button 
           onClick={loadData}
@@ -90,10 +103,18 @@ const ApprovalsPage: React.FC = () => {
         </button>
       </div>
 
-      {loading && data.episodes.length === 0 && data.questions.length === 0 ? (
+      {loading ? (
         <div className="flex flex-col items-center justify-center py-20 bg-obsidian-800/50 rounded-xl border border-obsidian-700">
           <RefreshCw size={40} className="text-accent-purple animate-spin mb-4" />
           <p className="text-obsidian-400">Freigaben werden geladen...</p>
+        </div>
+      ) : !hasAny ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-obsidian-800/50 rounded-xl border border-obsidian-700">
+          <CheckCircle size={48} className="text-green-500/40 mb-4" />
+          <p className="text-obsidian-300 font-semibold">Keine ausstehenden Freigaben</p>
+          <p className="text-obsidian-500 text-sm mt-1">
+            {canApprove ? 'Alle Episoden und Fragen sind auf dem aktuellen Stand.' : 'Du hast keine offenen Freigabe-Anfragen.'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -110,7 +131,7 @@ const ApprovalsPage: React.FC = () => {
                 <p className="text-obsidian-500">Keine ausstehenden Episoden-Freigaben</p>
               </div>
             ) : (
-              data.episodes.map(episode => (
+              data.episodes.map((episode: any) => (
                 <div key={episode.id} className="bg-obsidian-800 rounded-xl border border-obsidian-700 overflow-hidden hover:border-obsidian-600 transition-all group">
                   <div className="p-4">
                     <div className="flex items-start justify-between mb-3">
@@ -121,7 +142,7 @@ const ApprovalsPage: React.FC = () => {
                           </span>
                           <span className="text-[10px] text-obsidian-500 flex items-center gap-1">
                             <Clock size={10} />
-                            {new Date(episode.approvalRequestedAt).toLocaleString('de-DE')}
+                            {episode.approvalRequestedAt ? new Date(episode.approvalRequestedAt).toLocaleString('de-DE') : '–'}
                           </span>
                         </div>
                         <h3 className="font-bold text-white group-hover:text-accent-purple transition-colors">
@@ -133,9 +154,9 @@ const ApprovalsPage: React.FC = () => {
                       </Link>
                     </div>
                     
-                    {episode.notes && (
+                    {episode.approvalComment && (
                       <div className="mb-4 p-3 bg-obsidian-900/50 rounded-lg border border-obsidian-700/50 text-sm text-obsidian-300 italic">
-                        "{episode.notes}"
+                        "{episode.approvalComment}"
                       </div>
                     )}
 
@@ -160,7 +181,8 @@ const ApprovalsPage: React.FC = () => {
                           </button>
                         </>
                       ) : (
-                        <div className="flex-1 py-2 px-3 bg-obsidian-700/50 text-obsidian-500 text-xs text-center rounded-lg italic">
+                        <div className="flex-1 py-2 px-3 bg-obsidian-700/50 text-obsidian-500 text-xs text-center rounded-lg flex items-center justify-center gap-2">
+                          <Clock size={12} />
                           Wartet auf Freigabe durch Moderator
                         </div>
                       )}
@@ -184,7 +206,7 @@ const ApprovalsPage: React.FC = () => {
                 <p className="text-obsidian-500">Keine ausstehenden Interview-Freigaben</p>
               </div>
             ) : (
-              data.questions.map(question => (
+              data.questions.map((question: any) => (
                 <div key={question.id} className="bg-obsidian-800 rounded-xl border border-obsidian-700 overflow-hidden hover:border-obsidian-600 transition-all group">
                   <div className="p-4">
                     <div className="flex items-start justify-between mb-3">
@@ -217,12 +239,14 @@ const ApprovalsPage: React.FC = () => {
                           Freigeben
                         </button>
                       ) : (
-                        <div className="flex-1 py-2 px-3 bg-obsidian-700/50 text-obsidian-500 text-xs text-center rounded-lg italic">
+                        <div className="flex-1 py-2 px-3 bg-obsidian-700/50 text-obsidian-500 text-xs text-center rounded-lg flex items-center justify-center gap-2">
+                          <Clock size={12} />
                           Wartet auf Freigabe
                         </div>
                       )}
                     </div>
                   </div>
+                
                 </div>
               ))
             )}

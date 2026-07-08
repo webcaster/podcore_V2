@@ -201,6 +201,12 @@ export default function EpisodesPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-4 mt-1 text-text-muted text-xs">
+                  {ep.plannedDate && !['aufnahme','produktion','geplant','veroeffentlicht'].includes(ep.status) && (
+                    <span className="flex items-center gap-1 text-accent-purple/80" title="Vorplanungs-Datum">
+                      <Calendar size={12} />
+                      Vorplanung: {new Date(ep.plannedDate).toLocaleDateString('de-DE')}
+                    </span>
+                  )}
                   {ep.recordingDate && (
                     <span className="flex items-center gap-1">
                       <Calendar size={12} />

@@ -28,6 +28,7 @@ function parseEpisode(row: any) {
     scriptReadyBy: row.script_ready_by || null,
     showNotes: row.show_notes || '',
     altDuration: row.alt_duration ?? null,
+    plannedDate: row.planned_date || null,
     // Freigabe-Workflow
     approvalStatus: row.approval_status || 'ausstehend',
     approvedBy: row.approved_by || null,
@@ -283,7 +284,7 @@ router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthReques
     number, title, subtitle, description, status,
     recordingDate, publishDate, duration, hosts, guests,
     tags, blocks, sponsors, notes, productionInfo, technicalData,
-    scriptReady, showNotes, altDuration,
+    scriptReady, showNotes, altDuration, plannedDate,
   } = req.body;
 
   db.run(`
@@ -306,6 +307,7 @@ router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthReques
       technical_data = COALESCE(?, technical_data),
       show_notes = COALESCE(?, show_notes),
       alt_duration = COALESCE(?, alt_duration),
+      planned_date = COALESCE(?, planned_date),
       script_ready = COALESCE(?, script_ready),
       script_ready_at = ?,
       script_ready_by = ?,
@@ -324,6 +326,7 @@ router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthReques
     technicalData ? JSON.stringify(technicalData) : null,
     showNotes !== undefined ? showNotes : null,
     altDuration !== undefined ? altDuration : null,
+    plannedDate !== undefined ? (plannedDate || null) : null,
     // scriptReady params
     scriptReady !== undefined ? (scriptReady ? 1 : 0) : null,
     scriptReady !== undefined ? (scriptReady ? new Date().toISOString() : null) : null,
