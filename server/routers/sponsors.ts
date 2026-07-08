@@ -1709,10 +1709,41 @@ router.get('/:id/billing', requirePermission('canViewSponsors') as any, (req: Au
   // Alle Placements (echte + Vorplanungen)
   const allPlacements = [...placements, ...plannedPlacements];
 
-  const totalRevenue = placements.reduce((sum: number, p: any) => sum + (p.price || 0), 0);
-  const invoicedRevenue = placements.filter((p: any) => p.invoice_status === 'bezahlt').reduce((sum: number, p: any) => sum + (p.price || 0), 0);
-  const openRevenue = placements.filter((p: any) => p.invoice_status === 'offen' || !p.invoice_status).reduce((sum: number, p: any) => sum + (p.price || 0), 0);
+  // v2-Buchungen (ad_bookings) einbeziehen
+  const v2Bookings = db.all(`
+    SELECT ab.*,
+           s.name as slot_name
+    FROM ad_bookings ab
+    LEFT JOIN ad_slots s ON ab.slot_id = s.id
+    WHERE ab.sponsor_id = ?
+    ORDER BY ab.booking_date DESC
+  `, [req.params.id]) as any[];
+
+  // Gesamtumsatz: Legacy-Placements + v2-Buchungen
+  const legacyTotalRevenue = placements.reduce((sum: number, p: any) => sum + (p.price || 0), 0);
+  const v2TotalRevenue = v2Bookings.reduce((sum: number, b: any) => sum + (b.final_price || b.price || 0), 0);
+  const totalRevenue = legacyTotalRevenue + v2TotalRevenue;
+
+  const legacyInvoicedRevenue = placements.filter((p: any) => p.invoice_status === 'bezahlt').reduce((sum: number, p: any) => sum + (p.price || 0), 0);
+  const v2InvoicedRevenue = v2Bookings.filter((b: any) => b.invoice_status === 'bezahlt').reduce((sum: number, b: any) => sum + (b.final_price || b.price || 0), 0);
+  const invoicedRevenue = legacyInvoicedRevenue + v2InvoicedRevenue;
+
+  const legacyOpenRevenue = placements.filter((p: any) => p.invoice_status === 'offen' || !p.invoice_status).reduce((sum: number, p: any) => sum + (p.price || 0), 0);
+  const v2OpenRevenue = v2Bookings.filter((b: any) => b.invoice_status === 'offen' || b.invoice_status === 'ausstehend' || !b.invoice_status).reduce((sum: number, b: any) => sum + (b.final_price || b.price || 0), 0);
+  const openRevenue = legacyOpenRevenue + v2OpenRevenue;
+
   const plannedRevenue = plannedPlacements.reduce((sum: number, p: any) => sum + (p.price || 0), 0);
+
+  // Preisanpassung und Hörerbeteiligung aus v2-Buchungen summieren
+  const totalPriceAdjustment = v2Bookings.reduce((sum: number, b: any) => sum + (b.price_adjustment || 0), 0);
+  const totalListenerFee = v2Bookings.reduce((sum: number, b: any) => sum + (b.listener_fee || 0), 0);
+  const totalDiscount = v2Bookings.reduce((sum: number, b: any) => {
+    if (!b.discount || b.discount === 0) return sum;
+    if (b.discount_type === 'percent') {
+      return sum + ((b.price || 0) * b.discount / 100);
+    }
+    return sum + (b.discount || 0);
+  }, 0);
 
   const billingData = {
     sponsor: parseSponsor(sponsor),
@@ -1726,15 +1757,37 @@ router.get('/:id/billing', requirePermission('canViewSponsors') as any, (req: Au
       episodePublishDate: p.ep_publish_date,
       isPlanned: p.isPlanned || false,
     })),
+    v2Bookings: v2Bookings.map((b: any) => ({
+      id: b.id,
+      slotId: b.slot_id,
+      slotName: b.slot_name || 'Buchung',
+      bookingDate: b.booking_date,
+      price: b.price || 0,
+      priceAdjustment: b.price_adjustment || 0,
+      listenerFee: b.listener_fee || 0,
+      discount: b.discount || 0,
+      discountType: b.discount_type || 'fixed',
+      totalEpisodes: b.total_episodes || 1,
+      finalPrice: b.final_price || b.price || 0,
+      invoiceStatus: b.invoice_status || 'offen',
+      invoiceNumber: b.invoice_number,
+      notes: b.notes,
+      status: b.status || 'geplant',
+      createdAt: b.created_at,
+    })),
     summary: {
       totalPlacements: allPlacements.length,
       realPlacements: placements.length,
       plannedPlacements: plannedPlacements.length,
       confirmedPlacements: placements.filter((p: any) => p.confirmed === 1).length,
+      v2BookingsCount: v2Bookings.length,
       totalRevenue,
       invoicedRevenue,
       openRevenue,
       plannedRevenue,
+      totalPriceAdjustment,
+      totalListenerFee,
+      totalDiscount,
       currency: sponsor.currency || 'EUR',
     },
   };

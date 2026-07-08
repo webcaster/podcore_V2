@@ -806,6 +806,8 @@ function initializeSchema(db: any): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
   } catch (_) {}
+  // v2.12.9: sponsor_offers – offer_options für Mehrfach-Varianten
+  try { db.exec('ALTER TABLE sponsor_offers ADD COLUMN offer_options TEXT DEFAULT NULL'); } catch (_) {}
   // v2.12.3: episode_templates – Episoden-Vorlagen
   try { db.exec(`CREATE TABLE IF NOT EXISTS episode_templates (
     id TEXT PRIMARY KEY,

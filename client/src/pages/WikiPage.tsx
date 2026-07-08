@@ -960,6 +960,42 @@ const wikiData: WikiCategory[] = [
         ],
       },
       {
+        id: 'v2-12-9',
+        title: 'v2.12.9 — Angebots-Formular: Werbekategorien & Mehrfach-Optionen',
+        icon: <Package size={18} />,
+        tags: ['update', 'angebot', 'kategorie', 'varianten', 'sponsor', 'v2.12.9'],
+        summary: 'Angebots-Formular um Werbekategorien-Auswahl pro Position und Mehrfach-Optionen (Varianten A/B/C) erweitert. Beim Annehmen kann die gewünschte Variante gewählt werden. Billing-Endpunkt berücksichtigt jetzt auch v2-Buchungen.',
+        content: [
+          {
+            heading: 'Werbekategorien im Angebots-Formular',
+            list: [
+              'Jede Position kann einer Werbekategorie zugeordnet werden (optional)',
+              'Kategorie-Dropdown lädt alle aktiven Kategorien aus dem System',
+              'Bei Auswahl einer Kategorie wird der Standardpreis automatisch vorgeschlagen',
+              'Kategorie-Badge wird in der Positions-Liste und im Angebots-Tab angezeigt',
+            ],
+          },
+          {
+            heading: 'Mehrfach-Optionen (Varianten A/B/C)',
+            list: [
+              'Angebote können bis zu 5 Varianten enthalten (Option A, B, C, D, E)',
+              'Jede Variante hat eigene Positionen, Beschreibungen und Rabatt',
+              'Varianten-Tabs im Formular für einfache Bearbeitung',
+              'Beim Annehmen des Angebots: Variante auswählen → Buchungen werden aus der gewählten Variante erstellt',
+              'Angebots-Karte zeigt "X Varianten" statt Positionen-Anzahl wenn Varianten vorhanden',
+            ],
+          },
+          {
+            heading: 'Billing-Fix',
+            list: [
+              'Billing-Endpunkt berücksichtigt jetzt auch v2-Buchungen (ad_bookings)',
+              'Preisanpassung und Hörerbeteiligung werden korrekt summiert',
+              'Gesamtumsatz und offene Rechnungen schließen alle Buchungstypen ein',
+            ],
+          },
+        ],
+      },
+      {
         id: 'v2-12-8',
         title: 'v2.12.8 — Angebots-Funktion, Buchungsformular-Erweiterung, PDF-Layout-Manager-Update',
         icon: <Package size={18} />,

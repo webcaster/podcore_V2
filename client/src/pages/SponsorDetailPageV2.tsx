@@ -59,12 +59,16 @@ export default function SponsorDetailPageV2() {
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [acceptingOffer, setAcceptingOffer] = useState<any>(null);
   const [acceptOptions, setAcceptOptions] = useState({ updateContact: false, updateNotes: false });
+  const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
   const emptyOfferForm = {
     title: '', offerNumber: '', validUntil: '', introText: '', outroText: '',
     positions: [] as any[], discount: '0', discountType: 'absolute' as 'absolute' | 'percent', notes: '',
+    offerOptions: null as any[] | null, // null = keine Mehrfach-Optionen, Array = Varianten
   };
   const [offerForm, setOfferForm] = useState(emptyOfferForm);
-  const [newPosition, setNewPosition] = useState({ description: '', quantity: '1', unitPrice: '', unit: 'Pauschal' });
+  const [newPosition, setNewPosition] = useState({ description: '', quantity: '1', unitPrice: '', unit: 'Pauschal', categoryId: '' });
+  const [adCategories, setAdCategories] = useState<any[]>([]);
+  const [activeOptionTab, setActiveOptionTab] = useState(0); // Aktive Variante im Angebots-Formular
 
   // Contract Modal
   const [showContractModal, setShowContractModal] = useState(false);
@@ -115,18 +119,20 @@ export default function SponsorDetailPageV2() {
     if (!id) return;
     setIsLoading(true);
     try {
-      const [spData, contractsData, bookingsData, slotsData, offersData] = await Promise.all([
+      const [spData, contractsData, bookingsData, slotsData, offersData, categoriesData] = await Promise.all([
         sponsorsApi.get(id),
         sponsorsV2Api.listContracts(id),
         sponsorsV2Api.listBookings(id),
         sponsorsV2Api.listAllSlots(),
         sponsorsV2Api.listOffers(id).catch(() => []),
+        sponsorsApi.listCategories().catch(() => []),
       ]);
       setSponsor(spData);
       setContracts(contractsData || []);
       setBookings(bookingsData || []);
       setSlots(slotsData || []);
       setOffers(offersData || []);
+      setAdCategories(categoriesData || []);
       if (spData.lastPerformanceExport) setLastExportTime(spData.lastPerformanceExport);
     } catch (err: any) {
       showError(err.message);
@@ -254,6 +260,7 @@ export default function SponsorDetailPageV2() {
         discountType: offerForm.discountType,
         total,
         notes: offerForm.notes || undefined,
+        offerOptions: offerForm.offerOptions && offerForm.offerOptions.length > 0 ? offerForm.offerOptions : null,
       };
       if (editingOffer) {
         await sponsorsV2Api.updateOffer(editingOffer.id, payload);
@@ -283,11 +290,12 @@ export default function SponsorDetailPageV2() {
     if (!acceptingOffer || !id) return;
     setIsSaving(true);
     try {
-      await sponsorsV2Api.acceptOffer(acceptingOffer.id, acceptOptions);
+      await sponsorsV2Api.acceptOffer(acceptingOffer.id, { ...acceptOptions, selectedOptionIndex });
       showSuccess('Angebot angenommen – Buchungen wurden erstellt');
       setShowAcceptModal(false);
       setAcceptingOffer(null);
       setAcceptOptions({ updateContact: false, updateNotes: false });
+      setSelectedOptionIndex(0);
       load();
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
@@ -316,6 +324,13 @@ export default function SponsorDetailPageV2() {
   const openRevenue = bookings.filter(b => b.invoiceStatus !== 'bezahlt' && b.invoiceStatus !== 'storniert')
     .reduce((s, b) => s + (b.finalPrice || b.price || 0), 0);
   const paidCount = bookings.filter(b => b.invoiceStatus === 'bezahlt').length;
+  const totalPriceAdjustment = bookings.reduce((s, b) => s + (b.priceAdjustment || 0), 0);
+  const totalListenerFee = bookings.reduce((s, b) => s + (b.listenerFee || 0), 0);
+  const totalDiscount = bookings.reduce((s, b) => {
+    if (!b.discount || b.discount === 0) return s;
+    if (b.discountType === 'percent') return s + ((b.price || 0) * b.discount / 100);
+    return s + (b.discount || 0);
+  }, 0);
 
   const handleExportLeistungPdf = async () => {
     if (!id) return;
@@ -809,6 +824,29 @@ export default function SponsorDetailPageV2() {
                 <p className="text-xs text-gray-400 mt-1">Offen / ausstehend</p>
               </div>
             </div>
+            {/* Preisdetails (nur wenn vorhanden) */}
+            {(totalPriceAdjustment !== 0 || totalListenerFee !== 0 || totalDiscount !== 0) && (
+              <div className="grid grid-cols-3 gap-3">
+                {totalPriceAdjustment !== 0 && (
+                  <div className="p-3 bg-blue-900/20 border border-blue-800/40 rounded-lg text-center">
+                    <p className="text-lg font-bold text-blue-400">{totalPriceAdjustment >= 0 ? '+' : ''}{totalPriceAdjustment.toFixed(2)} €</p>
+                    <p className="text-xs text-gray-400 mt-1">Preisanpassung gesamt</p>
+                  </div>
+                )}
+                {totalListenerFee !== 0 && (
+                  <div className="p-3 bg-teal-900/20 border border-teal-800/40 rounded-lg text-center">
+                    <p className="text-lg font-bold text-teal-400">+{totalListenerFee.toFixed(2)} €</p>
+                    <p className="text-xs text-gray-400 mt-1">Hörerbeteiligung gesamt</p>
+                  </div>
+                )}
+                {totalDiscount !== 0 && (
+                  <div className="p-3 bg-orange-900/20 border border-orange-800/40 rounded-lg text-center">
+                    <p className="text-lg font-bold text-orange-400">-{totalDiscount.toFixed(2)} €</p>
+                    <p className="text-xs text-gray-400 mt-1">Rabatt gesamt</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Vertrags-Abrechnung Übersicht */}
             {contracts.length > 0 && (
@@ -1157,14 +1195,18 @@ export default function SponsorDetailPageV2() {
                           </div>
                           <div className="flex items-center gap-4 text-xs text-gray-400">
                             {offer.validUntil && <span className="flex items-center gap-1"><Clock size={10} /> Gültig bis {new Date(offer.validUntil).toLocaleDateString('de-DE')}</span>}
-                            <span className="flex items-center gap-1"><Hash size={10} /> {(offer.positions ? JSON.parse(typeof offer.positions === 'string' ? offer.positions : JSON.stringify(offer.positions)) : []).length} Positionen</span>
+                            {offer.offerOptions && offer.offerOptions.length > 0 ? (
+                              <span className="flex items-center gap-1 text-purple-300"><Hash size={10} /> {offer.offerOptions.length} Varianten</span>
+                            ) : (
+                              <span className="flex items-center gap-1"><Hash size={10} /> {(offer.positions ? JSON.parse(typeof offer.positions === 'string' ? offer.positions : JSON.stringify(offer.positions)) : []).length} Positionen</span>
+                            )}
                             <span className="font-medium text-white">{(offer.total ?? 0).toFixed(2)} €</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           {offer.status !== 'angenommen' && (
                             <button
-                              onClick={() => { setAcceptingOffer(offer); setAcceptOptions({ updateContact: false, updateNotes: false }); setShowAcceptModal(true); }}
+                              onClick={() => { setAcceptingOffer(offer); setAcceptOptions({ updateContact: false, updateNotes: false }); setSelectedOptionIndex(0); setShowAcceptModal(true); }}
                               className="flex items-center gap-1 px-2 py-1 text-xs bg-green-900/30 hover:bg-green-900/50 text-green-400 border border-green-700/40 rounded-lg transition-colors"
                               title="Angebot annehmen"
                             >
@@ -1181,6 +1223,12 @@ export default function SponsorDetailPageV2() {
                             onClick={() => {
                               const positions = typeof offer.positions === 'string' ? JSON.parse(offer.positions) : (offer.positions || []);
                               setEditingOffer(offer);
+                              const offerOptions = offer.offerOptions || offer.offer_options
+                                ? (typeof (offer.offerOptions || offer.offer_options) === 'string'
+                                    ? JSON.parse(offer.offerOptions || offer.offer_options)
+                                    : (offer.offerOptions || offer.offer_options))
+                                : null;
+                              setActiveOptionTab(0);
                               setOfferForm({
                                 title: offer.title || '',
                                 offerNumber: offer.offerNumber || offer.offer_number || '',
@@ -1191,6 +1239,7 @@ export default function SponsorDetailPageV2() {
                                 discount: String(offer.discount ?? 0),
                                 discountType: offer.discountType || offer.discount_type || 'absolute',
                                 notes: offer.notes || '',
+                                offerOptions,
                               });
                               setShowOfferModal(true);
                             }}
@@ -1720,52 +1769,229 @@ export default function SponsorDetailPageV2() {
             <label className="block text-sm font-medium text-gray-300 mb-2">Positionen</label>
             {offerForm.positions.length > 0 && (
               <div className="space-y-1 mb-3">
-                {offerForm.positions.map((pos: any, idx: number) => (
+                {offerForm.positions.map((pos: any, idx: number) => {
+                  const cat = adCategories.find((c: any) => c.id === pos.categoryId);
+                  return (
                   <div key={idx} className="flex items-center gap-2 p-2 bg-gray-800/60 rounded-lg border border-gray-700">
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm text-white">{pos.description}</span>
-                      <span className="text-xs text-gray-400 ml-2">{pos.quantity}x à {parseFloat(pos.unitPrice).toFixed(2)} € ({pos.unit})</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm text-white">{pos.description}</span>
+                        {cat && <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ color: cat.color || '#7c3aed', borderColor: (cat.color || '#7c3aed') + '60', backgroundColor: (cat.color || '#7c3aed') + '20' }}>{cat.name}</span>}
+                      </div>
+                      <span className="text-xs text-gray-400">{pos.quantity}x à {parseFloat(pos.unitPrice).toFixed(2)} € ({pos.unit})</span>
                     </div>
                     <span className="text-sm font-medium text-white shrink-0">{((parseFloat(pos.unitPrice) || 0) * (parseInt(pos.quantity) || 1)).toFixed(2)} €</span>
                     <button onClick={() => setOfferForm(prev => ({ ...prev, positions: prev.positions.filter((_: any, i: number) => i !== idx) }))}
                       className="p-1 text-gray-500 hover:text-red-400 transition-colors"><X size={12} /></button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
-            <div className="flex gap-2">
-              <input type="text" value={newPosition.description}
-                onChange={e => setNewPosition({ ...newPosition, description: e.target.value })}
-                placeholder="Beschreibung (z.B. Pre-Roll Spot, 5 Folgen)"
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
-              <input type="number" value={newPosition.quantity}
-                onChange={e => setNewPosition({ ...newPosition, quantity: e.target.value })}
-                placeholder="Anz." min="1"
-                className="w-16 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
-              <input type="number" value={newPosition.unitPrice}
-                onChange={e => setNewPosition({ ...newPosition, unitPrice: e.target.value })}
-                placeholder="Preis €"
-                className="w-24 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
-              <select value={newPosition.unit}
-                onChange={e => setNewPosition({ ...newPosition, unit: e.target.value })}
-                className="w-28 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500">
-                <option>Pauschal</option>
-                <option>Folge</option>
-                <option>Monat</option>
-                <option>Woche</option>
-                <option>Spot</option>
-              </select>
-              <button
-                onClick={() => {
-                  if (!newPosition.description || !newPosition.unitPrice) return;
-                  setOfferForm(prev => ({ ...prev, positions: [...prev.positions, { ...newPosition }] }));
-                  setNewPosition({ description: '', quantity: '1', unitPrice: '', unit: 'Pauschal' });
-                }}
-                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
-              ><Plus size={14} /></button>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input type="text" value={newPosition.description}
+                  onChange={e => setNewPosition({ ...newPosition, description: e.target.value })}
+                  placeholder="Beschreibung (z.B. Pre-Roll Spot, 5 Folgen)"
+                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
+                <input type="number" value={newPosition.quantity}
+                  onChange={e => setNewPosition({ ...newPosition, quantity: e.target.value })}
+                  placeholder="Anz." min="1"
+                  className="w-16 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
+                <input type="number" value={newPosition.unitPrice}
+                  onChange={e => setNewPosition({ ...newPosition, unitPrice: e.target.value })}
+                  placeholder="Preis €"
+                  className="w-24 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
+                <select value={newPosition.unit}
+                  onChange={e => setNewPosition({ ...newPosition, unit: e.target.value })}
+                  className="w-28 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500">
+                  <option>Pauschal</option>
+                  <option>Folge</option>
+                  <option>Monat</option>
+                  <option>Woche</option>
+                  <option>Spot</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <select value={newPosition.categoryId}
+                  onChange={e => {
+                    const cat = adCategories.find((c: any) => c.id === e.target.value);
+                    const priceFromCat = cat ? (cat.pricePerEpisode || cat.basePrice || '') : '';
+                    setNewPosition({ ...newPosition, categoryId: e.target.value, unitPrice: newPosition.unitPrice || String(priceFromCat) });
+                  }}
+                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500">
+                  <option value="">Kategorie (optional)</option>
+                  {adCategories.filter((c: any) => c.isActive !== false).map((cat: any) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    if (!newPosition.description || !newPosition.unitPrice) return;
+                    setOfferForm(prev => ({ ...prev, positions: [...prev.positions, { ...newPosition }] }));
+                    setNewPosition({ description: '', quantity: '1', unitPrice: '', unit: 'Pauschal', categoryId: '' });
+                  }}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors flex items-center gap-1"
+                ><Plus size={14} /> Position hinzufügen</button>
+              </div>
             </div>
           </div>
 
+          {/* Mehrfach-Optionen (Varianten) */}
+          <div className="border border-gray-700 rounded-xl p-3 bg-gray-900/30">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <label className="text-sm font-medium text-gray-300">Mehrfach-Optionen (Varianten)</label>
+                <p className="text-xs text-gray-500 mt-0.5">Biete dem Sponsor mehrere Pakete zur Auswahl an (z.B. Option A: 3 Folgen, Option B: 6 Folgen)</p>
+              </div>
+              <button
+                onClick={() => {
+                  if (offerForm.offerOptions) {
+                    setOfferForm(prev => ({ ...prev, offerOptions: null }));
+                    setActiveOptionTab(0);
+                  } else {
+                    setOfferForm(prev => ({ ...prev, offerOptions: [{ label: 'Option A', positions: [], discount: '0', discountType: 'absolute' }] }));
+                    setActiveOptionTab(0);
+                  }
+                }}
+                className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${offerForm.offerOptions ? 'bg-purple-900/30 border-purple-600 text-purple-300' : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-gray-500'}`}
+              >
+                {offerForm.offerOptions ? '✓ Aktiv – Deaktivieren' : 'Aktivieren'}
+              </button>
+            </div>
+            {offerForm.offerOptions && (
+              <div className="space-y-3">
+                {/* Varianten-Tabs */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {offerForm.offerOptions.map((opt: any, idx: number) => (
+                    <button key={idx}
+                      onClick={() => setActiveOptionTab(idx)}
+                      className={`px-3 py-1 text-xs rounded-lg border transition-colors ${activeOptionTab === idx ? 'bg-purple-600 border-purple-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-gray-500'}`}
+                    >
+                      {opt.label || `Option ${String.fromCharCode(65 + idx)}`}
+                    </button>
+                  ))}
+                  {offerForm.offerOptions.length < 5 && (
+                    <button
+                      onClick={() => {
+                        const labels = ['A', 'B', 'C', 'D', 'E'];
+                        const newOpt = { label: `Option ${labels[offerForm.offerOptions!.length]}`, positions: [], discount: '0', discountType: 'absolute' };
+                        setOfferForm(prev => ({ ...prev, offerOptions: [...(prev.offerOptions || []), newOpt] }));
+                        setActiveOptionTab(offerForm.offerOptions!.length);
+                      }}
+                      className="px-2 py-1 text-xs rounded-lg border border-dashed border-gray-600 text-gray-500 hover:border-purple-500 hover:text-purple-400 transition-colors"
+                    ><Plus size={10} className="inline mr-1" />Variante</button>
+                  )}
+                  {offerForm.offerOptions.length > 1 && (
+                    <button
+                      onClick={() => {
+                        const newOpts = offerForm.offerOptions!.filter((_: any, i: number) => i !== activeOptionTab);
+                        setOfferForm(prev => ({ ...prev, offerOptions: newOpts }));
+                        setActiveOptionTab(Math.max(0, activeOptionTab - 1));
+                      }}
+                      className="px-2 py-1 text-xs rounded-lg border border-red-800/40 text-red-400 hover:bg-red-900/20 transition-colors"
+                    ><Trash2 size={10} className="inline mr-1" />Entfernen</button>
+                  )}
+                </div>
+                {/* Aktive Variante bearbeiten */}
+                {offerForm.offerOptions[activeOptionTab] && (() => {
+                  const opt = offerForm.offerOptions![activeOptionTab];
+                  const updateOpt = (updates: any) => {
+                    const newOpts = offerForm.offerOptions!.map((o: any, i: number) => i === activeOptionTab ? { ...o, ...updates } : o);
+                    setOfferForm(prev => ({ ...prev, offerOptions: newOpts }));
+                  };
+                  return (
+                    <div className="space-y-3 p-3 bg-gray-800/40 rounded-lg border border-gray-700">
+                      <div className="flex gap-2">
+                        <input type="text" value={opt.label || ''} onChange={e => updateOpt({ label: e.target.value })}
+                          placeholder="Varianten-Bezeichnung"
+                          className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
+                      </div>
+                      {/* Positionen dieser Variante */}
+                      {(opt.positions || []).length > 0 && (
+                        <div className="space-y-1">
+                          {(opt.positions || []).map((pos: any, pidx: number) => {
+                            const cat = adCategories.find((c: any) => c.id === pos.categoryId);
+                            return (
+                              <div key={pidx} className="flex items-center gap-2 p-2 bg-gray-700/40 rounded-lg text-xs">
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-white">{pos.description}</span>
+                                  {cat && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded" style={{ color: cat.color || '#7c3aed', backgroundColor: (cat.color || '#7c3aed') + '20' }}>{cat.name}</span>}
+                                  <span className="text-gray-400 ml-1">{pos.quantity}x à {parseFloat(pos.unitPrice || 0).toFixed(2)} €</span>
+                                </div>
+                                <span className="text-white font-medium">{((parseFloat(pos.unitPrice) || 0) * (parseInt(pos.quantity) || 1)).toFixed(2)} €</span>
+                                <button onClick={() => updateOpt({ positions: opt.positions.filter((_: any, i: number) => i !== pidx) })}
+                                  className="p-0.5 text-gray-500 hover:text-red-400"><X size={11} /></button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {/* Neue Position für diese Variante */}
+                      {(() => {
+                        const [optNewPos, setOptNewPos] = [
+                          (opt._newPos || { description: '', quantity: '1', unitPrice: '', unit: 'Pauschal', categoryId: '' }),
+                          (v: any) => updateOpt({ _newPos: v })
+                        ];
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <input type="text" value={optNewPos.description} onChange={e => setOptNewPos({ ...optNewPos, description: e.target.value })}
+                                placeholder="Beschreibung" className="flex-1 px-2 py-1.5 bg-gray-800 border border-gray-700 text-white text-xs rounded-lg focus:outline-none focus:border-purple-500" />
+                              <input type="number" value={optNewPos.quantity} onChange={e => setOptNewPos({ ...optNewPos, quantity: e.target.value })}
+                                placeholder="Anz." min="1" className="w-14 px-2 py-1.5 bg-gray-800 border border-gray-700 text-white text-xs rounded-lg focus:outline-none focus:border-purple-500" />
+                              <input type="number" value={optNewPos.unitPrice} onChange={e => setOptNewPos({ ...optNewPos, unitPrice: e.target.value })}
+                                placeholder="Preis €" className="w-20 px-2 py-1.5 bg-gray-800 border border-gray-700 text-white text-xs rounded-lg focus:outline-none focus:border-purple-500" />
+                            </div>
+                            <div className="flex gap-2">
+                              <select value={optNewPos.unit} onChange={e => setOptNewPos({ ...optNewPos, unit: e.target.value })}
+                                className="w-24 px-2 py-1.5 bg-gray-800 border border-gray-700 text-white text-xs rounded-lg focus:outline-none focus:border-purple-500">
+                                <option>Pauschal</option><option>Folge</option><option>Monat</option><option>Woche</option><option>Spot</option>
+                              </select>
+                              <select value={optNewPos.categoryId} onChange={e => {
+                                const cat = adCategories.find((c: any) => c.id === e.target.value);
+                                setOptNewPos({ ...optNewPos, categoryId: e.target.value, unitPrice: optNewPos.unitPrice || (cat ? String(cat.pricePerEpisode || cat.basePrice || '') : '') });
+                              }} className="flex-1 px-2 py-1.5 bg-gray-800 border border-gray-700 text-white text-xs rounded-lg focus:outline-none focus:border-purple-500">
+                                <option value="">Kategorie (optional)</option>
+                                {adCategories.filter((c: any) => c.isActive !== false).map((cat: any) => (
+                                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                ))}
+                              </select>
+                              <button onClick={() => {
+                                if (!optNewPos.description || !optNewPos.unitPrice) return;
+                                const { _newPos: _, ...cleanPos } = optNewPos;
+                                updateOpt({ positions: [...(opt.positions || []), cleanPos], _newPos: undefined });
+                              }} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-colors flex items-center gap-1">
+                                <Plus size={11} /> Hinzufügen
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {/* Rabatt für diese Variante */}
+                      <div className="flex gap-2 items-center">
+                        <label className="text-xs text-gray-400 w-16 shrink-0">Rabatt:</label>
+                        <input type="number" value={opt.discount || '0'} min="0" onChange={e => updateOpt({ discount: e.target.value })}
+                          className="w-24 px-2 py-1.5 bg-gray-800 border border-gray-700 text-white text-xs rounded-lg focus:outline-none focus:border-purple-500" />
+                        <select value={opt.discountType || 'absolute'} onChange={e => updateOpt({ discountType: e.target.value })}
+                          className="w-16 px-2 py-1.5 bg-gray-800 border border-gray-700 text-white text-xs rounded-lg focus:outline-none focus:border-purple-500">
+                          <option value="absolute">EUR</option><option value="percent">%</option>
+                        </select>
+                        {/* Gesamtpreis dieser Variante */}
+                        {(opt.positions || []).length > 0 && (() => {
+                          const sub = (opt.positions || []).reduce((s: number, p: any) => s + (parseFloat(p.unitPrice) || 0) * (parseInt(p.quantity) || 1), 0);
+                          const disc = parseFloat(opt.discount || 0);
+                          const discAmt = (opt.discountType || 'absolute') === 'percent' ? sub * disc / 100 : disc;
+                          const total = Math.max(0, sub - discAmt);
+                          return <span className="ml-auto text-sm font-bold text-white">= {total.toFixed(2)} €</span>;
+                        })()}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
           {/* Rabatt */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Rabatt (gesamt)</label>
@@ -1835,6 +2061,32 @@ export default function SponsorDetailPageV2() {
               Alle Positionen aus <strong className="text-white">{acceptingOffer?.title}</strong> werden als Buchungen in diesem Sponsor angelegt.
             </p>
           </div>
+          {/* Varianten-Auswahl wenn offerOptions vorhanden */}
+          {acceptingOffer?.offerOptions && acceptingOffer.offerOptions.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Variante auswählen</p>
+              <div className="space-y-2">
+                {acceptingOffer.offerOptions.map((opt: any, idx: number) => {
+                  const sub = (opt.positions || []).reduce((s: number, p: any) => s + (parseFloat(p.unitPrice) || 0) * (parseInt(p.quantity) || 1), 0);
+                  const disc = parseFloat(opt.discount || 0);
+                  const discAmt = (opt.discountType || 'absolute') === 'percent' ? sub * disc / 100 : disc;
+                  const total = Math.max(0, sub - discAmt);
+                  return (
+                    <label key={idx} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedOptionIndex === idx ? 'bg-purple-900/20 border-purple-600' : 'bg-gray-800/60 border-gray-700 hover:border-gray-600'}`}>
+                      <input type="radio" name="offerOption" checked={selectedOptionIndex === idx}
+                        onChange={() => setSelectedOptionIndex(idx)}
+                        className="w-4 h-4 accent-purple-500" />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-white">{opt.label || `Option ${String.fromCharCode(65 + idx)}`}</div>
+                        <div className="text-xs text-gray-400">{(opt.positions || []).length} Positionen · {total.toFixed(2)} €</div>
+                      </div>
+                      <span className="text-sm font-bold text-white">{total.toFixed(2)} €</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Zusätzlich übernehmen (optional)</p>

@@ -1144,6 +1144,7 @@ router.get('/:sponsorId/offers', requirePermission('canViewSponsors') as any, (r
       introText: o.intro_text,
       outroText: o.outro_text,
       positions: o.positions ? JSON.parse(o.positions) : [],
+      offerOptions: o.offer_options ? JSON.parse(o.offer_options) : null,
       totalPrice: o.total_price,
       discount: o.discount,
       discountType: o.discount_type,
@@ -1160,23 +1161,35 @@ router.post('/:sponsorId/offers', requirePermission('canEditSponsors') as any, (
   const db = getDb();
   const {
     title, offerNumber, validUntil, introText, outroText,
-    positions = [], discount = 0, discountType = 'absolute', notes
+    positions = [], discount = 0, discountType = 'absolute', notes, offerOptions = null
   } = req.body;
   if (!title) return res.status(400).json({ success: false, error: 'Titel erforderlich' });
   const posArr = Array.isArray(positions) ? positions : [];
-  const subtotal = posArr.reduce((s: number, p: any) => s + ((p.unitPrice || 0) * (p.quantity || 1)), 0);
-  const discountAmt = discountType === 'percent' ? subtotal * (discount / 100) : (discount || 0);
-  const totalPrice = Math.max(0, subtotal - discountAmt);
+  // Gesamtpreis berechnen: aus Positionen oder aus offerOptions
+  let totalPrice = 0;
+  if (offerOptions && Array.isArray(offerOptions) && offerOptions.length > 0) {
+    // Mehrfach-Optionen: Gesamtpreis = Maximum aller Optionen
+    totalPrice = Math.max(...offerOptions.map((opt: any) => {
+      const optSub = (opt.positions || []).reduce((s: number, p: any) => s + ((p.unitPrice || 0) * (p.quantity || 1)), 0);
+      const optDisc = (opt.discountType || discountType) === 'percent' ? optSub * ((opt.discount || discount) / 100) : (opt.discount || discount || 0);
+      return Math.max(0, optSub - optDisc);
+    }));
+  } else {
+    const subtotal = posArr.reduce((s: number, p: any) => s + ((p.unitPrice || 0) * (p.quantity || 1)), 0);
+    const discountAmt = discountType === 'percent' ? subtotal * (discount / 100) : (discount || 0);
+    totalPrice = Math.max(0, subtotal - discountAmt);
+  }
   const id = uuidv4();
   // Angebotsnummer generieren wenn nicht angegeben
   const autoNumber = offerNumber || `ANG-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
   db.run(
-    `INSERT INTO sponsor_offers (id, sponsor_id, title, offer_number, valid_until, status, intro_text, outro_text, positions, total_price, discount, discount_type, notes, created_by)
-     VALUES (?, ?, ?, ?, ?, 'entwurf', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO sponsor_offers (id, sponsor_id, title, offer_number, valid_until, status, intro_text, outro_text, positions, total_price, discount, discount_type, notes, created_by, offer_options)
+     VALUES (?, ?, ?, ?, ?, 'entwurf', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, req.params.sponsorId, title, autoNumber, validUntil || null,
      introText || null, outroText || null, JSON.stringify(posArr),
      totalPrice, discount || 0, discountType || 'absolute', notes || null,
-     (req as any).user?.id || null]
+     (req as any).user?.id || null,
+     offerOptions ? JSON.stringify(offerOptions) : null]
   );
   const offer = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [id]) as any;
   return res.status(201).json({
@@ -1186,6 +1199,7 @@ router.post('/:sponsorId/offers', requirePermission('canEditSponsors') as any, (
       offerNumber: offer.offer_number, validUntil: offer.valid_until,
       status: offer.status, introText: offer.intro_text, outroText: offer.outro_text,
       positions: offer.positions ? JSON.parse(offer.positions) : [],
+      offerOptions: offer.offer_options ? JSON.parse(offer.offer_options) : null,
       totalPrice: offer.total_price, discount: offer.discount,
       discountType: offer.discount_type, notes: offer.notes,
       createdAt: offer.created_at, updatedAt: offer.updated_at,
@@ -1198,16 +1212,27 @@ router.put('/offers/:offerId', requirePermission('canEditSponsors') as any, (req
   const db = getDb();
   const {
     title, offerNumber, validUntil, status, introText, outroText,
-    positions, discount, discountType, notes
+    positions, discount, discountType, notes, offerOptions
   } = req.body;
   const existing = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [req.params.offerId]) as any;
   if (!existing) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
   const posArr = positions !== undefined ? (Array.isArray(positions) ? positions : []) : JSON.parse(existing.positions || '[]');
   const eff_discount = discount !== undefined ? discount : existing.discount;
   const eff_discountType = discountType !== undefined ? discountType : existing.discount_type;
-  const subtotal = posArr.reduce((s: number, p: any) => s + ((p.unitPrice || 0) * (p.quantity || 1)), 0);
-  const discountAmt = eff_discountType === 'percent' ? subtotal * (eff_discount / 100) : (eff_discount || 0);
-  const totalPrice = Math.max(0, subtotal - discountAmt);
+  // Gesamtpreis berechnen
+  let totalPrice = 0;
+  const effOfferOptions = offerOptions !== undefined ? offerOptions : (existing.offer_options ? JSON.parse(existing.offer_options) : null);
+  if (effOfferOptions && Array.isArray(effOfferOptions) && effOfferOptions.length > 0) {
+    totalPrice = Math.max(...effOfferOptions.map((opt: any) => {
+      const optSub = (opt.positions || []).reduce((s: number, p: any) => s + ((p.unitPrice || 0) * (p.quantity || 1)), 0);
+      const optDisc = (opt.discountType || eff_discountType) === 'percent' ? optSub * ((opt.discount || eff_discount) / 100) : (opt.discount || eff_discount || 0);
+      return Math.max(0, optSub - optDisc);
+    }));
+  } else {
+    const subtotal = posArr.reduce((s: number, p: any) => s + ((p.unitPrice || 0) * (p.quantity || 1)), 0);
+    const discountAmt = eff_discountType === 'percent' ? subtotal * (eff_discount / 100) : (eff_discount || 0);
+    totalPrice = Math.max(0, subtotal - discountAmt);
+  }
   db.run(
     `UPDATE sponsor_offers SET
       title = COALESCE(?, title),
@@ -1221,6 +1246,7 @@ router.put('/offers/:offerId', requirePermission('canEditSponsors') as any, (req
       discount = ?,
       discount_type = ?,
       notes = ?,
+      offer_options = ?,
       updated_at = datetime('now')
      WHERE id = ?`,
     [title || null, offerNumber || null,
@@ -1230,6 +1256,7 @@ router.put('/offers/:offerId', requirePermission('canEditSponsors') as any, (req
      outroText !== undefined ? (outroText || null) : existing.outro_text,
      JSON.stringify(posArr), totalPrice, eff_discount, eff_discountType,
      notes !== undefined ? (notes || null) : existing.notes,
+     effOfferOptions ? JSON.stringify(effOfferOptions) : null,
      req.params.offerId]
   );
   const updated = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [req.params.offerId]) as any;
@@ -1240,6 +1267,7 @@ router.put('/offers/:offerId', requirePermission('canEditSponsors') as any, (req
       offerNumber: updated.offer_number, validUntil: updated.valid_until,
       status: updated.status, introText: updated.intro_text, outroText: updated.outro_text,
       positions: updated.positions ? JSON.parse(updated.positions) : [],
+      offerOptions: updated.offer_options ? JSON.parse(updated.offer_options) : null,
       totalPrice: updated.total_price, discount: updated.discount,
       discountType: updated.discount_type, notes: updated.notes,
       createdAt: updated.created_at, updatedAt: updated.updated_at,
@@ -1264,8 +1292,22 @@ router.post('/offers/:offerId/accept', requirePermission('canEditSponsors') as a
     updateContactInfo = false,
     updateNotes = false,
     contractId = null,
+    selectedOptionIndex = null, // Index der gewählten Variante (bei offerOptions)
   } = req.body;
-  const positions = offer.positions ? JSON.parse(offer.positions) : [];
+  // Positionen bestimmen: aus offerOptions (wenn vorhanden und Variante gewählt) oder aus positions
+  const offerOptions = offer.offer_options ? JSON.parse(offer.offer_options) : null;
+  let positions: any[];
+  let effectiveDiscount = offer.discount || 0;
+  let effectiveDiscountType = offer.discount_type || 'absolute';
+  if (offerOptions && Array.isArray(offerOptions) && offerOptions.length > 0) {
+    const optIdx = selectedOptionIndex !== null ? selectedOptionIndex : 0;
+    const selectedOpt = offerOptions[Math.min(optIdx, offerOptions.length - 1)];
+    positions = selectedOpt?.positions || [];
+    effectiveDiscount = parseFloat(selectedOpt?.discount || 0);
+    effectiveDiscountType = selectedOpt?.discountType || 'absolute';
+  } else {
+    positions = offer.positions ? JSON.parse(offer.positions) : [];
+  }
   const createdBookingIds: string[] = [];
   // Buchungen aus Positionen anlegen
   if (createBookings && positions.length > 0) {
@@ -1273,9 +1315,9 @@ router.post('/offers/:offerId/accept', requirePermission('canEditSponsors') as a
       const bookingId = uuidv4();
       const unitPrice = pos.unitPrice || 0;
       const qty = pos.quantity || 1;
-      const posDiscount = offer.discount_type === 'percent'
-        ? unitPrice * qty * (offer.discount / 100)
-        : (offer.discount / Math.max(positions.length, 1));
+      const posDiscount = effectiveDiscountType === 'percent'
+        ? unitPrice * qty * (effectiveDiscount / 100)
+        : (effectiveDiscount / Math.max(positions.length, 1));
       const finalPrice = Math.max(0, unitPrice * qty - posDiscount);
       db.run(
         `INSERT INTO ad_bookings (id, slot_id, sponsor_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs, discount, discount_type, listener_count)
@@ -1292,8 +1334,8 @@ router.post('/offers/:offerId/accept', requirePermission('canEditSponsors') as a
           contractId || offer.contract_id || null,
           qty,
           pos.episodeRefs ? JSON.stringify(pos.episodeRefs) : null,
-          offer.discount || 0,
-          offer.discount_type || 'absolute',
+          effectiveDiscount,
+          effectiveDiscountType,
         ]
       );
       createdBookingIds.push(bookingId);
