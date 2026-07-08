@@ -24,7 +24,7 @@ export default function SponsorDetailPageV2() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const [activeTab, setActiveTab] = useState<'contracts' | 'slots' | 'bookings' | 'billing'>('contracts');
+  const [activeTab, setActiveTab] = useState<'stammdaten' | 'contracts' | 'slots' | 'bookings' | 'billing'>('stammdaten');
   const [form, setForm] = useState<any>({});
 
   // Contract Modal
@@ -246,7 +246,7 @@ export default function SponsorDetailPageV2() {
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-gray-800 bg-gray-900/50 px-6">
-        {(['contracts', 'slots', 'bookings', 'billing'] as const).map((tab) => (
+        {(['stammdaten', 'contracts', 'slots', 'bookings', 'billing'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -256,6 +256,7 @@ export default function SponsorDetailPageV2() {
                 : 'border-transparent text-gray-400 hover:text-gray-300'
             }`}
           >
+            {tab === 'stammdaten' && 'Stammdaten'}
             {tab === 'contracts' && 'Verträge'}
             {tab === 'slots' && 'Werbe-Slots'}
             {tab === 'bookings' && 'Buchungen'}
@@ -266,6 +267,19 @@ export default function SponsorDetailPageV2() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
+
+        {/* Stammdaten Tab */}
+        {activeTab === 'stammdaten' && (
+          <div className="max-w-3xl space-y-6">
+            <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <Building2 size={18} className="text-purple-400" /> Sponsor-Stammdaten
+              </h2>
+              <SponsorStammdatenForm sponsor={sponsor} onSaved={(updated: any) => setSponsor({ ...sponsor, ...updated })} />
+            </div>
+          </div>
+        )}
+
         {/* Contracts Tab */}
         {activeTab === 'contracts' && (
           <div className="space-y-4">
@@ -632,15 +646,32 @@ export default function SponsorDetailPageV2() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Buchungsdatum *</label>
-            <input
-              type="date"
-              value={bookingForm.bookingDate}
-              onChange={(e) => setBookingForm({ ...bookingForm, bookingDate: e.target.value })}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Laufzeit Von *</label>
+              <input
+                type="date"
+                value={bookingForm.bookingDate}
+                onChange={(e) => setBookingForm({ ...bookingForm, bookingDate: e.target.value })}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Laufzeit Bis *</label>
+              <input
+                type="date"
+                value={bookingForm.bookingEndDate}
+                min={bookingForm.bookingDate || undefined}
+                onChange={(e) => setBookingForm({ ...bookingForm, bookingEndDate: e.target.value })}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500"
+              />
+            </div>
           </div>
+          {bookingForm.bookingDate && bookingForm.bookingEndDate && (
+            <p className="text-xs text-gray-400">
+              Laufzeit: {Math.max(1, Math.ceil((new Date(bookingForm.bookingEndDate).getTime() - new Date(bookingForm.bookingDate).getTime()) / (1000 * 60 * 60 * 24) + 1))} Tage
+            </p>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Preis (EUR)</label>
             <input
@@ -668,6 +699,167 @@ export default function SponsorDetailPageV2() {
           </div>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+// ─── Stammdaten-Formular Komponente ──────────────────────────────────────────
+function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (data: any) => void }) {
+  const { showSuccess, showError } = useApp();
+  const [isSaving, setIsSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: sponsor.name || '',
+    company: sponsor.company || '',
+    customerNumber: sponsor.customer_number || sponsor.customerNumber || '',
+    contactName: sponsor.contact_name || sponsor.contactName || '',
+    contactEmail: sponsor.contact_email || sponsor.contactEmail || '',
+    contactPhone: sponsor.contact_phone || sponsor.contactPhone || '',
+    website: sponsor.website || '',
+    description: sponsor.description || '',
+    notes: sponsor.notes || '',
+    status: sponsor.status || 'interessent',
+    adDelivery: sponsor.ad_delivery || sponsor.adDelivery || 'self',
+    contactHint: sponsor.contact_hint || sponsor.contactHint || '',
+    totalBudget: sponsor.total_budget || sponsor.totalBudget || '',
+    contractStart: sponsor.contract_start || sponsor.contractStart || '',
+    contractEnd: sponsor.contract_end || sponsor.contractEnd || '',
+  });
+
+  const handleChange = (field: string, value: string) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await sponsorsApi.update(sponsor.id, form);
+      onSaved(form);
+      showSuccess('Stammdaten erfolgreich gespeichert');
+    } catch (e) {
+      showError('Fehler beim Speichern der Stammdaten');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const inputClass = "w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500";
+  const labelClass = "block text-xs font-medium text-gray-400 mb-1";
+
+  return (
+    <div className="space-y-6">
+      {/* Basis-Informationen */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wide">Basis-Informationen</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Name *</label>
+            <input className={inputClass} value={form.name} onChange={e => handleChange('name', e.target.value)} placeholder="Sponsor-Name" />
+          </div>
+          <div>
+            <label className={labelClass}>Firma</label>
+            <input className={inputClass} value={form.company} onChange={e => handleChange('company', e.target.value)} placeholder="Firmenname" />
+          </div>
+          <div>
+            <label className={labelClass}>Kundennummer</label>
+            <input
+              className={`${inputClass} font-mono`}
+              value={form.customerNumber}
+              onChange={e => handleChange('customerNumber', e.target.value)}
+              placeholder="z.B. KD-2024-001"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Status</label>
+            <select className={inputClass} value={form.status} onChange={e => handleChange('status', e.target.value)}>
+              <option value="interessent">Interessent</option>
+              <option value="aktiv">Aktiv</option>
+              <option value="inaktiv">Inaktiv</option>
+              <option value="pausiert">Pausiert</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Website</label>
+            <input className={inputClass} value={form.website} onChange={e => handleChange('website', e.target.value)} placeholder="https://..." />
+          </div>
+          <div>
+            <label className={labelClass}>Werbe-Lieferung</label>
+            <select className={inputClass} value={form.adDelivery} onChange={e => handleChange('adDelivery', e.target.value)}>
+              <option value="self">Selbst produziert</option>
+              <option value="provided">Vom Sponsor geliefert</option>
+              <option value="host_read">Host-Read</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Kontaktdaten */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wide">Kontaktdaten</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Ansprechpartner</label>
+            <input className={inputClass} value={form.contactName} onChange={e => handleChange('contactName', e.target.value)} placeholder="Vor- und Nachname" />
+          </div>
+          <div>
+            <label className={labelClass}>E-Mail</label>
+            <input className={inputClass} type="email" value={form.contactEmail} onChange={e => handleChange('contactEmail', e.target.value)} placeholder="kontakt@firma.de" />
+          </div>
+          <div>
+            <label className={labelClass}>Telefon</label>
+            <input className={inputClass} value={form.contactPhone} onChange={e => handleChange('contactPhone', e.target.value)} placeholder="+49 ..." />
+          </div>
+          <div>
+            <label className={labelClass}>Kontakt-Hinweis</label>
+            <input className={inputClass} value={form.contactHint} onChange={e => handleChange('contactHint', e.target.value)} placeholder="z.B. Nur per E-Mail" />
+          </div>
+        </div>
+      </div>
+
+      {/* Vertragsdaten */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wide">Vertragsdaten</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Vertragsstart</label>
+            <input className={inputClass} type="date" value={form.contractStart} onChange={e => handleChange('contractStart', e.target.value)} />
+          </div>
+          <div>
+            <label className={labelClass}>Vertragsende</label>
+            <input className={inputClass} type="date" value={form.contractEnd} onChange={e => handleChange('contractEnd', e.target.value)} />
+          </div>
+          <div>
+            <label className={labelClass}>Gesamtbudget (EUR)</label>
+            <input className={inputClass} type="number" value={form.totalBudget} onChange={e => handleChange('totalBudget', e.target.value)} placeholder="0.00" />
+          </div>
+        </div>
+      </div>
+
+      {/* Beschreibung & Notizen */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wide">Beschreibung & Notizen</h3>
+        <div className="space-y-3">
+          <div>
+            <label className={labelClass}>Beschreibung</label>
+            <textarea className={`${inputClass} h-20 resize-none`} value={form.description} onChange={e => handleChange('description', e.target.value)} placeholder="Kurzbeschreibung des Sponsors..." />
+          </div>
+          <div>
+            <label className={labelClass}>Interne Notizen</label>
+            <textarea className={`${inputClass} h-20 resize-none`} value={form.notes} onChange={e => handleChange('notes', e.target.value)} placeholder="Interne Notizen (nicht sichtbar für Sponsor)..." />
+          </div>
+        </div>
+      </div>
+
+      {/* Speichern-Button */}
+      <div className="flex justify-end pt-2">
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 font-medium"
+        >
+          {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          {isSaving ? 'Speichert...' : 'Stammdaten speichern'}
+        </button>
+      </div>
     </div>
   );
 }

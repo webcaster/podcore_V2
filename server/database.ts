@@ -711,7 +711,7 @@ function initializeSchema(db: any): void {
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (slot_id) REFERENCES ad_slots(id),
+    -- slot_id kann ad_slots.id ODER ad_categories.id sein (kein FK-Constraint)
     FOREIGN KEY (sponsor_id) REFERENCES sponsors(id),
     FOREIGN KEY (episode_id) REFERENCES episodes(id)
   )`); } catch (_) {}
@@ -726,6 +726,45 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE sponsors ADD COLUMN last_performance_export TEXT DEFAULT NULL'); } catch (_) {}
   // v2.12.0: performance_notes in ad_bookings
   try { db.exec('ALTER TABLE ad_bookings ADD COLUMN performance_notes TEXT DEFAULT NULL'); } catch (_) {}
+  // v2.12.1: slot_id FK-Constraint entfernen (slot_id kann ad_categories.id ODER ad_slots.id sein)
+  // SQLite erlaubt kein ALTER TABLE DROP CONSTRAINT – daher Tabelle neu erstellen
+  try {
+    const hasFk = db.get(`SELECT sql FROM sqlite_master WHERE type='table' AND name='ad_bookings'`) as any;
+    if (hasFk && hasFk.sql && hasFk.sql.includes('REFERENCES ad_slots')) {
+      db.exec(`
+        PRAGMA foreign_keys = OFF;
+        CREATE TABLE IF NOT EXISTS ad_bookings_new (
+          id TEXT PRIMARY KEY,
+          slot_id TEXT NOT NULL,
+          sponsor_id TEXT NOT NULL,
+          episode_id TEXT,
+          booking_date TEXT NOT NULL,
+          booking_end_date TEXT,
+          price REAL NOT NULL DEFAULT 0,
+          price_adjustment REAL DEFAULT 0,
+          listener_fee REAL DEFAULT 0,
+          final_price REAL NOT NULL DEFAULT 0,
+          invoice_status TEXT NOT NULL DEFAULT 'offen',
+          invoice_number TEXT,
+          invoice_date TEXT,
+          delivery_confirmed INTEGER NOT NULL DEFAULT 0,
+          listener_count INTEGER,
+          status TEXT NOT NULL DEFAULT 'geplant',
+          notes TEXT,
+          performance_notes TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (sponsor_id) REFERENCES sponsors(id),
+          FOREIGN KEY (episode_id) REFERENCES episodes(id)
+        );
+        INSERT OR IGNORE INTO ad_bookings_new SELECT id, slot_id, sponsor_id, episode_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, invoice_status, invoice_number, invoice_date, delivery_confirmed, listener_count, status, notes, NULL, created_at, updated_at FROM ad_bookings;
+        DROP TABLE ad_bookings;
+        ALTER TABLE ad_bookings_new RENAME TO ad_bookings;
+        PRAGMA foreign_keys = ON;
+      `);
+      console.log('[DB] v2.12.1: ad_bookings FK-Constraint auf ad_slots entfernt');
+    }
+  } catch (e) { console.error('[DB] v2.12.1 ad_bookings migration error:', e); }
   
   // Roles table migration (v2.11.5)
   try {
