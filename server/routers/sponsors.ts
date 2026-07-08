@@ -1769,13 +1769,34 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
   // Header
   renderPdfHeader(doc, layout, { podcastName, documentTitle, logoPath });
 
-  // Sponsor info
+  // Sponsor info mit Kundennummer (v2.12.0)
+  const showCustomerInfo = layout.sections?.showPerformanceCustomerInfo !== false;
+  const pageW = doc.page.width;
+  // Linke Spalte: Sponsor-Daten
+  const colLeft = m;
+  const colRight = pageW / 2 + 10;
+  const infoY = doc.y;
   doc.fontSize(layout.typography.subtitleSize).font(`${layout.typography.fontFamily}-Bold`)
-    .fillColor(layout.colors.primary).text(sponsor.name);
+    .fillColor(layout.colors.primary).text(sponsor.name, colLeft, infoY, { width: pageW / 2 - 20 });
   doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily).fillColor(layout.colors.muted);
-  if (sponsor.company) doc.text(sponsor.company);
-  if (sponsor.contact_name) doc.text(`Ansprechpartner: ${sponsor.contact_name}`);
-  if (sponsor.contact_email) doc.text(`E-Mail: ${sponsor.contact_email}`);
+  if (sponsor.company) doc.text(sponsor.company, colLeft, doc.y, { width: pageW / 2 - 20 });
+  if (sponsor.contact_name) doc.text(`Ansprechpartner: ${sponsor.contact_name}`, colLeft, doc.y, { width: pageW / 2 - 20 });
+  if (sponsor.contact_email) doc.text(`E-Mail: ${sponsor.contact_email}`, colLeft, doc.y, { width: pageW / 2 - 20 });
+  // Rechte Spalte: Kundennummer und Exportdatum
+  if (showCustomerInfo) {
+    let rightY = infoY;
+    if (sponsor.customer_number) {
+      doc.fontSize(layout.typography.smallSize).font(`${layout.typography.fontFamily}-Bold`)
+        .fillColor(layout.colors.muted).text('KUNDENNUMMER', colRight, rightY, { width: pageW / 2 - m - 10 });
+      rightY += 14;
+      doc.fontSize(layout.typography.headingSize).font(`${layout.typography.fontFamily}-Bold`)
+        .fillColor(layout.colors.primary).text(sponsor.customer_number, colRight, rightY, { width: pageW / 2 - m - 10 });
+      rightY += 18;
+    }
+    doc.fontSize(layout.typography.smallSize).font(layout.typography.fontFamily)
+      .fillColor(layout.colors.muted)
+      .text(`Exportdatum: ${new Date().toLocaleDateString('de-DE')}`, colRight, rightY, { width: pageW / 2 - m - 10 });
+  }
   doc.fillColor(layout.colors.text);
   doc.moveDown(0.8);
 
@@ -1796,6 +1817,33 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
     return;
   }
 
+  // v2.12.0: v2-Buchungen (ad_bookings) einbeziehen wenn Layout es erlaubt
+  const includeV2Bookings = layout.sections?.showPerformanceV2Bookings !== false;
+  const v2Bookings = includeV2Bookings ? (db.all(`
+    SELECT ab.*,
+           COALESCE(s.name, c.name) as slot_name,
+           COALESCE(s.category, c.default_position) as slot_category,
+           sp.name as sponsor_name,
+           e.title as episode_title, e.number as episode_number
+    FROM ad_bookings ab
+    LEFT JOIN ad_slots s ON ab.slot_id = s.id
+    LEFT JOIN ad_categories c ON ab.slot_id = c.id
+    JOIN sponsors sp ON ab.sponsor_id = sp.id
+    LEFT JOIN episodes e ON ab.episode_id = e.id
+    WHERE ab.sponsor_id = ?
+    ORDER BY ab.booking_date ASC
+  `, [req.params.id]) as any[]).map((b: any) => ({
+    ...b,
+    price: b.final_price || b.price || 0,
+    episode_title: b.episode_title ? `#${b.episode_number || ''} ${b.episode_title}` : null,
+    publish_date: b.booking_date,
+    invoice_status: b.invoice_status || 'ausstehend',
+    invoice_number: b.invoice_number || null,
+    position: b.slot_name || b.slot_category || 'Buchung v2',
+    booking_end_date: b.booking_end_date,
+    is_v2: true,
+  })) : [];
+
   // Alle Platzierungen inkl. episode_ad_bookings ohne Folge zusammenführen
   const allRows: any[] = [
     ...placements,
@@ -1814,6 +1862,8 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
       invoice_number: b.invoice_number || null,
       position: b.position || 'mid-roll',
     })),
+    // v2-Buchungen
+    ...v2Bookings,
   ];
 
   // Filter anwenden
@@ -1834,47 +1884,91 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
     doc.end();
     return;
   }
+  // Tabellen-Header mit erweiterter Spaltenstruktur (v2.12.0)
+  const showPriceBreakdown = layout.sections?.showPerformancePriceBreakdown !== false;
   doc.fontSize(layout.typography.smallSize).font(`${layout.typography.fontFamily}-Bold`);
   doc.rect(m, doc.y, tblW, 20).fill(layout.colors.secondary);
   const tableY = doc.y - 20;
-  const c1 = m + 5, c2 = m + tblW * 0.38, c3 = m + tblW * 0.55, c4 = m + tblW * 0.72, c5 = m + tblW * 0.86;
-  doc.fillColor('#ffffff').text('Episode', c1, tableY + 6, { width: tblW * 0.35 });
-  doc.text('Position', c2, tableY + 6, { width: tblW * 0.15 });
-  doc.text('Datum', c3, tableY + 6, { width: tblW * 0.15 });
-  doc.text('Status', c4, tableY + 6, { width: tblW * 0.12 });
-  doc.text('Preis', c5, tableY + 6, { width: tblW * 0.12, align: 'right' });
+  // Spaltenbreiten anpassen je nach Preisaufschlüsselung
+  const c1 = m + 5;
+  const c2 = m + tblW * 0.32;
+  const c3 = m + tblW * 0.50;
+  const c4 = m + tblW * (showPriceBreakdown ? 0.65 : 0.72);
+  const c5 = m + tblW * (showPriceBreakdown ? 0.78 : 0.86);
+  const c6 = m + tblW * 0.88; // Nur bei Preisaufschlüsselung
+  doc.fillColor('#ffffff').text('Leistung / Episode', c1, tableY + 6, { width: tblW * 0.29 });
+  doc.text('Werbeplatz', c2, tableY + 6, { width: tblW * 0.16 });
+  doc.text('Laufzeit', c3, tableY + 6, { width: tblW * 0.13 });
+  doc.text('Status', c4, tableY + 6, { width: tblW * 0.11 });
+  if (showPriceBreakdown) {
+    doc.text('Basis', c5, tableY + 6, { width: tblW * 0.09, align: 'right' });
+    doc.text('Gesamt', c6, tableY + 6, { width: tblW * 0.10, align: 'right' });
+  } else {
+    doc.text('Preis', c5, tableY + 6, { width: tblW * 0.12, align: 'right' });
+  }
   doc.moveDown(0.5);
 
-  // Table rows
+  // Table rows (v2.12.0: erweiterte Darstellung)
+  const showPerformanceNotes = layout.sections?.showPerformanceNotes !== false;
   let totalRevenue = 0;
+  let totalBaseRevenue = 0;
   let rowY = doc.y;
   const maxY = doc.page.height - m - 60;
   filteredRows.forEach((p: any, i: number) => {
     if (rowY > maxY) { doc.addPage(); rowY = m; }
     const bg = i % 2 === 0 ? '#f8f9fa' : '#ffffff';
-    const title = p.episode_title || p.episode_id || '-';
-    const posLabel = p.position || '-';
-    const dateStr = p.publish_date ? new Date(p.publish_date).toLocaleDateString('de-DE') : '-';
+    // Leistungsbeschreibung: Episode oder Laufzeit
+    let title = p.episode_title || '';
+    if (!title && p.is_v2) {
+      title = p.booking_end_date
+        ? `Laufzeit: ${new Date(p.publish_date || p.booking_date).toLocaleDateString('de-DE')} – ${new Date(p.booking_end_date).toLocaleDateString('de-DE')}`
+        : (p.publish_date || p.booking_date ? new Date(p.publish_date || p.booking_date).toLocaleDateString('de-DE') : '-');
+    }
+    if (!title) title = p.episode_id || '-';
+    const posLabel = p.position || p.slot_name || '-';
+    // Laufzeit-Spalte
+    const dateStr = p.is_v2
+      ? (p.booking_end_date
+          ? `${new Date(p.publish_date || p.booking_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} – ${new Date(p.booking_end_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })}`
+          : (p.publish_date ? new Date(p.publish_date).toLocaleDateString('de-DE') : '-'))
+      : (p.publish_date ? new Date(p.publish_date).toLocaleDateString('de-DE') : '-');
     const statusStr = p.invoice_status || 'offen';
     const price = p.price || 0;
-    const priceStr = `${price.toFixed(2)} €`;
+    const finalPrice = p.final_price || price;
+    const priceStr = `${finalPrice.toFixed(2)} €`;
+    const basePriceStr = price !== finalPrice ? `${price.toFixed(2)} €` : priceStr;
+    // Performance-Notizen
+    const notes = showPerformanceNotes ? (p.performance_notes || p.performanceNotes || p.notes || '') : '';
 
-    // Berechne maximale Höhe dieser Zeile
-    const h1 = doc.heightOfString(title, { width: tblW * 0.35 });
-    const rowHeight = Math.max(18, h1) + 6;
+    // Zeilenhoehe berechnen
+    const h1 = doc.heightOfString(title, { width: tblW * 0.29 });
+    const hNotes = notes ? doc.heightOfString(notes, { width: tblW * 0.60, fontSize: layout.typography.smallSize - 1 }) + 4 : 0;
+    const rowHeight = Math.max(18, h1) + hNotes + 6;
 
     if (rowY + rowHeight > maxY) { doc.addPage(); rowY = m; }
     doc.rect(m, rowY, tblW, rowHeight).fill(bg);
+    // v2-Buchungen mit leichtem Akzent-Hintergrund
+    if (p.is_v2) doc.rect(m, rowY, 3, rowHeight).fill(layout.colors.accent);
     doc.fillColor(layout.colors.text).fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
-    
-    doc.text(title, c1, rowY + 5, { width: tblW * 0.35 });
-    doc.text(posLabel, c2, rowY + 5, { width: tblW * 0.15 });
-    doc.text(dateStr, c3, rowY + 5, { width: tblW * 0.15 });
-    const statusColor = p.invoice_status === 'bezahlt' ? '#16a34a' : p.invoice_status === 'versendet' ? '#d97706' : '#dc2626';
-    doc.fillColor(statusColor).text(statusStr, c4, rowY + 5, { width: tblW * 0.12 });
-    doc.fillColor(layout.colors.text).text(priceStr, c5, rowY + 5, { width: tblW * 0.12, align: 'right' });
-    
-    totalRevenue += price;
+    doc.text(title, c1, rowY + 5, { width: tblW * 0.29 });
+    doc.text(posLabel, c2, rowY + 5, { width: tblW * 0.16 });
+    doc.text(dateStr, c3, rowY + 5, { width: tblW * 0.13 });
+    const statusColor = (statusStr === 'bezahlt' || statusStr === 'paid') ? '#16a34a'
+      : (statusStr === 'versendet' || statusStr === 'sent') ? '#d97706' : '#6b7280';
+    doc.fillColor(statusColor).text(statusStr, c4, rowY + 5, { width: tblW * 0.11 });
+    if (showPriceBreakdown) {
+      doc.fillColor(layout.colors.muted).text(basePriceStr, c5, rowY + 5, { width: tblW * 0.09, align: 'right' });
+      doc.fillColor(layout.colors.text).font(`${layout.typography.fontFamily}-Bold`).text(priceStr, c6, rowY + 5, { width: tblW * 0.10, align: 'right' });
+    } else {
+      doc.fillColor(layout.colors.text).text(priceStr, c5, rowY + 5, { width: tblW * 0.12, align: 'right' });
+    }
+    if (notes) {
+      doc.font(layout.typography.fontFamily).fillColor(layout.colors.muted)
+        .fontSize(layout.typography.smallSize - 1)
+        .text(notes, c1, rowY + Math.max(18, h1) + 3, { width: tblW * 0.60 });
+    }
+    totalRevenue += finalPrice;
+    totalBaseRevenue += price;
     rowY += rowHeight;
   });
 
@@ -1884,13 +1978,40 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
     rowY += 30;
   }
 
-  // Gesamt (nur wenn showSummary aktiv)
-  if (showSummary) {
-    doc.moveTo(m, rowY + 8).lineTo(doc.page.width - m, rowY + 8).strokeColor(layout.colors.accent).lineWidth(1).stroke();
+  // Gesamt-Zeile und Aufschlüsselung (v2.12.0)
+  const showTotals = layout.sections?.showPerformanceTotals !== false;
+  if (showSummary && showTotals) {
+    rowY += 8;
+    doc.moveTo(m, rowY).lineTo(doc.page.width - m, rowY).strokeColor(layout.colors.accent).lineWidth(1.5).stroke();
+    rowY += 12;
+    // Aufschlüsselung nach Buchungstyp
+    const v2Count = filteredRows.filter((r: any) => r.is_v2).length;
+    const classicCount = filteredRows.filter((r: any) => !r.is_v2).length;
+    if (v2Count > 0 && classicCount > 0) {
+      const v2Total = filteredRows.filter((r: any) => r.is_v2).reduce((s: number, r: any) => s + (r.final_price || r.price || 0), 0);
+      const classicTotal = filteredRows.filter((r: any) => !r.is_v2).reduce((s: number, r: any) => s + (r.price || 0), 0);
+      doc.fontSize(layout.typography.smallSize).font(layout.typography.fontFamily).fillColor(layout.colors.muted);
+      doc.text(`Klassische Buchungen (${classicCount}): ${classicTotal.toFixed(2)} €`, m, rowY, { align: 'right' });
+      rowY += 14;
+      doc.text(`v2-Buchungen (${v2Count}): ${v2Total.toFixed(2)} €`, m, rowY, { align: 'right' });
+      rowY += 14;
+      doc.moveTo(m + tblW * 0.6, rowY).lineTo(doc.page.width - m, rowY).strokeColor(layout.colors.muted).lineWidth(0.5).stroke();
+      rowY += 6;
+    }
     doc.fontSize(layout.typography.headingSize).font(`${layout.typography.fontFamily}-Bold`)
       .fillColor(layout.colors.primary)
-      .text(`Gesamt: ${totalRevenue.toFixed(2)} €`, m, rowY + 16, { align: 'right' });
+      .text(`Gesamtbetrag: ${totalRevenue.toFixed(2)} €`, m, rowY, { align: 'right' });
+    rowY += 20;
+    // Hinweis-Box
+    doc.rect(m, rowY, tblW, 28).fill('#f0f4ff').stroke();
+    doc.fontSize(layout.typography.smallSize).font(layout.typography.fontFamily).fillColor('#1e3a5f')
+      .text('ℹ️ Dieses Dokument ist eine Leistungsübersicht und dient als Grundlage für die Rechnungserstellung in Ihrer internen Software. Es stellt keine Rechnung im steuerrechtlichen Sinne dar.', m + 8, rowY + 8, { width: tblW - 16 });
   }
+
+  // Export-Zeitstempel in der Datenbank speichern (v2.12.0)
+  try {
+    db.run('UPDATE sponsors SET last_performance_export = datetime(\'now\') WHERE id = ?', [req.params.id]);
+  } catch (_) {}
 
   renderWatermark(doc, layout);
   renderPdfFooter(doc, layout, { podcastName, pageNum: 1 });

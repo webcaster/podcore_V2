@@ -19,7 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
-export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar';
+export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report';
 
 export interface PdfLayoutColors {
   primary: string;       // Hauptfarbe (Überschriften, Akzente)
@@ -88,6 +88,12 @@ export interface PdfLayoutSections {
   // Booking Calendar
   showBookingCalendarLegend: boolean;  // v2.11.1 – Legende im Buchungskalender
   showBookingCalendarConflicts: boolean; // v2.11.1 – Konflikte hervorheben
+  // Performance Report (Leistungsübersicht) – v2.12.0
+  showPerformanceCustomerInfo: boolean; // Kundennummer und Kontaktdaten
+  showPerformanceV2Bookings: boolean;   // v2-Buchungen (ad_bookings) einbeziehen
+  showPerformancePriceBreakdown: boolean; // Preisaufschlüsselung je Buchung
+  showPerformanceTotals: boolean;       // Gesamtsummen am Ende
+  showPerformanceNotes: boolean;        // Performance-Notizen je Buchung
 }
 
 export interface PdfLayoutWatermark {
@@ -187,6 +193,11 @@ export const DEFAULT_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> =
     showConfirmationTerms: true,
     showBookingCalendarLegend: true,
     showBookingCalendarConflicts: true,
+    showPerformanceCustomerInfo: true,
+    showPerformanceV2Bookings: true,
+    showPerformancePriceBreakdown: true,
+    showPerformanceTotals: true,
+    showPerformanceNotes: true,
   },
   pageMargin: 50,
   pageSize: 'A4',
@@ -260,8 +271,263 @@ export const MINIMAL_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> =
     showConfirmationTerms: true,
     showBookingCalendarLegend: true,
     showBookingCalendarConflicts: false,
+    showPerformanceCustomerInfo: true,
+    showPerformanceV2Bookings: true,
+    showPerformancePriceBreakdown: false,
+    showPerformanceTotals: true,
+    showPerformanceNotes: false,
   },
   pageMargin: 60,
+  pageSize: 'A4',
+  pageOrientation: 'portrait',
+  headerHeight: 70,
+  lineSpacing: 'normal',
+  dividerStyle: 'line',
+  watermark: { enabled: false, text: 'ENTWURF', color: '#888888', opacity: 0.15, position: 'diagonal' },
+  isEnabled: true,
+};
+
+// ─── Spezialisierte Layouts v2.12.0 ─────────────────────────────────────────
+
+export const PERFORMANCE_REPORT_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> = {
+  name: 'Leistungsübersicht Professionell',
+  description: 'Professionelles Layout für Sponsoring-Leistungsübersichten mit Kundennummer und Preisaufschlüsselung',
+  exportType: 'performance_report',
+  isDefault: true,
+  isSystem: true,
+  colors: {
+    primary: '#1e3a5f',
+    secondary: '#2563eb',
+    accent: '#1d4ed8',
+    text: '#111111',
+    muted: '#6b7280',
+    background: '#1e3a5f',
+    headerText: '#ffffff',
+  },
+  typography: {
+    titleSize: 20,
+    subtitleSize: 13,
+    headingSize: 11,
+    bodySize: 10,
+    smallSize: 8,
+    fontFamily: 'Helvetica',
+  },
+  header: {
+    showLogo: true,
+    showPodcastName: true,
+    showDocumentTitle: true,
+    logoPosition: 'left',
+    style: 'banner',
+  },
+  footer: {
+    showPageNumbers: true,
+    showDate: true,
+    showPodcastName: true,
+    customText: 'Dieses Dokument dient als Grundlage für die Rechnungserstellung.',
+  },
+  sections: {
+    showMeta: true, showDescription: true, showBlocks: true, showProductionInfo: false,
+    showTechnicalData: false, showNotes: false, showShowNotes: false, showSponsors: false,
+    showAltDuration: false, showIdeaDescription: false, showIdeaNotes: false,
+    showIdeaResearch: false, showIdeaQuestions: false, showIdeaChecklist: false,
+    showCalendarLegend: false, showCalendarNotes: false,
+    showInvoiceDetails: true, showInvoiceSummary: true,
+    showPricelistDescriptions: false, showPricelistExclusive: false,
+    showConfirmationContact: false, showConfirmationPricing: false, showConfirmationTerms: false,
+    showBookingCalendarLegend: false, showBookingCalendarConflicts: false,
+    showPerformanceCustomerInfo: true,
+    showPerformanceV2Bookings: true,
+    showPerformancePriceBreakdown: true,
+    showPerformanceTotals: true,
+    showPerformanceNotes: true,
+  },
+  pageMargin: 45,
+  pageSize: 'A4',
+  pageOrientation: 'portrait',
+  headerHeight: 75,
+  lineSpacing: 'normal',
+  dividerStyle: 'line',
+  watermark: { enabled: false, text: 'ENTWURF', color: '#888888', opacity: 0.15, position: 'diagonal' },
+  isEnabled: true,
+};
+
+export const PERFORMANCE_REPORT_COMPACT_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> = {
+  name: 'Leistungsübersicht Kompakt',
+  description: 'Kompaktes Layout für viele Buchungen – kleinere Schrift, schmale Ränder',
+  exportType: 'performance_report',
+  isDefault: false,
+  isSystem: true,
+  colors: {
+    primary: '#111827',
+    secondary: '#374151',
+    accent: '#4b5563',
+    text: '#111111',
+    muted: '#9ca3af',
+    background: '#111827',
+    headerText: '#ffffff',
+  },
+  typography: {
+    titleSize: 16,
+    subtitleSize: 11,
+    headingSize: 10,
+    bodySize: 9,
+    smallSize: 7,
+    fontFamily: 'Helvetica',
+  },
+  header: {
+    showLogo: true,
+    showPodcastName: true,
+    showDocumentTitle: true,
+    logoPosition: 'left',
+    style: 'minimal',
+  },
+  footer: {
+    showPageNumbers: true,
+    showDate: true,
+    showPodcastName: false,
+    customText: '',
+  },
+  sections: {
+    showMeta: true, showDescription: false, showBlocks: false, showProductionInfo: false,
+    showTechnicalData: false, showNotes: false, showShowNotes: false, showSponsors: false,
+    showAltDuration: false, showIdeaDescription: false, showIdeaNotes: false,
+    showIdeaResearch: false, showIdeaQuestions: false, showIdeaChecklist: false,
+    showCalendarLegend: false, showCalendarNotes: false,
+    showInvoiceDetails: true, showInvoiceSummary: true,
+    showPricelistDescriptions: false, showPricelistExclusive: false,
+    showConfirmationContact: false, showConfirmationPricing: false, showConfirmationTerms: false,
+    showBookingCalendarLegend: false, showBookingCalendarConflicts: false,
+    showPerformanceCustomerInfo: true,
+    showPerformanceV2Bookings: true,
+    showPerformancePriceBreakdown: false,
+    showPerformanceTotals: true,
+    showPerformanceNotes: false,
+  },
+  pageMargin: 35,
+  pageSize: 'A4',
+  pageOrientation: 'portrait',
+  headerHeight: 60,
+  lineSpacing: 'compact',
+  dividerStyle: 'dotted',
+  watermark: { enabled: false, text: 'ENTWURF', color: '#888888', opacity: 0.15, position: 'diagonal' },
+  isEnabled: true,
+};
+
+export const INVOICE_CORPORATE_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> = {
+  name: 'Abrechnung Corporate',
+  description: 'Formelles Business-Layout für Sponsor-Abrechnungen mit klarer Tabellenstruktur',
+  exportType: 'invoice',
+  isDefault: false,
+  isSystem: true,
+  colors: {
+    primary: '#0f172a',
+    secondary: '#1e40af',
+    accent: '#3b82f6',
+    text: '#0f172a',
+    muted: '#64748b',
+    background: '#0f172a',
+    headerText: '#f8fafc',
+  },
+  typography: {
+    titleSize: 22,
+    subtitleSize: 14,
+    headingSize: 12,
+    bodySize: 10,
+    smallSize: 8,
+    fontFamily: 'Helvetica',
+  },
+  header: {
+    showLogo: true,
+    showPodcastName: true,
+    showDocumentTitle: true,
+    logoPosition: 'left',
+    style: 'banner',
+  },
+  footer: {
+    showPageNumbers: true,
+    showDate: true,
+    showPodcastName: true,
+    customText: '',
+  },
+  sections: {
+    showMeta: true, showDescription: true, showBlocks: true, showProductionInfo: false,
+    showTechnicalData: false, showNotes: false, showShowNotes: false, showSponsors: false,
+    showAltDuration: false, showIdeaDescription: false, showIdeaNotes: false,
+    showIdeaResearch: false, showIdeaQuestions: false, showIdeaChecklist: false,
+    showCalendarLegend: false, showCalendarNotes: false,
+    showInvoiceDetails: true, showInvoiceSummary: true,
+    showPricelistDescriptions: false, showPricelistExclusive: false,
+    showConfirmationContact: false, showConfirmationPricing: false, showConfirmationTerms: false,
+    showBookingCalendarLegend: false, showBookingCalendarConflicts: false,
+    showPerformanceCustomerInfo: true,
+    showPerformanceV2Bookings: false,
+    showPerformancePriceBreakdown: true,
+    showPerformanceTotals: true,
+    showPerformanceNotes: false,
+  },
+  pageMargin: 50,
+  pageSize: 'A4',
+  pageOrientation: 'portrait',
+  headerHeight: 80,
+  lineSpacing: 'normal',
+  dividerStyle: 'double',
+  watermark: { enabled: false, text: 'ENTWURF', color: '#888888', opacity: 0.15, position: 'diagonal' },
+  isEnabled: true,
+};
+
+export const CONFIRMATION_MODERN_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> = {
+  name: 'Buchungsbestätigung Modern',
+  description: 'Modernes Layout mit lila Akzenten für Buchungsbestätigungen',
+  exportType: 'confirmation',
+  isDefault: false,
+  isSystem: true,
+  colors: {
+    primary: '#4c1d95',
+    secondary: '#7c3aed',
+    accent: '#8b5cf6',
+    text: '#111111',
+    muted: '#6b7280',
+    background: '#4c1d95',
+    headerText: '#ffffff',
+  },
+  typography: {
+    titleSize: 20,
+    subtitleSize: 13,
+    headingSize: 11,
+    bodySize: 10,
+    smallSize: 8,
+    fontFamily: 'Helvetica',
+  },
+  header: {
+    showLogo: true,
+    showPodcastName: true,
+    showDocumentTitle: true,
+    logoPosition: 'left',
+    style: 'banner',
+  },
+  footer: {
+    showPageNumbers: true,
+    showDate: true,
+    showPodcastName: true,
+    customText: 'Vielen Dank für Ihre Zusammenarbeit!',
+  },
+  sections: {
+    showMeta: true, showDescription: true, showBlocks: true, showProductionInfo: false,
+    showTechnicalData: false, showNotes: false, showShowNotes: false, showSponsors: false,
+    showAltDuration: false, showIdeaDescription: false, showIdeaNotes: false,
+    showIdeaResearch: false, showIdeaQuestions: false, showIdeaChecklist: false,
+    showCalendarLegend: false, showCalendarNotes: false,
+    showInvoiceDetails: true, showInvoiceSummary: true,
+    showPricelistDescriptions: false, showPricelistExclusive: false,
+    showConfirmationContact: true, showConfirmationPricing: true, showConfirmationTerms: true,
+    showBookingCalendarLegend: false, showBookingCalendarConflicts: false,
+    showPerformanceCustomerInfo: false,
+    showPerformanceV2Bookings: false,
+    showPerformancePriceBreakdown: false,
+    showPerformanceTotals: false,
+    showPerformanceNotes: false,
+  },
+  pageMargin: 50,
   pageSize: 'A4',
   pageOrientation: 'portrait',
   headerHeight: 70,
@@ -371,6 +637,57 @@ export function ensureDefaultLayouts(): void {
         JSON.stringify(layout.header), JSON.stringify(layout.footer),
         JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
         (layout as any).pageOrientation || 'landscape',
+      ]);
+  }
+
+  // v2.12.0: Neue spezialisierte Layouts seeden
+  const hasPerformanceReport = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'performance_report' AND name = 'Leistungsübersicht Professionell' LIMIT 1");
+  if (!hasPerformanceReport) {
+    for (const layout of [PERFORMANCE_REPORT_LAYOUT, PERFORMANCE_REPORT_COMPACT_LAYOUT]) {
+      db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation, header_height, line_spacing, divider_style, watermark)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          uuidv4(), layout.name, layout.description, layout.exportType,
+          layout.isDefault ? 1 : 0, layout.isSystem ? 1 : 0,
+          JSON.stringify(layout.colors), JSON.stringify(layout.typography),
+          JSON.stringify(layout.header), JSON.stringify(layout.footer),
+          JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
+          layout.pageOrientation || 'portrait',
+          layout.headerHeight || 70, layout.lineSpacing || 'normal',
+          layout.dividerStyle || 'line', JSON.stringify(layout.watermark),
+        ]);
+    }
+  }
+  const hasInvoiceCorporate = db.get("SELECT id FROM pdf_layouts WHERE name = 'Abrechnung Corporate' LIMIT 1");
+  if (!hasInvoiceCorporate) {
+    const layout = INVOICE_CORPORATE_LAYOUT;
+    db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation, header_height, line_spacing, divider_style, watermark)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuidv4(), layout.name, layout.description, layout.exportType,
+        layout.isDefault ? 1 : 0, layout.isSystem ? 1 : 0,
+        JSON.stringify(layout.colors), JSON.stringify(layout.typography),
+        JSON.stringify(layout.header), JSON.stringify(layout.footer),
+        JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
+        layout.pageOrientation || 'portrait',
+        layout.headerHeight || 70, layout.lineSpacing || 'normal',
+        layout.dividerStyle || 'line', JSON.stringify(layout.watermark),
+      ]);
+  }
+  const hasConfirmationModern = db.get("SELECT id FROM pdf_layouts WHERE name = 'Buchungsbestätigung Modern' LIMIT 1");
+  if (!hasConfirmationModern) {
+    const layout = CONFIRMATION_MODERN_LAYOUT;
+    db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation, header_height, line_spacing, divider_style, watermark)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuidv4(), layout.name, layout.description, layout.exportType,
+        layout.isDefault ? 1 : 0, layout.isSystem ? 1 : 0,
+        JSON.stringify(layout.colors), JSON.stringify(layout.typography),
+        JSON.stringify(layout.header), JSON.stringify(layout.footer),
+        JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
+        layout.pageOrientation || 'portrait',
+        layout.headerHeight || 70, layout.lineSpacing || 'normal',
+        layout.dividerStyle || 'line', JSON.stringify(layout.watermark),
       ]);
   }
 

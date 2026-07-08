@@ -3,7 +3,7 @@ import { FileText, ChevronDown } from 'lucide-react';
 import { pdfLayoutsApi } from '../../lib/api';
 
 interface PdfLayoutPickerProps {
-  exportType: 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar';
+  exportType: 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report';
   value: string;
   onChange: (layoutId: string) => void;
   className?: string;

@@ -718,6 +718,10 @@ function initializeSchema(db: any): void {
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_ad_bookings_episode ON ad_bookings(episode_id)'); } catch (_) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_ad_bookings_slot ON ad_bookings(slot_id)'); } catch (_) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_ad_bookings_date ON ad_bookings(booking_date)'); } catch (_) {}
+  // v2.12.0: Export-Zeitstempel für Leistungsübersicht
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN last_performance_export TEXT DEFAULT NULL'); } catch (_) {}
+  // v2.12.0: performance_notes in ad_bookings
+  try { db.exec('ALTER TABLE ad_bookings ADD COLUMN performance_notes TEXT DEFAULT NULL'); } catch (_) {}
   
   // Roles table migration (v2.11.5)
   try {

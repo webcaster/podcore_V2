@@ -89,6 +89,7 @@ export default function SponsorDetailPage() {
   const [leistungOutro, setLeistungOutro] = useState('');
   const [leistungFilter, setLeistungFilter] = useState<'alle' | 'offen' | 'bezahlt' | 'versendet'>('alle');
   const [isExportingLeistung, setIsExportingLeistung] = useState(false);
+  const [lastExportTime, setLastExportTime] = useState<string | null>(null);
 
   // TKP-Kalkulator
   const [tkpListeners, setTkpListeners] = useState<string>('');
@@ -407,6 +408,7 @@ export default function SponsorDetailPage() {
       a.click();
       URL.revokeObjectURL(url);
       showSuccess('Leistungsübersicht exportiert');
+      setLastExportTime(new Date().toISOString());
     } catch (err: any) { showError(err.message); }
     finally { setIsExportingLeistung(false); }
   };
@@ -1046,11 +1048,11 @@ export default function SponsorDetailPage() {
             {/* Export-Buttons */}
             <div className="flex flex-wrap gap-3 pt-1">
               <div className="flex items-center gap-2">
-                <PdfLayoutPicker exportType="invoice" value={pdfLayoutId} onChange={setPdfLayoutId} />
+                <PdfLayoutPicker exportType="performance_report" value={pdfLayoutId} onChange={setPdfLayoutId} />
                 <button
                   onClick={handleExportLeistungPdf}
-                  disabled={isExportingLeistung || placements.filter(p => !p.isPlanned).length === 0}
-                  title={placements.filter(p => !p.isPlanned).length === 0 ? 'Keine abgeschlossenen Buchungen – erst nach Ausstrahlung verfügbar' : 'Leistungsübersicht als PDF exportieren'}
+                  disabled={isExportingLeistung}
+                  title="Leistungsübersicht als PDF exportieren"
                   className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isExportingLeistung ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
@@ -1069,6 +1071,23 @@ export default function SponsorDetailPage() {
                 <span>Als CSV exportieren</span>
               </button>
             </div>
+
+            {/* Export-Hinweis: wann zuletzt exportiert (v2.12.0) */}
+            {(lastExportTime || sponsor?.lastPerformanceExport) && (
+              <div className="flex items-center gap-2 text-xs text-text-muted mt-1 pt-2 border-t border-white/5">
+                <CheckCircle size={13} className="text-green-400 shrink-0" />
+                <span>
+                  Leistungsübersicht zuletzt exportiert am{' '}
+                  <span className="text-text-primary font-medium">
+                    {new Date(lastExportTime || sponsor?.lastPerformanceExport).toLocaleString('de-DE', {
+                      day: '2-digit', month: '2-digit', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit'
+                    })}
+                  </span>
+                  {' '}– Grundlage für Rechnungserstellung in externer Software.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* TKP-Kalkulator */}
