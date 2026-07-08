@@ -225,7 +225,7 @@ export default function EpisodeDetailPage() {
   const [v2Bookings, setV2Bookings] = useState<any[]>([]);
   const [isLoadingV2Bookings, setIsLoadingV2Bookings] = useState(false);
   const [showV2BookingModal, setShowV2BookingModal] = useState(false);
-  const [v2BookingForm, setV2BookingForm] = useState<any>({ slotId: '', price: '', notes: '' });
+  const [v2BookingForm, setV2BookingForm] = useState<any>({ slotId: '', startDate: '', endDate: '', price: '', notes: '' });
   const [v2SponsorSlots, setV2SponsorSlots] = useState<any[]>([]);
 
   useEffect(() => {
@@ -368,23 +368,25 @@ export default function EpisodeDetailPage() {
     if (!id) return;
     setIsLoadingV2Bookings(true);
     try {
-      // Alle Sponsoren laden um deren v2-Buchungen für diese Episode zu finden
-      const allSponsorsData = await sponsorsApi.list();
+      // Alle Slots über neuen /v2/slots Endpunkt laden (effizienter als pro-Sponsor)
+      const [allSlotsRes, allSponsorsData] = await Promise.all([
+        sponsorsV2Api.listAllSlots(),
+        sponsorsApi.list(),
+      ]);
+      const allSlots = (Array.isArray(allSlotsRes) ? allSlotsRes : (allSlotsRes as any)?.data || []);
       const sponsorList = Array.isArray(allSponsorsData) ? allSponsorsData : (allSponsorsData as any)?.data || [];
+
+      // v2-Buchungen für diese Episode laden
       const allV2Bookings: any[] = [];
-      const allSlots: any[] = [];
-      for (const sp of sponsorList) {
+      await Promise.all(sponsorList.map(async (sp: any) => {
         try {
-          const [bkgs, slots] = await Promise.all([
-            sponsorsV2Api.listBookings(sp.id, {}),
-            sponsorsApi.listSlots(sp.id),
-          ]);
+          const bkgs = await sponsorsV2Api.listBookings(sp.id, {});
           const episodeBookings = (Array.isArray(bkgs) ? bkgs : (bkgs as any)?.data || [])
-            .filter((b: any) => b.episodeId === id);
+            .filter((b: any) => b.episodeId === id || b.episode_id === id);
           allV2Bookings.push(...episodeBookings);
-          allSlots.push(...(Array.isArray(slots) ? slots : (slots as any)?.data || []).map((s: any) => ({ ...s, sponsorId: sp.id, sponsorName: sp.name })));
         } catch (_) {}
-      }
+      }));
+
       setV2Bookings(allV2Bookings);
       setV2SponsorSlots(allSlots);
     } catch (err: any) { /* Stille Fehler – v2 ist optional */ }
@@ -1521,7 +1523,14 @@ export default function EpisodeDetailPage() {
                       <div key={b.id} className="flex items-center justify-between p-3 rounded-xl border border-purple-700/30 bg-purple-900/10">
                         <div>
                           <p className="text-sm font-bold text-text-primary">{b.sponsorName}</p>
-                          <p className="text-xs text-text-muted">{b.slotName} · {new Date(b.bookingDate).toLocaleDateString('de-DE')}</p>
+                          <p className="text-xs text-text-muted">
+                            {b.slotName}
+                            {b.bookingDate && (
+                              <> · {new Date(b.bookingDate).toLocaleDateString('de-DE')}
+                              {b.bookingEndDate && <> – {new Date(b.bookingEndDate).toLocaleDateString('de-DE')}</>}
+                              </>
+                            )}
+                          </p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
                               b.status === 'bestätigt' ? 'bg-green-900/30 text-green-400 border-green-700/40' :
@@ -1538,21 +1547,32 @@ export default function EpisodeDetailPage() {
                             )}
                           </div>
                         </div>
-                        {can('canEditSponsors') && (
-                          <button
-                            onClick={async () => {
-                              if (!window.confirm('Buchung wirklich löschen?')) return;
-                              try {
-                                await sponsorsV2Api.deleteBooking(b.id);
-                                showSuccess('Buchung gelöscht');
-                                loadV2Bookings();
-                              } catch (e: any) { showError(e.message); }
-                            }}
-                            className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors ml-3"
+                        <div className="flex items-center gap-1 ml-3 flex-shrink-0">
+                          <a
+                            href={sponsorsV2Api.getConfirmationPdfUrl(b.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Buchungsbestätigung als PDF"
+                            className="p-1.5 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10 rounded-lg transition-colors"
                           >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
+                            <FileText size={13} />
+                          </a>
+                          {can('canEditSponsors') && (
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm('Buchung wirklich löschen?')) return;
+                                try {
+                                  await sponsorsV2Api.deleteBooking(b.id);
+                                  showSuccess('Buchung gelöscht');
+                                  loadV2Bookings();
+                                } catch (e: any) { showError(e.message); }
+                              }}
+                              className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1576,18 +1596,16 @@ export default function EpisodeDetailPage() {
                               )}
                             </div>
                             <button
-                              onClick={async () => {
-                                try {
-                                  const today = new Date().toISOString().split('T')[0];
-                                  await sponsorsV2Api.createBooking(slot.sponsorId, {
-                                    slotId: slot.id,
-                                    episodeId: id,
-                                    bookingDate: today,
-                                    price: slot.price_per_episode || slot.base_price || 0,
-                                  });
-                                  showSuccess(`${slot.sponsorName} gebucht`);
-                                  loadV2Bookings();
-                                } catch (e: any) { showError(e.message); }
+                              onClick={() => {
+                                // Slot vorausfüllen und Modal öffnen
+                                setV2BookingForm({
+                                  slotId: slot.id,
+                                  startDate: '',
+                                  endDate: '',
+                                  price: slot.basePrice || slot.price_per_episode || '',
+                                  notes: '',
+                                });
+                                setShowV2BookingModal(true);
                               }}
                               className="text-[10px] px-2 py-0.5 rounded-full bg-purple-900/40 text-purple-300 border border-purple-700/50 hover:bg-purple-800/60 transition-colors"
                             >
@@ -2232,25 +2250,57 @@ export default function EpisodeDetailPage() {
       </Modal>
 
       {/* v2.12.0 Buchungsmodal */}
-      <Modal isOpen={showV2BookingModal} onClose={() => setShowV2BookingModal(false)} title="Neue v2-Buchung erstellen">
+      <Modal isOpen={showV2BookingModal} onClose={() => setShowV2BookingModal(false)} title="Neue Buchung erstellen">
         <div className="space-y-4">
           <div className="p-3 bg-purple-900/20 border border-purple-700/40 rounded-lg">
-            <p className="text-xs text-purple-400 font-medium">Buchung im neuen Sponsoring-System (v2.12.0)</p>
-            <p className="text-[10px] text-text-muted mt-1">Erstellt eine Buchung direkt in der neuen <code>ad_bookings</code>-Tabelle, verknüpft mit einem Sponsor-Slot.</p>
+            <p className="text-xs text-purple-400 font-medium">Buchung im Sponsoring-System v2.12.0</p>
+            <p className="text-[10px] text-text-muted mt-1">Die Buchung gilt für eine Laufzeit (Von – Bis) und ist nicht an ein einzelnes Datum gebunden.</p>
           </div>
           <div>
             <label className="label">Werbeplatz (Slot) *</label>
             <select
               value={v2BookingForm.slotId}
-              onChange={e => setV2BookingForm((f: any) => ({...f, slotId: e.target.value}))}
+              onChange={e => {
+                const slot = v2SponsorSlots.find((s: any) => s.id === e.target.value);
+                setV2BookingForm((f: any) => ({
+                  ...f,
+                  slotId: e.target.value,
+                  price: slot?.basePrice || slot?.price_per_episode || f.price || '',
+                }));
+              }}
               className="select w-full"
             >
               <option value="">Slot auswählen...</option>
               {v2SponsorSlots.map((s: any) => (
-                <option key={s.id} value={s.id}>{s.sponsorName} – {s.name}</option>
+                <option key={s.id} value={s.id}>{s.sponsorName} – {s.name} ({s.category || s.position || '–'})</option>
               ))}
             </select>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Laufzeit Von *</label>
+              <input
+                type="date"
+                value={v2BookingForm.startDate}
+                onChange={e => setV2BookingForm((f: any) => ({...f, startDate: e.target.value}))}
+                className="input w-full"
+              />
+            </div>
+            <div>
+              <label className="label">Laufzeit Bis *</label>
+              <input
+                type="date"
+                value={v2BookingForm.endDate}
+                onChange={e => setV2BookingForm((f: any) => ({...f, endDate: e.target.value}))}
+                className="input w-full"
+              />
+            </div>
+          </div>
+          {v2BookingForm.startDate && v2BookingForm.endDate && v2BookingForm.startDate <= v2BookingForm.endDate && (
+            <div className="text-xs text-purple-300 bg-purple-900/20 rounded-lg px-3 py-2">
+              Laufzeit: {Math.ceil((new Date(v2BookingForm.endDate).getTime() - new Date(v2BookingForm.startDate).getTime()) / (1000*60*60*24) + 1)} Tage
+            </div>
+          )}
           <div>
             <label className="label">Preis (€)</label>
             <input
@@ -2275,22 +2325,23 @@ export default function EpisodeDetailPage() {
           <div className="flex gap-2 pt-2">
             <button onClick={() => setShowV2BookingModal(false)} className="btn-ghost flex-1">Abbrechen</button>
             <button
-              disabled={!v2BookingForm.slotId}
+              disabled={!v2BookingForm.slotId || !v2BookingForm.startDate || !v2BookingForm.endDate}
               onClick={async () => {
-                if (!v2BookingForm.slotId) return;
+                if (!v2BookingForm.slotId || !v2BookingForm.startDate || !v2BookingForm.endDate) return;
                 const slot = v2SponsorSlots.find((s: any) => s.id === v2BookingForm.slotId);
                 if (!slot) return;
                 try {
-                  const today = new Date().toISOString().split('T')[0];
                   await sponsorsV2Api.createBooking(slot.sponsorId, {
                     slotId: v2BookingForm.slotId,
                     episodeId: id,
-                    bookingDate: today,
+                    bookingDate: v2BookingForm.startDate,
+                    bookingEndDate: v2BookingForm.endDate,
                     price: parseFloat(v2BookingForm.price) || 0,
                     notes: v2BookingForm.notes,
                   });
                   showSuccess('Buchung erstellt');
                   setShowV2BookingModal(false);
+                  setV2BookingForm({ slotId: '', startDate: '', endDate: '', price: '', notes: '' });
                   loadV2Bookings();
                 } catch (e: any) { showError(e.message); }
               }}

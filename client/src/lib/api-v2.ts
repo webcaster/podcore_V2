@@ -32,4 +32,11 @@ export const sponsorsV2Api = {
     const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
     return api.get<any>(`/sponsors/v2/calendar/bookings${qs}`);
   },
+
+  // All Slots (for episode editor booking form)
+  listAllSlots: () => api.get<any[]>('/sponsors/v2/slots'),
+
+  // Booking Confirmation PDF URL (direct download link)
+  getConfirmationPdfUrl: (bookingId: string) =>
+    `/api/sponsors/v2/bookings/${bookingId}/confirmation-pdf`,
 };

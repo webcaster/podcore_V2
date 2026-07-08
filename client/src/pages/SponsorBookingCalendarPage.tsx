@@ -6,6 +6,7 @@ import {
   Download, FileText, CalendarRange,
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
+import { sponsorsV2Api } from '../lib/api-v2';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 interface EpisodeBooking {
@@ -41,6 +42,19 @@ interface Conflict {
   type: string; date: string; categoryName: string;
   bookings: { id: string; sponsorName: string; episodeTitle?: string }[];
   message: string;
+}
+interface V2Contract {
+  id: string; type: 'contract'; sponsorId: string; sponsorName: string;
+  sponsorCompany?: string; sponsorColor: string;
+  startDate?: string; endDate?: string;
+  contactPerson?: string; contactEmail?: string;
+  status?: string; notes?: string;
+}
+interface V2Booking {
+  id: string; type: 'v2booking'; sponsorId: string; sponsorName: string;
+  sponsorColor: string; slotName?: string; position?: string;
+  date?: string; endDate?: string; episodeTitle?: string;
+  price?: number; finalPrice?: number; invoiceStatus?: string; status?: string;
 }
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
@@ -89,6 +103,10 @@ export default function SponsorBookingCalendarPage() {
   const [showConflictsOnly, setShowConflictsOnly] = useState(false);
   const [showPlanned, setShowPlanned] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
+  const [v2Contracts, setV2Contracts] = useState<V2Contract[]>([]);
+  const [v2Bookings, setV2Bookings] = useState<V2Booking[]>([]);
+  const [showContracts, setShowContracts] = useState(true);
+  const [showV2Bookings, setShowV2Bookings] = useState(true);
 
   // Alle Sponsoren für Filter
   const allSponsors = Array.from(new Set([
@@ -96,6 +114,8 @@ export default function SponsorBookingCalendarPage() {
     ...slotBookings.map(b => b.sponsorName),
     ...adPlacements.map(p => p.sponsorName),
     ...plannedSlots.map(p => p.sponsorName),
+    ...v2Contracts.map(c => c.sponsorName),
+    ...v2Bookings.map(b => b.sponsorName),
   ])).sort();
 
   const load = useCallback(async () => {
@@ -103,12 +123,18 @@ export default function SponsorBookingCalendarPage() {
     try {
       const firstDay = toIso(year, month, 1);
       const lastDay = toIso(year, month, getDaysInMonth(year, month));
-      const res = await sponsorsApi.getBookingCalendar({ from: firstDay, to: lastDay });
+      const [res, v2Res] = await Promise.all([
+        sponsorsApi.getBookingCalendar({ from: firstDay, to: lastDay }),
+        sponsorsV2Api.getBookingCalendar({ from: firstDay, to: lastDay }),
+      ]);
       setEpisodeBookings(res.data?.episodeBookings || []);
       setSlotBookings(res.data?.slotBookings || []);
       setAdPlacements(res.data?.adPlacements || []);
       setPlannedSlots(res.data?.plannedSlots || []);
       setConflicts(res.data?.conflicts || []);
+      // v2.12.0: Verträge und neue Buchungen
+      setV2Contracts((v2Res as any)?.data?.contracts || []);
+      setV2Bookings((v2Res as any)?.data?.bookings || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -138,6 +164,23 @@ export default function SponsorBookingCalendarPage() {
     let ep = episodeBookings.filter(b => b.date === dateStr);
     let sl = slotBookings.filter(b => b.startDate && b.endDate && dateStr >= b.startDate && dateStr <= b.endDate);
     let pl = adPlacements.filter(p => p.date === dateStr);
+    // v2.12.0: Verträge (Laufzeit)
+    let ct: V2Contract[] = [];
+    if (showContracts) {
+      ct = v2Contracts.filter(c => {
+        if (!c.startDate || !c.endDate) return false;
+        return dateStr >= c.startDate && dateStr <= c.endDate;
+      });
+    }
+    // v2.12.0: Neue Buchungen (Laufzeit)
+    let v2b: V2Booking[] = [];
+    if (showV2Bookings) {
+      v2b = v2Bookings.filter(b => {
+        if (b.date && b.endDate) return dateStr >= b.date && dateStr <= b.endDate;
+        if (b.date) return b.date === dateStr;
+        return false;
+      });
+    }
     // BUGFIX v2.11.11: Vorplanungen mit verbesserter Logik
     let ps: PlannedSlot[] = [];
     if (showPlanned && plannedSlots.length > 0) {
@@ -175,14 +218,17 @@ export default function SponsorBookingCalendarPage() {
       sl = sl.filter(b => b.sponsorName === filterSponsor);
       pl = pl.filter(p => p.sponsorName === filterSponsor);
       ps = ps.filter(p => p.sponsorName === filterSponsor);
+      ct = ct.filter(c => c.sponsorName === filterSponsor);
+      v2b = v2b.filter(b => b.sponsorName === filterSponsor);
     }
     if (filterPosition) {
       ep = ep.filter(b => b.position === filterPosition);
       sl = sl.filter(b => b.position === filterPosition);
       pl = pl.filter(p => p.position === filterPosition);
       ps = ps.filter(p => p.position === filterPosition);
+      v2b = v2b.filter(b => b.position === filterPosition);
     }
-    return { ep, sl, pl, ps };
+    return { ep, sl, pl, ps, ct, v2b };
   };
 
   // Placements ohne Datum: im aktuellen Monat anzeigen
@@ -309,11 +355,11 @@ export default function SponsorBookingCalendarPage() {
                   return <div key={i} className="min-h-[80px] bg-gray-900/30 rounded-lg" />;
                 }
                 const dateStr = toIso(year, month, dayNum);
-                const { ep, sl, pl, ps } = getBookingsForDay(dateStr);
+                const { ep, sl, pl, ps, ct, v2b } = getBookingsForDay(dateStr);
                 const isConflict = hasConflict(dateStr);
                 const isToday = dateStr === today.toISOString().split('T')[0];
                 const isSelected = dateStr === selectedDay;
-                const hasBookings = ep.length > 0 || sl.length > 0 || pl.length > 0 || ps.length > 0;
+                const hasBookings = ep.length > 0 || sl.length > 0 || pl.length > 0 || ps.length > 0 || ct.length > 0 || v2b.length > 0;
                 if (showConflictsOnly && !isConflict) {
                   return <div key={i} className="min-h-[80px] bg-gray-900/20 rounded-lg opacity-30" />;
                 }
@@ -362,8 +408,20 @@ export default function SponsorBookingCalendarPage() {
                           <span className="truncate text-amber-400">◷ {p.sponsorName}</span>
                         </div>
                       ))}
-                      {(ep.length + sl.length + pl.length + ps.length) > 5 && (
-                        <div className="text-[9px] text-gray-500 pl-1">+{ep.length + sl.length + pl.length + ps.length - 5} weitere</div>
+                      {ct.slice(0, 1).map(c => (
+                        <div key={c.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
+                          style={{ backgroundColor: (c.sponsorColor || '#7c3aed') + '15', borderLeft: `2px solid ${c.sponsorColor || '#7c3aed'}`, borderStyle: 'double' }}>
+                          <span className="truncate text-purple-300">≡ {c.sponsorName}</span>
+                        </div>
+                      ))}
+                      {v2b.slice(0, 1).map(b => (
+                        <div key={b.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
+                          style={{ backgroundColor: (b.sponsorColor || '#7c3aed') + '25', borderLeft: `3px solid ${b.sponsorColor || '#7c3aed'}` }}>
+                          <span className="truncate font-medium" style={{ color: b.sponsorColor || '#a78bfa' }}>● {b.sponsorName}</span>
+                        </div>
+                      ))}
+                      {(ep.length + sl.length + pl.length + ps.length + ct.length + v2b.length) > 5 && (
+                        <div className="text-[9px] text-gray-500 pl-1">+{ep.length + sl.length + pl.length + ps.length + ct.length + v2b.length - 5} weitere</div>
                       )}
                     </div>
                   </div>
@@ -618,7 +676,100 @@ export default function SponsorBookingCalendarPage() {
                 </div>
               )}
 
-              {selectedBookings && selectedBookings.ep.length === 0 && selectedBookings.sl.length === 0 && selectedBookings.pl.length === 0 && selectedBookings.ps.length === 0 && (
+              {/* v2.12.0 Verträge */}
+              {selectedBookings && selectedBookings.ct.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <FileText size={11} /> Verträge (v2.12.0)
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedBookings.ct.map(c => (
+                      <div key={c.id} className="p-3 rounded-lg border border-double border-purple-700/60 bg-purple-900/10">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-sm text-white">{c.sponsorName}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            c.status === 'aktiv' ? 'bg-green-900/40 text-green-400 border border-green-700/40' :
+                            c.status === 'abgelaufen' ? 'bg-gray-700 text-gray-400' :
+                            'bg-yellow-900/40 text-yellow-400 border border-yellow-700/40'
+                          }`}>{c.status || 'Vertrag'}</span>
+                        </div>
+                        <div className="text-xs text-gray-400 space-y-0.5">
+                          {c.sponsorCompany && <div className="text-gray-300">{c.sponsorCompany}</div>}
+                          {c.startDate && c.endDate && (
+                            <div className="flex items-center gap-1 text-purple-400/80">
+                              <CalendarRange size={10} />
+                              {new Date(c.startDate + 'T12:00:00').toLocaleDateString('de-DE')} – {new Date(c.endDate + 'T12:00:00').toLocaleDateString('de-DE')}
+                            </div>
+                          )}
+                          {c.contactPerson && <div className="text-gray-400">{c.contactPerson}{c.contactEmail && ` · ${c.contactEmail}`}</div>}
+                          {c.notes && <div className="text-gray-500 text-[10px] italic">{c.notes}</div>}
+                        </div>
+                        <button onClick={() => navigate(`/sponsors/${c.sponsorId}`)} className="mt-2 flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300">
+                          <ExternalLink size={9} /> Sponsor öffnen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* v2.12.0 Buchungen */}
+              {selectedBookings && selectedBookings.v2b.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-semibold text-violet-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Megaphone size={11} /> Buchungen v2.12.0
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedBookings.v2b.map(b => (
+                      <div key={b.id} className="p-3 rounded-lg border border-violet-700/50 bg-violet-900/10">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-sm text-white">{b.sponsorName}</span>
+                          <div className="flex items-center gap-1">
+                            {b.status && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
+                                b.status === 'bestätigt' ? 'bg-green-900/30 text-green-400 border-green-700/40' :
+                                b.status === 'ausgestrahlt' ? 'bg-blue-900/30 text-blue-400 border-blue-700/40' :
+                                'bg-yellow-900/30 text-yellow-400 border-yellow-700/40'
+                              }`}>{b.status}</span>
+                            )}
+                            <a href={`/api/sponsors/v2/bookings/${b.id}/confirmation-pdf`} target="_blank" rel="noopener noreferrer"
+                              className="p-1 text-gray-400 hover:text-violet-300 rounded transition-colors" title="Bestätigung als PDF">
+                              <FileText size={11} />
+                            </a>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-400 space-y-0.5">
+                          {b.slotName && <div className="text-violet-300/80">{b.slotName}{b.position && ` · ${b.position}`}</div>}
+                          {b.date && (
+                            <div className="flex items-center gap-1 text-violet-400/80">
+                              <CalendarRange size={10} />
+                              {new Date(b.date + 'T12:00:00').toLocaleDateString('de-DE')}
+                              {b.endDate && <> – {new Date(b.endDate + 'T12:00:00').toLocaleDateString('de-DE')}</>}
+                            </div>
+                          )}
+                          {(b.finalPrice || b.price) && (
+                            <div className="flex items-center gap-0.5 text-green-400">
+                              <Euro size={9} />{(b.finalPrice || b.price || 0).toFixed(2)}
+                            </div>
+                          )}
+                          {b.invoiceStatus && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                              b.invoiceStatus === 'bezahlt' ? 'bg-green-900/30 text-green-400' :
+                              b.invoiceStatus === 'versendet' ? 'bg-blue-900/30 text-blue-400' :
+                              'bg-gray-700/50 text-gray-400'
+                            }`}>Rechnung: {b.invoiceStatus}</span>
+                          )}
+                        </div>
+                        <button onClick={() => navigate(`/sponsors/${b.sponsorId}`)} className="mt-2 flex items-center gap-1 text-[10px] text-violet-400 hover:text-violet-300">
+                          <ExternalLink size={9} /> Sponsor öffnen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedBookings && selectedBookings.ep.length === 0 && selectedBookings.sl.length === 0 && selectedBookings.pl.length === 0 && selectedBookings.ps.length === 0 && selectedBookings.ct.length === 0 && selectedBookings.v2b.length === 0 && (
                 <div className="text-center text-gray-500 py-8 text-sm">
                   <Calendar size={24} className="mx-auto mb-2 opacity-40" />
                   Keine Buchungen an diesem Tag
@@ -631,7 +782,7 @@ export default function SponsorBookingCalendarPage() {
               <h3 className="font-semibold text-white mb-4">Monatsübersicht</h3>
               <div className="space-y-3">
                 <div className="p-3 bg-gray-800 rounded-lg">
-                  <div className="text-2xl font-bold text-white">{totalBookings + plannedSlots.length}</div>
+                  <div className="text-2xl font-bold text-white">{totalBookings + plannedSlots.length + v2Contracts.length + v2Bookings.length}</div>
                   <div className="text-xs text-gray-400">Einträge gesamt</div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -662,6 +813,18 @@ export default function SponsorBookingCalendarPage() {
                     <div className="text-xs text-gray-400">Umsatz Werbeplätze</div>
                   </div>
                 )}
+                {(v2Contracts.length > 0 || v2Bookings.length > 0) && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
+                      <div className="text-lg font-bold text-purple-400">{v2Contracts.length}</div>
+                      <div className="text-xs text-purple-500">Verträge (v2)</div>
+                    </div>
+                    <div className="p-3 bg-violet-900/20 border border-violet-700/50 rounded-lg">
+                      <div className="text-lg font-bold text-violet-400">{v2Bookings.length}</div>
+                      <div className="text-xs text-violet-500">Buchungen (v2)</div>
+                    </div>
+                  </div>
+                )}
                 {conflicts.length > 0 && (
                   <div className="p-3 bg-red-900/20 border border-red-700 rounded-lg">
                     <div className="text-lg font-bold text-red-400">{conflicts.length}</div>
@@ -669,6 +832,36 @@ export default function SponsorBookingCalendarPage() {
                   </div>
                 )}
               </div>
+
+              {/* v2.12.0 Verträge-Liste */}
+              {v2Contracts.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <FileText size={12} /> Aktive Verträge (v2.12.0)
+                  </h4>
+                  <div className="space-y-2">
+                    {v2Contracts.slice(0, 5).map(c => (
+                      <div key={c.id} className="p-2 bg-purple-900/10 border border-purple-700/40 rounded-lg cursor-pointer hover:border-purple-600"
+                        onClick={() => navigate(`/sponsors/${c.sponsorId}`)}>
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-purple-300 font-medium">{c.sponsorName}</div>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            c.status === 'aktiv' ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-400'
+                          }`}>{c.status || '–'}</span>
+                        </div>
+                        {c.startDate && c.endDate && (
+                          <div className="text-[10px] text-gray-500 mt-0.5">
+                            {new Date(c.startDate + 'T12:00:00').toLocaleDateString('de-DE')} – {new Date(c.endDate + 'T12:00:00').toLocaleDateString('de-DE')}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {v2Contracts.length > 5 && (
+                      <div className="text-[11px] text-gray-500 pl-1">+{v2Contracts.length - 5} weitere Verträge</div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Vorplanungen-Liste */}
               {plannedSlots.length > 0 && (

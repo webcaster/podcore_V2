@@ -392,6 +392,156 @@ router.delete('/bookings/:bookingId', requirePermission('canEditSponsors') as an
 });
 
 // ============================================================
+// ALLE SLOTS (für Episoden-Editor v2 Buchungsformular)
+// ============================================================
+
+router.get('/slots', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const slots = db.all(`
+    SELECT s.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color, sp.status as sponsor_status
+    FROM ad_slots s
+    JOIN sponsors sp ON s.sponsor_id = sp.id
+    WHERE sp.status != 'archiviert'
+    ORDER BY sp.name ASC, s.name ASC
+  `) as any[];
+  return res.json({
+    success: true,
+    data: slots.map((s: any) => ({
+      id: s.id,
+      sponsorId: s.sponsor_id,
+      sponsorName: s.sponsor_name,
+      sponsorCompany: s.sponsor_company,
+      sponsorColor: s.sponsor_color,
+      name: s.name,
+      category: s.category,
+      position: s.category,
+      duration: s.duration,
+      basePrice: s.base_price || s.price,
+      priceModel: s.price_model,
+      status: s.status,
+      startDate: s.start_date || s.placement_start,
+      endDate: s.end_date || s.placement_end,
+      notes: s.notes,
+    })),
+  });
+});
+
+// ============================================================
+// BUCHUNGSBESTÄTIGUNG ALS PDF
+// ============================================================
+
+router.get('/bookings/:bookingId/confirmation-pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const booking = db.get(`
+    SELECT ab.*,
+           s.name as slot_name, s.category as slot_position, s.duration as slot_duration,
+           sp.name as sponsor_name, sp.company as sponsor_company, sp.contact_name, sp.contact_email, sp.website, sp.color as sponsor_color,
+           e.title as episode_title, e.number as episode_number, e.publish_date
+    FROM ad_bookings ab
+    JOIN ad_slots s ON ab.slot_id = s.id
+    JOIN sponsors sp ON ab.sponsor_id = sp.id
+    LEFT JOIN episodes e ON ab.episode_id = e.id
+    WHERE ab.id = ?
+  `, [req.params.bookingId]) as any;
+
+  if (!booking) return res.status(404).json({ success: false, error: 'Buchung nicht gefunden' });
+
+  const PDFDocument = require('pdfkit');
+  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  const chunks: Buffer[] = [];
+  doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+  doc.on('end', () => {
+    const pdfBuffer = Buffer.concat(chunks);
+    const filename = `Buchungsbestaetigung_${booking.sponsor_name.replace(/[^a-zA-Z0-9]/g, '_')}_${booking.id.slice(0, 8)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+  });
+
+  const accentColor = booking.sponsor_color || '#7c3aed';
+  const now = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  // Header
+  doc.rect(0, 0, doc.page.width, 80).fill(accentColor);
+  doc.fillColor('white').fontSize(22).font('Helvetica-Bold').text('Buchungsbestätigung', 50, 25);
+  doc.fontSize(10).font('Helvetica').text(`Erstellt am ${now}`, 50, 55);
+
+  // Sponsor-Block
+  doc.fillColor('#1a1a2e').rect(50, 100, doc.page.width - 100, 80).fill('#f8f8ff');
+  doc.fillColor('#333').fontSize(14).font('Helvetica-Bold').text('Sponsor', 65, 112);
+  doc.fontSize(11).font('Helvetica').text(booking.sponsor_name || '–', 65, 130);
+  if (booking.sponsor_company) doc.text(booking.sponsor_company, 65, 145);
+  if (booking.contact_name) doc.text(`Ansprechpartner: ${booking.contact_name}`, 65, 160);
+  if (booking.contact_email) doc.text(`E-Mail: ${booking.contact_email}`, 350, 130);
+  if (booking.website) doc.text(`Web: ${booking.website}`, 350, 145);
+
+  // Buchungsdetails
+  doc.fillColor('#333').fontSize(14).font('Helvetica-Bold').text('Buchungsdetails', 50, 200);
+  doc.moveTo(50, 218).lineTo(doc.page.width - 50, 218).strokeColor(accentColor).lineWidth(2).stroke();
+
+  const details = [
+    ['Buchungs-ID', booking.id],
+    ['Werbeplatz', `${booking.slot_name} (${booking.slot_position || '–'})`],
+    ['Dauer', booking.slot_duration ? `${booking.slot_duration} Sekunden` : '–'],
+    ['Episode', booking.episode_title ? `#${booking.episode_number || ''} ${booking.episode_title}` : '–'],
+    ['Ausstrahlungsdatum', booking.publish_date ? new Date(booking.publish_date).toLocaleDateString('de-DE') : '–'],
+    ['Buchungszeitraum', booking.booking_date ? `${new Date(booking.booking_date).toLocaleDateString('de-DE')}${booking.booking_end_date ? ' – ' + new Date(booking.booking_end_date).toLocaleDateString('de-DE') : ''}` : '–'],
+    ['Status', booking.status || '–'],
+    ['Abrechnungsstatus', booking.invoice_status || '–'],
+  ];
+
+  let y = 230;
+  details.forEach(([label, value], i) => {
+    if (i % 2 === 0) doc.rect(50, y, doc.page.width - 100, 22).fill('#f0f0f8');
+    doc.fillColor('#555').fontSize(9).font('Helvetica-Bold').text(label, 60, y + 6);
+    doc.fillColor('#222').fontSize(9).font('Helvetica').text(String(value), 200, y + 6, { width: 300 });
+    y += 22;
+  });
+
+  // Preisblock
+  y += 15;
+  doc.fillColor('#333').fontSize(14).font('Helvetica-Bold').text('Preisübersicht', 50, y);
+  y += 18;
+  doc.moveTo(50, y).lineTo(doc.page.width - 50, y).strokeColor(accentColor).lineWidth(2).stroke();
+  y += 10;
+
+  const priceRows = [
+    ['Basispreis', `${(booking.price || 0).toFixed(2)} €`],
+    ['Preisanpassung', `${(booking.price_adjustment || 0).toFixed(2)} €`],
+    ['Hörerbeteiligung', `${(booking.listener_fee || 0).toFixed(2)} €`],
+    ['Gesamtpreis', `${(booking.final_price || booking.price || 0).toFixed(2)} €`],
+  ];
+
+  priceRows.forEach(([label, value], i) => {
+    const isFinal = i === priceRows.length - 1;
+    if (isFinal) {
+      doc.rect(50, y, doc.page.width - 100, 26).fill(accentColor);
+      doc.fillColor('white').fontSize(11).font('Helvetica-Bold').text(label, 60, y + 7);
+      doc.text(value, doc.page.width - 150, y + 7);
+    } else {
+      doc.fillColor('#555').fontSize(10).font('Helvetica').text(label, 60, y + 5);
+      doc.fillColor('#222').text(value, doc.page.width - 150, y + 5);
+    }
+    y += isFinal ? 26 : 22;
+  });
+
+  if (booking.notes) {
+    y += 20;
+    doc.fillColor('#333').fontSize(12).font('Helvetica-Bold').text('Notizen', 50, y);
+    y += 18;
+    doc.fillColor('#555').fontSize(10).font('Helvetica').text(booking.notes, 50, y, { width: doc.page.width - 100 });
+  }
+
+  // Footer
+  doc.fillColor('#aaa').fontSize(8).text(
+    `PodCore v2.12.0 · Buchungsbestätigung · ${now}`,
+    50, doc.page.height - 40, { align: 'center', width: doc.page.width - 100 }
+  );
+
+  doc.end();
+});
+
+// ============================================================
 // BOOKING CALENDAR (v2.12.0)
 // ============================================================
 
@@ -425,9 +575,36 @@ router.get('/calendar/bookings', requirePermission('canViewSponsors') as any, (r
 
   const bookings = db.all(query, params) as any[];
 
+  // Verträge laden
+  let contractQuery = `
+    SELECT sc.*, sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color
+    FROM sponsor_contracts sc
+    JOIN sponsors sp ON sc.sponsor_id = sp.id
+    WHERE 1=1
+  `;
+  const contractParams: any[] = [];
+  if (from) { contractQuery += ' AND (sc.contract_end IS NULL OR sc.contract_end >= ?)'; contractParams.push(from); }
+  if (to) { contractQuery += ' AND (sc.contract_start IS NULL OR sc.contract_start <= ?)'; contractParams.push(to); }
+  contractQuery += ' ORDER BY sc.contract_start ASC';
+  const contracts = db.all(contractQuery, contractParams) as any[];
+
   return res.json({
     success: true,
     data: {
+      contracts: contracts.map((c: any) => ({
+        id: c.id,
+        type: 'contract',
+        sponsorId: c.sponsor_id,
+        sponsorName: c.sponsor_name,
+        sponsorCompany: c.sponsor_company,
+        sponsorColor: c.sponsor_color || '#7c3aed',
+        startDate: c.contract_start,
+        endDate: c.contract_end,
+        contactPerson: c.contact_person,
+        contactEmail: c.contact_email,
+        status: c.status,
+        notes: c.notes,
+      })),
       bookings: bookings.map((b: any) => ({
         id: b.id,
         type: 'booking',
