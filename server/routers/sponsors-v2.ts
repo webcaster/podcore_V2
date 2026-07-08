@@ -566,7 +566,10 @@ router.get('/calendar/bookings', requirePermission('canViewSponsors') as any, (r
            COALESCE(s.name, c.name) as slot_name,
            COALESCE(s.category, c.default_position) as slot_position,
            sp.name as sponsor_name, sp.company as sponsor_company, sp.color as sponsor_color,
-           e.title as episode_title, e.number as episode_number
+           e.title as episode_title, e.number as episode_number,
+           c.base_price as cat_base_price,
+           c.price_per_episode as cat_price_per_episode,
+           c.price_per_1000_listens as cat_price_per_1000
     FROM ad_bookings ab
     LEFT JOIN ad_slots s ON ab.slot_id = s.id
     LEFT JOIN ad_categories c ON ab.slot_id = c.id
@@ -639,6 +642,9 @@ router.get('/calendar/bookings', requirePermission('canViewSponsors') as any, (r
         invoiceStatus: b.invoice_status,
         status: b.status,
         deliveryConfirmed: b.delivery_confirmed === 1,
+        basePrice: b.cat_base_price,
+        pricePerEpisode: b.cat_price_per_episode,
+        pricePer1000: b.cat_price_per_1000,
         createdAt: b.created_at,
         updatedAt: b.updated_at,
       })),

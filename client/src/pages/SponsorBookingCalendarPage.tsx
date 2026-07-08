@@ -55,6 +55,7 @@ interface V2Booking {
   sponsorColor: string; slotName?: string; position?: string;
   date?: string; endDate?: string; episodeTitle?: string;
   price?: number; finalPrice?: number; invoiceStatus?: string; status?: string;
+  basePrice?: number; pricePerEpisode?: number; pricePer1000?: number;
 }
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
@@ -414,12 +415,20 @@ export default function SponsorBookingCalendarPage() {
                           <span className="truncate text-purple-300">≡ {c.sponsorName}</span>
                         </div>
                       ))}
-                      {v2b.slice(0, 1).map(b => (
-                        <div key={b.id} className="flex items-center gap-1 text-[10px] rounded px-1 py-0.5 truncate"
-                          style={{ backgroundColor: (b.sponsorColor || '#7c3aed') + '25', borderLeft: `3px solid ${b.sponsorColor || '#7c3aed'}` }}>
-                          <span className="truncate font-medium" style={{ color: b.sponsorColor || '#a78bfa' }}>● {b.sponsorName}</span>
-                        </div>
-                      ))}
+                      {v2b.slice(0, 2).map(b => {
+                        // Preismodell ableiten
+                        const priceLabel = b.pricePerEpisode ? 'Folge' : b.pricePer1000 ? 'CPM' : b.basePrice ? 'Basis' : null;
+                        return (
+                          <div key={b.id} className="text-[10px] rounded px-1 py-0.5 truncate"
+                            style={{ backgroundColor: (b.sponsorColor || '#7c3aed') + '25', borderLeft: `3px solid ${b.sponsorColor || '#7c3aed'}` }}>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="truncate font-medium" style={{ color: b.sponsorColor || '#a78bfa' }}>● {b.sponsorName}</span>
+                              {priceLabel && <span className="text-[9px] text-violet-400 shrink-0">{priceLabel}</span>}
+                            </div>
+                            {b.slotName && <div className="truncate text-gray-400 text-[9px]">{b.slotName}</div>}
+                          </div>
+                        );
+                      })}
                       {(ep.length + sl.length + pl.length + ps.length + ct.length + v2b.length) > 5 && (
                         <div className="text-[9px] text-gray-500 pl-1">+{ep.length + sl.length + pl.length + ps.length + ct.length + v2b.length - 5} weitere</div>
                       )}
@@ -720,51 +729,77 @@ export default function SponsorBookingCalendarPage() {
                     <Megaphone size={11} /> Buchungen v2.12.0
                   </h4>
                   <div className="space-y-2">
-                    {selectedBookings.v2b.map(b => (
-                      <div key={b.id} className="p-3 rounded-lg border border-violet-700/50 bg-violet-900/10">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-sm text-white">{b.sponsorName}</span>
-                          <div className="flex items-center gap-1">
-                            {b.status && (
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
-                                b.status === 'bestätigt' ? 'bg-green-900/30 text-green-400 border-green-700/40' :
-                                b.status === 'ausgestrahlt' ? 'bg-blue-900/30 text-blue-400 border-blue-700/40' :
-                                'bg-yellow-900/30 text-yellow-400 border-yellow-700/40'
-                              }`}>{b.status}</span>
-                            )}
-                            <a href={`/api/sponsors/v2/bookings/${b.id}/confirmation-pdf`} target="_blank" rel="noopener noreferrer"
-                              className="p-1 text-gray-400 hover:text-violet-300 rounded transition-colors" title="Bestätigung als PDF">
-                              <FileText size={11} />
-                            </a>
+                    {selectedBookings.v2b.map(b => {
+                      // Preismodell ableiten
+                      const priceModel = b.pricePerEpisode ? 'Pro Folge' : b.pricePer1000 ? 'CPM (pro 1.000 Hörer)' : b.basePrice ? 'Basis-Preis' : null;
+                      const displayPrice = b.finalPrice || b.price || 0;
+                      // Laufzeit in Tagen berechnen
+                      let durationDays: number | null = null;
+                      if (b.date && b.endDate) {
+                        const start = new Date(b.date + 'T12:00:00');
+                        const end = new Date(b.endDate + 'T12:00:00');
+                        durationDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                      }
+                      return (
+                        <div key={b.id} className="p-3 rounded-lg border border-violet-700/50 bg-violet-900/10">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-semibold text-sm text-white">{b.sponsorName}</span>
+                            <div className="flex items-center gap-1">
+                              {b.status && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
+                                  b.status === 'bestätigt' ? 'bg-green-900/30 text-green-400 border-green-700/40' :
+                                  b.status === 'ausgestrahlt' ? 'bg-blue-900/30 text-blue-400 border-blue-700/40' :
+                                  'bg-yellow-900/30 text-yellow-400 border-yellow-700/40'
+                                }`}>{b.status}</span>
+                              )}
+                              <a href={`/api/sponsors/v2/bookings/${b.id}/confirmation-pdf`} target="_blank" rel="noopener noreferrer"
+                                className="p-1 text-gray-400 hover:text-violet-300 rounded transition-colors" title="Bestätigung als PDF">
+                                <FileText size={11} />
+                              </a>
+                            </div>
                           </div>
+                          <div className="text-xs text-gray-400 space-y-1">
+                            {b.slotName && (
+                              <div className="flex items-center gap-1.5">
+                                <Tag size={10} className="text-violet-400 shrink-0" />
+                                <span className="text-violet-300">{b.slotName}</span>
+                                {b.position && <span className="text-gray-500">· {b.position}</span>}
+                              </div>
+                            )}
+                            {b.date && (
+                              <div className="flex items-center gap-1 text-violet-400/80">
+                                <CalendarRange size={10} />
+                                {new Date(b.date + 'T12:00:00').toLocaleDateString('de-DE')}
+                                {b.endDate && <> – {new Date(b.endDate + 'T12:00:00').toLocaleDateString('de-DE')}</>}
+                                {durationDays && <span className="text-gray-500 ml-1">({durationDays} Tage)</span>}
+                              </div>
+                            )}
+                            {priceModel && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-900/40 border border-violet-700/50 text-violet-300">
+                                  {priceModel}
+                                </span>
+                              </div>
+                            )}
+                            {displayPrice > 0 && (
+                              <div className="flex items-center gap-0.5 text-green-400 font-medium">
+                                <Euro size={10} />{displayPrice.toFixed(2)}
+                                {b.invoiceStatus && (
+                                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${
+                                    b.invoiceStatus === 'bezahlt' ? 'bg-green-900/30 text-green-400' :
+                                    b.invoiceStatus === 'versendet' ? 'bg-blue-900/30 text-blue-400' :
+                                    'bg-gray-700/50 text-gray-400'
+                                  }`}>{b.invoiceStatus}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <button onClick={() => navigate(`/sponsors/${b.sponsorId}`)} className="mt-2 flex items-center gap-1 text-[10px] text-violet-400 hover:text-violet-300">
+                            <ExternalLink size={9} /> Sponsor öffnen
+                          </button>
                         </div>
-                        <div className="text-xs text-gray-400 space-y-0.5">
-                          {b.slotName && <div className="text-violet-300/80">{b.slotName}{b.position && ` · ${b.position}`}</div>}
-                          {b.date && (
-                            <div className="flex items-center gap-1 text-violet-400/80">
-                              <CalendarRange size={10} />
-                              {new Date(b.date + 'T12:00:00').toLocaleDateString('de-DE')}
-                              {b.endDate && <> – {new Date(b.endDate + 'T12:00:00').toLocaleDateString('de-DE')}</>}
-                            </div>
-                          )}
-                          {(b.finalPrice || b.price) && (
-                            <div className="flex items-center gap-0.5 text-green-400">
-                              <Euro size={9} />{(b.finalPrice || b.price || 0).toFixed(2)}
-                            </div>
-                          )}
-                          {b.invoiceStatus && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                              b.invoiceStatus === 'bezahlt' ? 'bg-green-900/30 text-green-400' :
-                              b.invoiceStatus === 'versendet' ? 'bg-blue-900/30 text-blue-400' :
-                              'bg-gray-700/50 text-gray-400'
-                            }`}>Rechnung: {b.invoiceStatus}</span>
-                          )}
-                        </div>
-                        <button onClick={() => navigate(`/sponsors/${b.sponsorId}`)} className="mt-2 flex items-center gap-1 text-[10px] text-violet-400 hover:text-violet-300">
-                          <ExternalLink size={9} /> Sponsor öffnen
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -814,16 +849,29 @@ export default function SponsorBookingCalendarPage() {
                   </div>
                 )}
                 {(v2Contracts.length > 0 || v2Bookings.length > 0) && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
-                      <div className="text-lg font-bold text-purple-400">{v2Contracts.length}</div>
-                      <div className="text-xs text-purple-500">Verträge (v2)</div>
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
+                        <div className="text-lg font-bold text-purple-400">{v2Contracts.length}</div>
+                        <div className="text-xs text-purple-500">Verträge (v2)</div>
+                      </div>
+                      <div className="p-3 bg-violet-900/20 border border-violet-700/50 rounded-lg">
+                        <div className="text-lg font-bold text-violet-400">{v2Bookings.length}</div>
+                        <div className="text-xs text-violet-500">Buchungen (v2)</div>
+                      </div>
                     </div>
-                    <div className="p-3 bg-violet-900/20 border border-violet-700/50 rounded-lg">
-                      <div className="text-lg font-bold text-violet-400">{v2Bookings.length}</div>
-                      <div className="text-xs text-violet-500">Buchungen (v2)</div>
-                    </div>
-                  </div>
+                    {v2Bookings.length > 0 && (() => {
+                      const v2Revenue = v2Bookings.reduce((sum, b) => sum + (b.finalPrice || b.price || 0), 0);
+                      return v2Revenue > 0 ? (
+                        <div className="p-3 bg-violet-900/20 border border-violet-700/50 rounded-lg">
+                          <div className="text-lg font-bold text-violet-300">
+                            {v2Revenue.toFixed(2)} €
+                          </div>
+                          <div className="text-xs text-violet-400">Umsatz Buchungen (v2)</div>
+                        </div>
+                      ) : null;
+                    })()}
+                  </>
                 )}
                 {conflicts.length > 0 && (
                   <div className="p-3 bg-red-900/20 border border-red-700 rounded-lg">
@@ -858,6 +906,54 @@ export default function SponsorBookingCalendarPage() {
                     ))}
                     {v2Contracts.length > 5 && (
                       <div className="text-[11px] text-gray-500 pl-1">+{v2Contracts.length - 5} weitere Verträge</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* v2-Buchungen-Liste */}
+              {v2Bookings.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-xs font-semibold text-violet-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Megaphone size={12} /> Buchungen diesen Monat (v2)
+                  </h4>
+                  <div className="space-y-2">
+                    {v2Bookings.slice(0, 5).map(b => {
+                      const priceLabel = b.pricePerEpisode ? 'Folge' : b.pricePer1000 ? 'CPM' : b.basePrice ? 'Basis' : null;
+                      const displayPrice = b.finalPrice || b.price || 0;
+                      return (
+                        <div key={b.id} className="p-2 bg-violet-900/10 border border-violet-700/40 rounded-lg cursor-pointer hover:border-violet-600"
+                          onClick={() => navigate(`/sponsors/${b.sponsorId}`)}>
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs text-violet-300 font-medium truncate">{b.sponsorName}</div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {priceLabel && <span className="text-[9px] text-violet-500">{priceLabel}</span>}
+                              {b.status && (
+                                <span className={`text-[9px] px-1 py-0.5 rounded-full ${
+                                  b.status === 'bestätigt' ? 'bg-green-900/30 text-green-400' :
+                                  b.status === 'ausgestrahlt' ? 'bg-blue-900/30 text-blue-400' :
+                                  'bg-yellow-900/30 text-yellow-400'
+                                }`}>{b.status}</span>
+                              )}
+                            </div>
+                          </div>
+                          {b.slotName && <div className="text-[10px] text-violet-400/70 mt-0.5 truncate">{b.slotName}</div>}
+                          <div className="flex items-center justify-between mt-0.5">
+                            {b.date && (
+                              <div className="text-[10px] text-gray-500">
+                                {new Date(b.date + 'T12:00:00').toLocaleDateString('de-DE')}
+                                {b.endDate && <> – {new Date(b.endDate + 'T12:00:00').toLocaleDateString('de-DE')}</>}
+                              </div>
+                            )}
+                            {displayPrice > 0 && (
+                              <div className="text-[10px] text-green-400 font-medium">{displayPrice.toFixed(2)} €</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {v2Bookings.length > 5 && (
+                      <div className="text-[11px] text-gray-500 pl-1">+{v2Bookings.length - 5} weitere Buchungen</div>
                     )}
                   </div>
                 </div>
@@ -927,6 +1023,41 @@ export default function SponsorBookingCalendarPage() {
                 <div className="flex items-center gap-2 text-xs text-gray-400">
                   <Info size={12} />
                   Klicke auf einen Tag um Details zu sehen.
+                </div>
+              </div>
+
+              {/* Legende */}
+              <div className="mt-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                <div className="text-xs font-semibold text-gray-400 mb-2">Legende</div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-sm bg-purple-500/30 border-l-2 border-purple-500"></div>
+                    <span className="text-[11px] text-gray-400">Episodenbuchung</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-sm bg-blue-500/30 border-l-2 border-blue-500"></div>
+                    <span className="text-[11px] text-gray-400">Zeitraum-Buchung</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-sm bg-green-500/30 border-l-2 border-green-500"></div>
+                    <span className="text-[11px] text-gray-400">Werbeplatz-Buchung</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-sm bg-amber-500/30 border-l-2 border-amber-500"></div>
+                    <span className="text-[11px] text-gray-400">Vorplanung</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-sm bg-violet-500/30 border border-violet-500/50 border-double"></div>
+                    <span className="text-[11px] text-gray-400">Vertrag (v2)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-sm bg-violet-600/30 border-l-2 border-violet-500"></div>
+                    <span className="text-[11px] text-gray-400">Buchung (v2) – Basis/Folge/CPM</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-sm bg-red-900/40 border border-red-700"></div>
+                    <span className="text-[11px] text-gray-400">Konflikt</span>
+                  </div>
                 </div>
               </div>
             </div>
