@@ -1408,7 +1408,17 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
   } catch (_) { positions = []; }
   try {
     const { getDefaultLayoutForType } = require('../pdfLayouts');
-    const layout = getDefaultLayoutForType('sponsor_offer');
+    // Suche nach einem speziellen Preislisten-Layout oder nutze das Standard-Angebot-Layout
+    let layout = db.get("SELECT * FROM pdf_layouts WHERE export_type = 'sponsor_offer' AND is_default = 1") as any;
+    if (layout) {
+      try {
+        layout.colors = JSON.parse(layout.colors);
+        layout.header = JSON.parse(layout.header);
+        layout.footer = JSON.parse(layout.footer);
+      } catch(e) {}
+    } else {
+      layout = getDefaultLayoutForType('sponsor_offer');
+    }
     const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ margin: 50, size: 'A4', autoFirstPage: true });
     // Error-Handler VOR dem Pipen registrieren
@@ -1590,7 +1600,17 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
   const categories = db.all(`SELECT * FROM ad_categories WHERE is_active = 1 ORDER BY name ASC`) as any[];
   try {
     const { getDefaultLayoutForType } = require('../pdfLayouts');
-    const layout = getDefaultLayoutForType('sponsor_offer');
+    // Suche nach einem speziellen Preislisten-Layout oder nutze das Standard-Angebot-Layout
+    let layout = db.get("SELECT * FROM pdf_layouts WHERE export_type = 'sponsor_offer' AND is_default = 1") as any;
+    if (layout) {
+      try {
+        layout.colors = JSON.parse(layout.colors);
+        layout.header = JSON.parse(layout.header);
+        layout.footer = JSON.parse(layout.footer);
+      } catch(e) {}
+    } else {
+      layout = getDefaultLayoutForType('sponsor_offer');
+    }
     const PDFDocument = require('pdfkit');
     const fs = require('fs');
     const path = require('path');

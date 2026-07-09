@@ -960,6 +960,19 @@ const wikiData: WikiCategory[] = [
         ],
       },
       {
+  {
+    id: "v2-12-12",
+    version: "v2.12.12",
+    date: "09.07.2026",
+    title: "PDF-Layout CI-Fix & Preisliste Landscape",
+    description: "Korrektur der PDF-Layout Integration für alle Sponsoring-Exporte und Umstellung der Preisliste auf Querformat.",
+    changes: [
+      "Preisliste auf Querformat (Landscape) umgestellt für mehr Platz",
+      "Hörerbeteiligung (CPM) zur Preisliste hinzugefügt",
+      "Fix: PDF-Layouts (CI-Farben, Logos) werden nun korrekt aus der Datenbank für alle Sponsoring-Exporte geladen",
+      "Verbesserte Spaltenaufteilung in allen Sponsoring-PDFs",
+    ],
+  },
         id: 'v2-12-11',
         title: 'v2.12.11 — Bugfix-Release',
         icon: <CheckCircle size={18} />,
