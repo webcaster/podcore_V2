@@ -2,7 +2,7 @@ import express, { Response } from 'express';
 import { getDb } from '../database';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 
-const router = express.Router();
+const router: import("express").Router = express.Router();
 
 // Hilfsfunktion für Episoden-Parsing (kopiert aus episodes.ts für Konsistenz)
 function parseEpisode(row: any) {

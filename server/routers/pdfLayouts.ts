@@ -9,7 +9,7 @@ import {
 import PDFDocument from 'pdfkit';
 import { getDb } from '../database';
 
-const router = Router();
+const router: import("express").Router = Router();
 router.use(requireAuth as any);
 
 // ─── Hilfsfunktion: Muster-PDF für Vorschau generieren ────────────────────────

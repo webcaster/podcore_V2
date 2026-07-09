@@ -185,6 +185,10 @@ export default function PdfLayoutManagerPage() {
     watermark: false, advanced: false,
   });
 
+  // Sidebar-Filter & Sortierung
+  const [sidebarTypeFilter, setSidebarTypeFilter] = useState('all');
+  const [sidebarSort, setSidebarSort] = useState<'name' | 'default' | 'type'>('type');
+
   // PDF-Vorschau
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -315,10 +319,11 @@ export default function PdfLayoutManagerPage() {
     <div className="flex h-full gap-0 overflow-hidden">
       {/* ── Sidebar: Layout-Liste ─────────────────────────────────────── */}
       <div className="w-72 shrink-0 flex flex-col border-r border-surface-border bg-obsidian-900 overflow-y-auto">
-        <div className="p-4 border-b border-surface-border flex items-center justify-between">
+        <div className="p-3 border-b border-surface-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileText size={16} className="text-accent-purple" />
             <span className="text-sm font-semibold text-text-primary">PDF-Layouts</span>
+            <span className="text-xs bg-surface-raised text-text-muted px-1.5 py-0.5 rounded-full">{layouts.length}</span>
           </div>
           {can('canManageSettings') && (
             <button
@@ -331,54 +336,135 @@ export default function PdfLayoutManagerPage() {
           )}
         </div>
 
+        {/* Filter & Sortierung */}
+        <div className="p-2 border-b border-surface-border flex flex-col gap-1.5">
+          <select
+            value={sidebarTypeFilter}
+            onChange={e => setSidebarTypeFilter(e.target.value)}
+            className="w-full bg-obsidian-800 border border-surface-border rounded px-2 py-1.5 text-xs text-text-primary"
+            title="Nach Export-Typ filtern"
+          >
+            <option value="all">Alle Typen ({layouts.length})</option>
+            {EXPORT_TYPES.filter(t => t.value !== 'all').map(t => {
+              const count = layouts.filter(l => l.exportType === t.value).length;
+              return count > 0 ? (
+                <option key={t.value} value={t.value}>{t.label} ({count})</option>
+              ) : null;
+            })}
+          </select>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-text-muted shrink-0">Sortierung:</span>
+            <select
+              value={sidebarSort}
+              onChange={e => setSidebarSort(e.target.value as any)}
+              className="flex-1 bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary"
+            >
+              <option value="type">Nach Typ</option>
+              <option value="name">Name A–Z</option>
+              <option value="default">Standard zuerst</option>
+            </select>
+          </div>
+        </div>
         {isLoading ? (
           <div className="p-4 text-center text-text-muted text-sm">Lädt…</div>
-        ) : (
-          <div className="flex flex-col gap-1 p-2">
-            {layouts.map(layout => (
-              <div
-                key={layout.id}
-                onClick={() => setSelectedId(layout.id)}
-                className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-                  selectedId === layout.id
-                    ? 'bg-accent-purple/20 border border-accent-purple/30'
-                    : 'hover:bg-surface-raised border border-transparent'
-                }`}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    {layout.isSystem && <Lock size={10} className="text-text-muted shrink-0" />}
-                    {layout.isDefault && <Star size={10} className="text-accent-yellow shrink-0" />}
-                    <span className="text-sm text-text-primary truncate">{layout.name}</span>
-                  </div>
-                  <span className="text-xs text-text-muted">
-                    {EXPORT_TYPES.find(t => t.value === layout.exportType)?.label || layout.exportType}
-                  </span>
-                </div>
-                {can('canManageSettings') && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={e => { e.stopPropagation(); handleDuplicate(layout.id); }}
-                      className="p-1 rounded hover:bg-surface-overlay text-text-muted hover:text-text-primary"
-                      title="Duplizieren"
+        ) : (() => {
+          // Filtern
+          let filtered = sidebarTypeFilter === 'all'
+            ? layouts
+            : layouts.filter(l => l.exportType === sidebarTypeFilter || l.exportType === 'all');
+          // Sortieren
+          filtered = [...filtered].sort((a, b) => {
+            if (sidebarSort === 'name') return a.name.localeCompare(b.name, 'de');
+            if (sidebarSort === 'default') {
+              if (a.isDefault && !b.isDefault) return -1;
+              if (!a.isDefault && b.isDefault) return 1;
+              if (a.isSystem && !b.isSystem) return -1;
+              if (!a.isSystem && b.isSystem) return 1;
+              return a.name.localeCompare(b.name, 'de');
+            }
+            const typeOrder = ['all','episode','idea','calendar','invoice','confirmation','booking_calendar','performance_report','sponsor_dossier','sponsor_offer'];
+            const ta = typeOrder.indexOf(a.exportType);
+            const tb = typeOrder.indexOf(b.exportType);
+            if (ta !== tb) return ta - tb;
+            if (a.isSystem && !b.isSystem) return -1;
+            if (!a.isSystem && b.isSystem) return 1;
+            if (a.isDefault && !b.isDefault) return -1;
+            if (!a.isDefault && b.isDefault) return 1;
+            return a.name.localeCompare(b.name, 'de');
+          });
+          const grouped = sidebarSort === 'type'
+            ? EXPORT_TYPES.reduce((acc: any[], t) => {
+                const items = filtered.filter(l => l.exportType === t.value);
+                if (items.length > 0) acc.push({ label: t.label, items });
+                return acc;
+              }, [])
+            : [{ label: '', items: filtered }];
+          return (
+            <div className="flex flex-col gap-0 p-2 flex-1 overflow-y-auto">
+              {grouped.map((group: any, gi: number) => (
+                <div key={gi} className="mb-2">
+                  {group.label && (
+                    <div className="px-2 py-1 text-xs font-semibold text-text-muted uppercase tracking-wide border-b border-surface-border mb-1">
+                      {group.label}
+                    </div>
+                  )}
+                  {group.items.map((layout: any) => (
+                    <div
+                      key={layout.id}
+                      onClick={() => setSelectedId(layout.id)}
+                      className={`group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors mb-0.5 ${
+                        selectedId === layout.id
+                          ? 'bg-accent-purple/20 border border-accent-purple/30'
+                          : 'hover:bg-surface-raised border border-transparent'
+                      }`}
                     >
-                      <Copy size={12} />
-                    </button>
-                    {!layout.isSystem && (
-                      <button
-                        onClick={e => { e.stopPropagation(); handleDelete(layout.id); }}
-                        className="p-1 rounded hover:bg-red-500/20 text-text-muted hover:text-red-400"
-                        title="Löschen"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+                      <div
+                        className="w-3 h-3 rounded-full shrink-0 border border-white/10"
+                        style={{ backgroundColor: layout.colors?.primary || '#4a4a8a' }}
+                        title={`Primärfarbe: ${layout.colors?.primary || '#4a4a8a'}`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1">
+                          {layout.isSystem && <Lock size={9} className="text-text-muted shrink-0" title="System-Layout" />}
+                          {layout.isDefault && <Star size={9} className="text-accent-yellow shrink-0 fill-current" title="Standard-Layout" />}
+                          <span className="text-xs text-text-primary truncate">{layout.name}</span>
+                        </div>
+                        {sidebarSort !== 'type' && (
+                          <span className="text-xs text-text-muted">
+                            {EXPORT_TYPES.find(t => t.value === layout.exportType)?.label || layout.exportType}
+                          </span>
+                        )}
+                      </div>
+                      {can('canManageSettings') && (
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={e => { e.stopPropagation(); handleDuplicate(layout.id); }}
+                            className="p-1 rounded hover:bg-surface-overlay text-text-muted hover:text-text-primary"
+                            title="Duplizieren"
+                          >
+                            <Copy size={11} />
+                          </button>
+                          {!layout.isSystem && (
+                            <button
+                              onClick={e => { e.stopPropagation(); handleDelete(layout.id); }}
+                              className="p-1 rounded hover:bg-red-500/20 text-text-muted hover:text-red-400"
+                              title="Löschen"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <div className="text-xs text-text-muted text-center py-4">Keine Layouts für diesen Filter.</div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── Editor: Layout-Details ────────────────────────────────────── */}

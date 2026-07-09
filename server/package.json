@@ -11,6 +11,9 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1073.0",
     "@aws-sdk/lib-storage": "^3.1073.0",
+    "@pdfme/common": "^6.1.11",
+    "@pdfme/generator": "^6.1.11",
+    "@pdfme/schemas": "^6.1.11",
     "@types/adm-zip": "^0.5.8",
     "@types/pdfkit": "^0.17.6",
     "adm-zip": "^0.5.17",

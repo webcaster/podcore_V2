@@ -3,7 +3,7 @@ import { getDb } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 import { testStorageConnection, getLocalNetworkIPs } from '../storage';
 
-const router = Router();
+const router: import("express").Router = Router();
 router.use(requireAuth as any);
 
 // GET /api/storage/config — Get current storage configuration

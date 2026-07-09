@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb, getDefaultPermissions } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
-const router = Router();
+const router: import("express").Router = Router();
 
 // ============================================================
 // PUBLIC ROUTES (kein Auth nötig)

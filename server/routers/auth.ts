@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../database';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 
-const router = Router();
+const router: import("express").Router = Router();
 
 function resolveUserPermissions(user: any): Record<string, boolean> {
   if (user.role === 'admin') return {};

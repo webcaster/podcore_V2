@@ -6,7 +6,7 @@ import fs from 'fs';
 import { getDb, ASSETS_DIR, DATA_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
-const router = Router();
+const router: import("express").Router = Router();
 router.use(requireAuth as any);
 
 function getStorageConfig() {

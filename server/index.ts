@@ -28,7 +28,7 @@ import approvalsRouter from './routers/approvals';
 import sponsorsV2Router from './routers/sponsors-v2';
 import updateRouter from './routers/update';
 
-const app = express();
+const app: import("express").Express = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // Version dynamisch aus package.json lesen (wird bei jedem Build automatisch aktualisiert)

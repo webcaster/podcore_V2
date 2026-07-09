@@ -170,6 +170,8 @@ export default function EpisodeDetailPage() {
   const [pdfLayoutId, setPdfLayoutId] = useState('');
   const [pdfFileName, setPdfFileName] = useState('');
   const [pdfDocTitle, setPdfDocTitle] = useState('');
+  const [addNotesPage, setAddNotesPage] = useState(false);
+  const [useClassicLayout, setUseClassicLayout] = useState(false);
 
   // Script-fertig Status
   const [scriptReady, setScriptReady] = useState(false);
@@ -538,6 +540,8 @@ export default function EpisodeDetailPage() {
       const params = new URLSearchParams();
       if (pdfLayoutId) params.set('layoutId', pdfLayoutId);
       if (pdfDocTitle) params.set('documentTitle', encodeURIComponent(pdfDocTitle));
+      if (addNotesPage) params.set('addNotesPage', '1');
+      if (useClassicLayout) params.set('classicLayout', '1');
       const qs = params.toString() ? `?${params.toString()}` : '';
       const res = await fetch(`/api/episodes/${id}/export-pdf${qs}`, {
         credentials: 'include',
@@ -819,6 +823,14 @@ export default function EpisodeDetailPage() {
                 title="Eigener Dateiname für den PDF-Export"
               />
               <PdfLayoutPicker exportType="episode" value={pdfLayoutId} onChange={setPdfLayoutId} />
+              <label className="flex items-center gap-1 text-xs text-text-muted cursor-pointer" title="Klassisches Abschnitts-Layout statt Tabellen-Skript-Layout">
+                <input type="checkbox" checked={useClassicLayout} onChange={e => setUseClassicLayout(e.target.checked)} className="w-3 h-3" />
+                Klassisch
+              </label>
+              <label className="flex items-center gap-1 text-xs text-text-muted cursor-pointer" title="Leere Notizseite am Ende des PDFs anfügen">
+                <input type="checkbox" checked={addNotesPage} onChange={e => setAddNotesPage(e.target.checked)} className="w-3 h-3" />
+                + Notizseite
+              </label>
               <button onClick={handleExportPdf} disabled={isExporting} className="btn-secondary">
                 {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                 <span>PDF Export</span>

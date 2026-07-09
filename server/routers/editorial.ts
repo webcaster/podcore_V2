@@ -6,7 +6,7 @@ import fs from 'fs';
 import { getDb, DATA_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
-const router = Router();
+const router: import("express").Router = Router();
 router.use(requireAuth as any);
 
 // ============================================================

@@ -6,7 +6,7 @@ import * as https from 'https';
 import { requirePermission } from '../middleware/auth';
 import { AuthRequest } from '../middleware/auth';
 
-const router = Router();
+const router: import("express").Router = Router();
 
 const GITHUB_REPO = 'webcaster/podcore_V2';
 const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;

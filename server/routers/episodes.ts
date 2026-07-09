@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
-const router = Router();
+const router: import("express").Router = Router();
 router.use(requireAuth as any);
 
 function parseEpisode(row: any) {
@@ -415,12 +415,17 @@ router.post('/:id/duplicate', requirePermission('canCreateEpisodes') as any, (re
   return res.status(201).json({ success: true, data: parseEpisode(episode) });
 });
 
-// POST /api/episodes/:id/export-pdf
+// GET /api/episodes/:id/export-pdf
+// Query-Parameter:
+//   layoutId=...       → PDF-Layout-ID (Standard: episode-default)
+//   documentTitle=...  → Dokumententitel (URL-encoded)
+//   scriptLayout=1     → Tabellen-Skript-Layout (neu, Standard)
+//   classicLayout=1    → Klassisches Abschnitts-Layout
+//   addNotesPage=1     → Leere Notizseite am Ende anfügen
 router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const row = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
   if (!row) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
-
   const ep = parseEpisode(row);
   const PDFDocument = require('pdfkit');
   const fs = require('fs');
@@ -428,21 +433,20 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
   const { DATA_DIR } = require('../database');
   const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderSectionHeading, renderWatermark, getLineSpacingFactor } = require('../pdfLayouts');
 
-  // Layout auswählen: ?layoutId=... oder Standard
+  // Layout auswählen
   const layoutId = req.query.layoutId as string | undefined;
   const layout = layoutId ? (getLayoutById(layoutId) || getDefaultLayoutForType('episode')) : getDefaultLayoutForType('episode');
   const m = layout.pageMargin;
 
-  // Anpassbarer Dokumententitel
+  // Dokumententitel
   const customDocTitle = req.query.documentTitle as string | undefined;
-  const documentTitle = customDocTitle ? decodeURIComponent(customDocTitle) : 'Episoden-Dokument';
+  const documentTitle = customDocTitle ? decodeURIComponent(customDocTitle) : 'Episoden-Skript';
 
-  const doc = new PDFDocument({ margin: m, size: layout.pageSize, layout: layout.pageOrientation === 'landscape' ? 'landscape' : 'portrait', autoFirstPage: true });
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="episode-${ep.number || ep.id}.pdf"`);
-  doc.pipe(res);
+  // Optionen
+  const useScriptLayout = req.query.classicLayout !== '1'; // Standard: Skript-Tabellen-Layout
+  const addNotesPage = req.query.addNotesPage === '1';
 
-  // Branding
+  // Branding laden
   const brandingDir = path.join(DATA_DIR, 'branding');
   let logoPath: string | null = null;
   if (fs.existsSync(brandingDir)) {
@@ -453,212 +457,464 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
   const appSettings = settingsRow ? JSON.parse(settingsRow.value) : {};
   const podcastName = appSettings?.branding?.podcastName || appSettings?.general?.podcastName || 'PodCore';
 
-  // ── Header ──────────────────────────────────────────────────────────
-  renderPdfHeader(doc, layout, { podcastName, documentTitle, logoPath });
-
-  // ── Episodentitel ─────────────────────────────────────────────────
-  doc.fontSize(layout.typography.subtitleSize + 2).font(`${layout.typography.fontFamily}-Bold`)
-    .fillColor(layout.colors.primary)
-    .text(`${ep.number ? `#${ep.number} — ` : ''}${ep.title}`, { align: 'center' });
-  if (ep.subtitle) {
-    doc.fontSize(layout.typography.subtitleSize).font(layout.typography.fontFamily)
-      .fillColor(layout.colors.muted).text(ep.subtitle, { align: 'center' });
+  // HTML-Stripping Hilfsfunktion
+  function stripHtml(html: string): string {
+    if (!html) return '';
+    return html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<li>/gi, '• ')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"')
+      .replace(/\n{3,}/g, '\n\n').trim();
   }
-  doc.fillColor(layout.colors.text);
-  doc.moveDown(0.8);
 
-  // ── Meta ───────────────────────────────────────────────────────────
-  if (layout.sections.showMeta) {
-    const metaParts = [
-      ep.status && `Status: ${ep.status}`,
-      ep.recordingDate && `Aufnahme: ${new Date(ep.recordingDate).toLocaleDateString('de-DE')}`,
-      ep.publishDate && `Veröffentlichung: ${new Date(ep.publishDate).toLocaleDateString('de-DE')}`,
-      ep.hosts?.length && `Hosts: ${ep.hosts.join(', ')}`,
-      ep.guests?.length && `Gäste: ${ep.guests.join(', ')}`,
-    ].filter(Boolean).join('   |   ');
-    if (metaParts) {
-      doc.fontSize(layout.typography.smallSize).font(layout.typography.fontFamily)
-        .fillColor(layout.colors.muted).text(metaParts);
-      doc.fillColor(layout.colors.text);
+  // Regieanweisungen extrahieren [in eckigen Klammern]
+  function extractDirections(text: string): string {
+    const matches = text.match(/\[[^\]]+\]/g) || [];
+    return matches.map(m => m.replace(/^\[|\]$/g, '')).join(' | ');
+  }
+
+  // Sprechtext ohne Regieanweisungen
+  function getSpeechText(text: string): string {
+    return text.replace(/\[[^\]]+\]/g, '').replace(/\s{2,}/g, ' ').trim();
+  }
+
+  // Block-Typ-Label und Farbe
+  const BLOCK_META: Record<string, { label: string; color: string; symbol: string }> = {
+    intro:              { label: 'Intro',           color: '#0891b2', symbol: '■' },
+    segment:            { label: 'Segment',         color: '#2563eb', symbol: '✓' },
+    interview:          { label: 'Interview',       color: '#7c3aed', symbol: '●' },
+    interview_questions:{ label: 'Interview-Fragen',color: '#7c3aed', symbol: '●' },
+    highlights:         { label: 'Highlights',      color: '#ca8a04', symbol: '★' },
+    ad:                 { label: 'Werbung',         color: '#d97706', symbol: '◆' },
+    jingle:             { label: 'Jingle',          color: '#059669', symbol: '♪' },
+    outro:              { label: 'Outro',           color: '#dc2626', symbol: '■' },
+    custom:             { label: 'Custom',          color: '#6b7280', symbol: '○' },
+    moderation:         { label: 'Moderation',      color: '#0891b2', symbol: '●' },
+  };
+
+  // Dauer formatieren
+  function formatDur(seconds: number | null | undefined): string {
+    if (!seconds || seconds <= 0) return '--';
+    if (seconds < 60) return `${seconds}s`;
+    const m2 = Math.floor(seconds / 60);
+    const s2 = seconds % 60;
+    return s2 > 0 ? `${m2}m ${s2}s` : `${m2}m`;
+  }
+
+  // Status-Label
+  const STATUS_LABELS: Record<string, string> = {
+    idee: 'Idee', entwurf: 'Entwurf', aufnahme: 'Aufnahme',
+    produktion: 'Produktion', geplant: 'Geplant',
+    veroeffentlicht: 'Veröffentlicht', archiviert: 'Archiviert',
+  };
+
+  const doc = new PDFDocument({
+    margin: m,
+    size: layout.pageSize,
+    layout: layout.pageOrientation === 'landscape' ? 'landscape' : 'portrait',
+    autoFirstPage: true,
+    bufferPages: true,
+  });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  const safeTitle = (ep.title || 'episode').replace(/[^a-zA-Z0-9äöüÄÖÜß\-_]/g, '_').substring(0, 40);
+  res.setHeader('Content-Disposition', `attachment; filename="skript-${ep.number || safeTitle}.pdf"`);
+
+  // Error-Handler vor pipe
+  doc.on('error', (err: any) => {
+    console.error('[Episode PDF] Stream error:', err);
+  });
+  doc.pipe(res);
+
+  let pageNum = 1;
+
+  // ─── Hilfsfunktion: Footer auf aktueller Seite ───────────────────────────
+  function addFooter(pNum: number) {
+    const pageW = doc.page.width;
+    const footerY = doc.page.height - 25;
+    doc.moveTo(m, footerY - 4).lineTo(pageW - m, footerY - 4)
+      .strokeColor(layout.colors.accent || '#cccccc').lineWidth(0.4).stroke();
+    doc.fontSize(7).font('Helvetica').fillColor(layout.colors.muted || '#888888')
+      .text(podcastName, m, footerY, { width: (pageW - m * 2) * 0.6, align: 'left' });
+    doc.fontSize(7).font('Helvetica').fillColor(layout.colors.muted || '#888888')
+      .text(`Seite ${pNum}`, m, footerY, { width: pageW - m * 2, align: 'right' });
+  }
+
+  if (useScriptLayout) {
+    // ═══════════════════════════════════════════════════════════════════════
+    // NEUES TABELLEN-SKRIPT-LAYOUT
+    // ═══════════════════════════════════════════════════════════════════════
+    const pageW = doc.page.width;
+    const pageH = doc.page.height;
+    const contentW = pageW - 2 * m;
+
+    // ── Header-Bereich ──────────────────────────────────────────────────
+    const primaryColor = layout.colors.primary || '#1a1a2e';
+    const accentColor = layout.colors.accent || '#4a4a8a';
+
+    // Logo (wenn vorhanden)
+    let headerY = m;
+    let logoW = 0;
+    if (logoPath) {
+      try {
+        doc.image(logoPath, m, headerY, { fit: [45, 45] });
+        logoW = 52;
+      } catch (_) {}
     }
-    doc.moveDown(0.5);
-  }
 
-  // ── Beschreibung ────────────────────────────────────────────────
-  if (layout.sections.showDescription && ep.description) {
-    renderSectionHeading(doc, layout, 'Beschreibung');
-    doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily)
-      .fillColor(layout.colors.text).text(ep.description, { paragraphGap: 4 });
-    doc.moveDown();
-  }
+    // Episodentitel
+    const titleX = m + logoW;
+    const titleW = contentW - logoW;
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(primaryColor)
+      .text(`${ep.number ? `#${ep.number} ` : ''}${ep.title}`, titleX, headerY, { width: titleW });
 
-  // ── Blöcke / Script ───────────────────────────────────────────────
-  if (layout.sections.showBlocks && ep.blocks?.length > 0) {
+    const afterTitle = doc.y;
+
+    // Status + Datum
+    const statusLabel = STATUS_LABELS[ep.status] || ep.status || '';
+    const dateStr = ep.publishDate
+      ? new Date(ep.publishDate).toLocaleDateString('de-DE')
+      : ep.recordingDate
+        ? new Date(ep.recordingDate).toLocaleDateString('de-DE')
+        : new Date().toLocaleDateString('de-DE');
+
+    doc.fontSize(8.5).font('Helvetica-Bold').fillColor(accentColor)
+      .text('Status: ', titleX, afterTitle + 2, { continued: true });
+    doc.font('Helvetica').fillColor(primaryColor).text(statusLabel);
+    doc.fontSize(8.5).font('Helvetica-Bold').fillColor(accentColor)
+      .text('Datum: ', titleX, doc.y, { continued: true });
+    doc.font('Helvetica').fillColor(primaryColor).text(dateStr);
+
+    // Hosts / Gäste
+    if (ep.hosts?.length > 0) {
+      doc.fontSize(8).font('Helvetica').fillColor(layout.colors.muted || '#666666')
+        .text(`Hosts: ${ep.hosts.join(', ')}`, titleX, doc.y);
+    }
+    if (ep.guests?.length > 0) {
+      doc.fontSize(8).font('Helvetica').fillColor(layout.colors.muted || '#666666')
+        .text(`Gäste: ${ep.guests.join(', ')}`, titleX, doc.y);
+    }
+
+    // Trennlinie unter Header
+    const headerBottom = Math.max(doc.y + 4, headerY + (logoW > 0 ? 50 : 0));
+    doc.moveTo(m, headerBottom)
+      .lineTo(pageW - m, headerBottom)
+      .strokeColor(accentColor).lineWidth(1.5).stroke();
+
+    let tableY = headerBottom + 8;
+
+    // ── Tabellen-Header ──────────────────────────────────────────────────
+    // Spaltenbreiten (in mm-ähnlichen Punkten)
+    const COL_BLOCK  = contentW * 0.18;  // Block-Typ
+    const COL_TEXT   = contentW * 0.47;  // Sprechtext
+    const COL_DETAIL = contentW * 0.25;  // Details & Regie
+    const COL_DUR    = contentW * 0.10;  // Dauer
+
+    const COL_X = [
+      m,
+      m + COL_BLOCK,
+      m + COL_BLOCK + COL_TEXT,
+      m + COL_BLOCK + COL_TEXT + COL_DETAIL,
+    ];
+
+    const ROW_H_HEADER = 18;
+    const headerBg = accentColor;
+
+    // Header-Hintergrund
+    doc.rect(m, tableY, contentW, ROW_H_HEADER).fill(headerBg);
+
+    // Header-Text
+    const headerLabels = [
+      { x: COL_X[0], w: COL_BLOCK,  text: '🎙 Sprechtext / Inhalt (Stichpunkte)' },
+      { x: COL_X[1], w: COL_TEXT,   text: '' },
+      { x: COL_X[2], w: COL_DETAIL, text: 'Details & Regieanweisung' },
+      { x: COL_X[3], w: COL_DUR,    text: 'Dauer' },
+    ];
+
+    // Kombinierter Header: Spalte 1+2 zusammen
+    doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
+      .text('🎙 Sprechtext / Inhalt (Stichpunkte)', COL_X[0] + 3, tableY + 5,
+        { width: COL_BLOCK + COL_TEXT - 6, align: 'left' });
+    doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
+      .text('Details & Regieanweisung', COL_X[2] + 3, tableY + 5,
+        { width: COL_DETAIL - 6, align: 'left' });
+    // Uhr-Symbol + Dauer
+    doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
+      .text('⏱ Dauer', COL_X[3] + 2, tableY + 5,
+        { width: COL_DUR - 4, align: 'center' });
+
+    // Vertikale Trennlinien im Header
+    doc.moveTo(COL_X[2], tableY).lineTo(COL_X[2], tableY + ROW_H_HEADER)
+      .strokeColor('#ffffff').lineWidth(0.5).stroke();
+    doc.moveTo(COL_X[3], tableY).lineTo(COL_X[3], tableY + ROW_H_HEADER)
+      .strokeColor('#ffffff').lineWidth(0.5).stroke();
+
+    tableY += ROW_H_HEADER;
+
+    // ── Tabellen-Zeilen ──────────────────────────────────────────────────
+    const blocks = ep.blocks || [];
+    const ROW_PADDING = 4;
+    const FONT_SIZE_BODY = 8;
+    const FONT_SIZE_SMALL = 7;
+    const MIN_ROW_H = 16;
+    const FOOTER_RESERVE = 30;
+
+    let rowAlt = false;
+
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const block = blocks[bi];
+      const meta = BLOCK_META[block.type] || BLOCK_META['custom'];
+
+      // Inhalt aufbereiten
+      const rawContent = stripHtml(block.content || '');
+      const speechText = getSpeechText(rawContent);
+      const directions = extractDirections(rawContent);
+      const blockNotes = block.notes ? stripHtml(block.notes) : '';
+
+      // Für interview_questions: Fragen als Stichpunkte
+      let cellTextCol1 = speechText;
+      let cellTextCol2 = directions || blockNotes || '--';
+
+      if (block.type === 'interview_questions' && Array.isArray(block.questions) && block.questions.length > 0) {
+        const qLines = block.questions.map((q: any, qi: number) => {
+          const qt = stripHtml(q.text || q.question || '');
+          return `• ${qt}${q.answerDuration ? ` (${q.answerDuration}s)` : ''}`;
+        });
+        cellTextCol1 = qLines.join('\n');
+        if (block.partnerName) cellTextCol2 = `Gast: ${block.partnerName}`;
+      }
+
+      // Asset-Info für Jingle/Intro/Outro
+      if (block.assetName && !cellTextCol1) {
+        cellTextCol1 = `[${block.assetName}]`;
+      }
+
+      const blockLabel = block.title || meta.label;
+      const durStr = formatDur(block.duration);
+
+      // Zeilenhöhe berechnen (Schätzung)
+      const linesText = Math.max(1, Math.ceil(cellTextCol1.length / 55) + (cellTextCol1.match(/\n/g) || []).length);
+      const linesDetail = Math.max(1, Math.ceil(cellTextCol2.length / 28));
+      const linesBlock = Math.max(1, Math.ceil(blockLabel.length / 14));
+      const maxLines = Math.max(linesText, linesDetail, linesBlock);
+      const rowH = Math.max(MIN_ROW_H, maxLines * (FONT_SIZE_BODY + 3) + ROW_PADDING * 2);
+
+      // Seitenumbruch prüfen
+      if (tableY + rowH + FOOTER_RESERVE > pageH) {
+        addFooter(pageNum);
+        doc.addPage();
+        pageNum++;
+        tableY = m;
+
+        // Tabellen-Header wiederholen
+        doc.rect(m, tableY, contentW, ROW_H_HEADER).fill(headerBg);
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
+          .text('🎙 Sprechtext / Inhalt (Stichpunkte)', COL_X[0] + 3, tableY + 5,
+            { width: COL_BLOCK + COL_TEXT - 6, align: 'left' });
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
+          .text('Details & Regieanweisung', COL_X[2] + 3, tableY + 5,
+            { width: COL_DETAIL - 6, align: 'left' });
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
+          .text('⏱ Dauer', COL_X[3] + 2, tableY + 5,
+            { width: COL_DUR - 4, align: 'center' });
+        doc.moveTo(COL_X[2], tableY).lineTo(COL_X[2], tableY + ROW_H_HEADER)
+          .strokeColor('#ffffff').lineWidth(0.5).stroke();
+        doc.moveTo(COL_X[3], tableY).lineTo(COL_X[3], tableY + ROW_H_HEADER)
+          .strokeColor('#ffffff').lineWidth(0.5).stroke();
+        tableY += ROW_H_HEADER;
+        rowAlt = false;
+      }
+
+      // Zeilen-Hintergrund (alternierend)
+      const rowBg = rowAlt ? '#f8f8f8' : '#ffffff';
+      doc.rect(m, tableY, contentW, rowH).fill(rowBg);
+      rowAlt = !rowAlt;
+
+      // Äußerer Rahmen der Zeile
+      doc.rect(m, tableY, contentW, rowH)
+        .strokeColor('#dddddd').lineWidth(0.3).stroke();
+
+      // Vertikale Trennlinien
+      doc.moveTo(COL_X[1], tableY).lineTo(COL_X[1], tableY + rowH)
+        .strokeColor('#dddddd').lineWidth(0.3).stroke();
+      doc.moveTo(COL_X[2], tableY).lineTo(COL_X[2], tableY + rowH)
+        .strokeColor('#dddddd').lineWidth(0.3).stroke();
+      doc.moveTo(COL_X[3], tableY).lineTo(COL_X[3], tableY + rowH)
+        .strokeColor('#dddddd').lineWidth(0.3).stroke();
+
+      // ── Spalte 1: Block-Typ ──────────────────────────────────────────
+      // Farbiger linker Rand
+      doc.rect(m, tableY, 3, rowH).fill(meta.color);
+
+      doc.fontSize(FONT_SIZE_BODY).font('Helvetica-Bold').fillColor(meta.color)
+        .text(blockLabel, m + 5, tableY + ROW_PADDING,
+          { width: COL_BLOCK - 8, align: 'left' });
+
+      // ── Spalte 2: Sprechtext ─────────────────────────────────────────
+      if (cellTextCol1) {
+        doc.fontSize(FONT_SIZE_BODY).font('Helvetica').fillColor('#1a1a1a')
+          .text(cellTextCol1, COL_X[1] + 3, tableY + ROW_PADDING,
+            { width: COL_TEXT - 6, align: 'left' });
+      } else {
+        doc.fontSize(FONT_SIZE_SMALL).font('Helvetica').fillColor('#aaaaaa')
+          .text('--', COL_X[1] + 3, tableY + ROW_PADDING,
+            { width: COL_TEXT - 6, align: 'left' });
+      }
+
+      // ── Spalte 3: Details & Regieanweisung ───────────────────────────
+      doc.fontSize(FONT_SIZE_SMALL).font('Helvetica').fillColor('#555555')
+        .text(cellTextCol2, COL_X[2] + 3, tableY + ROW_PADDING,
+          { width: COL_DETAIL - 6, align: 'left' });
+
+      // ── Spalte 4: Dauer ──────────────────────────────────────────────
+      doc.fontSize(FONT_SIZE_BODY).font('Helvetica-Bold').fillColor('#333333')
+        .text(durStr, COL_X[3] + 2, tableY + ROW_PADDING,
+          { width: COL_DUR - 4, align: 'center' });
+
+      tableY += rowH;
+    }
+
+    // Abschluss-Linie unter Tabelle
+    doc.moveTo(m, tableY).lineTo(pageW - m, tableY)
+      .strokeColor(accentColor).lineWidth(0.5).stroke();
+
+    // Gesamtdauer
+    const totalDur = blocks.reduce((sum: number, b: any) => sum + (b.duration || 0), 0);
+    if (totalDur > 0) {
+      tableY += 6;
+      doc.fontSize(8).font('Helvetica-Bold').fillColor(primaryColor)
+        .text(`Gesamtdauer: ${formatDur(totalDur)}`, m, tableY, { align: 'right', width: contentW });
+    }
+
+    // Wasserzeichen
+    renderWatermark(doc, layout);
+    addFooter(pageNum);
+
+  } else {
+    // ═══════════════════════════════════════════════════════════════════════
+    // KLASSISCHES LAYOUT (unveränderter Code)
+    // ═══════════════════════════════════════════════════════════════════════
+    function stripHtmlClassic(html: string): string {
+      if (!html) return '';
+      return html
+        .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<li>/gi, '• ')
+        .replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"')
+        .replace(/\n{3,}/g, '\n\n').trim();
+    }
     const blockColors: Record<string, string> = {
       intro: '#0891b2', segment: '#2563eb', interview: '#7c3aed',
       interview_questions: '#7c3aed', highlights: '#ca8a04', ad: '#d97706',
       jingle: '#059669', outro: '#dc2626', custom: '#6b7280', moderation: '#0891b2',
     };
-    const blockTypeLabels: Record<string, string> = {
-      intro: 'INTRO', segment: 'SEGMENT', interview: 'INTERVIEW',
-      interview_questions: 'INTERVIEW-FRAGEN', highlights: 'HIGHLIGHTS',
-      ad: 'WERBUNG', jingle: 'JINGLE', outro: 'OUTRO', custom: 'CUSTOM',
-      moderation: 'MODERATION',
-    };
-
-    const stripHtml = (html: string) =>
-      (html || '').replace(/<[^>]*>?/gm, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').trim();
-
-    for (const block of ep.blocks) {
-      const bColor = blockColors[block.type] || layout.colors.secondary;
-      const typeLabel = blockTypeLabels[block.type] || (block.type || 'BLOCK').toUpperCase();
-      const durationStr = block.duration ? ` (${block.duration}s)` : '';
-      const blockTitle = block.title ? `${block.title}${durationStr}` : `${typeLabel}${durationStr}`;
-
-      // Block-Titel
-      doc.fontSize(layout.typography.bodySize).font(`${layout.typography.fontFamily}-Bold`).fillColor(bColor)
-        .text(blockTitle);
-      doc.fillColor(layout.colors.text);
-
-      // ── Spezielles Rendering für interview_questions ──────────────────
-      if (block.type === 'interview_questions' && Array.isArray(block.questions) && block.questions.length > 0) {
-        for (let qi = 0; qi < block.questions.length; qi++) {
-          const q = block.questions[qi];
-          const questionText = stripHtml(q.text || q.question || '');
-          if (!questionText) continue;
-
-          // Fragen-Nummer und Text
-          doc.fontSize(layout.typography.bodySize - 1)
-            .font(`${layout.typography.fontFamily}-Bold`)
-            .fillColor(bColor)
-            .text(`F${qi + 1}: `, { continued: true, indent: 15 });
-          doc.font(layout.typography.fontFamily)
-            .fillColor(layout.colors.text)
-            .text(questionText, { paragraphGap: 2 });
-
-          // Kategorie (wenn vorhanden)
-          if (q.category) {
-            doc.fontSize(layout.typography.bodySize - 2)
-              .font(layout.typography.fontFamily)
-              .fillColor(layout.colors.muted)
-              .text(`Kategorie: ${q.category}`, { indent: 25, paragraphGap: 1 });
-          }
-
-          // Antwortzeit (wenn vorhanden)
-          if (q.answerDuration) {
-            doc.fontSize(layout.typography.bodySize - 2)
-              .font(layout.typography.fontFamily)
-              .fillColor(layout.colors.muted)
-              .text(`Antwortzeit: ${q.answerDuration}s`, { indent: 25, paragraphGap: 2 });
-          }
-
-          // Moderationshinweis (wenn vorhanden, nicht intern)
-          if (q.note && !q.internalOnly) {
-            const noteText = stripHtml(q.note);
-            if (noteText) {
-              doc.fontSize(layout.typography.bodySize - 2)
-                .font(layout.typography.fontFamily)
-                .fillColor(layout.colors.muted)
-                .text(`Hinweis: ${noteText}`, { indent: 25, paragraphGap: 2 });
-            }
-          }
-        }
-        doc.moveDown(0.5);
-        continue;
-      }
-
-      // ── Standard-Rendering für alle anderen Block-Typen ──────────────
-      let cleanContent = (block.content || '').replace(/\[(INTRO|OUTRO|AD|JINGLE|SEGMENT|INTERVIEW|CUSTOM|MODERATION)\]/gi, '').trim();
-      const plainText = stripHtml(cleanContent);
-
-      if (plainText) {
-        doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily)
-          .text(plainText, { indent: 15, paragraphGap: 3 });
-      } else if (!plainText && block.type !== 'jingle' && block.type !== 'ad') {
-        // Kein Inhalt – kurze Platzhalter-Zeile
-        doc.fontSize(layout.typography.bodySize - 1).font(layout.typography.fontFamily)
-          .fillColor(layout.colors.muted)
-          .text('(kein Inhalt)', { indent: 15, paragraphGap: 2 });
+    renderPdfHeader(doc, layout, { podcastName, documentTitle, logoPath });
+    doc.fontSize(layout.typography.subtitleSize + 2).font(`${layout.typography.fontFamily}-Bold`)
+      .fillColor(layout.colors.primary)
+      .text(`${ep.number ? `#${ep.number} — ` : ''}${ep.title}`, { align: 'center' });
+    if (ep.subtitle) {
+      doc.fontSize(layout.typography.subtitleSize).font(layout.typography.fontFamily)
+        .fillColor(layout.colors.muted).text(ep.subtitle, { align: 'center' });
+    }
+    doc.fillColor(layout.colors.text);
+    doc.moveDown(0.8);
+    if (layout.sections.showMeta) {
+      const metaParts = [
+        ep.status && `Status: ${ep.status}`,
+        ep.recordingDate && `Aufnahme: ${new Date(ep.recordingDate).toLocaleDateString('de-DE')}`,
+        ep.publishDate && `Veröffentlichung: ${new Date(ep.publishDate).toLocaleDateString('de-DE')}`,
+        ep.hosts?.length && `Hosts: ${ep.hosts.join(', ')}`,
+        ep.guests?.length && `Gäste: ${ep.guests.join(', ')}`,
+      ].filter(Boolean).join('   |   ');
+      if (metaParts) {
+        doc.fontSize(layout.typography.smallSize).font(layout.typography.fontFamily)
+          .fillColor(layout.colors.muted).text(metaParts);
         doc.fillColor(layout.colors.text);
       }
       doc.moveDown(0.5);
     }
-    doc.moveDown(0.3);
-  }
-
-  // ── Produktions-Info ──────────────────────────────────────────────
-  if (layout.sections.showProductionInfo && ep.productionInfo) {
-    renderSectionHeading(doc, layout, 'Produktions-Informationen');
-    doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily)
-      .fillColor(layout.colors.text).text(ep.productionInfo, { paragraphGap: 4 });
-    doc.moveDown();
-  }
-
-  // ── Technische Daten ──────────────────────────────────────────────
-  if (layout.sections.showTechnicalData) {
-    const td = ep.technicalData || {};
-    const tdFields = Object.entries(td).filter(([, v]) => v);
-    if (tdFields.length > 0) {
-      renderSectionHeading(doc, layout, 'Technische Daten');
-      for (const [key, value] of tdFields) {
-        doc.fontSize(layout.typography.bodySize);
-        doc.font(`${layout.typography.fontFamily}-Bold`).fillColor(layout.colors.secondary).text(`${key}: `, { continued: true });
-        doc.font(layout.typography.fontFamily).fillColor(layout.colors.text).text(String(value));
-      }
+    if (layout.sections.showDescription && ep.description) {
+      renderSectionHeading(doc, layout, 'Beschreibung');
+      doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily)
+        .fillColor(layout.colors.text).text(ep.description, { paragraphGap: 4 });
       doc.moveDown();
     }
-  }
-
-  // ── Interne Notizen ───────────────────────────────────────────────
-  if (layout.sections.showNotes && ep.notes) {
-    renderSectionHeading(doc, layout, 'Interne Notizen');
-    doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily)
-      .fillColor(layout.colors.muted).text(ep.notes, { paragraphGap: 4 });
-    doc.fillColor(layout.colors.text);
-    doc.moveDown();
-  }
-
-  // ── Show-Notes (öffentlich) ───────────────────────────────────────
-  if (layout.sections.showShowNotes && ep.showNotes) {
-    renderSectionHeading(doc, layout, 'Show-Notes');
-    const showNotesText = ep.showNotes.replace(/<[^>]*>?/gm, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').trim();
-    if (showNotesText) {
-      doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily)
-        .fillColor(layout.colors.text).text(showNotesText, { paragraphGap: 4 });
-    }
-    doc.moveDown();
-  }
-
-  // ── Alternative Episodenlänge ─────────────────────────────────────
-  if (layout.sections.showAltDuration && ep.altDuration) {
-    renderSectionHeading(doc, layout, 'Sonderfolge – Alternative Ziel-Länge');
-    doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily)
-      .fillColor(layout.colors.text).text(`${ep.altDuration} Minuten (Sonderformat)`);
-    doc.moveDown();
-  }
-
-  // ── Sponsoren (Episode) ───────────────────────────────────────────
-  if (layout.sections.showSponsors && ep.sponsors?.length > 0) {
-    renderSectionHeading(doc, layout, 'Sponsoren');
-    for (const sp of ep.sponsors) {
-      doc.fontSize(layout.typography.bodySize).font(`${layout.typography.fontFamily}-Bold`)
-        .fillColor(layout.colors.secondary).text(sp.name || sp.sponsorId || 'Sponsor', { continued: sp.position ? true : false });
-      if (sp.position) {
-        doc.font(layout.typography.fontFamily).fillColor(layout.colors.muted)
-          .text(`  (${sp.position}${sp.duration ? `, ${sp.duration}s` : ''})`);
-      } else {
-        doc.text('');
+    if (layout.sections.showBlocks && ep.blocks?.length > 0) {
+      renderSectionHeading(doc, layout, 'Skript / Ablauf');
+      for (const block of ep.blocks) {
+        const bColor = blockColors[block.type] || '#6b7280';
+        const blockLabel = block.title || block.type;
+        const durText = block.duration ? ` (${formatDur(block.duration)})` : '';
+        if (doc.y > doc.page.height - 80) { doc.addPage(); pageNum++; }
+        doc.fontSize(layout.typography.bodySize + 1).font(`${layout.typography.fontFamily}-Bold`)
+          .fillColor(bColor).text(`${blockLabel}${durText}`);
+        doc.fillColor(layout.colors.text);
+        if (block.type === 'interview_questions' && Array.isArray(block.questions) && block.questions.length > 0) {
+          for (let qi = 0; qi < block.questions.length; qi++) {
+            const q = block.questions[qi];
+            const questionText = stripHtmlClassic(q.text || q.question || '');
+            if (!questionText) continue;
+            doc.fontSize(layout.typography.bodySize - 1).font(`${layout.typography.fontFamily}-Bold`)
+              .fillColor(bColor).text(`F${qi + 1}: `, { continued: true, indent: 15 });
+            doc.font(layout.typography.fontFamily).fillColor(layout.colors.text)
+              .text(questionText, { paragraphGap: 2 });
+          }
+          doc.moveDown(0.5);
+          continue;
+        }
+        let cleanContent = (block.content || '').replace(/\[(INTRO|OUTRO|AD|JINGLE|SEGMENT|INTERVIEW|CUSTOM|MODERATION)\]/gi, '').trim();
+        const plainText = stripHtmlClassic(cleanContent);
+        if (plainText) {
+          doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily)
+            .text(plainText, { indent: 15, paragraphGap: 3 });
+        } else if (!plainText && block.type !== 'jingle' && block.type !== 'ad') {
+          doc.fontSize(layout.typography.bodySize - 1).font(layout.typography.fontFamily)
+            .fillColor(layout.colors.muted).text('(kein Inhalt)', { indent: 15, paragraphGap: 2 });
+          doc.fillColor(layout.colors.text);
+        }
+        doc.moveDown(0.5);
       }
-      doc.fillColor(layout.colors.text);
+      doc.moveDown(0.3);
     }
-    doc.moveDown();
+    renderWatermark(doc, layout);
+    renderPdfFooter(doc, layout, { podcastName, pageNum });
   }
 
-  // ── Wasserzeichen ─────────────────────────────────────────────────
-  renderWatermark(doc, layout);
+  // ── Optionale Notizseite ──────────────────────────────────────────────────
+  if (addNotesPage) {
+    doc.addPage();
+    pageNum++;
+    const pageW2 = doc.page.width;
+    const pageH2 = doc.page.height;
+    const contentW2 = pageW2 - 2 * m;
+    const accentColor2 = layout.colors.accent || '#4a4a8a';
 
-  // ── Footer ───────────────────────────────────────────────────────────
-  renderPdfFooter(doc, layout, { podcastName, pageNum: 1 });
+    // Überschrift
+    doc.fontSize(14).font('Helvetica-Bold').fillColor(layout.colors.primary || '#1a1a2e')
+      .text('Notizen', m, m);
+    doc.fontSize(8).font('Helvetica').fillColor(layout.colors.muted || '#888888')
+      .text(`${ep.title}  |  ${new Date().toLocaleDateString('de-DE')}`, m, m + 18);
+
+    // Trennlinie
+    doc.moveTo(m, m + 30).lineTo(pageW2 - m, m + 30)
+      .strokeColor(accentColor2).lineWidth(1).stroke();
+
+    // Linierte Fläche für Notizen
+    const lineStartY = m + 40;
+    const lineSpacing = 18;
+    const numLines = Math.floor((pageH2 - lineStartY - 40) / lineSpacing);
+    for (let i = 0; i < numLines; i++) {
+      const ly = lineStartY + i * lineSpacing;
+      doc.moveTo(m, ly).lineTo(pageW2 - m, ly)
+        .strokeColor('#e0e0e0').lineWidth(0.4).stroke();
+    }
+
+    // Footer
+    addFooter(pageNum);
+  }
+
   doc.end();
 });
 

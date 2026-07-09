@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../database';
 import { requireAuth } from '../middleware/auth';
 
-const router = Router();
+const router: import("express").Router = Router();
 
 // ─── Get overview stats (derived from episodes + manual entries) ──────────────
 router.get('/overview', requireAuth, (req, res) => {
