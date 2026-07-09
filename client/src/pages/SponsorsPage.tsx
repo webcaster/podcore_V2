@@ -370,6 +370,47 @@ export default function SponsorsPage() {
       )}
 
       {/* CATEGORIES TAB */}
+      {activeTab === 'archive' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Archivierte Angebote</h2>
+            <p className="text-sm text-text-muted">{archivedOffers.length} archivierte Dokumente</p>
+          </div>
+          
+          {archivedOffers.length === 0 ? (
+            <div className="card text-center py-12">
+              <Archive size={32} className="text-text-muted mx-auto mb-3" />
+              <p className="text-text-secondary">Keine archivierten Angebote gefunden</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {archivedOffers.map(offer => (
+                <div key={offer.id} className="card hover:border-surface-border-light transition-all">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-medium text-white">{offer.title}</h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-overlay text-text-muted uppercase">Archiv</span>
+                  </div>
+                  <div className="text-xs text-text-secondary space-y-1 mb-4">
+                    <p>Nummer: {offer.offerNumber || '–'}</p>
+                    <p>Sponsor: {sponsors.find(s => s.id === offer.sponsorId)?.name || 'Unbekannt'}</p>
+                    <p>Datum: {new Date(offer.createdAt).toLocaleDateString('de-DE')}</p>
+                    <p className="font-bold text-white mt-2">Summe: {offer.totalPrice.toFixed(2)} €</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <a href={`/api/sponsors/v2/offers/${offer.id}/pdf`} target="_blank" rel="noreferrer" className="btn-secondary flex-1 py-1.5 text-xs">
+                      <Download size={12} /> PDF
+                    </a>
+                    <Link to={`/sponsors/${offer.sponsorId}?tab=offers`} className="btn-secondary p-1.5">
+                      <ExternalLink size={12} />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {activeTab === 'categories' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center flex-wrap gap-3">

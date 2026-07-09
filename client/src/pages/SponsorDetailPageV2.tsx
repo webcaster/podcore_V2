@@ -11,6 +11,7 @@ import { sponsorsApi } from '../lib/api';
 import { sponsorsV2Api } from '../lib/api-v2';
 import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
+import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
 
 // ─── Typen ───────────────────────────────────────────────────────────────────
 interface EpisodeRef {
@@ -110,6 +111,8 @@ export default function SponsorDetailPageV2() {
   const [leistungOutro, setLeistungOutro] = useState('');
   const [pdfFileName, setPdfFileName] = useState('');
   const [pdfDocTitle, setPdfDocTitle] = useState('');
+  const [offerDocTitle, setOfferDocTitle] = useState('Angebot');
+  const [selectedOfferLayoutId, setSelectedOfferLayoutId] = useState<string>('');
   const [pdfDisclaimer, setPdfDisclaimer] = useState('');
   const [isExportingLeistung, setIsExportingLeistung] = useState(false);
   const [isExportingAll, setIsExportingAll] = useState(false);
@@ -259,6 +262,7 @@ export default function SponsorDetailPageV2() {
         discount,
         discountType: offerForm.discountType,
         total,
+        status: offerForm.status || undefined,
         notes: offerForm.notes || undefined,
         offerOptions: offerForm.offerOptions && offerForm.offerOptions.length > 0 ? offerForm.offerOptions : null,
       };
@@ -1153,25 +1157,35 @@ export default function SponsorDetailPageV2() {
         {/* ── Angebote Tab ───────────────────────────────────────────────────────────────── */}
         {activeTab === 'offers' && (
           <div className="space-y-4 max-w-4xl">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                   <ClipboardList size={18} className="text-purple-400" />
                   Angebote
                 </h2>
-                <p className="text-xs text-gray-400 mt-0.5">Erstelle individuelle Angebote für {sponsor?.name}. Bei Annahme werden automatisch Buchungen angelegt.</p>
+                <p className="text-xs text-gray-400 mt-0.5">Erstelle individuelle Angebote für {sponsor?.name}.</p>
               </div>
-              <div className="flex items-center gap-3 bg-gray-800/40 p-2 rounded-lg border border-gray-700">
+              <div className="flex items-center justify-between md:justify-start gap-3 bg-gray-800/40 p-2 rounded-lg border border-gray-700 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <label className="text-[10px] text-gray-500 uppercase font-bold">PDF-Titel:</label>
+                  <label className="text-[10px] text-gray-500 uppercase font-bold shrink-0">PDF-Titel:</label>
                   <input 
                     type="text" 
                     value={offerDocTitle} 
                     onChange={e => setOfferDocTitle(e.target.value)}
-                    className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white w-32 focus:outline-none focus:border-purple-500"
+                    className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white w-24 sm:w-28 focus:outline-none focus:border-purple-500"
                   />
                 </div>
-                <div className="w-px h-4 bg-gray-700"></div>
+                <div className="w-px h-4 bg-gray-700 hidden sm:block"></div>
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] text-gray-500 uppercase font-bold shrink-0">Layout:</label>
+                  <PdfLayoutPicker 
+                    exportType="sponsor_offer" 
+                    value={selectedOfferLayoutId} 
+                    onChange={setSelectedOfferLayoutId}
+                    className="w-44"
+                  />
+                </div>
+                <div className="w-px h-4 bg-gray-700 hidden sm:block"></div>
                 <a href="/api/sponsors/v2/price-list-pdf" target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-lg transition-colors">
                   <FileText size={14} /> Preisliste
@@ -1774,11 +1788,26 @@ export default function SponsorDetailPageV2() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Gültig bis</label>
-            <input type="date" value={offerForm.validUntil}
-              onChange={e => setOfferForm({ ...offerForm, validUntil: e.target.value })}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Gültig bis</label>
+              <input type="date" value={offerForm.validUntil}
+                onChange={e => setOfferForm({ ...offerForm, validUntil: e.target.value })}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
+              <select value={offerForm.status || 'entwurf'}
+                onChange={e => setOfferForm({ ...offerForm, status: e.target.value })}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500">
+                <option value="entwurf">Entwurf</option>
+                <option value="versendet">Versendet</option>
+                <option value="angenommen">Angenommen</option>
+                <option value="abgelehnt">Abgelehnt</option>
+                <option value="archiviert">Archiviert</option>
+              </select>
+            </div>
           </div>
 
           <div>

@@ -32,14 +32,11 @@ export default function PdfLayoutPicker({ exportType, value, onChange, className
   if (isLoading || layouts.length === 0) return null;
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <FileText size={13} className="text-text-muted shrink-0" />
-      <label className="text-xs text-text-muted shrink-0">Layout:</label>
-      <div className="relative">
+    <div className={`relative ${className}`}>
         <select
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="appearance-none bg-obsidian-800 border border-surface-border rounded px-2 py-1 pr-6 text-xs text-text-primary cursor-pointer hover:border-accent-purple/50 transition-colors"
+          className="appearance-none w-full bg-obsidian-800 border border-surface-border rounded px-2 py-1 pr-6 text-xs text-text-primary cursor-pointer hover:border-accent-purple/50 transition-colors"
         >
           {layouts.map(l => (
             <option key={l.id} value={l.id}>
@@ -49,6 +46,5 @@ export default function PdfLayoutPicker({ exportType, value, onChange, className
         </select>
         <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
       </div>
-    </div>
   );
 }

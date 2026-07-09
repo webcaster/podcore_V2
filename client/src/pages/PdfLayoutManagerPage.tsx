@@ -61,11 +61,7 @@ const SECTION_GROUPS: Record<string, { label: string; keys: string[] }> = {
   },
   invoice: {
     label: 'Sponsoring-Abrechnung',
-    keys: ['showInvoiceDetails', 'showInvoiceSummary', 'showInvoiceBankDetails'],
-  },
-  pricelist: {
-    label: 'Werbekategorien-Preisliste',
-    keys: ['showPricelistDescriptions', 'showPricelistExclusive'],
+    keys: ['showInvoiceDetails', 'showInvoiceSummary'],
   },
   confirmation: {
     label: 'Buchungsbestätigung',
@@ -73,15 +69,27 @@ const SECTION_GROUPS: Record<string, { label: string; keys: string[] }> = {
   },
   price_list: {
     label: 'Preisliste (Werbung)',
-    keys: ['showPricelistDescriptions', 'showPricelistExclusive', 'showPricelistCPM'],
+    keys: ['showPricelistDescriptions', 'showPricelistExclusive'],
   },
   episode_table: {
     label: 'Episoden-Skript (Tabelle)',
-    keys: ['showTableColors', 'showTableDuration', 'showTableRegie', 'showTableNotesPage'],
+    keys: ['showTableColors', 'showTableDuration', 'showTableRegie'],
   },
   booking_calendar: {
     label: 'Buchungskalender',
     keys: ['showBookingCalendarLegend', 'showBookingCalendarConflicts'],
+  },
+  sponsor_offer: {
+    label: 'Sponsor-Angebot',
+    keys: ['showOfferIntro', 'showOfferOutro', 'showOfferNotes', 'showOfferOptions'],
+  },
+  sponsor_dossier: {
+    label: 'Sponsor-Dossier',
+    keys: ['showDossierMeta', 'showDossierContracts', 'showDossierBookings', 'showDossierBilling'],
+  },
+  performance_report: {
+    label: 'Leistungsbericht',
+    keys: ['showReportStats', 'showReportChart', 'showReportBookings'],
   },
 };
 

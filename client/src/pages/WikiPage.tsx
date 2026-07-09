@@ -29,16 +29,16 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
-        id: 'v2-12-12',
-        title: 'v2.12.12 - Varianten, Archiv & CI-Fix',
-        summary: 'Umfangreiches Update für Sponsoring-Exporte, Varianten-Support und Layout-Management.',
+        id: 'v2-12-12-p2-4',
+        title: 'v2.12.12 - Patch 2.4: PDF & Layout Final',
+        summary: 'Finalisierung der PDF-Layout-Engine, Vorschau-Optimierung und automatische Angebotsnummerierung.',
         icon: <Package size={18} />,
-        tags: ['update', 'sponsoring', 'pdf', 'archiv', 'v2.12.12'],
+        tags: ['patch', 'pdf', 'layout', 'branding', 'v2.12.12-p2.4'],
         content: [
-          { heading: 'Angebots-Varianten im PDF', text: 'Mehrfach-Optionen (A/B/C) werden nun übersichtlich im PDF-Export aufgelistet.' },
-          { heading: 'Angebots-Archiv', text: 'In der Sponsoring-Übersicht gibt es einen neuen Tab "Archiv".' },
-          { heading: 'PDF-Layout Integration', text: 'CI-Farben und Logos werden nun konsistent übernommen.' },
-          { heading: 'Preisliste Landscape', text: 'Der Preislisten-Export wurde auf Querformat umgestellt.' }
+          { heading: 'PDF-Layout-Manager', text: 'Korrektur der Sektions-Auswahl für alle Export-Typen. Sektionen können nun präzise je Dokumententyp konfiguriert werden.' },
+          { heading: 'Vorschau-Optimierung', text: 'Export-Typ spezifische Mock-Daten für eine realitätsnahe PDF-Vorschau direkt im Manager.' },
+          { heading: 'Sponsoring-Fixes', text: 'Reparatur der PDF-Export-Route und Implementierung der automatischen Angebotsnummerierung (ANG-YYYY-NNN).' },
+          { heading: 'CI-Branding & Clipping', text: 'Konsequente Übernahme der CI-Farben in allen PDF-Tabellen und Summen-Boxen. Behebung von Text-Clipping in Summen.' }
         ]
       }
     ]

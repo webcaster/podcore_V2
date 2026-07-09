@@ -13,6 +13,8 @@ const router: import("express").Router = Router();
 router.use(requireAuth as any);
 
 // ─── Hilfsfunktion: Muster-PDF für Vorschau generieren ────────────────────────
+
+// ─── Hilfsfunktion: Muster-PDF für Vorschau generieren ────────────────────────
 function generatePreviewPdf(layout: PdfLayout): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const db = getDb();
@@ -36,8 +38,7 @@ function generatePreviewPdf(layout: PdfLayout): Promise<Buffer> {
     const pageWidth = doc.page.width;
     const contentWidth = pageWidth - pageMargin * 2;
 
-    // ── Seite 1: Header + Episoden-Beispiel ──────────────────────────────────
-    // Logo-Pfad aus Branding-Verzeichnis ermitteln
+    // Logo-Pfad
     const fs = require('fs');
     const path = require('path');
     const { DATA_DIR } = require('../database');
@@ -50,131 +51,64 @@ function generatePreviewPdf(layout: PdfLayout): Promise<Buffer> {
 
     renderPdfHeader(doc, layout, {
       podcastName,
-      documentTitle: 'Vorschau — Layout-Beispiel',
+      documentTitle: `Vorschau — ${layout.name || 'Layout'}`,
       logoPath,
     });
 
-    // Meta-Informationen
-    if (layout.sections.showMeta) {
-      renderSectionHeading(doc, layout, 'Meta-Informationen');
-      const metaItems = [
-        ['Episode', '#42 — Beispiel-Episode'],
-        ['Status', 'Veröffentlicht'],
-        ['Aufnahme', '15.01.2025'],
-        ['Veröffentlichung', '20.01.2025'],
-        ['Hosts', 'Max Müller, Sarah Schneider'],
-        ['Gäste', 'Dr. Petra Hoffmann'],
-        ['Tags', 'technologie, ki, gesellschaft'],
-      ];
-      for (const [label, value] of metaItems) {
-        doc.fontSize(typography.bodySize).font(`${typography.fontFamily}-Bold`).fillColor(colors.secondary)
-          .text(label + ':', pageMargin, doc.y, { continued: true, width: 120 });
-        doc.font(typography.fontFamily).fillColor(colors.text)
-          .text(' ' + value, { width: contentWidth - 120 });
-      }
-      doc.moveDown(0.5);
-    }
+    const type = layout.exportType;
 
-    // Beschreibung
-    if (layout.sections.showDescription) {
-      renderSectionHeading(doc, layout, 'Beschreibung');
+    if (type === 'sponsor_offer') {
+      renderSectionHeading(doc, layout, 'Angebot für: Beispiel Sponsor');
       doc.fontSize(typography.bodySize).font(typography.fontFamily).fillColor(colors.text)
-        .text(
-          'In dieser Beispiel-Episode tauchen wir tief in das Thema Künstliche Intelligenz ein. ' +
-          'Wir sprechen über Large Language Models, ihre Fähigkeiten und Grenzen, und was die KI-Revolution ' +
-          'für unsere Gesellschaft bedeutet. Mit dabei: Dr. Petra Hoffmann, KI-Forscherin an der TU Berlin.',
-          { width: contentWidth, align: 'justify' }
-        );
-      doc.moveDown(0.5);
-    }
-
-    // Script-Blöcke
-    if (layout.sections.showBlocks) {
-      renderSectionHeading(doc, layout, 'Script-Blöcke');
-      const blocks = [
-        { type: 'INTRO', title: 'Intro', duration: 30, text: 'Musik und Jingle — 30 Sekunden' },
-        { type: 'WERBUNG', title: 'Pre-Roll Werbung', duration: 30, text: 'DataSafe VPN — Werbung 30 Sekunden' },
-        { type: 'MODERATION', title: 'Begrüßung', duration: 180,
-          text: 'Herzlich willkommen bei Deep Dive Digital! Heute sprechen wir über Künstliche Intelligenz — ' +
-                'ein Thema, das 2024 alles dominiert hat. Ich bin Max Müller und mit mir ist heute Sarah Schneider.' },
-        { type: 'INTERVIEW', title: 'Interview Dr. Hoffmann', duration: 1800,
-          text: 'Interviewgespräch mit Dr. Petra Hoffmann, KI-Forscherin an der TU Berlin. ' +
-                'Themen: Wie funktionieren LLMs? Was können sie wirklich? Gesellschaftliche Auswirkungen.' },
-        { type: 'MODERATION', title: 'Zusammenfassung', duration: 300,
-          text: 'Zusammenfassung der wichtigsten Punkte aus dem Interview. Ausblick auf nächste Episode.' },
-        { type: 'OUTRO', title: 'Outro', duration: 30, text: 'Musik und Abspann — 30 Sekunden' },
-      ];
-
-      for (const block of blocks) {
-        // Block-Header-Box
-        const boxY = doc.y;
-        doc.rect(pageMargin, boxY, contentWidth, 18)
-          .fill(colors.background);
-        doc.fontSize(typography.smallSize)
-          .font(`${typography.fontFamily}-Bold`)
-          .fillColor(colors.headerText)
-          .text(
-            `${block.type}  ·  ${block.title}  ·  ${Math.floor(block.duration / 60)}:${String(block.duration % 60).padStart(2, '0')} min`,
-            pageMargin + 4, boxY + 4,
-            { width: contentWidth - 8 }
-          );
-        doc.y = boxY + 22;
-        doc.fontSize(typography.bodySize).font(typography.fontFamily).fillColor(colors.text)
-          .text(block.text, pageMargin + 8, doc.y, { width: contentWidth - 16 });
-        doc.moveDown(0.4);
+        .text('Gültig bis: 31.12.2026', { width: contentWidth });
+      doc.moveDown();
+      
+      if (layout.sections.showOfferIntro) {
+        doc.text('Vielen Dank für das freundliche Telefonat. Gerne unterbreiten wir Ihnen folgendes Angebot für eine Zusammenarbeit in unserem Podcast.', { align: 'justify' });
+        doc.moveDown();
       }
-      doc.moveDown(0.3);
-    }
 
-    // ── Seite 2: Notizen + Technische Daten ──────────────────────────────────
-    doc.addPage();
-    renderPdfHeader(doc, layout, {
-      podcastName,
-      documentTitle: 'Vorschau — Seite 2',
-    });
-
-    if (layout.sections.showTechnicalData) {
-      renderSectionHeading(doc, layout, 'Technische Daten');
-      const techItems = [
-        ['Mikrofon', 'Rode NT1'],
-        ['Interface', 'Zoom H6'],
-        ['DAW', 'Adobe Audition'],
-        ['Format', 'MP3 · 192 kbps · 44.1 kHz · Stereo'],
-        ['Aufnahmeort', 'Heimstudio Berlin'],
-        ['Schnitt', 'Lena Braun'],
+      renderSectionHeading(doc, layout, 'Paket: Premium');
+      const items = [
+        ['Beschreibung', 'Menge', 'Einzel', 'Gesamt'],
+        ['Pre-Roll Werbung (30s)', '4', '250.00 €', '1000.00 €'],
+        ['Mid-Roll Sponsoring', '2', '450.00 €', '900.00 €'],
       ];
-      for (const [label, value] of techItems) {
-        doc.fontSize(typography.bodySize).font(`${typography.fontFamily}-Bold`).fillColor(colors.secondary)
-          .text(label + ':', pageMargin, doc.y, { continued: true, width: 120 });
-        doc.font(typography.fontFamily).fillColor(colors.text)
-          .text(' ' + value, { width: contentWidth - 120 });
-      }
-      doc.moveDown(0.5);
-    }
-
-    if (layout.sections.showNotes) {
-      renderSectionHeading(doc, layout, 'Interne Notizen');
+      
+      let curY = doc.y;
+      items.forEach((row, i) => {
+        doc.fontSize(i === 0 ? typography.smallSize : typography.bodySize)
+           .font(i === 0 ? `${typography.fontFamily}-Bold` : typography.fontFamily)
+           .fillColor(i === 0 ? colors.headerText : colors.text);
+        if (i === 0) {
+          doc.rect(pageMargin, curY - 2, contentWidth, 15).fill(colors.primary);
+          doc.fillColor(colors.headerText);
+        }
+        doc.text(row[0], pageMargin + 5, curY);
+        doc.text(row[1], pageMargin + 250, curY, { width: 50, align: 'right' });
+        doc.text(row[2], pageMargin + 310, curY, { width: 80, align: 'right' });
+        doc.text(row[3], pageMargin + 400, curY, { width: 80, align: 'right' });
+        curY += 18;
+      });
+      doc.y = curY + 10;
+      doc.fontSize(typography.headingSize).font(`${typography.fontFamily}-Bold`).fillColor(colors.primary)
+         .text('Gesamtpreis: 1.900,00 €', { align: 'right' });
+      
+    } else if (type === 'invoice' || type === 'confirmation') {
+       renderSectionHeading(doc, layout, type === 'invoice' ? 'Abrechnung' : 'Buchungsbestätigung');
+       doc.fontSize(typography.bodySize).font(typography.fontFamily).fillColor(colors.text)
+          .text(`Nummer: 2026-001
+Datum: 01.01.2026`, { width: contentWidth });
+       doc.moveDown();
+       doc.text('Hiermit bestätigen wir die folgenden Werbebuchungen für den Zeitraum Q1/2026.');
+    } else {
+      // Fallback: Episode Preview (wie bisher)
+      renderSectionHeading(doc, layout, 'Beispiel-Inhalt');
       doc.fontSize(typography.bodySize).font(typography.fontFamily).fillColor(colors.text)
-        .text(
-          'Sehr gute Episode. Dr. Hoffmann war ein toller Gast. ' +
-          'Ton war durchgehend sauber, kein Nachbearbeitung nötig. ' +
-          'Minute 28:00 — kurze Pause einfügen (Themenübergang). ' +
-          'Intro und Outro aus der Media Library übernehmen.',
-          { width: contentWidth }
-        );
-      doc.moveDown(0.5);
+        .text('Dies ist eine Vorschau für den Export-Typ: ' + type, { width: contentWidth });
     }
 
-    if (layout.sections.showSponsors) {
-      renderSectionHeading(doc, layout, 'Sponsoren');
-      doc.fontSize(typography.bodySize).font(typography.fontFamily).fillColor(colors.text)
-        .text('DataSafe VPN — Pre-Roll · 30s · Bestätigt', { width: contentWidth });
-      doc.moveDown(0.2);
-      doc.text('TechCloud Solutions — Mid-Roll · 60s · Bestätigt', { width: contentWidth });
-      doc.moveDown(0.5);
-    }
-
-    // Footer auf allen Seiten
+    // Footer
     const range = doc.bufferedPageRange();
     for (let i = 0; i < range.count; i++) {
       doc.switchToPage(range.start + i);
