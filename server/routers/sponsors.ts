@@ -398,7 +398,7 @@ router.get('/categories', requirePermission('canViewSponsors') as any, (req: Aut
 router.post('/categories', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const { name, description, color = '#7c3aed', defaultPosition = 'mid-roll', defaultDuration = 30,
-    presentationTemplate = 'präsentiert von', isExclusive = 0,
+    presentationTemplate = '', isExclusive = 0,
     basePrice, pricePerEpisode, pricePer1000Listens, currency = 'EUR', sortOrder = 0 } = req.body;
   if (!name) return res.status(400).json({ success: false, error: 'Name erforderlich' });
   const id = uuidv4();

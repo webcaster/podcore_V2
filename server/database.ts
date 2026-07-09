@@ -479,7 +479,7 @@ function initializeSchema(db: any): void {
     color TEXT NOT NULL DEFAULT '#7c3aed',
     default_position TEXT NOT NULL DEFAULT 'mid-roll',
     default_duration INTEGER NOT NULL DEFAULT 30,
-    presentation_template TEXT NOT NULL DEFAULT 'präsentiert von',
+    presentation_template TEXT DEFAULT '',
     is_exclusive INTEGER NOT NULL DEFAULT 0,
     base_price REAL,
     price_per_episode REAL,
@@ -957,35 +957,35 @@ function initializeSchema(db: any): void {
         {
           id: uuidv4(), name: 'Pre-Roll', description: 'Pre-Roll – Kategorie Sponsor, oder Eigenwerbung Kurz',
           color: '#3b82f6', default_position: 'pre-roll', default_duration: 15,
-          presentation_template: 'präsentiert von', is_exclusive: 0,
+          presentation_template: '', is_exclusive: 0,
           base_price: 50.00, price_per_episode: 60.00, price_per_1000_listens: 12.00,
           currency: 'EUR', is_active: 1, sort_order: 1
         },
         {
           id: uuidv4(), name: 'Mid-Roll', description: 'Mid-Roll // Hauptwerbeplatz',
           color: '#f97316', default_position: 'mid-roll', default_duration: 30,
-          presentation_template: 'präsentiert von', is_exclusive: 0,
+          presentation_template: '', is_exclusive: 0,
           base_price: 80.00, price_per_episode: 100.00, price_per_1000_listens: 18.00,
           currency: 'EUR', is_active: 1, sort_order: 2
         },
         {
           id: uuidv4(), name: 'Post-Roll', description: 'Post-Roll',
           color: '#22c55e', default_position: 'post-roll', default_duration: 15,
-          presentation_template: 'präsentiert von', is_exclusive: 0,
+          presentation_template: '', is_exclusive: 0,
           base_price: 30.00, price_per_episode: 40.00, price_per_1000_listens: 8.00,
           currency: 'EUR', is_active: 1, sort_order: 3
         },
         {
           id: uuidv4(), name: 'Host-Read', description: 'Persönlich vom Moderator gesprochen in der laufenden Episode.',
           color: '#a855f7', default_position: 'mid-roll', default_duration: 90,
-          presentation_template: 'präsentiert von', is_exclusive: 0,
+          presentation_template: '', is_exclusive: 0,
           base_price: 120.00, price_per_episode: 150.00, price_per_1000_listens: 40.00,
           currency: 'EUR', is_active: 1, sort_order: 4
         },
         {
           id: uuidv4(), name: 'Folgensponsoring', description: 'Folgensponsoring - Exklusiv',
           color: '#ef4444', default_position: 'pre-roll', default_duration: 30,
-          presentation_template: 'präsentiert von', is_exclusive: 1,
+          presentation_template: '', is_exclusive: 1,
           base_price: 150.00, price_per_episode: 200.00, price_per_1000_listens: 25.00,
           currency: 'EUR', is_active: 1, sort_order: 5
         },
@@ -998,6 +998,8 @@ function initializeSchema(db: any): void {
       }
       console.log('[DB] Default ad_categories seeded (5 categories)');
     }
+    // Clean up legacy text from existing rows
+    db.run("UPDATE ad_categories SET presentation_template = '' WHERE presentation_template = 'präsentiert von'");
   } catch (e) { console.error('[DB] Ad categories seed error:', e); }
 
   console.log('[DB] Database initialized at:', DB_PATH);

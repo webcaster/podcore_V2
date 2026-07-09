@@ -42,7 +42,7 @@ export default function SponsorsPage() {
   });
   const [categoryForm, setCategoryForm] = useState({
     name: '', description: '', color: '#7c3aed', defaultDuration: 30, defaultPosition: 'pre-roll',
-    presentationTemplate: 'präsentiert von', isExclusive: false,
+    presentationTemplate: '', isExclusive: false,
     basePrice: '', pricePerEpisode: '', pricePer1000Listens: '', currency: 'EUR',
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -406,7 +406,7 @@ export default function SponsorsPage() {
                 </div>
               )}
               {can('canManageSponsors') && (
-                <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', color: '#7c3aed', defaultDuration: 30, defaultPosition: 'pre-roll', presentationTemplate: 'präsentiert von', isExclusive: false, basePrice: '', pricePerEpisode: '', pricePer1000Listens: '', currency: 'EUR' }); setShowCategoryModal(true); }} className="btn-primary">
+                <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', color: '#7c3aed', defaultDuration: 30, defaultPosition: 'pre-roll', presentationTemplate: '', isExclusive: false, basePrice: '', pricePerEpisode: '', pricePer1000Listens: '', currency: 'EUR' }); setShowCategoryModal(true); }} className="btn-primary">
                   <Plus size={16} /><span>Neue Kategorie</span>
                 </button>
               )}
@@ -436,7 +436,7 @@ export default function SponsorsPage() {
               <Tag size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-text-secondary">Noch keine Werbekategorien</p>
               {can('canManageSponsors') && (
-                <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', color: '#7c3aed', defaultDuration: 30, defaultPosition: 'pre-roll', presentationTemplate: 'präsentiert von', isExclusive: false, basePrice: '', pricePerEpisode: '', pricePer1000Listens: '', currency: 'EUR' }); setShowCategoryModal(true); }} className="btn-primary mt-4 mx-auto">
+                <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', color: '#7c3aed', defaultDuration: 30, defaultPosition: 'pre-roll', presentationTemplate: '', isExclusive: false, basePrice: '', pricePerEpisode: '', pricePer1000Listens: '', currency: 'EUR' }); setShowCategoryModal(true); }} className="btn-primary mt-4 mx-auto">
                   <Plus size={16} /><span>Erste Kategorie erstellen</span>
                 </button>
               )}
@@ -452,7 +452,7 @@ export default function SponsorsPage() {
                     </div>
                     {can('canManageSponsors') && (
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => { setEditingCategory(cat); setCategoryForm({ name: cat.name, description: cat.description || '', color: cat.color, defaultDuration: cat.default_duration || cat.defaultDuration || 30, defaultPosition: cat.default_position || cat.defaultPosition || 'mid-roll', presentationTemplate: cat.presentation_template || 'präsentiert von', isExclusive: cat.is_exclusive === 1, basePrice: cat.base_price != null ? String(cat.base_price) : '', pricePerEpisode: cat.price_per_episode != null ? String(cat.price_per_episode) : '', pricePer1000Listens: cat.price_per_1000_listens != null ? String(cat.price_per_1000_listens) : '', currency: cat.currency || 'EUR' }); setShowCategoryModal(true); }} className="p-1.5 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg"><Edit2 size={13} /></button>
+                        <button onClick={() => { setEditingCategory(cat); setCategoryForm({ name: cat.name, description: cat.description || '', color: cat.color, defaultDuration: cat.default_duration || cat.defaultDuration || 30, defaultPosition: cat.default_position || cat.defaultPosition || 'mid-roll', presentationTemplate: cat.presentation_template || '', isExclusive: cat.is_exclusive === 1, basePrice: cat.base_price != null ? String(cat.base_price) : '', pricePerEpisode: cat.price_per_episode != null ? String(cat.price_per_episode) : '', pricePer1000Listens: cat.price_per_1000_listens != null ? String(cat.price_per_1000_listens) : '', currency: cat.currency || 'EUR' }); setShowCategoryModal(true); }} className="p-1.5 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg"><Edit2 size={13} /></button>
                         <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="p-1.5 text-text-muted hover:text-accent-red hover:bg-accent-red/10 rounded-lg"><Trash2 size={13} /></button>
                       </div>
                     )}
@@ -468,9 +468,9 @@ export default function SponsorsPage() {
                       </span>
                     )}
                   </div>
-                  {cat.presentation_template && (
+                  {cat.presentation_template && cat.presentation_template.trim() !== '' && (
                     <p className="text-[10px] text-accent-green/80 italic mb-2">
-                      [Folgentitel] {cat.presentation_template} [Sponsor]
+                      {cat.presentation_template}
                     </p>
                   )}
 
