@@ -198,6 +198,25 @@ export default function SettingsPage() {
     nextNumber: 1,
   });
 
+  // ── Offer number schema form ──────────────────────────────────────────────
+  const [offerNumberForm, setOfferNumberForm] = useState({
+    prefix: 'ANG',
+    separator: '-',
+    includeYear: true,
+    paddingDigits: 3,
+    nextNumber: 1,
+  });
+
+  const buildOfferNumberExample = (form: typeof offerNumberForm): string => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const num = String(form.nextNumber || 1).padStart(form.paddingDigits, '0');
+    const parts: string[] = [form.prefix || 'ANG'];
+    if (form.includeYear) parts.push(String(year));
+    parts.push(num);
+    return parts.join(form.separator || '-');
+  };
+
   const buildInvoiceExample = (form: typeof invoiceForm): string => {
     const now = new Date();
     const year = now.getFullYear();
@@ -263,6 +282,15 @@ export default function SettingsPage() {
         includeMonth: inv.includeMonth ?? false,
         paddingDigits: inv.paddingDigits || 3,
         nextNumber: inv.nextNumber || 1,
+      });
+      // Offer number schema
+      const ofn = data.sponsoring?.offerNumbering || {};
+      setOfferNumberForm({
+        prefix: ofn.prefix || 'ANG',
+        separator: ofn.separator || '-',
+        includeYear: ofn.includeYear ?? true,
+        paddingDigits: ofn.paddingDigits || 3,
+        nextNumber: ofn.nextNumber || 1,
       });
       // Technical defaults
       const t = data.technicalDefaults || {};
@@ -386,7 +414,7 @@ export default function SettingsPage() {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const payload: any = { ...appForm, pdf: pdfForm, workflow: workflowForm, invoiceSchema: invoiceForm };
+      const payload: any = { ...appForm, pdf: pdfForm, workflow: workflowForm, invoiceSchema: invoiceForm, sponsoring: { ...(settings?.sponsoring || {}), offerNumbering: offerNumberForm } };
       if (!payload.sessionSecret) delete payload.sessionSecret;
       await adminApi.updateSettings(payload);
       showSuccess('Einstellungen gespeichert');
@@ -994,6 +1022,55 @@ export default function SettingsPage() {
                 <div className="mt-4 p-3 bg-obsidian-800 rounded-lg border border-surface-border flex items-center gap-3">
                   <span className="text-text-muted text-sm">Vorschau:</span>
                   <span className="font-mono text-accent-purple font-bold text-base">{buildInvoiceExample(invoiceForm)}</span>
+                </div>
+              </div>
+
+              {/* Offer Number Schema */}
+              <div className="card">
+                <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
+                  <Tag size={16} /> Angebotsnummern-Schema
+                </h3>
+                <p className="text-text-muted text-sm mb-4">Lege fest, wie Angebotsnummern automatisch vergeben werden. Die nächste Nummer wird beim Erstellen eines Angebots automatisch eingetragen.</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="label">Präfix</label>
+                    <input type="text" value={offerNumberForm.prefix} onChange={e => setOfferNumberForm(p => ({ ...p, prefix: e.target.value }))} className="input font-mono" placeholder="ANG" maxLength={10} />
+                    <p className="text-text-muted text-xs mt-1">z.B. ANG, OFF, ANB</p>
+                  </div>
+                  <div>
+                    <label className="label">Trennzeichen</label>
+                    <select value={offerNumberForm.separator} onChange={e => setOfferNumberForm(p => ({ ...p, separator: e.target.value }))} className="input">
+                      <option value="-">Bindestrich  (ANG-2025-001)</option>
+                      <option value="/">Schrägstrich (ANG/2025/001)</option>
+                      <option value=".">Punkt        (ANG.2025.001)</option>
+                      <option value="_">Unterstrich  (ANG_2025_001)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Stellen (Nummer)</label>
+                    <select value={offerNumberForm.paddingDigits} onChange={e => setOfferNumberForm(p => ({ ...p, paddingDigits: parseInt(e.target.value) }))} className="input">
+                      <option value={2}>2 Stellen (01)</option>
+                      <option value={3}>3 Stellen (001)</option>
+                      <option value={4}>4 Stellen (0001)</option>
+                      <option value={5}>5 Stellen (00001)</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3 pt-4">
+                    <button type="button" onClick={() => setOfferNumberForm(p => ({ ...p, includeYear: !p.includeYear }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${offerNumberForm.includeYear ? 'bg-accent-purple' : 'bg-surface-border'}`}>
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${offerNumberForm.includeYear ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                    <span className="text-text-secondary text-sm">Jahr einschließen</span>
+                  </div>
+                  <div>
+                    <label className="label">Nächste Nummer</label>
+                    <input type="number" value={offerNumberForm.nextNumber} onChange={e => setOfferNumberForm(p => ({ ...p, nextNumber: parseInt(e.target.value) || 1 }))} className="input" min={1} />
+                    <p className="text-text-muted text-xs mt-1">Zähler für das nächste Angebot</p>
+                  </div>
+                </div>
+                <div className="mt-4 p-3 bg-obsidian-800 rounded-lg border border-surface-border flex items-center gap-3">
+                  <span className="text-text-muted text-sm">Vorschau:</span>
+                  <span className="font-mono text-accent-purple font-bold text-base">{buildOfferNumberExample(offerNumberForm)}</span>
                 </div>
               </div>
 

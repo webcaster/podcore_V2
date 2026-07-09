@@ -899,6 +899,15 @@ function initializeSchema(db: any): void {
         interviewApprovalRequired: false,
         approvalRoles: ['moderator', 'admin'],
       },
+      sponsoring: {
+        offerNumbering: {
+          prefix: 'ANG',
+          separator: '-',
+          includeYear: true,
+          paddingDigits: 3,
+          nextNumber: 1,
+        },
+      },
     };
     db.run('INSERT INTO settings (key, value) VALUES (?, ?)', ['app', JSON.stringify(defaultSettings)]);
   }
@@ -1041,6 +1050,9 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
     canManageSponsorContracts: false,
     canManageAdBookingsV2: false,
     canViewSponsorContracts: false,
+    // Sponsoring-System v2.12.13 – Angebote
+    canManageSponsorOffers: false,
+    canViewSponsorOffers: false,
   };
 
   switch (role) {
@@ -1074,6 +1086,9 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         // v2.12.0
         canViewSponsorContracts: true,
         canManageAdBookingsV2: true,
+        // v2.12.13
+        canViewSponsorOffers: true,
+        canManageSponsorOffers: true,
       };
     case 'moderator':
       return {
@@ -1103,6 +1118,9 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canViewSponsorContracts: true,
         canManageSponsorContracts: true,
         canManageAdBookingsV2: true,
+        // v2.12.13
+        canViewSponsorOffers: true,
+        canManageSponsorOffers: true,
       };
     case 'produktion':
       return {
@@ -1126,6 +1144,8 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         // v2.12.0
         canViewSponsorContracts: true,
         canManageAdBookingsV2: true,
+        // v2.12.13
+        canViewSponsorOffers: true,
       };
     default:
       return base;

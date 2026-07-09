@@ -29,6 +29,21 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-12-13',
+        title: 'v2.12.13 - Sponsoring-System Final',
+        summary: 'Vollständige Stabilisierung des Sponsoring-Systems: Accept-Fix, PDF-Layout-Übergabe, Angebotsnummern-Einstellungen im Admin und neue Rollen-Berechtigungen.',
+        icon: <Package size={18} />,
+        tags: ['sponsoring', 'pdf', 'admin', 'permissions', 'v2.12.13'],
+        content: [
+          { heading: 'Accept-Fehler behoben', text: 'Der Fehler „Unexpected token < ... is not valid JSON“ beim Annehmen eines Angebots wurde durch Korrektur eines fehlerhaften SQL-Bindings behoben. Buchungen werden nun zuverlässig angelegt.' },
+          { heading: 'PDF-Layout-Übergabe', text: 'Das ausgewählte Layout wird nun korrekt beim PDF-Export übergeben. CI-Farben, Sektionen und Schriften aus dem konfigurierten Layout werden im Angebots-PDF vollständig übernommen.' },
+          { heading: 'Angebotsnummern-Einstellungen', text: 'Im Admin-Bereich (Einstellungen → App) kann das Schema für automatische Angebotsnummern konfiguriert werden: Präfix, Trennzeichen, Jahreszahl, Stellen und Startnummer.' },
+          { heading: 'Neue Rollen-Berechtigungen', text: 'Zwei neue Berechtigungen wurden eingeführt: „Angebote ansehen“ (canViewSponsorOffers) und „Angebote erstellen & verwalten“ (canManageSponsorOffers). Alle bestehenden Rollen wurden entsprechend angepasst.' },
+          { heading: 'Sponsor-Adresse im PDF', text: 'Name, Firma und Anschrift des Sponsors werden nun im Angebots-PDF angezeigt (steuerbar über die Layout-Sektionen).' },
+          { heading: 'Kein Gesamtpreis bei Optionen', text: 'Bei Angeboten mit mehreren Varianten wird kein Gesamtpreis mehr am Ende angezeigt, da jede Option ihren eigenen Preis ausweist.' }
+        ]
+      },
+      {
         id: 'v2-12-12-p2-4',
         title: 'v2.12.12 - Patch 2.4: PDF & Layout Final',
         summary: 'Finalisierung der PDF-Layout-Engine, Vorschau-Optimierung und automatische Angebotsnummerierung.',

@@ -94,20 +94,12 @@ export interface PdfLayoutSections {
   showPerformancePriceBreakdown: boolean; // Preisaufschlüsselung je Buchung
   showPerformanceTotals: boolean;       // Gesamtsummen am Ende
   showPerformanceNotes: boolean;        // Performance-Notizen je Buchung
-  // Sponsor Offer (Angebot) - v2.12.12
-  showOfferIntro: boolean;
-  showOfferOutro: boolean;
-  showOfferNotes: boolean;
-  showOfferOptions: boolean;
-  // Sponsor Dossier - v2.12.12
-  showDossierMeta: boolean;
-  showDossierContracts: boolean;
-  showDossierBookings: boolean;
-  showDossierBilling: boolean;
-  // Performance Report Extensions - v2.12.12
-  showReportStats: boolean;
-  showReportChart: boolean;
-  showReportBookings: boolean;
+  // Sponsor-Angebot – v2.12.13
+  showOfferIntro: boolean;              // Einleitungstext im Angebot
+  showOfferOutro: boolean;              // Abschlusstext im Angebot
+  showOfferNotes: boolean;              // Hinweise im Angebot
+  showOfferOptions: boolean;            // Optionen/Positionen im Angebot
+  showSponsorAddress: boolean;          // Sponsor-Adresse im Angebot
 }
 
 export interface PdfLayoutWatermark {
@@ -211,21 +203,13 @@ export const DEFAULT_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> =
     showPerformanceV2Bookings: true,
     showPerformancePriceBreakdown: true,
     showPerformanceTotals: true,
-        showPerformanceNotes: true,
-    // Sponsor Offer
+    showPerformanceNotes: true,
+    // Sponsor-Angebot – v2.12.13
     showOfferIntro: true,
     showOfferOutro: true,
     showOfferNotes: true,
     showOfferOptions: true,
-    // Sponsor Dossier
-    showDossierMeta: true,
-    showDossierContracts: true,
-    showDossierBookings: true,
-    showDossierBilling: true,
-    // Performance Report
-    showReportStats: true,
-    showReportChart: true,
-    showReportBookings: true,
+    showSponsorAddress: true,
   },
   pageMargin: 50,
   pageSize: 'A4',
@@ -304,17 +288,12 @@ export const MINIMAL_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> =
     showPerformancePriceBreakdown: false,
     showPerformanceTotals: true,
     showPerformanceNotes: false,
+    // Sponsor-Angebot – v2.12.13
     showOfferIntro: true,
     showOfferOutro: true,
-    showOfferNotes: true,
+    showOfferNotes: false,
     showOfferOptions: true,
-    showDossierMeta: true,
-    showDossierContracts: true,
-    showDossierBookings: true,
-    showDossierBilling: true,
-    showReportStats: true,
-    showReportChart: true,
-    showReportBookings: true,
+    showSponsorAddress: false,
   },
   pageMargin: 60,
   pageSize: 'A4',
@@ -378,21 +357,8 @@ export const PERFORMANCE_REPORT_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'up
     showPerformanceV2Bookings: true,
     showPerformancePriceBreakdown: true,
     showPerformanceTotals: true,
-        showPerformanceNotes: true,
-    // Sponsor Offer
-    showOfferIntro: true,
-    showOfferOutro: true,
-    showOfferNotes: true,
-    showOfferOptions: true,
-    // Sponsor Dossier
-    showDossierMeta: true,
-    showDossierContracts: true,
-    showDossierBookings: true,
-    showDossierBilling: true,
-    // Performance Report
-    showReportStats: true,
-    showReportChart: true,
-    showReportBookings: true,
+    showPerformanceNotes: true,
+    showOfferIntro: true, showOfferOutro: true, showOfferNotes: true, showOfferOptions: true, showSponsorAddress: true,
   },
   pageMargin: 45,
   pageSize: 'A4',
@@ -455,17 +421,7 @@ export const PERFORMANCE_REPORT_COMPACT_LAYOUT: Omit<PdfLayout, 'id' | 'createdA
     showPerformancePriceBreakdown: false,
     showPerformanceTotals: true,
     showPerformanceNotes: false,
-    showOfferIntro: true,
-    showOfferOutro: true,
-    showOfferNotes: true,
-    showOfferOptions: true,
-    showDossierMeta: true,
-    showDossierContracts: true,
-    showDossierBookings: true,
-    showDossierBilling: true,
-    showReportStats: true,
-    showReportChart: true,
-    showReportBookings: true,
+    showOfferIntro: true, showOfferOutro: true, showOfferNotes: false, showOfferOptions: true, showSponsorAddress: false,
   },
   pageMargin: 35,
   pageSize: 'A4',
@@ -528,17 +484,7 @@ export const INVOICE_CORPORATE_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'upd
     showPerformancePriceBreakdown: true,
     showPerformanceTotals: true,
     showPerformanceNotes: false,
-    showOfferIntro: true,
-    showOfferOutro: true,
-    showOfferNotes: true,
-    showOfferOptions: true,
-    showDossierMeta: true,
-    showDossierContracts: true,
-    showDossierBookings: true,
-    showDossierBilling: true,
-    showReportStats: true,
-    showReportChart: true,
-    showReportBookings: true,
+    showOfferIntro: true, showOfferOutro: true, showOfferNotes: true, showOfferOptions: true, showSponsorAddress: true,
   },
   pageMargin: 50,
   pageSize: 'A4',
@@ -601,17 +547,7 @@ export const CONFIRMATION_MODERN_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'u
     showPerformancePriceBreakdown: false,
     showPerformanceTotals: false,
     showPerformanceNotes: false,
-    showOfferIntro: true,
-    showOfferOutro: true,
-    showOfferNotes: true,
-    showOfferOptions: true,
-    showDossierMeta: true,
-    showDossierContracts: true,
-    showDossierBookings: true,
-    showDossierBilling: true,
-    showReportStats: true,
-    showReportChart: true,
-    showReportBookings: true,
+    showOfferIntro: true, showOfferOutro: true, showOfferNotes: true, showOfferOptions: true, showSponsorAddress: true,
   },
   pageMargin: 50,
   pageSize: 'A4',
@@ -645,20 +581,14 @@ function parseLayout(row: any): PdfLayout {
       showConfirmationTerms: true,
       showBookingCalendarLegend: true,
       showBookingCalendarConflicts: true,
+      // Sponsor-Angebot Defaults
+      showOfferIntro: true,
+      showOfferOutro: true,
+      showOfferNotes: true,
+      showOfferOptions: true,
+      showSponsorAddress: true,
       ...sections,
-    showPerformanceNotes: false,
-    showOfferIntro: true,
-    showOfferOutro: true,
-    showOfferNotes: true,
-    showOfferOptions: true,
-    showDossierMeta: true,
-    showDossierContracts: true,
-    showDossierBookings: true,
-    showDossierBilling: true,
-    showReportStats: true,
-    showReportChart: true,
-    showReportBookings: true,
-  },
+    },
     isDefault: row.is_default === 1,
     isSystem: row.is_system === 1,
     exportType: row.export_type,
@@ -828,6 +758,7 @@ export function ensureDefaultLayouts(): void {
       isSystem: true,
       colors: { primary: '#7c3aed', secondary: '#1e3a5f', accent: '#a855f7', text: '#111111', muted: '#6b7280', background: '#7c3aed', headerText: '#ffffff' },
       footer: { showPageNumbers: true, showDate: true, showPodcastName: true, customText: 'Angebot freibleibend – Preise zzgl. gesetzlicher MwSt.' },
+      sections: { showOfferIntro: true, showOfferOutro: true, showOfferNotes: true, showOfferOptions: true, showSponsorAddress: true },
     };
     db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation, header_height, line_spacing, divider_style, watermark)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

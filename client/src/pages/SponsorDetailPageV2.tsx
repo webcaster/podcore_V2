@@ -1253,7 +1253,7 @@ export default function SponsorDetailPageV2() {
                             </button>
                           )}
                           <a
-                            href={`${sponsorsV2Api.getOfferPdfUrl(offer.id)}?documentTitle=${encodeURIComponent(offerDocTitle)}`}
+                            href={`${sponsorsV2Api.getOfferPdfUrl(offer.id)}?documentTitle=${encodeURIComponent(offerDocTitle)}${selectedOfferLayoutId ? `&layoutId=${encodeURIComponent(selectedOfferLayoutId)}` : ''}`}
                             target="_blank" rel="noopener noreferrer"
                             className="p-1.5 text-gray-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors"
                             title="Angebot als PDF"
@@ -2131,7 +2131,7 @@ export default function SponsorDetailPageV2() {
                         onChange={() => setSelectedOptionIndex(idx)}
                         className="w-4 h-4 accent-purple-500" />
                       <div className="flex-1">
-                        <div className="text-sm font-medium text-white">{opt.label || `Option ${String.fromCharCode(65 + idx)}`}</div>
+                        <div className="text-sm font-medium text-white">{opt.title || opt.label || `Option ${String.fromCharCode(65 + idx)}`}</div>
                         <div className="text-xs text-gray-400">{(opt.positions || []).length} Positionen · {total.toFixed(2)} €</div>
                       </div>
                       <span className="text-sm font-bold text-white">{total.toFixed(2)} €</span>
