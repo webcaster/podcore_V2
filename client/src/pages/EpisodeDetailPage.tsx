@@ -747,16 +747,17 @@ export default function EpisodeDetailPage() {
   };
 
   const handleApplyTemplate = (template: any) => {
-    if (!confirm(`Vorlage "${template.name}" laden? Aktuelle Blöcke werden ersetzt.`)) return;
+    const blockCount = (template.blocks || []).length;
+    if (!confirm(`Vorlage "${template.name}" laden?\n\n${blockCount} Block(s) werden übernommen. Aktuelle Blöcke werden ersetzt.`)) return;
     const newBlocks = (template.blocks || []).map((b: any, i: number) => ({
       ...b,
       id: `block_${Date.now()}_${i}`,
-      content: b.content || '',
+      content: b.content !== undefined ? b.content : '',
     }));
     setBlocks(newBlocks);
     setIsDirty(true);
     setShowTemplateLoadModal(false);
-    showSuccess(`Vorlage "${template.name}" geladen`);
+    showSuccess(`Vorlage "${template.name}" geladen (${blockCount} Blöcke)`);
   };
 
   const handleDeleteTemplate = async (templateId: string) => {

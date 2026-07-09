@@ -273,6 +273,7 @@ router.post('/', requirePermission('canCreateEpisodes') as any, (req: AuthReques
 
 // PUT /api/episodes/:id
 router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthRequest, res: Response) => {
+  try {
   const db = getDb();
   const existing = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
 
@@ -371,6 +372,10 @@ router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthReques
 
   const episode = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]);
   return res.json({ success: true, data: parseEpisode(episode) });
+  } catch (err: any) {
+    console.error('[Episodes PUT] Error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Fehler beim Speichern der Episode' });
+  }
 });
 
 // DELETE /api/episodes/:id

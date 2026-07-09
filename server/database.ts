@@ -547,6 +547,9 @@ function initializeSchema(db: any): void {
   // Episodes: add show_notes and alt_duration (v2.9.0)
   try { db.exec('ALTER TABLE episodes ADD COLUMN show_notes TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE episodes ADD COLUMN alt_duration INTEGER DEFAULT NULL'); } catch (_) {}
+  // Episodes: add planned_date and idea_id if not exists (v2.12.11)
+  try { db.exec('ALTER TABLE episodes ADD COLUMN planned_date TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN idea_id TEXT DEFAULT NULL'); } catch (_) {}
 
   // PDF Layouts: neue Spalten für v2.9.3 (header_height, line_spacing, divider_style, watermark)
   try { db.exec("ALTER TABLE pdf_layouts ADD COLUMN header_height INTEGER DEFAULT 70"); } catch (_) {}
