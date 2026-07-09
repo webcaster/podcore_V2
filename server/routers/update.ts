@@ -200,20 +200,41 @@ router.post('/install', requirePermission('canManageSystem') as any, (req: AuthR
       log('step', '📥 Lade neueste Version von GitHub...');
       await runStep('git fetch --all && git reset --hard origin/main', APP_DIR, 'Git Pull');
 
-      // 2. Server-Dependencies
+      // 2. Root-Dependencies (better-sqlite3 etc.)
+      log('step', '📦 Installiere Root-Abhängigkeiten...');
+      await runStep('npm install', APP_DIR, 'npm install (Root)');
+
+      // 3. Server-Dependencies
       log('step', '📦 Installiere Server-Abhängigkeiten...');
-      await runStep('npm install --production', path.join(APP_DIR, 'server'), 'npm install (Server)');
+      await runStep('npm install', path.join(APP_DIR, 'server'), 'npm install (Server)');
 
-      // 3. TypeScript Build
+      // 4. Client-Dependencies
+      log('step', '📦 Installiere Client-Abhängigkeiten...');
+      await runStep('npm install', path.join(APP_DIR, 'client'), 'npm install (Client)');
+
+      // 5. Client-Build (mit lokaler Vite-Installation)
+      log('step', '🎨 Baue Frontend...');
+      const viteBin = path.join(APP_DIR, 'client', 'node_modules', '.bin', 'vite');
+      const viteFallback = 'npx vite@5';
+      const vitecmd = fs.existsSync(viteBin) ? `"${viteBin}" build` : `${viteFallback} build`;
+      await runStep(vitecmd, path.join(APP_DIR, 'client'), 'Vite Build (Frontend)');
+
+      // 6. Public-Sync
+      log('step', '📁 Synchronisiere Public-Dateien...');
+      await runStep('rm -rf dist/public && cp -r public dist/public', path.join(APP_DIR, 'server'), 'Public Sync');
+
+      // 7. TypeScript Build
       log('step', '🔨 Kompiliere Server...');
-      await runStep('npx tsc', path.join(APP_DIR, 'server'), 'TypeScript Build');
+      const tscBin = path.join(APP_DIR, 'server', 'node_modules', '.bin', 'tsc');
+      const tsccmd = fs.existsSync(tscBin) ? `"${tscBin}"` : 'npx tsc';
+      await runStep(tsccmd, path.join(APP_DIR, 'server'), 'TypeScript Build');
 
-      // 4. Neue Version lesen
+      // 8. Neue Version lesen
       const newVersion = getCurrentVersion();
       log('success', `✅ Update auf v${newVersion} erfolgreich!`);
       log('restart', '🔁 Server wird neu gestartet...');
 
-      // 5. Server neu starten (nach kurzer Verzögerung)
+      // 9. Server neu starten (nach kurzer Verzögerung)
       setTimeout(() => {
         broadcastUpdate({ type: 'done', message: 'Update abgeschlossen – Server startet neu', version: newVersion });
         setTimeout(() => {
