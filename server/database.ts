@@ -900,23 +900,28 @@ function initializeSchema(db: any): void {
     db.run('INSERT INTO settings (key, value) VALUES (?, ?)', ['app', JSON.stringify(defaultSettings)]);
   }
 
-  // Roles migration: update existing roles to latest permissions (v2.9.12)
-  // This runs on every startup to ensure roles are always up-to-date
+  // Roles migration: nur neue Permissions-Keys ergänzen, gespeicherte Werte NICHT überschreiben
+  // Gespeicherte Benutzer-Anpassungen bleiben erhalten
   try {
-    const existingRoles = db.all('SELECT id, name FROM roles') as any[];
+    const existingRoles = db.all('SELECT id, name, is_system FROM roles') as any[];
     for (const role of existingRoles) {
       const latestPerms = getDefaultPermissions(role.name);
-      // Merge: keep any extra custom permissions, update known ones
       const currentRow = db.get('SELECT permissions FROM roles WHERE id = ?', [role.id]) as any;
       let currentPerms: Record<string, boolean> = {};
       try { currentPerms = JSON.parse(currentRow?.permissions || '{}'); } catch (_) {}
-      const merged = { ...latestPerms, ...currentPerms, ...latestPerms };
-      // For system roles, always use latest defaults
-      const isSystem = (db.get('SELECT is_system FROM roles WHERE id = ?', [role.id]) as any)?.is_system;
-      const finalPerms = isSystem ? latestPerms : merged;
-      db.run('UPDATE roles SET permissions = ? WHERE id = ?', [JSON.stringify(finalPerms), role.id]);
+      // Nur neue Keys aus latestPerms ergänzen, vorhandene Werte NICHT überschreiben
+      // Ausnahme: Wenn die Rolle noch gar keine Permissions hat (leeres Objekt)
+      const hasCustomPerms = Object.keys(currentPerms).length > 0;
+      if (!hasCustomPerms) {
+        // Noch keine Permissions gesetzt → Defaults eintragen
+        db.run('UPDATE roles SET permissions = ? WHERE id = ?', [JSON.stringify(latestPerms), role.id]);
+      } else {
+        // Nur neue Keys ergänzen (die in latestPerms stehen, aber noch nicht in currentPerms)
+        const merged = { ...latestPerms, ...currentPerms };
+        db.run('UPDATE roles SET permissions = ? WHERE id = ?', [JSON.stringify(merged), role.id]);
+      }
     }
-    if (existingRoles.length > 0) console.log('[DB] Roles permissions updated to latest defaults (v2.12.0)');
+    if (existingRoles.length > 0) console.log('[DB] Roles permissions migration checked (v2.12.11)');
   } catch (e) { console.error('[DB] Roles migration error:', e); }
 
   // Default roles

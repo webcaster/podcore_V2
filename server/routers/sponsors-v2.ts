@@ -195,6 +195,7 @@ router.get('/:sponsorId/bookings', requirePermission('canViewSponsors') as any, 
       episodeRefs: b.episode_refs ? (() => { try { return JSON.parse(b.episode_refs); } catch { return []; } })() : [],
       discount: b.discount ?? 0,
       discountType: b.discount_type ?? 'absolute',
+      totalEpisodes: b.total_episodes ?? null,
       createdAt: b.created_at,
       updatedAt: b.updated_at,
     })),
@@ -220,6 +221,7 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
     discount = 0,
     discountType = 'absolute',
     listenerCount,
+    totalEpisodes,
   } = req.body;
 
   if (!slotId || !bookingDate) {
@@ -247,8 +249,8 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
   const id = uuidv4();
 
   db.run(
-    `INSERT INTO ad_bookings (id, slot_id, sponsor_id, episode_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs, discount, discount_type, listener_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO ad_bookings (id, slot_id, sponsor_id, episode_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs, discount, discount_type, listener_count, total_episodes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       slotId,
@@ -269,6 +271,7 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
       discount || 0,
       discountType || 'absolute',
       listenerCount || null,
+      totalEpisodes ? Number(totalEpisodes) : null,
     ]
   );
 
@@ -312,6 +315,7 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
       episodeRefs: booking.episode_refs ? JSON.parse(booking.episode_refs) : [],
       discount: booking.discount ?? 0,
       discountType: booking.discount_type ?? 'absolute',
+      totalEpisodes: booking.total_episodes ?? null,
       createdAt: booking.created_at,
       updatedAt: booking.updated_at,
     },
@@ -336,6 +340,9 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
     episodeRefs,
     discount,
     discountType,
+    bookingDate,
+    bookingEndDate,
+    totalEpisodes,
   } = req.body;
 
   // Berechne finalPrice neu wenn Preiskomponenten geändert werden
@@ -422,9 +429,17 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
     updates.push('discount_type = ?');
     values.push(discountType || 'absolute');
   }
-  if (listenerCount !== undefined) {
-    updates.push('listener_count = ?');
-    values.push(listenerCount ?? null);
+  if (bookingDate !== undefined) {
+    updates.push('booking_date = ?');
+    values.push(bookingDate || null);
+  }
+  if (bookingEndDate !== undefined) {
+    updates.push('booking_end_date = ?');
+    values.push(bookingEndDate || null);
+  }
+  if (totalEpisodes !== undefined) {
+    updates.push('total_episodes = ?');
+    values.push(totalEpisodes ? Number(totalEpisodes) : null);
   }
 
   if (updates.length === 0) {
@@ -607,10 +622,11 @@ router.get('/bookings/:bookingId/confirmation-pdf', requirePermission('canViewSp
   doc.moveTo(50, y).lineTo(doc.page.width - 50, y).strokeColor(accentColor).lineWidth(2).stroke();
   y += 10;
 
-  const priceRows = [
+  const priceRows: [string, string][] = [
     ['Basispreis', `${(booking.price || 0).toFixed(2)} €`],
-    ['Preisanpassung', `${(booking.price_adjustment || 0).toFixed(2)} €`],
-    ['Hörerbeteiligung', `${(booking.listener_fee || 0).toFixed(2)} €`],
+    ...(booking.price_adjustment && booking.price_adjustment !== 0 ? [['Preisanpassung', `${Number(booking.price_adjustment).toFixed(2)} €`] as [string, string]] : []),
+    ...(booking.listener_fee && booking.listener_fee > 0 ? [['Hörerbeteiligung (Fee/1.000 Hörer)', `${Number(booking.listener_fee).toFixed(2)} €`] as [string, string]] : []),
+    ...(booking.discount && booking.discount > 0 ? [[`Rabatt${booking.discount_type === 'percent' ? ` (${booking.discount}%)` : ''}`, `-${(booking.discount_type === 'percent' ? (booking.price || 0) * booking.discount / 100 : booking.discount).toFixed(2)} €`] as [string, string]] : []),
     ['Gesamtpreis', `${(booking.final_price || booking.price || 0).toFixed(2)} €`],
   ];
 
@@ -900,7 +916,9 @@ router.get('/:sponsorId/bookings/confirmation-pdf-all', requirePermission('canVi
 
     const priceRows: [string, string, boolean][] = [
       ['Buchungspreis', `${(booking.price || 0).toFixed(2)} €`, false],
-      ['Preisanpassung', `${(booking.price_adjustment || 0).toFixed(2)} €`, false],
+      ...(booking.price_adjustment && booking.price_adjustment !== 0 ? [['Preisanpassung', `${Number(booking.price_adjustment).toFixed(2)} €`, false] as [string, string, boolean]] : []),
+      ...(booking.listener_fee && booking.listener_fee > 0 ? [['Hörerbeteiligung (Fee/1.000 Hörer)', `${Number(booking.listener_fee).toFixed(2)} €`, false] as [string, string, boolean]] : []),
+      ...(booking.discount && booking.discount > 0 ? [[`Rabatt${booking.discount_type === 'percent' ? ` (${booking.discount}%)` : ''}`, `-${(booking.discount_type === 'percent' ? (booking.price || 0) * booking.discount / 100 : booking.discount).toFixed(2)} €`, false] as [string, string, boolean]] : []),
       ['Gesamtpreis', `${(booking.final_price || booking.price || 0).toFixed(2)} €`, true],
     ];
     priceRows.forEach(([label, value, isFinal]) => {
@@ -1362,6 +1380,15 @@ router.post('/offers/:offerId/accept', requirePermission('canEditSponsors') as a
   });
 });
 
+// POST /offers/:offerId/archive — Angebot archivieren
+router.post('/offers/:offerId/archive', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const offer = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [req.params.offerId]) as any;
+  if (!offer) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
+  db.run(`UPDATE sponsor_offers SET status = 'archiviert', updated_at = datetime('now') WHERE id = ?`, [req.params.offerId]);
+  return res.json({ success: true });
+});
+
 // GET /offers/:offerId/pdf — Angebots-PDF exportieren
 router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
@@ -1398,32 +1425,62 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
     const m = 50;
     const contentW = doc.page.width - m * 2;
     const now = new Date().toLocaleDateString('de-DE');
-    // Settings
+    // Settings: Podcastname, Firmenname, Logo
     const settings = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
     let podcastName = 'PodCore';
-    try { const s = JSON.parse(settings?.value || '{}'); podcastName = s?.branding?.podcastName || podcastName; } catch (_) {}
+    let companyName = '';
+    try {
+      const s = JSON.parse(settings?.value || '{}');
+      podcastName = s?.branding?.podcastName || s?.general?.podcastName || 'PodCore';
+      companyName = s?.branding?.companyName || s?.general?.companyName || '';
+    } catch (_) {}
+    // Logo laden
+    const fs = require('fs');
+    const path = require('path');
+    const { DATA_DIR } = require('../database');
+    let logoPath: string | null = null;
+    try {
+      const brandingDir = path.join(DATA_DIR, 'branding');
+      if (fs.existsSync(brandingDir)) {
+        const lf = fs.readdirSync(brandingDir).find((f: string) => f.match(/^logo\.(png|jpg|jpeg|svg)$/i));
+        if (lf) logoPath = path.join(brandingDir, lf);
+      }
+    } catch (_) {}
     // Header
-    doc.rect(0, 0, doc.page.width, 80).fill(primaryColor);
+    doc.rect(0, 0, doc.page.width, 90).fill(primaryColor);
+    // Logo links
+    if (logoPath && fs.existsSync(logoPath)) {
+      try { doc.image(logoPath, m, 15, { height: 40 }); } catch (_) {}
+    }
+    // Titel rechts
     doc.fontSize(22).font('Helvetica-Bold').fillColor('#fff')
-      .text('ANGEBOT', m, 20);
-    doc.fontSize(10).font('Helvetica').fillColor('rgba(255,255,255,0.85)')
-      .text(`${podcastName} · ${now}`, m, 48);
-    doc.fontSize(10).font('Helvetica').fillColor('rgba(255,255,255,0.85)')
-      .text(`Angebotsnummer: ${offer.offer_number || '–'}`, m, 60);
-    doc.moveDown(4);
+      .text('ANGEBOT', m, 18, { align: 'right', width: contentW });
+    // Podcastname + Firmenname
+    const headerLine2 = companyName ? `${podcastName} · ${companyName}` : podcastName;
+    doc.fontSize(9).font('Helvetica').fillColor('rgba(255,255,255,0.85)')
+      .text(`${headerLine2} · ${now}`, m, 52, { align: 'right', width: contentW });
+    doc.fontSize(9).font('Helvetica').fillColor('rgba(255,255,255,0.85)')
+      .text(`Angebotsnummer: ${offer.offer_number || '–'}`, m, 65, { align: 'right', width: contentW });
+    // Sponsor-Info
     // Sponsor-Info
     doc.fontSize(14).font('Helvetica-Bold').fillColor('#1a1a2e')
-      .text(`Angebot für: ${sponsor.name}`, m, 100);
+      .text(`Angebot für: ${sponsor.name}`, m, 108);
+    if (sponsor.company) {
+      doc.fontSize(10).font('Helvetica').fillColor('#555')
+        .text(sponsor.company, m, 126);
+    }
+    let infoY = sponsor.company ? 140 : 126;
     if (sponsor.contact_name) {
       doc.fontSize(10).font('Helvetica').fillColor('#555')
-        .text(`Ansprechpartner: ${sponsor.contact_name}`, m, 118);
+        .text(`Ansprechpartner: ${sponsor.contact_name}`, m, infoY);
+      infoY += 14;
     }
     if (offer.valid_until) {
       doc.fontSize(10).font('Helvetica').fillColor('#555')
-        .text(`Gültig bis: ${new Date(offer.valid_until).toLocaleDateString('de-DE')}`,
-          m, sponsor.contact_name ? 130 : 118);
+        .text(`Gültig bis: ${new Date(offer.valid_until).toLocaleDateString('de-DE')}`, m, infoY);
+      infoY += 14;
     }
-    let y = offer.valid_until || sponsor.contact_name ? 155 : 130;
+    let y = infoY + 16;
     // Intro-Text
     if (offer.intro_text) {
       doc.fontSize(11).font('Helvetica').fillColor('#333')
@@ -1439,11 +1496,11 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
       // Tabellen-Header
       doc.rect(m, y, contentW, 22).fill(primaryColor);
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#fff');
-      doc.text('Pos.', m + 5, y + 7, { width: 30 });
-      doc.text('Beschreibung', m + 40, y + 7, { width: contentW - 180 });
-      doc.text('Menge', m + contentW - 135, y + 7, { width: 45, align: 'right' });
-      doc.text('Einzelpreis', m + contentW - 85, y + 7, { width: 55, align: 'right' });
-      doc.text('Gesamt', m + contentW - 25, y + 7, { width: 25, align: 'right' });
+      doc.text('Pos.', m + 5, y + 7, { width: 25 });
+      doc.text('Beschreibung', m + 35, y + 7, { width: contentW - 215 });
+      doc.text('Menge', m + contentW - 175, y + 7, { width: 40, align: 'right' });
+      doc.text('Einzelpreis', m + contentW - 130, y + 7, { width: 65, align: 'right' });
+      doc.text('Gesamt', m + contentW - 60, y + 7, { width: 60, align: 'right' });
       y += 22;
       let subtotal = 0;
       positions.forEach((pos: any, idx: number) => {
@@ -1461,11 +1518,11 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
         if (idx % 2 === 0) doc.rect(m, y, contentW, rowH).fill('#f8f8ff');
         else doc.rect(m, y, contentW, rowH).fill('#fff');
         doc.fontSize(9).font('Helvetica').fillColor('#333');
-        doc.text(`${idx + 1}.`, m + 5, y + 6, { width: 30 });
-        doc.text(pos.description || pos.title || '–', m + 40, y + 6, { width: contentW - 180 });
-        doc.text(String(qty), m + contentW - 135, y + 6, { width: 45, align: 'right' });
-        doc.text(`${unitPrice.toFixed(2)} €`, m + contentW - 85, y + 6, { width: 55, align: 'right' });
-        doc.text(`${lineTotal.toFixed(2)} €`, m + contentW - 25, y + 6, { width: 25, align: 'right' });
+        doc.text(`${idx + 1}.`, m + 5, y + 6, { width: 25 });
+        doc.text(pos.description || pos.title || '–', m + 35, y + 6, { width: contentW - 215 });
+        doc.text(String(qty), m + contentW - 175, y + 6, { width: 40, align: 'right' });
+        doc.text(`${unitPrice.toFixed(2)} €`, m + contentW - 130, y + 6, { width: 65, align: 'right' });
+        doc.text(`${lineTotal.toFixed(2)} €`, m + contentW - 60, y + 6, { width: 60, align: 'right' });
         y += rowH;
       });
       // Trennlinie
@@ -1473,8 +1530,8 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
       y += 10;
       // Zwischensumme
       doc.fontSize(10).font('Helvetica').fillColor('#333')
-        .text('Zwischensumme:', m + contentW - 160, y, { width: 120, align: 'right' })
-        .text(`${subtotal.toFixed(2)} €`, m + contentW - 35, y, { width: 35, align: 'right' });
+        .text('Zwischensumme:', m + contentW - 200, y, { width: 135, align: 'right' })
+        .text(`${subtotal.toFixed(2)} €`, m + contentW - 62, y, { width: 60, align: 'right' });
       y += 16;
       // Rabatt
       const effDiscount = Number(offer.discount) || 0;
@@ -1486,16 +1543,16 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
           ? `Rabatt (${effDiscount}%):`
           : 'Rabatt:';
         doc.fontSize(10).font('Helvetica').fillColor('#e53e3e')
-          .text(discLabel, m + contentW - 160, y, { width: 120, align: 'right' })
-          .text(`-${discAmt.toFixed(2)} €`, m + contentW - 35, y, { width: 35, align: 'right' });
+          .text(discLabel, m + contentW - 200, y, { width: 135, align: 'right' })
+          .text(`-${discAmt.toFixed(2)} €`, m + contentW - 62, y, { width: 60, align: 'right' });
         y += 16;
       }
       // Gesamtpreis
       const totalPrice = Number(offer.total_price) || subtotal;
-      doc.rect(m + contentW - 200, y - 2, 200, 22).fill(primaryColor);
-      doc.fontSize(12).font('Helvetica-Bold').fillColor('#fff')
-        .text('Gesamtpreis (netto):', m + contentW - 195, y + 4, { width: 130, align: 'right' })
-        .text(`${totalPrice.toFixed(2)} €`, m + contentW - 60, y + 4, { width: 55, align: 'right' });
+      doc.rect(m + contentW - 240, y - 2, 240, 24).fill(primaryColor);
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#fff')
+        .text('Gesamtpreis (netto):', m + contentW - 235, y + 5, { width: 170, align: 'right' })
+        .text(`${totalPrice.toFixed(2)} €`, m + contentW - 62, y + 5, { width: 60, align: 'right' });
       y += 30;
     }
     // Outro-Text
@@ -1523,6 +1580,101 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
     if (!res.headersSent) {
       return res.status(500).json({ success: false, error: 'PDF-Fehler: ' + err.message });
     }
+  }
+});
+
+// GET /price-list-pdf — Preisliste als PDF exportieren
+router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { title: rawTitle = 'Preisliste', description: rawDesc = '' } = req.query as Record<string, string>;
+  const categories = db.all(`SELECT * FROM ad_categories WHERE is_active = 1 ORDER BY name ASC`) as any[];
+  try {
+    const { getDefaultLayoutForType } = require('../pdfLayouts');
+    const layout = getDefaultLayoutForType('sponsor_offer');
+    const PDFDocument = require('pdfkit');
+    const fs = require('fs');
+    const path = require('path');
+    const { DATA_DIR } = require('../database');
+    const doc = new PDFDocument({ margin: 50, size: 'A4', autoFirstPage: true });
+    doc.on('error', (err: any) => {
+      console.error('[Preisliste-PDF]', err);
+      if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Preisliste.pdf"`);
+    doc.pipe(res);
+    const primaryColor = layout?.colors?.primary || '#7c3aed';
+    const m = 50;
+    const contentW = doc.page.width - m * 2;
+    const now = new Date().toLocaleDateString('de-DE');
+    // Settings
+    const settings = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
+    let podcastName = 'PodCore';
+    let companyName = '';
+    try {
+      const s = JSON.parse(settings?.value || '{}');
+      podcastName = s?.branding?.podcastName || s?.general?.podcastName || 'PodCore';
+      companyName = s?.branding?.companyName || s?.general?.companyName || '';
+    } catch (_) {}
+    // Logo
+    let logoPath: string | null = null;
+    try {
+      const brandingDir = path.join(DATA_DIR, 'branding');
+      if (fs.existsSync(brandingDir)) {
+        const lf = fs.readdirSync(brandingDir).find((f: string) => f.match(/^logo\.(png|jpg|jpeg|svg)$/i));
+        if (lf) logoPath = path.join(brandingDir, lf);
+      }
+    } catch (_) {}
+    // Header
+    doc.rect(0, 0, doc.page.width, 90).fill(primaryColor);
+    if (logoPath && fs.existsSync(logoPath)) {
+      try { doc.image(logoPath, m, 15, { height: 40 }); } catch (_) {}
+    }
+    doc.fontSize(22).font('Helvetica-Bold').fillColor('#fff')
+      .text(rawTitle || 'PREISLISTE', m, 18, { align: 'right', width: contentW });
+    const headerLine2 = companyName ? `${podcastName} · ${companyName}` : podcastName;
+    doc.fontSize(9).font('Helvetica').fillColor('rgba(255,255,255,0.85)')
+      .text(`${headerLine2} · ${now}`, m, 55, { align: 'right', width: contentW });
+    let y = 110;
+    // Beschreibung
+    if (rawDesc) {
+      doc.fontSize(11).font('Helvetica').fillColor('#333')
+        .text(rawDesc, m, y, { width: contentW });
+      y += doc.heightOfString(rawDesc, { width: contentW }) + 20;
+    }
+    // Tabellen-Header
+    doc.rect(m, y, contentW, 22).fill(primaryColor);
+    doc.fontSize(9).font('Helvetica-Bold').fillColor('#fff');
+    doc.text('Werbeplatz', m + 5, y + 7, { width: contentW - 260 });
+    doc.text('Position', m + contentW - 255, y + 7, { width: 60 });
+    doc.text('Dauer', m + contentW - 190, y + 7, { width: 50, align: 'right' });
+    doc.text('Basispreis', m + contentW - 135, y + 7, { width: 65, align: 'right' });
+    doc.text('Pro Folge', m + contentW - 65, y + 7, { width: 65, align: 'right' });
+    y += 22;
+    categories.forEach((cat: any, idx: number) => {
+      if (y + 24 > doc.page.height - 80) { doc.addPage(); y = 50; }
+      if (idx % 2 === 0) doc.rect(m, y, contentW, 24).fill('#f8f8ff');
+      else doc.rect(m, y, contentW, 24).fill('#fff');
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#222')
+        .text(cat.name || '–', m + 5, y + 4, { width: contentW - 260 });
+      if (cat.description) {
+        doc.fontSize(7).font('Helvetica').fillColor('#888')
+          .text(cat.description, m + 5, y + 14, { width: contentW - 260 });
+      }
+      doc.fontSize(9).font('Helvetica').fillColor('#444')
+        .text(cat.default_position || '–', m + contentW - 255, y + 8, { width: 60 });
+      doc.text(cat.default_duration ? `${cat.default_duration}s` : '–', m + contentW - 190, y + 8, { width: 50, align: 'right' });
+      doc.text(cat.base_price ? `${Number(cat.base_price).toFixed(2)} €` : '–', m + contentW - 135, y + 8, { width: 65, align: 'right' });
+      doc.text(cat.price_per_episode ? `${Number(cat.price_per_episode).toFixed(2)} €` : '–', m + contentW - 65, y + 8, { width: 65, align: 'right' });
+      y += 24;
+    });
+    // Footer
+    doc.fontSize(8).font('Helvetica').fillColor('#aaa')
+      .text(`${podcastName} · Preisliste · Erstellt am ${now}`, m, doc.page.height - 35, { align: 'center', width: contentW });
+    doc.end();
+  } catch (err: any) {
+    console.error('[Preisliste-PDF]', err);
+    if (!res.headersSent) res.status(500).json({ success: false, error: 'PDF-Fehler: ' + err.message });
   }
 });
 

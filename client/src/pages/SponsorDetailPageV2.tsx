@@ -5,7 +5,7 @@ import {
   Building2, CalendarRange, CheckCircle, AlertCircle, Megaphone,
   FileText, Download, FileSpreadsheet, Info, Receipt, Files,
   X, ChevronDown, ChevronUp, BookOpen, Star, Send, ClipboardList,
-  Tag, Percent, Users, Hash, Clock, ExternalLink
+  Tag, Percent, Users, Hash, Clock, ExternalLink, Archive
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
 import { sponsorsV2Api } from '../lib/api-v2';
@@ -1161,12 +1161,18 @@ export default function SponsorDetailPageV2() {
                 </h2>
                 <p className="text-xs text-gray-400 mt-0.5">Erstelle individuelle Angebote für {sponsor?.name}. Bei Annahme werden automatisch Buchungen angelegt.</p>
               </div>
-              <button
-                onClick={() => { setEditingOffer(null); setOfferForm(emptyOfferForm); setShowOfferModal(true); }}
-                className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
-              >
-                <Plus size={14} /> Neues Angebot
-              </button>
+              <div className="flex items-center gap-2">
+                <a href="/api/sponsors/v2/price-list-pdf" target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-lg transition-colors">
+                  <FileText size={14} /> Preisliste
+                </a>
+                <button
+                  onClick={() => { setEditingOffer(null); setOfferForm(emptyOfferForm); setShowOfferModal(true); }}
+                  className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
+                >
+                  <Plus size={14} /> Neues Angebot
+                </button>
+              </div>
             </div>
 
             {offers.length === 0 ? (
@@ -1177,7 +1183,7 @@ export default function SponsorDetailPageV2() {
               </div>
             ) : (
               <div className="space-y-3">
-                {offers.map((offer: any) => {
+                {offers.filter((o: any) => o.status !== 'archiviert').map((offer: any) => {
                   const statusColor = offer.status === 'angenommen' ? 'text-green-400 bg-green-900/20 border-green-700/40'
                     : offer.status === 'abgelehnt' ? 'text-red-400 bg-red-900/20 border-red-700/40'
                     : offer.status === 'gesendet' ? 'text-blue-400 bg-blue-900/20 border-blue-700/40'
@@ -1200,17 +1206,26 @@ export default function SponsorDetailPageV2() {
                             ) : (
                               <span className="flex items-center gap-1"><Hash size={10} /> {(offer.positions ? JSON.parse(typeof offer.positions === 'string' ? offer.positions : JSON.stringify(offer.positions)) : []).length} Positionen</span>
                             )}
-                            <span className="font-medium text-white">{(offer.total ?? 0).toFixed(2)} €</span>
+                            <span className="font-medium text-white">{(Number(offer.totalPrice) || 0).toFixed(2)} €</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          {offer.status !== 'angenommen' && (
+                          {offer.status !== 'angenommen' && offer.status !== 'archiviert' && (
                             <button
                               onClick={() => { setAcceptingOffer(offer); setAcceptOptions({ updateContact: false, updateNotes: false }); setSelectedOptionIndex(0); setShowAcceptModal(true); }}
                               className="flex items-center gap-1 px-2 py-1 text-xs bg-green-900/30 hover:bg-green-900/50 text-green-400 border border-green-700/40 rounded-lg transition-colors"
                               title="Angebot annehmen"
                             >
                               <CheckCircle size={12} /> Annehmen
+                            </button>
+                          )}
+                          {offer.status !== 'archiviert' && (
+                            <button
+                              onClick={async () => { if (!confirm('Angebot archivieren?')) return; try { await sponsorsV2Api.archiveOffer(offer.id); showSuccess('Angebot archiviert'); load(); } catch (e: any) { showError(e.message); } }}
+                              className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700 rounded-lg transition-colors"
+                              title="Angebot archivieren"
+                            >
+                              <Archive size={12} /> Archivieren
                             </button>
                           )}
                           <a
@@ -1728,8 +1743,8 @@ export default function SponsorDetailPageV2() {
 
       {/* ─── Angebots-Modal ─── */}
       <Modal isOpen={showOfferModal} onClose={() => setShowOfferModal(false)}
-        title={editingOffer ? 'Angebot bearbeiten' : 'Neues Angebot erstellen'}>
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+        title={editingOffer ? 'Angebot bearbeiten' : 'Neues Angebot erstellen'} size="xl">
+        <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
           <p className="text-xs text-gray-400">Erstelle ein individuelles Angebot für <strong className="text-white">{sponsor?.name}</strong>. Positionen werden bei Annahme als Buchungen übernommen.</p>
 
           <div className="grid grid-cols-2 gap-3">

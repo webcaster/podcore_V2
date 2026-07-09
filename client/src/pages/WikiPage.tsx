@@ -960,6 +960,27 @@ const wikiData: WikiCategory[] = [
         ],
       },
       {
+        id: 'v2-12-11',
+        title: 'v2.12.11 — Bugfix-Release',
+        icon: <CheckCircle size={18} />,
+        tags: ['update', 'bugfix', 'buchung', 'angebot', 'rollen', 'pdf', 'v2.12.11'],
+        summary: 'Umfangreicher Bugfix-Release: Buchungs-Eingaben, PDF-Spalten, Rollen-Persistenz, App-Update.',
+        content: [
+          { text: 'Umfangreicher Bugfix-Release mit Korrekturen in mehreren Bereichen.' },
+          { heading: 'Behobene Fehler', list: [
+            'Buchungs-Formular: Alle Felder werden korrekt gespeichert und beim Bearbeiten vorgeladen',
+            'Angebots-PDF: Spaltenbreiten korrigiert – kein Abschneiden mehr',
+            'Angebots-PDF: Podcast-Name und Firmen-Name im Header',
+            'Angebotspreis nach Annahme: Preis wird korrekt angezeigt',
+            'Rollen & Berechtigungen: Gespeicherte Änderungen bleiben nach Neustart erhalten',
+            'App-Update: Quellcode-ZIPs werden erkannt und automatisch gebaut',
+            'Angebote archivieren: neuer Archivieren-Button',
+            'Preislisten-Export: neuer Button im Angebots-Tab',
+            'Hörerbeteiligung: wird nur angezeigt wenn Wert > 0',
+          ]},
+        ],
+      },
+      {
         id: 'v2-12-9',
         title: 'v2.12.9 — Angebots-Formular: Werbekategorien & Mehrfach-Optionen',
         icon: <Package size={18} />,

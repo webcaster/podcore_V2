@@ -55,6 +55,10 @@ export const sponsorsV2Api = {
     api.put<any>(`/sponsors/v2/offers/${offerId}`, data),
   deleteOffer: (offerId: string) =>
     api.delete(`/sponsors/v2/offers/${offerId}`),
+  archiveOffer: (offerId: string) =>
+    api.post<any>(`/sponsors/v2/offers/${offerId}/archive`, {}),
+  getPriceListPdfUrl: () =>
+    `/api/sponsors/v2/price-list-pdf`,
   acceptOffer: (offerId: string, data: any) =>
     api.post<any>(`/sponsors/v2/offers/${offerId}/accept`, data),
   getOfferPdfUrl: (offerId: string) =>

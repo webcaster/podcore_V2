@@ -556,9 +556,14 @@ router.post('/update/upload', requirePermission('canManageSettings') as any, upl
     const zip = new AdmZip(req.file.path);
     const entries = zip.getEntries().map(e => e.entryName);
     // Prüfe ob es eine gültige PodCore-Update-ZIP ist
-    const hasServer = entries.some(e => e.includes('server/dist/index.js') || e.includes('dist/index.js'));
-    const hasPublic = entries.some(e => e.includes('server/public/') || e.includes('dist/public/'));
+    // Unterstützt: Build-ZIPs (server/dist/) UND Quellcode-ZIPs (client/src/ + server/)
+    const hasServerDist = entries.some(e => e.includes('server/dist/index.js') || e.includes('dist/index.js'));
+    const hasServerSrc = entries.some(e => e.includes('server/routers/') || e.includes('server/index.ts'));
+    const hasClientSrc = entries.some(e => e.includes('client/src/') || e.includes('client/index.html'));
+    const hasServer = hasServerDist || hasServerSrc;
+    const hasPublic = entries.some(e => e.includes('server/public/') || e.includes('dist/public/') || e.includes('client/dist/'));
     const hasPkg = entries.some(e => e.endsWith('package.json'));
+    const isSourceZip = !hasServerDist && hasServerSrc;
     // Versuche Version aus package.json zu lesen
     let updateVersion = '?';
     try {
@@ -572,9 +577,10 @@ router.post('/update/upload', requirePermission('canManageSettings') as any, upl
     const nodeOk = parseInt(process.version.slice(1)) >= 18;
     const checks = [
       { name: 'Server-Dateien', ok: hasServer, required: true },
-      { name: 'Frontend-Assets', ok: hasPublic, required: true },
+      { name: isSourceZip ? 'Client-Quellcode' : 'Frontend-Assets', ok: hasPublic || hasClientSrc, required: false },
       { name: 'package.json', ok: hasPkg, required: false },
       { name: `Node.js >= 18 (aktuell: ${process.version})`, ok: nodeOk, required: true },
+      ...(isSourceZip ? [{ name: 'Quellcode-ZIP (Build erforderlich)', ok: true, required: false }] : []),
     ];
     const allRequired = checks.filter(c => c.required).every(c => c.ok);
     const updateId = path.basename(req.file.path, '.zip').replace('update-', '');
@@ -613,35 +619,65 @@ router.post('/update/apply', requirePermission('canManageSettings') as any, (req
     const serverRootDir = path.join(__dirname, '..', '..'); // .../server → .../podcore-release
     const log: string[] = [`Update gestartet: ${new Date().toISOString()}`];
     // Extrahiere nur server/dist und server/public (keine node_modules, keine DB)
+    // Prüfe ob es eine Quellcode-ZIP oder Build-ZIP ist
+    const entryNames = entries.map((e: any) => e.entryName);
+    const isSourceZip = !entryNames.some((e: string) => e.includes('server/dist/index.js') || e.includes('dist/index.js'))
+      && entryNames.some((e: string) => e.includes('server/routers/') || e.includes('server/index.ts') || e.includes('client/src/'));
     let extracted = 0;
-    entries.forEach(entry => {
-      const name = entry.entryName;
-      // Überspringe node_modules, .db Dateien, Uploads, Verzeichniseinträge
-      if (entry.isDirectory) return;
-      if (name.includes('node_modules/') || name.endsWith('.db') || name.includes('/uploads/') || name.includes('/branding/')) return;
-      // Normalisiere Pfad: entferne führendes Verzeichnis (z.B. 'podcore-release/')
-      const stripped = name.replace(/^[^/]+\//, '');
-      // Extrahiere server/dist/, server/public/, server/package.json
-      let targetRelPath: string | null = null;
-      if (stripped.startsWith('server/dist/') || stripped.startsWith('server/public/')) {
-        // stripped = 'server/dist/...' → targetRelPath relativ zu serverRootDir
-        targetRelPath = stripped;
-      } else if (stripped === 'server/package.json') {
-        targetRelPath = stripped;
-      } else if (stripped.startsWith('dist/') || stripped.startsWith('public/')) {
-        // Fallback: ZIP ohne 'server/' Prefix
-        targetRelPath = 'server/' + stripped;
-      } else if (stripped === 'package.json') {
-        targetRelPath = 'server/package.json';
+    if (isSourceZip) {
+      // Quellcode-ZIP: Alle Quelldateien extrahieren (außer node_modules, DB, Uploads)
+      entries.forEach((entry: any) => {
+        const name = entry.entryName;
+        if (entry.isDirectory) return;
+        if (name.includes('node_modules/') || name.endsWith('.db') || name.includes('/uploads/') || name.includes('/branding/')) return;
+        if (name.includes('/.git/') || name.endsWith('.log')) return;
+        // Normalisiere: führendes Verzeichnis entfernen (z.B. 'podcore_v2/')
+        const stripped = name.replace(/^[^/]+\//, '');
+        if (!stripped || stripped.startsWith('.')) return;
+        const targetPath = path.join(serverRootDir, stripped);
+        try {
+          fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+          fs.writeFileSync(targetPath, entry.getData());
+          extracted++;
+        } catch (_) {}
+      });
+      log.push(`${extracted} Quelldateien extrahiert`);
+      // Build ausführen
+      log.push('Build wird gestartet (npm run build)...');
+      try {
+        const { execSync } = require('child_process');
+        execSync('npm run build', { cwd: serverRootDir, stdio: 'pipe', timeout: 300000 });
+        log.push('Build erfolgreich abgeschlossen');
+      } catch (buildErr: any) {
+        log.push(`Build-Fehler: ${buildErr.message || buildErr}`);
+        return res.status(500).json({ success: false, error: 'Build fehlgeschlagen: ' + (buildErr.message || buildErr) });
       }
-      if (targetRelPath) {
-        const targetPath = path.join(serverRootDir, targetRelPath);
-        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-        fs.writeFileSync(targetPath, entry.getData());
-        extracted++;
-      }
-    });
-    log.push(`${extracted} Dateien extrahiert`);
+    } else {
+      // Build-ZIP: Nur dist/public extrahieren
+      entries.forEach((entry: any) => {
+        const name = entry.entryName;
+        if (entry.isDirectory) return;
+        if (name.includes('node_modules/') || name.endsWith('.db') || name.includes('/uploads/') || name.includes('/branding/')) return;
+        const stripped = name.replace(/^[^/]+\//, '');
+        let targetRelPath: string | null = null;
+        if (stripped.startsWith('server/dist/') || stripped.startsWith('server/public/')) {
+          targetRelPath = stripped;
+        } else if (stripped === 'server/package.json') {
+          targetRelPath = stripped;
+        } else if (stripped.startsWith('dist/') || stripped.startsWith('public/')) {
+          targetRelPath = 'server/' + stripped;
+        } else if (stripped === 'package.json') {
+          targetRelPath = 'server/package.json';
+        }
+        if (targetRelPath) {
+          const targetPath = path.join(serverRootDir, targetRelPath);
+          fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+          fs.writeFileSync(targetPath, entry.getData());
+          extracted++;
+        }
+      });
+      log.push(`${extracted} Dateien extrahiert`);
+    }
     // Aufräumen
     try { fs.unlinkSync(zipPath); } catch {}
     log.push('Update erfolgreich abgeschlossen');
