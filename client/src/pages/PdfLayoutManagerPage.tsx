@@ -19,6 +19,8 @@ const EXPORT_TYPES = [
   { value: 'performance_report', label: 'Leistungsübersicht (Sponsor)' },
   { value: 'sponsor_dossier', label: 'Sponsor-Dossier' },
   { value: 'sponsor_offer', label: 'Sponsor-Angebot' },
+  { value: 'price_list', label: 'Preisliste (Werbung)' },
+  { value: 'episode_table', label: 'Episoden-Skript (Tabelle)' },
 ];
 
 const HEADER_STYLES = [
@@ -69,6 +71,14 @@ const SECTION_GROUPS: Record<string, { label: string; keys: string[] }> = {
     label: 'Buchungsbestätigung',
     keys: ['showConfirmationContact', 'showConfirmationPricing', 'showConfirmationTerms'],
   },
+  price_list: {
+    label: 'Preisliste (Werbung)',
+    keys: ['showPricelistDescriptions', 'showPricelistExclusive', 'showPricelistCPM'],
+  },
+  episode_table: {
+    label: 'Episoden-Skript (Tabelle)',
+    keys: ['showTableColors', 'showTableDuration', 'showTableRegie', 'showTableNotesPage'],
+  },
   booking_calendar: {
     label: 'Buchungskalender',
     keys: ['showBookingCalendarLegend', 'showBookingCalendarConflicts'],
@@ -102,6 +112,11 @@ const SECTION_LABELS: Record<string, string> = {
   showConfirmationTerms: 'Vertragslaufzeit (Bestätigung)',
   showBookingCalendarLegend: 'Legende (Buchungskalender)',
   showBookingCalendarConflicts: 'Konflikte hervorheben (Buchungskalender)',
+  showPricelistCPM: 'Hörerbeteiligung (CPM) anzeigen',
+  showTableColors: 'CI-Farben in Tabelle verwenden',
+  showTableDuration: 'Dauer-Spalte anzeigen',
+  showTableRegie: 'Regieanweisungen-Spalte anzeigen',
+  showTableNotesPage: 'Zusätzliche Notizseite anhängen',
 };
 
 const LINE_SPACING_OPTIONS = [

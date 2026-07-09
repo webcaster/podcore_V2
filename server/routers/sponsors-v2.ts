@@ -84,7 +84,7 @@ router.put('/contracts/:contractId', requirePermission('canEditSponsors') as any
       contact_phone = ?,
       sponsoring_type = ?,
       notes = ?,
-      status = COALESCE(?, status),
+      status = ?,
       updated_at = datetime('now')
      WHERE id = ?`,
     [
@@ -1256,7 +1256,7 @@ router.put('/offers/:offerId', requirePermission('canEditSponsors') as any, (req
       title = COALESCE(?, title),
       offer_number = COALESCE(?, offer_number),
       valid_until = ?,
-      status = COALESCE(?, status),
+      status = ?,
       intro_text = ?,
       outro_text = ?,
       positions = ?,
@@ -1304,6 +1304,8 @@ router.delete('/offers/:offerId', requirePermission('canEditSponsors') as any, (
 router.post('/offers/:offerId/accept', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const offer = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [req.params.offerId]) as any;
+  if (!offer) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
+  const { documentTitle, layoutId } = req.query as Record<string, string>;
   if (!offer) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
   const {
     createBookings = true,
@@ -1385,6 +1387,8 @@ router.post('/offers/:offerId/archive', requirePermission('canEditSponsors') as 
   const db = getDb();
   const offer = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [req.params.offerId]) as any;
   if (!offer) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
+  const { documentTitle, layoutId } = req.query as Record<string, string>;
+  if (!offer) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
   db.run(`UPDATE sponsor_offers SET status = 'archiviert', updated_at = datetime('now') WHERE id = ?`, [req.params.offerId]);
   return res.json({ success: true });
 });
@@ -1393,6 +1397,8 @@ router.post('/offers/:offerId/archive', requirePermission('canEditSponsors') as 
 router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const offer = db.get('SELECT * FROM sponsor_offers WHERE id = ?', [req.params.offerId]) as any;
+  if (!offer) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
+  const { documentTitle, layoutId } = req.query as Record<string, string>;
   if (!offer) return res.status(404).json({ success: false, error: 'Angebot nicht gefunden' });
   const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [offer.sponsor_id]) as any;
   if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
@@ -1409,7 +1415,13 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
   try {
     const { getDefaultLayoutForType } = require('../pdfLayouts');
     // Suche nach einem speziellen Preislisten-Layout oder nutze das Standard-Angebot-Layout
-    let layout = db.get("SELECT * FROM pdf_layouts WHERE export_type = 'sponsor_offer' AND is_default = 1") as any;
+    let layout = null;
+    if (layoutId) {
+      layout = db.get("SELECT * FROM pdf_layouts WHERE id = ?", [layoutId]) as any;
+    }
+    if (!layout) {
+      layout = db.get("SELECT * FROM pdf_layouts WHERE export_type = 'sponsor_offer' AND is_default = 1") as any;
+    }
     if (layout) {
       try {
         layout.colors = JSON.parse(layout.colors);
@@ -1464,7 +1476,7 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
     }
     // Titel rechts
     doc.fontSize(22).font('Helvetica-Bold').fillColor('#fff')
-      .text('ANGEBOT', m, 18, { align: 'right', width: contentW });
+      .text(documentTitle || 'ANGEBOT', m, 18, { align: 'right', width: contentW });
     // Podcastname + Firmenname
     const headerLine2 = companyName ? `${podcastName} · ${companyName}` : podcastName;
     doc.fontSize(9).font('Helvetica').fillColor('rgba(255,255,255,0.85)')
@@ -1501,8 +1513,60 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsors') as any, 
     doc.fontSize(16).font('Helvetica-Bold').fillColor(primaryColor)
       .text(offer.title, m, y);
     y += 30;
-    // Positionen-Tabelle
-    if (positions.length > 0) {
+    // Mehrfach-Optionen (Varianten) oder normale Positionen
+    const offerOptions = offer.offer_options ? JSON.parse(offer.offer_options) : null;
+    
+    if (offerOptions && Array.isArray(offerOptions) && offerOptions.length > 0) {
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(primaryColor).text('Verfügbare Optionen:', m, y);
+      y += 20;
+      
+      offerOptions.forEach((opt: any, optIdx: number) => {
+        if (y > doc.page.height - 150) { doc.addPage(); y = 50; }
+        
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('#333').text(`Option ${optIdx + 1}: ${opt.title || 'Variante'}`, m, y);
+        y += 15;
+        
+        const optPos = opt.positions || [];
+        if (optPos.length > 0) {
+          doc.rect(m, y, contentW, 20).fill(primaryColor + '15');
+          doc.fontSize(8).font('Helvetica-Bold').fillColor(primaryColor);
+          doc.text('Beschreibung', m + 5, y + 5, { width: contentW - 165 });
+          doc.text('Menge', m + contentW - 155, y + 5, { width: 40, align: 'right' });
+          doc.text('Einzel', m + contentW - 110, y + 5, { width: 50, align: 'right' });
+          doc.text('Gesamt', m + contentW - 55, y + 5, { width: 50, align: 'right' });
+          y += 18;
+          
+          let optSubtotal = 0;
+          optPos.forEach((p: any, pIdx: number) => {
+            const q = Number(p.quantity) || 1;
+            const up = Number(p.unitPrice) || 0;
+            const total = q * up;
+            optSubtotal += total;
+            
+            if (y > doc.page.height - 50) { doc.addPage(); y = 50; }
+            
+            doc.fontSize(8).font('Helvetica').fillColor('#444');
+            doc.text(p.description || '–', m + 5, y + 4, { width: contentW - 165 });
+            doc.text(String(q), m + contentW - 155, y + 4, { width: 40, align: 'right' });
+            doc.text(`${up.toFixed(2)} €`, m + contentW - 110, y + 4, { width: 50, align: 'right' });
+            doc.text(`${total.toFixed(2)} €`, m + contentW - 55, y + 4, { width: 50, align: 'right' });
+            y += 15;
+          });
+          
+          // Summe für diese Option
+          const optDisc = (opt.discountType || offer.discount_type) === 'percent' 
+            ? optSubtotal * ((opt.discount || 0) / 100) 
+            : (opt.discount || 0);
+          const optTotal = Math.max(0, optSubtotal - optDisc);
+          
+          doc.rect(m + contentW - 120, y, 120, 15).fill(primaryColor);
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#fff');
+          doc.text(`Preis Option ${optIdx + 1}:`, m + contentW - 115, y + 4, { width: 60 });
+          doc.text(`${optTotal.toFixed(2)} €`, m + contentW - 55, y + 4, { width: 50, align: 'right' });
+          y += 25;
+        }
+      });
+    } else if (positions.length > 0) {
       // Tabellen-Header
       doc.rect(m, y, contentW, 22).fill(primaryColor);
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#fff');
@@ -1601,7 +1665,14 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
   try {
     const { getDefaultLayoutForType } = require('../pdfLayouts');
     // Suche nach einem speziellen Preislisten-Layout oder nutze das Standard-Angebot-Layout
-    let layout = db.get("SELECT * FROM pdf_layouts WHERE export_type = 'sponsor_offer' AND is_default = 1") as any;
+    let layout = null;
+    const layoutId = req.query.layoutId as string;
+    if (layoutId) {
+      layout = db.get("SELECT * FROM pdf_layouts WHERE id = ?", [layoutId]) as any;
+    }
+    if (!layout) {
+      layout = db.get("SELECT * FROM pdf_layouts WHERE export_type = 'sponsor_offer' AND is_default = 1") as any;
+    }
     if (layout) {
       try {
         layout.colors = JSON.parse(layout.colors);

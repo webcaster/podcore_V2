@@ -6,6 +6,7 @@ import {
   Clock, Star, Filter, BarChart3, Download, FileSpreadsheet, Euro
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
+import { sponsorsV2Api } from '../lib/api-v2';
 import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
 
@@ -30,7 +31,7 @@ export default function SponsorsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [activeTab, setActiveTab] = useState<'sponsors' | 'categories'>('sponsors');
+  const [activeTab, setActiveTab] = useState<'sponsors' | 'categories' | 'archive'>('sponsors');
   const [showSponsorModal, setShowSponsorModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
@@ -47,6 +48,7 @@ export default function SponsorsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isExportingPriceList, setIsExportingPriceList] = useState(false);
   const [isExportingSponsors, setIsExportingSponsors] = useState(false);
+  const [archivedOffers, setArchivedOffers] = useState<any[]>([]);
 
   const handleExportSponsors = async () => {
     setIsExportingSponsors(true);
@@ -137,6 +139,11 @@ export default function SponsorsPage() {
       ]);
       setSponsors(spData);
       setCategories(catData);
+      // Lade alle Angebote und filtere archivierte
+      const allOffersPromises = spData.map((s: any) => sponsorsV2Api.listOffers(s.id));
+      const allOffersResults = await Promise.all(allOffersPromises);
+      const allArchived = allOffersResults.flat().filter((o: any) => o.status === 'archiviert');
+      setArchivedOffers(allArchived);
     } catch (err: any) { showError(err.message); }
     finally { setIsLoading(false); }
   };
@@ -249,12 +256,13 @@ export default function SponsorsPage() {
         {[
           { key: 'sponsors', label: `Sponsoren (${sponsors.length})` },
           { key: 'categories', label: `Werbekategorien (${categories.length})` },
+	          { key: 'archive', label: 'Archiv' },
         ].map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as any)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'
+              activeTab === tab.key ? 'bg-accent-purple text-white shadow-lg shadow-purple-900/20' : 'text-text-secondary hover:text-text-primary hover:bg-obsidian-700'
             }`}
           >
             {tab.label}
@@ -643,6 +651,49 @@ export default function SponsorsPage() {
           </div>
         </form>
       </Modal>
-    </div>
+    
+      {/* ARCHIVE TAB */}
+      
+      {/* ARCHIVE TAB */}
+      {activeTab === 'archive' && (
+        <div className="space-y-6">
+          <div className="card p-6 border-accent-purple/20 bg-accent-purple/5">
+            <h2 className="text-lg font-bold text-text-primary flex items-center gap-2 mb-2">
+              <Clock size={20} className="text-accent-purple" />
+              Angebots-Archiv
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Hier finden Sie alle archivierten Angebote über alle Sponsoren hinweg. 
+            </p>
+          </div>
+          
+          {archivedOffers.length === 0 ? (
+            <div className="card p-12 text-center text-text-muted border-dashed border-2">
+              <Search size={40} className="mx-auto mb-4 opacity-20" />
+              <p>Keine archivierten Angebote gefunden.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {archivedOffers.map((offer: any) => (
+                <div key={offer.id} className="card p-4 hover:border-accent-purple/30 transition-all">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-bold text-text-primary">{offer.title}</h3>
+                      <p className="text-xs text-text-muted mt-1">#{offer.offerNumber || offer.offer_number}</p>
+                    </div>
+                    <span className="badge bg-surface-raised text-text-muted text-[10px]">Archiviert</span>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="text-sm font-bold text-accent-purple">{(Number(offer.totalPrice || offer.total_price) || 0).toFixed(2)} €</span>
+                    <Link to={`/sponsors/${offer.sponsorId || offer.sponsor_id}`} className="text-xs text-accent-blue hover:underline">Zum Sponsor</Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+</div>
   );
 }

@@ -1161,7 +1161,17 @@ export default function SponsorDetailPageV2() {
                 </h2>
                 <p className="text-xs text-gray-400 mt-0.5">Erstelle individuelle Angebote für {sponsor?.name}. Bei Annahme werden automatisch Buchungen angelegt.</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 bg-gray-800/40 p-2 rounded-lg border border-gray-700">
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] text-gray-500 uppercase font-bold">PDF-Titel:</label>
+                  <input 
+                    type="text" 
+                    value={offerDocTitle} 
+                    onChange={e => setOfferDocTitle(e.target.value)}
+                    className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white w-32 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div className="w-px h-4 bg-gray-700"></div>
                 <a href="/api/sponsors/v2/price-list-pdf" target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-lg transition-colors">
                   <FileText size={14} /> Preisliste
@@ -1229,7 +1239,7 @@ export default function SponsorDetailPageV2() {
                             </button>
                           )}
                           <a
-                            href={sponsorsV2Api.getOfferPdfUrl(offer.id)}
+                            href={`${sponsorsV2Api.getOfferPdfUrl(offer.id)}?documentTitle=${encodeURIComponent(offerDocTitle)}`}
                             target="_blank" rel="noopener noreferrer"
                             className="p-1.5 text-gray-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors"
                             title="Angebot als PDF"
