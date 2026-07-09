@@ -1645,27 +1645,36 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
     // Tabellen-Header
     doc.rect(m, y, contentW, 22).fill(primaryColor);
     doc.fontSize(9).font('Helvetica-Bold').fillColor('#fff');
-    doc.text('Werbeplatz', m + 5, y + 7, { width: contentW - 260 });
-    doc.text('Position', m + contentW - 255, y + 7, { width: 60 });
-    doc.text('Dauer', m + contentW - 190, y + 7, { width: 50, align: 'right' });
-    doc.text('Basispreis', m + contentW - 135, y + 7, { width: 65, align: 'right' });
-    doc.text('Pro Folge', m + contentW - 65, y + 7, { width: 65, align: 'right' });
+    const col1 = 250; // Werbeplatz
+    const col2 = 80;  // Position
+    const col3 = 60;  // Dauer
+    const col4 = 80;  // Basispreis
+    const col5 = 80;  // Pro Folge
+    const col6 = 100; // Hörerbeteiligung (CPM)
+    
+    doc.text('Werbeplatz', m + 5, y + 7, { width: col1 });
+    doc.text('Position', m + 5 + col1 + 10, y + 7, { width: col2 });
+    doc.text('Dauer', m + 5 + col1 + col2 + 20, y + 7, { width: col3, align: 'right' });
+    doc.text('Basispreis', m + 5 + col1 + col2 + col3 + 30, y + 7, { width: col4, align: 'right' });
+    doc.text('Pro Folge', m + 5 + col1 + col2 + col3 + col4 + 40, y + 7, { width: col5, align: 'right' });
+    doc.text('Hörerbeteiligung', m + 5 + col1 + col2 + col3 + col4 + col5 + 50, y + 7, { width: col6, align: 'right' });
     y += 22;
     categories.forEach((cat: any, idx: number) => {
       if (y + 24 > doc.page.height - 80) { doc.addPage(); y = 50; }
       if (idx % 2 === 0) doc.rect(m, y, contentW, 24).fill('#f8f8ff');
       else doc.rect(m, y, contentW, 24).fill('#fff');
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#222')
-        .text(cat.name || '–', m + 5, y + 4, { width: contentW - 260 });
+        .text(cat.name || '–', m + 5, y + 4, { width: col1 });
       if (cat.description) {
         doc.fontSize(7).font('Helvetica').fillColor('#888')
-          .text(cat.description, m + 5, y + 14, { width: contentW - 260 });
+          .text(cat.description, m + 5, y + 14, { width: col1 });
       }
       doc.fontSize(9).font('Helvetica').fillColor('#444')
-        .text(cat.default_position || '–', m + contentW - 255, y + 8, { width: 60 });
-      doc.text(cat.default_duration ? `${cat.default_duration}s` : '–', m + contentW - 190, y + 8, { width: 50, align: 'right' });
-      doc.text(cat.base_price ? `${Number(cat.base_price).toFixed(2)} €` : '–', m + contentW - 135, y + 8, { width: 65, align: 'right' });
-      doc.text(cat.price_per_episode ? `${Number(cat.price_per_episode).toFixed(2)} €` : '–', m + contentW - 65, y + 8, { width: 65, align: 'right' });
+        .text(cat.default_position || '–', m + 5 + col1 + 10, y + 8, { width: col2 });
+      doc.text(cat.default_duration ? `${cat.default_duration}s` : '–', m + 5 + col1 + col2 + 20, y + 8, { width: col3, align: 'right' });
+      doc.text(cat.base_price ? `${Number(cat.base_price).toFixed(2)} €` : '–', m + 5 + col1 + col2 + col3 + 30, y + 8, { width: col4, align: 'right' });
+      doc.text(cat.price_per_episode ? `${Number(cat.price_per_episode).toFixed(2)} €` : '–', m + 5 + col1 + col2 + col3 + col4 + 40, y + 8, { width: col5, align: 'right' });
+      doc.text(cat.price_per_1000 ? `${Number(cat.price_per_1000).toFixed(2)} € / 1k` : '–', m + 5 + col1 + col2 + col3 + col4 + col5 + 50, y + 8, { width: col6, align: 'right' });
       y += 24;
     });
     // Footer
