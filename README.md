@@ -81,7 +81,7 @@ PodCore ist als Node.js-Anwendung konzipiert und verwendet SQLite als Datenbank,
    npm start
    ```
 
-Die Anwendung ist nun unter `http://localhost:3000` erreichbar.
+Die Anwendung ist nun unter `http://localhost:3001` erreichbar.
 
 ### Start-Skripte
 Für einen noch einfacheren Start liegen Skripte bei:
