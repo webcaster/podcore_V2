@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Megaphone, Plus, Search, Building2, Mail, Phone, Globe,
   Tag, Edit2, Trash2, ChevronRight, CheckCircle, XCircle,
-  Clock, Star, Filter, BarChart3, Download, FileSpreadsheet, Euro
+  Clock, Star, Filter, BarChart3, Download, FileSpreadsheet, Euro,
+  Archive, ExternalLink
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
 import { sponsorsV2Api } from '../lib/api-v2';
@@ -370,47 +371,6 @@ export default function SponsorsPage() {
       )}
 
       {/* CATEGORIES TAB */}
-      {activeTab === 'archive' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Archivierte Angebote</h2>
-            <p className="text-sm text-text-muted">{archivedOffers.length} archivierte Dokumente</p>
-          </div>
-          
-          {archivedOffers.length === 0 ? (
-            <div className="card text-center py-12">
-              <Archive size={32} className="text-text-muted mx-auto mb-3" />
-              <p className="text-text-secondary">Keine archivierten Angebote gefunden</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {archivedOffers.map(offer => (
-                <div key={offer.id} className="card hover:border-surface-border-light transition-all">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-medium text-white">{offer.title}</h3>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-overlay text-text-muted uppercase">Archiv</span>
-                  </div>
-                  <div className="text-xs text-text-secondary space-y-1 mb-4">
-                    <p>Nummer: {offer.offerNumber || '–'}</p>
-                    <p>Sponsor: {sponsors.find(s => s.id === offer.sponsorId)?.name || 'Unbekannt'}</p>
-                    <p>Datum: {new Date(offer.createdAt).toLocaleDateString('de-DE')}</p>
-                    <p className="font-bold text-white mt-2">Summe: {offer.totalPrice.toFixed(2)} €</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <a href={`/api/sponsors/v2/offers/${offer.id}/pdf`} target="_blank" rel="noreferrer" className="btn-secondary flex-1 py-1.5 text-xs">
-                      <Download size={12} /> PDF
-                    </a>
-                    <Link to={`/sponsors/${offer.sponsorId}?tab=offers`} className="btn-secondary p-1.5">
-                      <ExternalLink size={12} />
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {activeTab === 'categories' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center flex-wrap gap-3">
@@ -694,8 +654,6 @@ export default function SponsorsPage() {
       </Modal>
     
       {/* ARCHIVE TAB */}
-      
-      {/* ARCHIVE TAB */}
       {activeTab === 'archive' && (
         <div className="space-y-6">
           <div className="card p-6 border-accent-purple/20 bg-accent-purple/5">
@@ -704,32 +662,59 @@ export default function SponsorsPage() {
               Angebots-Archiv
             </h2>
             <p className="text-sm text-text-secondary">
-              Hier finden Sie alle archivierten Angebote über alle Sponsoren hinweg. 
+              Alle archivierten Angebote über alle Sponsoren hinweg.
             </p>
           </div>
-          
+
           {archivedOffers.length === 0 ? (
             <div className="card p-12 text-center text-text-muted border-dashed border-2">
               <Search size={40} className="mx-auto mb-4 opacity-20" />
               <p>Keine archivierten Angebote gefunden.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {archivedOffers.map((offer: any) => (
-                <div key={offer.id} className="card p-4 hover:border-accent-purple/30 transition-all">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-text-primary">{offer.title}</h3>
-                      <p className="text-xs text-text-muted mt-1">#{offer.offerNumber || offer.offer_number}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {archivedOffers.map((offer: any) => {
+                const sponsorName = sponsors.find((s: any) => s.id === (offer.sponsorId || offer.sponsor_id))?.name || 'Unbekannt';
+                const totalPrice = (Number(offer.totalPrice || offer.total_price) || 0).toFixed(2);
+                const offerNum = offer.offerNumber || offer.offer_number || '–';
+                const createdAt = offer.createdAt || offer.created_at;
+                return (
+                  <div key={offer.id} className="card p-4 hover:border-accent-purple/30 transition-all flex flex-col gap-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-text-primary truncate">{offer.title}</h3>
+                        <p className="text-xs text-text-muted mt-0.5">#{offerNum}</p>
+                      </div>
+                      <span className="badge bg-surface-raised text-text-muted text-[10px] ml-2 shrink-0">Archiviert</span>
                     </div>
-                    <span className="badge bg-surface-raised text-text-muted text-[10px]">Archiviert</span>
+                    <div className="text-xs text-text-secondary space-y-1">
+                      <p><span className="text-text-muted">Sponsor:</span> {sponsorName}</p>
+                      {createdAt && <p><span className="text-text-muted">Datum:</span> {new Date(createdAt).toLocaleDateString('de-DE')}</p>}
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-surface-border">
+                      <span className="text-sm font-bold text-accent-purple">{totalPrice} €</span>
+                      <div className="flex gap-2">
+                        <a
+                          href={`/api/sponsors/v2/offers/${offer.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-secondary py-1 px-2 text-xs"
+                          title="PDF herunterladen"
+                        >
+                          <Download size={12} /> PDF
+                        </a>
+                        <Link
+                          to={`/sponsors/${offer.sponsorId || offer.sponsor_id}?tab=offers`}
+                          className="btn-secondary p-1.5"
+                          title="Zum Sponsor"
+                        >
+                          <ExternalLink size={12} />
+                        </Link>
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-4 flex items-center justify-between">
-                    <span className="text-sm font-bold text-accent-purple">{(Number(offer.totalPrice || offer.total_price) || 0).toFixed(2)} €</span>
-                    <Link to={`/sponsors/${offer.sponsorId || offer.sponsor_id}`} className="text-xs text-accent-blue hover:underline">Zum Sponsor</Link>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

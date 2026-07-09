@@ -29,6 +29,20 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
+        id: 'v2-12-14',
+        title: 'v2.12.14 - PDF-Layout-Optimierung & Archiv-Fix',
+        summary: 'Schwarze Archiv-Seite behoben, Episoden-Script-PDF nutzt nun vollständig das PDF-Layout-System (CI-Farben, Schriften, Header-Stil).',
+        icon: <Package size={18} />,
+        tags: ['pdf', 'layout', 'archiv', 'episode', 'ci', 'v2.12.14'],
+        content: [
+          { heading: 'Archiv-Seite repariert', text: 'Der doppelte Archiv-Tab in der Sponsoren-Übersicht wurde entfernt. Die Archiv-Ansicht zeigt nun korrekt alle archivierten Angebote mit Sponsor-Name, Datum, Preis, PDF-Download und Link zum Sponsor.' },
+          { heading: 'Episoden-Script-PDF: CI-Farben', text: 'Das Tabellen-Skript-Layout im Episoden-Export nutzt nun vollständig die im PDF-Layout konfigurierten CI-Farben (Primär, Akzent, Gedämpft) und Schriftarten.' },
+          { heading: 'Episoden-Script-PDF: Header-Stil', text: 'Der Header des Episoden-Script-PDFs wird nun über die zentrale renderPdfHeader-Funktion gerendert. Damit werden alle drei Header-Stile (Banner, Sidebar, Minimal) korrekt angewendet.' },
+          { heading: 'Layout-Zuordnung optimiert', text: 'Die getDefaultLayoutForType-Funktion priorisiert benutzerdefinierte Layouts vor System-Layouts. Alle Export-Bereiche nutzen nun konsistent das Layout-System als Referenz.' },
+          { heading: 'Footer-Titel', text: 'Der Footer des Episoden-Script-PDFs zeigt nun den konfigurierten Dokumententitel statt des Podcast-Namens.' }
+        ]
+      },
+      {
         id: 'v2-12-13',
         title: 'v2.12.13 - Sponsoring-System Final',
         summary: 'Vollständige Stabilisierung des Sponsoring-Systems: Accept-Fix, PDF-Layout-Übergabe, Angebotsnummern-Einstellungen im Admin und neue Rollen-Berechtigungen.',

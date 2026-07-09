@@ -538,42 +538,33 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
     doc.moveTo(m, footerY - 4).lineTo(pageW - m, footerY - 4)
       .strokeColor(layout.colors.accent || '#cccccc').lineWidth(0.4).stroke();
     doc.fontSize(7).font('Helvetica').fillColor(layout.colors.muted || '#888888')
-      .text(podcastName, m, footerY, { width: (pageW - m * 2) * 0.6, align: 'left' });
+      .text(documentTitle || podcastName, m, footerY, { width: (pageW - m * 2) * 0.6, align: 'left' });
     doc.fontSize(7).font('Helvetica').fillColor(layout.colors.muted || '#888888')
       .text(`Seite ${pNum}`, m, footerY, { width: pageW - m * 2, align: 'right' });
   }
 
   if (useScriptLayout) {
     // ═══════════════════════════════════════════════════════════════════════
-    // NEUES TABELLEN-SKRIPT-LAYOUT
+    // TABELLEN-SKRIPT-LAYOUT (nutzt PDF-Layout CI-Farben & Schriften)
     // ═══════════════════════════════════════════════════════════════════════
     const pageW = doc.page.width;
     const pageH = doc.page.height;
     const contentW = pageW - 2 * m;
 
-    // ── Header-Bereich ──────────────────────────────────────────────────
+    // ── CI-Farben & Schriften aus Layout ────────────────────────────────
     const primaryColor = layout.colors.primary || '#1a1a2e';
-    const accentColor = layout.colors.accent || '#4a4a8a';
+    const accentColor  = layout.colors.accent  || '#4a4a8a';
+    const mutedColor   = layout.colors.muted   || '#888888';
+    const bgColor      = layout.colors.background || '#ffffff';
+    const fontFamily   = layout.typography?.fontFamily || 'Helvetica';
+    const fontBold     = fontFamily === 'Helvetica' ? 'Helvetica-Bold' : `${fontFamily}-Bold`;
+    const lineSpacing  = getLineSpacingFactor(layout);
 
-    // Logo (wenn vorhanden)
-    let headerY = m;
-    let logoW = 0;
-    if (logoPath) {
-      try {
-        doc.image(logoPath, m, headerY, { fit: [45, 45] });
-        logoW = 52;
-      } catch (_) {}
-    }
+    // ── Header via Layout-Engine ─────────────────────────────────────────
+    const epTitle = `${ep.number ? `#${ep.number} — ` : ''}${ep.title}`;
+    renderPdfHeader(doc, layout, { podcastName, documentTitle: documentTitle || epTitle, logoPath });
 
-    // Episodentitel
-    const titleX = m + logoW;
-    const titleW = contentW - logoW;
-    doc.fontSize(16).font('Helvetica-Bold').fillColor(primaryColor)
-      .text(`${ep.number ? `#${ep.number} ` : ''}${ep.title}`, titleX, headerY, { width: titleW });
-
-    const afterTitle = doc.y;
-
-    // Status + Datum
+    // Episoden-Meta unter dem Header
     const statusLabel = STATUS_LABELS[ep.status] || ep.status || '';
     const dateStr = ep.publishDate
       ? new Date(ep.publishDate).toLocaleDateString('de-DE')
@@ -581,30 +572,35 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
         ? new Date(ep.recordingDate).toLocaleDateString('de-DE')
         : new Date().toLocaleDateString('de-DE');
 
-    doc.fontSize(8.5).font('Helvetica-Bold').fillColor(accentColor)
-      .text('Status: ', titleX, afterTitle + 2, { continued: true });
-    doc.font('Helvetica').fillColor(primaryColor).text(statusLabel);
-    doc.fontSize(8.5).font('Helvetica-Bold').fillColor(accentColor)
-      .text('Datum: ', titleX, doc.y, { continued: true });
-    doc.font('Helvetica').fillColor(primaryColor).text(dateStr);
+    // Episodentitel (wenn documentTitle überschrieben wurde, zeigen wir Titel separat)
+    if (documentTitle && documentTitle !== epTitle) {
+      doc.fontSize(13).font(fontBold).fillColor(primaryColor)
+        .text(epTitle, { width: contentW });
+      doc.moveDown(0.3);
+    }
 
-    // Hosts / Gäste
+    doc.fontSize(8.5).font(fontBold).fillColor(accentColor)
+      .text('Status: ', { continued: true });
+    doc.font(fontFamily).fillColor(primaryColor).text(statusLabel);
+    doc.fontSize(8.5).font(fontBold).fillColor(accentColor)
+      .text('Datum: ', { continued: true });
+    doc.font(fontFamily).fillColor(primaryColor).text(dateStr);
+
     if (ep.hosts?.length > 0) {
-      doc.fontSize(8).font('Helvetica').fillColor(layout.colors.muted || '#666666')
-        .text(`Hosts: ${ep.hosts.join(', ')}`, titleX, doc.y);
+      doc.fontSize(8).font(fontFamily).fillColor(mutedColor)
+        .text(`Hosts: ${ep.hosts.join(', ')}`);
     }
     if (ep.guests?.length > 0) {
-      doc.fontSize(8).font('Helvetica').fillColor(layout.colors.muted || '#666666')
-        .text(`Gäste: ${ep.guests.join(', ')}`, titleX, doc.y);
+      doc.fontSize(8).font(fontFamily).fillColor(mutedColor)
+        .text(`Gäste: ${ep.guests.join(', ')}`);
     }
 
-    // Trennlinie unter Header
-    const headerBottom = Math.max(doc.y + 4, headerY + (logoW > 0 ? 50 : 0));
-    doc.moveTo(m, headerBottom)
-      .lineTo(pageW - m, headerBottom)
+    // Trennlinie unter Meta
+    doc.moveDown(0.4);
+    doc.moveTo(m, doc.y).lineTo(pageW - m, doc.y)
       .strokeColor(accentColor).lineWidth(1.5).stroke();
 
-    let tableY = headerBottom + 8;
+    let tableY = doc.y + 8;
 
     // ── Tabellen-Header ──────────────────────────────────────────────────
     // Spaltenbreiten (in mm-ähnlichen Punkten)
@@ -621,7 +617,7 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
     ];
 
     const ROW_H_HEADER = 18;
-    const headerBg = accentColor;
+    const headerBg = accentColor; // CI-Farbe aus Layout
 
     // Header-Hintergrund
     doc.rect(m, tableY, contentW, ROW_H_HEADER).fill(headerBg);
@@ -749,28 +745,28 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
       // Farbiger linker Rand
       doc.rect(m, tableY, 3, rowH).fill(meta.color);
 
-      doc.fontSize(FONT_SIZE_BODY).font('Helvetica-Bold').fillColor(meta.color)
+      doc.fontSize(FONT_SIZE_BODY).font(fontBold).fillColor(meta.color)
         .text(blockLabel, m + 5, tableY + ROW_PADDING,
           { width: COL_BLOCK - 8, align: 'left' });
 
       // ── Spalte 2: Sprechtext ─────────────────────────────────────────
       if (cellTextCol1) {
-        doc.fontSize(FONT_SIZE_BODY).font('Helvetica').fillColor('#1a1a1a')
+        doc.fontSize(FONT_SIZE_BODY).font(fontFamily).fillColor(primaryColor)
           .text(cellTextCol1, COL_X[1] + 3, tableY + ROW_PADDING,
             { width: COL_TEXT - 6, align: 'left' });
       } else {
-        doc.fontSize(FONT_SIZE_SMALL).font('Helvetica').fillColor('#aaaaaa')
+        doc.fontSize(FONT_SIZE_SMALL).font(fontFamily).fillColor(mutedColor)
           .text('--', COL_X[1] + 3, tableY + ROW_PADDING,
             { width: COL_TEXT - 6, align: 'left' });
       }
 
-      // ── Spalte 3: Details & Regieanweisung ───────────────────────────
-      doc.fontSize(FONT_SIZE_SMALL).font('Helvetica').fillColor('#555555')
+      // ── Spalte 3: Details & Regieanweisung ───────────────────────
+      doc.fontSize(FONT_SIZE_SMALL).font(fontFamily).fillColor(mutedColor)
         .text(cellTextCol2, COL_X[2] + 3, tableY + ROW_PADDING,
           { width: COL_DETAIL - 6, align: 'left' });
 
-      // ── Spalte 4: Dauer ──────────────────────────────────────────────
-      doc.fontSize(FONT_SIZE_BODY).font('Helvetica-Bold').fillColor('#333333')
+      // ── Spalte 4: Dauer ──────────────────────────────────────────
+      doc.fontSize(FONT_SIZE_BODY).font(fontBold).fillColor(primaryColor)
         .text(durStr, COL_X[3] + 2, tableY + ROW_PADDING,
           { width: COL_DUR - 4, align: 'center' });
 
@@ -785,7 +781,7 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
     const totalDur = blocks.reduce((sum: number, b: any) => sum + (b.duration || 0), 0);
     if (totalDur > 0) {
       tableY += 6;
-      doc.fontSize(8).font('Helvetica-Bold').fillColor(primaryColor)
+      doc.fontSize(8).font(fontBold).fillColor(primaryColor)
         .text(`Gesamtdauer: ${formatDur(totalDur)}`, m, tableY, { align: 'right', width: contentW });
     }
 
