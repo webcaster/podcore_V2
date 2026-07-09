@@ -29,32 +29,21 @@ const wikiData: WikiCategory[] = [
     color: 'text-accent-green',
     articles: [
       {
-        id: 'v2-12-14',
-        title: 'v2.12.14 - PDF-Layout-Optimierung & Archiv-Fix',
-        summary: 'Schwarze Archiv-Seite behoben, Episoden-Script-PDF nutzt nun vollständig das PDF-Layout-System (CI-Farben, Schriften, Header-Stil).',
-        icon: <Package size={18} />,
-        tags: ['pdf', 'layout', 'archiv', 'episode', 'ci', 'v2.12.14'],
-        content: [
-          { heading: 'Archiv-Seite repariert', text: 'Der doppelte Archiv-Tab in der Sponsoren-Übersicht wurde entfernt. Die Archiv-Ansicht zeigt nun korrekt alle archivierten Angebote mit Sponsor-Name, Datum, Preis, PDF-Download und Link zum Sponsor.' },
-          { heading: 'Episoden-Script-PDF: CI-Farben', text: 'Das Tabellen-Skript-Layout im Episoden-Export nutzt nun vollständig die im PDF-Layout konfigurierten CI-Farben (Primär, Akzent, Gedämpft) und Schriftarten.' },
-          { heading: 'Episoden-Script-PDF: Header-Stil', text: 'Der Header des Episoden-Script-PDFs wird nun über die zentrale renderPdfHeader-Funktion gerendert. Damit werden alle drei Header-Stile (Banner, Sidebar, Minimal) korrekt angewendet.' },
-          { heading: 'Layout-Zuordnung optimiert', text: 'Die getDefaultLayoutForType-Funktion priorisiert benutzerdefinierte Layouts vor System-Layouts. Alle Export-Bereiche nutzen nun konsistent das Layout-System als Referenz.' },
-          { heading: 'Footer-Titel', text: 'Der Footer des Episoden-Script-PDFs zeigt nun den konfigurierten Dokumententitel statt des Podcast-Namens.' }
-        ]
-      },
-      {
         id: 'v2-12-13',
-        title: 'v2.12.13 - Sponsoring-System Final',
-        summary: 'Vollständige Stabilisierung des Sponsoring-Systems: Accept-Fix, PDF-Layout-Übergabe, Angebotsnummern-Einstellungen im Admin und neue Rollen-Berechtigungen.',
+        title: 'v2.12.13 - Sponsoring-System, PDF-Layouts & Interview-Fix',
+        summary: 'Vollstaendige Stabilisierung des Sponsoring-Systems, PDF-Layout-Optimierungen, Interview-Block-Fix und Archiv-Reparatur.',
         icon: <Package size={18} />,
-        tags: ['sponsoring', 'pdf', 'admin', 'permissions', 'v2.12.13'],
+        tags: ['sponsoring', 'pdf', 'admin', 'permissions', 'interview', 'archiv', 'v2.12.13'],
         content: [
-          { heading: 'Accept-Fehler behoben', text: 'Der Fehler „Unexpected token < ... is not valid JSON“ beim Annehmen eines Angebots wurde durch Korrektur eines fehlerhaften SQL-Bindings behoben. Buchungen werden nun zuverlässig angelegt.' },
-          { heading: 'PDF-Layout-Übergabe', text: 'Das ausgewählte Layout wird nun korrekt beim PDF-Export übergeben. CI-Farben, Sektionen und Schriften aus dem konfigurierten Layout werden im Angebots-PDF vollständig übernommen.' },
-          { heading: 'Angebotsnummern-Einstellungen', text: 'Im Admin-Bereich (Einstellungen → App) kann das Schema für automatische Angebotsnummern konfiguriert werden: Präfix, Trennzeichen, Jahreszahl, Stellen und Startnummer.' },
-          { heading: 'Neue Rollen-Berechtigungen', text: 'Zwei neue Berechtigungen wurden eingeführt: „Angebote ansehen“ (canViewSponsorOffers) und „Angebote erstellen & verwalten“ (canManageSponsorOffers). Alle bestehenden Rollen wurden entsprechend angepasst.' },
-          { heading: 'Sponsor-Adresse im PDF', text: 'Name, Firma und Anschrift des Sponsors werden nun im Angebots-PDF angezeigt (steuerbar über die Layout-Sektionen).' },
-          { heading: 'Kein Gesamtpreis bei Optionen', text: 'Bei Angeboten mit mehreren Varianten wird kein Gesamtpreis mehr am Ende angezeigt, da jede Option ihren eigenen Preis ausweist.' }
+          { heading: 'Accept-Fehler behoben', text: 'Der Fehler beim Annehmen eines Angebots wurde durch Korrektur eines fehlerhaften SQL-Bindings behoben. Buchungen werden nun zuverlaessig angelegt.' },
+          { heading: 'PDF-Layout-Uebergabe', text: 'Das ausgewaehlte Layout wird nun korrekt beim PDF-Export uebergeben. CI-Farben, Sektionen und Schriften aus dem konfigurierten Layout werden im Angebots-PDF vollstaendig uebernommen.' },
+          { heading: 'Angebotsnummern-Einstellungen', text: 'Im Admin-Bereich (Einstellungen) kann das Schema fuer automatische Angebotsnummern konfiguriert werden: Praefix, Trennzeichen, Jahreszahl, Stellen und Startnummer.' },
+          { heading: 'Neue Rollen-Berechtigungen', text: 'Zwei neue Berechtigungen: canViewSponsorOffers und canManageSponsorOffers. Alle bestehenden Rollen wurden entsprechend angepasst.' },
+          { heading: 'Sponsor-Adresse im PDF', text: 'Name, Firma und Anschrift des Sponsors werden nun im Angebots-PDF angezeigt.' },
+          { heading: 'Kein Gesamtpreis bei Optionen', text: 'Bei Angeboten mit mehreren Varianten wird kein Gesamtpreis am Ende angezeigt.' },
+          { heading: 'Interview-Block-Fix', text: 'Fehler behoben: Interview-Partner konnten nicht mit Fragen als Block in den Episoden-Editor uebernommen werden, wenn keine Fragen als freigegeben markiert waren. Nun werden alle Fragen als Fallback verwendet.' },
+          { heading: 'Archiv-Seite repariert', text: 'Der doppelte Archiv-Tab in der Sponsoren-Uebersicht wurde entfernt. Die Archiv-Ansicht zeigt nun korrekt alle archivierten Angebote.' },
+          { heading: 'Episoden-Script-PDF: CI-Farben & Header', text: 'Das Tabellen-Skript-Layout im Episoden-Export nutzt nun vollstaendig die im PDF-Layout konfigurierten CI-Farben und Schriftarten. Der Header wird ueber die zentrale renderPdfHeader-Funktion gerendert.' }
         ]
       },
       {

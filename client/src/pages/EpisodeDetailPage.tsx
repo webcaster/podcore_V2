@@ -317,7 +317,9 @@ export default function EpisodeDetailPage() {
   };
 
   const handleAddInterviewBlock = (partner: any) => {
-    const rawQuestions = partner.approvedQuestions || partner.allQuestions || [];
+    // Nutze freigegebene Fragen wenn vorhanden, sonst alle Fragen als Fallback
+    // (approvedQuestions kann ein leeres Array [] sein, was als truthy gilt – daher .length prüfen)
+    const rawQuestions = (partner.approvedQuestions?.length > 0 ? partner.approvedQuestions : partner.allQuestions) || [];
     // Strukturierter interview_questions-Block: jede Frage als Objekt mit Antwortzeit
     const structuredQuestions = rawQuestions.map((q: any) => ({
       id: q.id || Math.random().toString(36).slice(2),
@@ -1658,6 +1660,7 @@ export default function EpisodeDetailPage() {
                             {partner.role && <span className="text-[10px] text-accent-cyan">{partner.role}</span>}
                             <span className="text-[10px] text-text-muted">{partner.questionCount || 0} Fragen</span>
                             {partner.approvedCount > 0 && <span className="text-[10px] text-accent-green">{partner.approvedCount} freigegeben</span>}
+                            {(partner.questionCount || 0) === 0 && <span className="text-[10px] text-accent-amber">Noch keine Fragen</span>}
                           </div>
                         </div>
                         <div className="flex gap-1">
