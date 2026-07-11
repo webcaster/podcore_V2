@@ -223,6 +223,41 @@ export const editorialHubApi = {
 };
 
 // ============================================================
+// Episode Workflow API (v2.14.0)
+// ============================================================
+export const episodeWorkflowApi = {
+  updateField: (episodeId: string, field: string, value: any, expectedUpdatedAt?: string) =>
+    api.patch<any>(`/episode-workflow/${episodeId}/field`, { field, value, expectedUpdatedAt }),
+  listComments: (episodeId: string, fieldKey?: string) =>
+    api.get<any[]>(`/episode-workflow/${episodeId}/comments${buildQs({ fieldKey })}`),
+  createComment: (episodeId: string, data: { fieldKey?: string; parentId?: string; content: string; mentions?: string[] }) =>
+    api.post<any>(`/episode-workflow/${episodeId}/comments`, data),
+  resolveComment: (episodeId: string, commentId: string, resolved = true) =>
+    api.patch<any>(`/episode-workflow/${episodeId}/comments/${commentId}/resolve`, { resolved }),
+  deleteComment: (episodeId: string, commentId: string) =>
+    api.delete(`/episode-workflow/${episodeId}/comments/${commentId}`),
+  getHistory: (episodeId: string) => api.get<any[]>(`/episode-workflow/${episodeId}/history`),
+  rollback: (episodeId: string, revisionId: string) =>
+    api.post<any>(`/episode-workflow/${episodeId}/history/${revisionId}/rollback`, {}),
+  getTeam: () => api.get<any[]>('/episode-workflow/team'),
+  getNotifications: (limit = 30) => api.get<any[]>(`/episode-workflow/notifications?limit=${limit}`),
+  markNotificationsRead: (ids?: string[]) => api.post('/episode-workflow/notifications/read', { ids }),
+  getMedia: (episodeId: string) => api.get<any[]>(`/episode-workflow/${episodeId}/media`),
+  linkMedia: (episodeId: string, assetId: string, relationType = 'source') =>
+    api.post<any>(`/episode-workflow/${episodeId}/media`, { assetId, relationType }),
+  unlinkMedia: (episodeId: string, assetId: string) =>
+    api.delete(`/episode-workflow/${episodeId}/media/${assetId}`),
+  getSponsoringRecommendations: (episodeId: string) =>
+    api.get<any[]>(`/episode-workflow/${episodeId}/sponsoring/recommendations`),
+  quickBookSponsor: (episodeId: string, data: { sponsorId: string; slotId: string; position?: string; duration?: number; presentationText?: string }) =>
+    api.post<any>(`/episode-workflow/${episodeId}/sponsoring/quick-book`, data),
+  analyzeAudio: (episodeId: string, assetId: string) =>
+    api.post<any>(`/episode-workflow/${episodeId}/audio/${assetId}/analyze`, {}),
+  getAudioJob: (episodeId: string, jobId: string) =>
+    api.get<any>(`/episode-workflow/${episodeId}/audio/jobs/${jobId}`),
+};
+
+// ============================================================
 // Sponsors API
 // ============================================================
 export const sponsorsApi = {

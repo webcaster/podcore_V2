@@ -63,7 +63,7 @@ export default function SponsorDetailPageV2() {
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
   const emptyOfferForm = {
     title: '', offerNumber: '', validUntil: '', introText: '', outroText: '',
-    positions: [] as any[], discount: '0', discountType: 'absolute' as 'absolute' | 'percent', notes: '',
+    positions: [] as any[], discount: '0', discountType: 'absolute' as 'absolute' | 'percent', status: 'entwurf', notes: '',
     offerOptions: null as any[] | null, // null = keine Mehrfach-Optionen, Array = Varianten
   };
   const [offerForm, setOfferForm] = useState(emptyOfferForm);
@@ -1277,6 +1277,7 @@ export default function SponsorDetailPageV2() {
                                 positions,
                                 discount: String(offer.discount ?? 0),
                                 discountType: offer.discountType || offer.discount_type || 'absolute',
+                                status: offer.status || 'entwurf',
                                 notes: offer.notes || '',
                                 offerOptions,
                               });

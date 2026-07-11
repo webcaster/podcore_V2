@@ -5,9 +5,26 @@ import path from 'path';
 import fs from 'fs';
 import { getDb, DATA_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
+import { broadcastRealtime } from '../services/realtime';
 
 const router: import("express").Router = Router();
 router.use(requireAuth as any);
+
+function broadcastIdeaUpdated(db: any, ideaId: string, req: AuthRequest, scope: string): void {
+  const idea = db.get('SELECT episode_id FROM ideas WHERE id = ?', [ideaId]) as any;
+  const linked = db.all('SELECT id FROM episodes WHERE idea_id = ?', [ideaId]) as any[];
+  const episodeIds = new Set<string>([idea?.episode_id, ...linked.map(row => row.id)].filter(Boolean));
+  const payload = { ideaId, scope, changedBy: req.user?.displayName || req.user?.username };
+  if (!episodeIds.size) broadcastRealtime({ type: 'editorial.idea.updated', userId: req.user?.id, payload });
+  episodeIds.forEach(episodeId => broadcastRealtime({ type: 'editorial.idea.updated', episodeId, userId: req.user?.id, payload }));
+}
+
+function broadcastEditorialResourceUpdated(db: any, resource: any, req: AuthRequest, scope: string): void {
+  const ideaId = resource?.related_idea_id || resource?.idea_id || null;
+  const episodeId = resource?.related_episode_id || resource?.episode_id || null;
+  if (ideaId) broadcastIdeaUpdated(db, ideaId, req, scope);
+  if (episodeId) broadcastRealtime({ type: 'editorial.idea.updated', episodeId, userId: req.user?.id, payload: { ideaId, scope, changedBy: req.user?.displayName || req.user?.username } });
+}
 
 // ============================================================
 // IDEAS
@@ -56,6 +73,7 @@ router.put('/ideas/:id', requirePermission('canEditIdeas') as any, (req: AuthReq
 
   const idea = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
   if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+  broadcastIdeaUpdated(db, req.params.id, req, 'idea');
   return res.json({ success: true, data: { ...idea, tags: JSON.parse(idea.tags), createdAt: idea.created_at, updatedAt: idea.updated_at, createdBy: idea.created_by } });
 });
 
@@ -97,6 +115,7 @@ router.patch('/ideas/:id', requirePermission('canEditIdeas') as any, (req: AuthR
      req.params.id]);
   const idea = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
   if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+  broadcastIdeaUpdated(db, req.params.id, req, 'idea');
   return res.json({ success: true, data: { ...idea, tags: JSON.parse(idea.tags || '[]'), createdAt: idea.created_at, updatedAt: idea.updated_at } });
 });
 
@@ -117,6 +136,7 @@ router.post('/ideas/:id/checklists', requirePermission('canEditIdeas') as any, (
   const itemId = uuidv4();
   db.run('INSERT INTO idea_checklists (id, idea_id, title, sort_order) VALUES (?, ?, ?, ?)', [itemId, req.params.id, title, sortOrder]);
   const item = db.get('SELECT * FROM idea_checklists WHERE id = ?', [itemId]) as any;
+  broadcastIdeaUpdated(db, req.params.id, req, 'checklist');
   return res.status(201).json({ success: true, data: { ...item, isDone: item.is_done === 1, ideaId: item.idea_id } });
 });
 
@@ -126,12 +146,14 @@ router.put('/ideas/:id/checklists/:itemId', requirePermission('canEditIdeas') as
   db.run(`UPDATE idea_checklists SET title = COALESCE(?, title), is_done = COALESCE(?, is_done), sort_order = COALESCE(?, sort_order), updated_at = datetime('now') WHERE id = ? AND idea_id = ?`,
     [title ?? null, isDone !== undefined ? (isDone ? 1 : 0) : null, sortOrder ?? null, req.params.itemId, req.params.id]);
   const item = db.get('SELECT * FROM idea_checklists WHERE id = ?', [req.params.itemId]) as any;
+  broadcastIdeaUpdated(db, req.params.id, req, 'checklist');
   return res.json({ success: true, data: { ...item, isDone: item.is_done === 1, ideaId: item.idea_id } });
 });
 
 router.delete('/ideas/:id/checklists/:itemId', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   db.run('DELETE FROM idea_checklists WHERE id = ? AND idea_id = ?', [req.params.itemId, req.params.id]);
+  broadcastIdeaUpdated(db, req.params.id, req, 'checklist');
   return res.json({ success: true, message: 'Aufgabe gelöscht' });
 });
 
@@ -152,6 +174,7 @@ router.post('/ideas/:id/notes', requirePermission('canEditIdeas') as any, (req: 
   const noteId = uuidv4();
   db.run('INSERT INTO idea_notes (id, idea_id, content, created_by) VALUES (?, ?, ?, ?)', [noteId, req.params.id, content, req.user!.id]);
   const note = db.get('SELECT * FROM idea_notes WHERE id = ?', [noteId]) as any;
+  broadcastIdeaUpdated(db, req.params.id, req, 'notes');
   return res.status(201).json({ success: true, data: { ...note, ideaId: note.idea_id, createdBy: note.created_by, createdAt: note.created_at } });
 });
 
@@ -160,12 +183,14 @@ router.put('/ideas/:id/notes/:noteId', requirePermission('canEditIdeas') as any,
   const { content } = req.body;
   db.run(`UPDATE idea_notes SET content = COALESCE(?, content), updated_at = datetime('now') WHERE id = ? AND idea_id = ?`, [content ?? null, req.params.noteId, req.params.id]);
   const note = db.get('SELECT * FROM idea_notes WHERE id = ?', [req.params.noteId]) as any;
+  broadcastIdeaUpdated(db, req.params.id, req, 'notes');
   return res.json({ success: true, data: { ...note, ideaId: note.idea_id, createdBy: note.created_by, createdAt: note.created_at } });
 });
 
 router.delete('/ideas/:id/notes/:noteId', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   db.run('DELETE FROM idea_notes WHERE id = ? AND idea_id = ?', [req.params.noteId, req.params.id]);
+  broadcastIdeaUpdated(db, req.params.id, req, 'notes');
   return res.json({ success: true, message: 'Notiz gelöscht' });
 });
 
@@ -200,6 +225,7 @@ router.post('/ideas/:id/uploads', requirePermission('canEditIdeas') as any, idea
   db.run('INSERT INTO idea_uploads (id, idea_id, filename, original_name, filepath, filesize, mime_type, description, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [uploadId, req.params.id, req.file.filename, req.file.originalname, req.file.path, req.file.size, req.file.mimetype, description || null, req.user!.id]);
   const upload = db.get('SELECT * FROM idea_uploads WHERE id = ?', [uploadId]) as any;
+  broadcastIdeaUpdated(db, req.params.id, req, 'uploads');
   return res.status(201).json({ success: true, data: { ...upload, ideaId: upload.idea_id, uploadedBy: upload.uploaded_by, originalName: upload.original_name, mimeType: upload.mime_type, createdAt: upload.created_at } });
 });
 
@@ -209,6 +235,7 @@ router.delete('/ideas/:id/uploads/:uploadId', requirePermission('canEditIdeas') 
   if (!upload) return res.status(404).json({ success: false, error: 'Datei nicht gefunden' });
   try { if (fs.existsSync(upload.filepath)) fs.unlinkSync(upload.filepath); } catch (_) {}
   db.run('DELETE FROM idea_uploads WHERE id = ?', [req.params.uploadId]);
+  broadcastIdeaUpdated(db, req.params.id, req, 'uploads');
   return res.json({ success: true, message: 'Datei gelöscht' });
 });
 
@@ -631,6 +658,7 @@ router.post('/interviews/questions', requirePermission('canEditInterviews') as a
     [id, partnerId || null, episodeId || null, question, category || null, order, notes || null]);
 
   const q = db.get('SELECT * FROM interview_questions WHERE id = ?', [id]) as any;
+  broadcastEditorialResourceUpdated(db, q, req, 'interview-questions');
   return res.status(201).json({ success: true, data: { ...q, answered: q.answered === 1, partnerId: q.partner_id, episodeId: q.episode_id, createdAt: q.created_at } });
 });
 
@@ -645,6 +673,7 @@ router.put('/interviews/questions/:id', requirePermission('canEditInterviews') a
 
   const q = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
   if (!q) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
+  broadcastEditorialResourceUpdated(db, q, req, 'interview-questions');
   return res.json({ success: true, data: {
     ...q, approved: q.approved === 1,
     approvedBy: q.approved_by, approvedAt: q.approved_at,
@@ -665,6 +694,7 @@ router.post('/interviews/questions/:id/approve', requirePermission('canApproveIn
   );
 
   const updated = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
+  broadcastEditorialResourceUpdated(db, updated, req, 'interview-questions');
   return res.json({ success: true, data: {
     ...updated, approved: updated.approved === 1,
     approvedBy: updated.approved_by, approvedAt: updated.approved_at,
@@ -685,6 +715,7 @@ router.post('/interviews/questions/:id/revoke', requirePermission('canApproveInt
   );
 
   const updated = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
+  broadcastEditorialResourceUpdated(db, updated, req, 'interview-questions');
   return res.json({ success: true, data: {
     ...updated, approved: updated.approved === 1,
     approvedBy: updated.approved_by, approvedAt: updated.approved_at,
@@ -938,6 +969,7 @@ router.post('/research', requirePermission('canCreateIdeas') as any, (req: AuthR
     [id, title, url || null, type, description || null, content || null, JSON.stringify(tags), relatedIdeaId || null, relatedEpisodeId || null, status, req.user!.id]
   );
   const source = db.get('SELECT * FROM research_sources WHERE id = ?', [id]) as any;
+  broadcastEditorialResourceUpdated(db, source, req, 'research');
   return res.status(201).json({ success: true, data: { ...source, tags: JSON.parse(source.tags || '[]') } });
 });
 
@@ -959,6 +991,7 @@ router.put('/research/:id', requirePermission('canEditIdeas') as any, (req: Auth
      status ?? null, req.params.id]
   );
   const updated = db.get('SELECT * FROM research_sources WHERE id = ?', [req.params.id]) as any;
+  broadcastEditorialResourceUpdated(db, updated, req, 'research');
   return res.json({ success: true, data: { ...updated, tags: JSON.parse(updated.tags || '[]') } });
 });
 
@@ -967,6 +1000,7 @@ router.delete('/research/:id', requirePermission('canDeleteIdeas') as any, (req:
   const existing = db.get('SELECT * FROM research_sources WHERE id = ?', [req.params.id]) as any;
   if (!existing) return res.status(404).json({ success: false, error: 'Quelle nicht gefunden' });
   db.run('DELETE FROM research_sources WHERE id = ?', [req.params.id]);
+  broadcastEditorialResourceUpdated(db, existing, req, 'research');
   return res.json({ success: true, message: 'Quelle gelöscht' });
 });
 
@@ -1036,7 +1070,7 @@ router.get('/ideas/:id/full', requirePermission('canViewIdeas') as any, (req: Au
       notes: notes.map((n: any) => ({ ...n, ideaId: n.idea_id, createdAt: n.created_at })),
       checklists: checklists.map((c: any) => ({ ...c, isDone: c.is_done === 1, ideaId: c.idea_id })),
       interviewPartners: partners.map((p: any) => ({ ...p, guestIntro: p.guest_intro, ideaId: p.idea_id })),
-      interviewQuestions: questions.map((q: any) => ({ ...q, ideaId: q.idea_id, partnerId: q.partner_id, partnerName: q.partner_name })),
+      interviewQuestions: questions.map((q: any) => ({ ...q, ideaId: q.idea_id, partnerId: q.partner_id, partnerName: q.partner_name, timestampSeconds: q.timestamp_seconds, timestampSource: q.timestamp_source })),
       uploads: uploads.map((u: any) => ({ ...u, ideaId: u.idea_id, createdAt: u.created_at })),
     },
   });
@@ -1059,8 +1093,8 @@ router.get('/interviews/for-episode', requirePermission('canViewInterviews') as 
       ...p,
       guestIntro: p.guest_intro,
       ideaId: p.idea_id,
-      approvedQuestions,
-      allQuestions,
+        approvedQuestions: approvedQuestions.map((q: any) => ({ ...q, timestampSeconds: q.timestamp_seconds, timestampSource: q.timestamp_source })),
+      allQuestions: allQuestions.map((q: any) => ({ ...q, timestampSeconds: q.timestamp_seconds, timestampSource: q.timestamp_source })),
       questionCount: allQuestions.length,
       approvedCount: approvedQuestions.length,
     };

@@ -1076,11 +1076,10 @@ function AssetEditForm({ editForm, setEditForm, onSubmit, onClose }: {
                     <div>
                       <label className="label">Tags</label>
                       <div className="flex flex-wrap gap-1 mb-2">
-          // @ts-ignore
-                        {editForm.tags.map((tag, i) => (
+                        {editForm.tags.map((tag: string, i: number) => (
                           <span key={i} className="badge bg-surface-overlay text-text-muted text-xs flex items-center gap-1">
                             {tag}
-                            <button type="button" onClick={() => setEditForm(p => ({ ...p, tags: p.tags.filter((_, j) => j !== i) }))} className="hover:text-accent-red"><X size={10} /></button>
+                            <button type="button" onClick={() => setEditForm(p => ({ ...p, tags: p.tags.filter((_: string, j: number) => j !== i) }))} className="hover:text-accent-red"><X size={10} /></button>
                           </span>
                         ))}
                       </div>
@@ -1210,8 +1209,7 @@ function AssetEditForm({ editForm, setEditForm, onSubmit, onClose }: {
                 {metaTab === 'custom' && (
                   <div className="space-y-3">
                     <p className="text-xs text-text-muted">Füge beliebige eigene Schlüssel-Wert-Paare hinzu.</p>
-          // @ts-ignore
-                    {editForm.customMetadata.map((item, i) => (
+                    {editForm.customMetadata.map((item: { key: string; value: string }, i: number) => (
                       <div key={i} className="flex items-center gap-2">
                         <input
                           type="text"
@@ -1229,7 +1227,7 @@ function AssetEditForm({ editForm, setEditForm, onSubmit, onClose }: {
                           className="input text-sm flex-1"
                           placeholder="Wert"
                         />
-                        <button type="button" onClick={() => setEditForm(p => ({ ...p, customMetadata: p.customMetadata.filter((_, j) => j !== i) }))} className="p-2 text-text-muted hover:text-accent-red">
+                        <button type="button" onClick={() => setEditForm(p => ({ ...p, customMetadata: p.customMetadata.filter((_: { key: string; value: string }, j: number) => j !== i) }))} className="p-2 text-text-muted hover:text-accent-red">
                           <X size={14} />
                         </button>
                       </div>
@@ -1495,7 +1493,7 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
     });
 
     ws.on('audioprocess', () => setCurrentTime(ws.getCurrentTime()));
-    ws.on('seek', () => setCurrentTime(ws.getCurrentTime()));
+    ws.on('seeking', () => setCurrentTime(ws.getCurrentTime()));
     ws.on('play', () => setIsPlaying(true));
     ws.on('pause', () => setIsPlaying(false));
     ws.on('error', (e: any) => { setLoadError(`Fehler beim Laden: ${e}`); setIsLoading(false); });

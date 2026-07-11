@@ -448,8 +448,8 @@ export default function PdfLayoutManagerPage() {
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                          {layout.isSystem && <Lock size={9} className="text-text-muted shrink-0" title="System-Layout" />}
-                          {layout.isDefault && <Star size={9} className="text-accent-yellow shrink-0 fill-current" title="Standard-Layout" />}
+                          {layout.isSystem && <span title="System-Layout"><Lock size={9} className="text-text-muted shrink-0" aria-label="System-Layout" /></span>}
+                          {layout.isDefault && <span title="Standard-Layout"><Star size={9} className="text-accent-yellow shrink-0 fill-current" aria-label="Standard-Layout" /></span>}
                           <span className="text-xs text-text-primary truncate">{layout.name}</span>
                         </div>
                         {sidebarSort !== 'type' && (

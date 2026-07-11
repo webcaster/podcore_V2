@@ -8,14 +8,20 @@ import {
   AlertTriangle, Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle,
   Search, Star, CheckSquare, Square, BookOpen, UserCheck, Layers, ExternalLink, X,
   MessageSquare, HelpCircle, FileEdit, StickyNote, Target, Timer, Timer as TimerIcon,
-  RotateCcw, FolderOpen
+  RotateCcw, FolderOpen, RefreshCw
 } from 'lucide-react';
-import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi } from '../lib/api';
+import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi, episodeWorkflowApi } from '../lib/api';
 import { sponsorsV2Api, episodeTemplatesApi } from '../lib/api-v2';
 import Modal from '../components/ui/Modal';
 import IdeaImportModal from '../components/ui/IdeaImportModal';
 import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
 import { useApp } from '../contexts/AppContext';
+import EditableField from '../components/episodes/EditableField';
+import PreviewPane from '../components/episodes/PreviewPane';
+import SponsoringQuickBook from '../components/episodes/SponsoringQuickBook';
+import EpisodeMediaManager from '../components/episodes/EpisodeMediaManager';
+import CommentThread from '../components/episodes/CommentThread';
+import ChangeHistory from '../components/episodes/ChangeHistory';
 
 const BLOCK_TYPES = [
   { value: 'intro', label: 'Intro', color: 'text-accent-cyan', bg: 'bg-accent-cyan/20' },
@@ -139,6 +145,7 @@ export default function EpisodeDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [workflowUpdatedAt, setWorkflowUpdatedAt] = useState<string | undefined>();
   const [activeTab, setActiveTab] = useState<'script' | 'shownotes' | 'meta' | 'production' | 'technical' | 'ads' | 'hub'>('script');
 
   // Redaktionshub-Tab States
@@ -165,6 +172,7 @@ export default function EpisodeDetailPage() {
   const [workflowEnabled, setWorkflowEnabled] = useState(false);
   const [isImportingHub, setIsImportingHub] = useState(false);
   const [linkedIdeaId, setLinkedIdeaId] = useState<string | null>(null);
+  const [hubSyncState, setHubSyncState] = useState<{ at: string; scope: string; changedBy?: string } | null>(null);
 
   // PDF Layout & Dateiname
   const [pdfLayoutId, setPdfLayoutId] = useState('');
@@ -439,6 +447,7 @@ export default function EpisodeDetailPage() {
       adminApi.getSettings().catch(() => null),
     ]).then(([ep, settings]) => {
         setEpisode(ep);
+        setWorkflowUpdatedAt(ep.updatedAt);
         setWorkflowEnabled(settings?.workflow?.episodeApprovalRequired ?? false);
         setForm({
           title: ep.title || '',
@@ -472,9 +481,10 @@ export default function EpisodeDetailPage() {
 
   const markDirty = () => setIsDirty(true);
 
-  const handleImportFromHub = async () => {
+  const handleImportFromHub = async (silent: boolean | unknown = false) => {
+    const quiet = silent === true;
     if (!linkedIdeaId) {
-      showError('Diese Episode hat keine verknüpfte Ideenmappe.');
+      if (!quiet) showError('Diese Episode hat keine verknüpfte Ideenmappe.');
       return;
     }
     setIsImportingHub(true);
@@ -487,17 +497,28 @@ export default function EpisodeDetailPage() {
         editorialApi.listIdeaChecklist(linkedIdeaId),
       ]);
 
-      let hubNotes = '';
-      if (notes.length > 0) hubNotes += '## Notizen aus Ideenmappe\n' + notes.map((n: any) => `- ${n.content}`).join('\n') + '\n\n';
-      if (research.length > 0) hubNotes += '## Recherche-Quellen\n' + research.map((s: any) => `- ${s.title}${s.url ? ` (${s.url})` : ''}`).join('\n') + '\n\n';
-      if (questions.length > 0) hubNotes += '## Interview-Fragen\n' + questions.map((q: any) => `- ${q.question}${q.category ? ` (${q.category})` : ''}`).join('\n') + '\n\n';
-      if (checklist.length > 0) hubNotes += '## Checkliste\n' + checklist.map((c: any) => `${c.isDone ? '[x]' : '[ ]'} ${c.title}`).join('\n');
+      let hubNotes = `## RedaktionsHub: ${idea.title || 'Ideenmappe'}\n`;
+      if (idea.description) hubNotes += `${idea.description}\n\n`;
+      if (notes.length > 0) hubNotes += '### Notizen\n' + notes.map((n: any) => `- ${n.content}`).join('\n') + '\n\n';
+      if (research.length > 0) hubNotes += '### Recherche-Quellen\n' + research.map((s: any) => `- ${s.title}${s.url ? ` (${s.url})` : ''}`).join('\n') + '\n\n';
+      if (questions.length > 0) hubNotes += '### Interview-Fragen\n' + questions.map((q: any) => `- ${q.timestampSeconds != null ? `[${Math.floor(q.timestampSeconds / 60)}:${String(q.timestampSeconds % 60).padStart(2, '0')}] ` : ''}${q.question}${q.category ? ` (${q.category})` : ''}`).join('\n') + '\n\n';
+      if (checklist.length > 0) hubNotes += '### Checkliste\n' + checklist.map((c: any) => `${c.isDone ? '[x]' : '[ ]'} ${c.title}`).join('\n');
 
-      const currentNotes = form.notes || '';
-      const separator = currentNotes.trim() ? '\n\n---\n\n' : '';
-      updateForm('notes', currentNotes + separator + hubNotes);
-      showSuccess(`Redaktionshub-Daten importiert`);
-    } catch (err: any) { showError(err.message); }
+      const start = '<!-- PODCORE_HUB_SYNC_START -->';
+      const end = '<!-- PODCORE_HUB_SYNC_END -->';
+      const managedBlock = `${start}\n${hubNotes.trim()}\n${end}`;
+      setForm((previous: any) => {
+        const currentNotes = String(previous.notes || '');
+        const pattern = /<!-- PODCORE_HUB_SYNC_START -->[\s\S]*?<!-- PODCORE_HUB_SYNC_END -->/;
+        const nextNotes = pattern.test(currentNotes)
+          ? currentNotes.replace(pattern, managedBlock)
+          : `${currentNotes.trim()}${currentNotes.trim() ? '\n\n---\n\n' : ''}${managedBlock}`;
+        return { ...previous, notes: nextNotes };
+      });
+      setIsDirty(true);
+      setHubSyncState({ at: new Date().toISOString(), scope: 'full-sync' });
+      if (!quiet) showSuccess('RedaktionsHub-Daten synchronisiert');
+    } catch (err: any) { if (!quiet) showError(err.message); }
     finally { setIsImportingHub(false); }
   };
 
@@ -505,6 +526,53 @@ export default function EpisodeDetailPage() {
     setForm((p: any) => ({ ...p, [key]: value }));
     markDirty();
   };
+
+  const handleInlineSaved = (result: any) => {
+    const snapshot = result?.episode;
+    if (snapshot?.updatedAt) setWorkflowUpdatedAt(snapshot.updatedAt);
+    if (snapshot) setEpisode((previous: any) => ({ ...previous, ...snapshot }));
+    setIsDirty(false);
+  };
+
+  useEffect(() => {
+    const onRealtime = (raw: Event) => {
+      const event = (raw as CustomEvent).detail;
+      if (!event) return;
+      const matchesEpisode = event.episodeId === id;
+      const matchesIdea = event.payload?.ideaId && event.payload.ideaId === linkedIdeaId;
+      if (event.type === 'editorial.idea.updated' && (matchesEpisode || matchesIdea)) {
+        setHubSyncState({ at: event.timestamp || new Date().toISOString(), scope: event.payload?.scope || 'hub', changedBy: event.payload?.changedBy });
+        void loadHubData();
+        if (linkedIdeaId) void handleImportFromHub(true);
+        return;
+      }
+      if (!matchesEpisode) return;
+      if (event.type === 'episode.field.updated') {
+        const { field, value, updatedAt } = event.payload || {};
+        if (updatedAt) setWorkflowUpdatedAt(updatedAt);
+        setEpisode((previous: any) => ({ ...previous, [field]: value, updatedAt }));
+        if (field === 'blocks') setBlocks(Array.isArray(value) ? value : []);
+        else if (field === 'technicalData') setTechnicalData(value || {});
+        else if (field === 'productionInfo') setProductionInfo(value || '');
+        else if (field === 'showNotes') setShowNotes(value || '');
+        else if (field === 'altDuration') setAltDuration(value == null ? '' : String(value));
+        else setForm((previous: any) => ({ ...previous, [field]: ['hosts', 'guests'].includes(field) && Array.isArray(value) ? value.join(', ') : value }));
+      }
+      if (event.type === 'episode.rollback.completed' && event.payload?.episode) {
+        const snapshot = event.payload.episode;
+        setEpisode((previous: any) => ({ ...previous, ...snapshot }));
+        setWorkflowUpdatedAt(snapshot.updatedAt);
+        setForm((previous: any) => ({ ...previous, ...snapshot, hosts: (snapshot.hosts || []).join(', '), guests: (snapshot.guests || []).join(', ') }));
+        setBlocks(snapshot.blocks || []);
+        setProductionInfo(snapshot.productionInfo || '');
+        setShowNotes(snapshot.showNotes || '');
+        setTechnicalData(snapshot.technicalData || {});
+      }
+      if (event.type === 'episode.sponsoring.booked') { void loadAdBookings(); void loadV2Bookings(); }
+    };
+    window.addEventListener('podcore:realtime', onRealtime);
+    return () => window.removeEventListener('podcore:realtime', onRealtime);
+  }, [id, linkedIdeaId]);
 
   const updateTechnical = (key: string, value: string) => {
     setTechnicalData(prev => ({ ...prev, [key]: value }));
@@ -527,6 +595,7 @@ export default function EpisodeDetailPage() {
         technicalData,
       });
       setEpisode(updated);
+      setWorkflowUpdatedAt(updated.updatedAt);
       setScriptReady(updated.scriptReady || false);
       setIsDirty(false);
       showSuccess('Episode gespeichert');
@@ -909,6 +978,8 @@ export default function EpisodeDetailPage() {
                 </div>
               </div>
 
+              {id && <div className="mb-5"><EpisodeMediaManager episodeId={id} onAnalyze={() => { if (linkedIdeaId) void handleImportFromHub(true); }} /></div>}
+
               {/* Block-Steuerung: Alle auf-/zuklappen */}
               {blocks.length > 1 && (
                 <div className="flex items-center justify-end gap-2 mb-1">
@@ -1267,78 +1338,39 @@ export default function EpisodeDetailPage() {
             </div>
           )}
 
-          {activeTab === 'meta' && (
-            <div className="card space-y-4">
-              <h2 className="font-semibold text-text-primary">Metadaten</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="label">Titel *</label><input type="text" value={form.title} onChange={e => updateForm('title', e.target.value)} className="input" /></div>
-                <div><label className="label">Nummer</label><input type="number" value={form.number} onChange={e => updateForm('number', e.target.value)} className="input" /></div>
-              </div>
-              <div>
-                <label className="label">Status</label>
-                <select 
-                  value={form.status} 
-                  onChange={e => updateForm('status', e.target.value)} 
-                  className="input"
-                >
-                  {STATUS_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div><label className="label">Untertitel</label><input type="text" value={form.subtitle} onChange={e => updateForm('subtitle', e.target.value)} className="input" /></div>
-              <div><label className="label">Beschreibung</label><RichTextEditor value={form.description} onChange={html => updateForm('description', html)} minHeight={120} /></div>
-              {/* Vorplanungs-Datum */}
-              <div className="p-3 rounded-lg border border-surface-border bg-obsidian-800/40">
-                <div className="flex items-center gap-2 mb-2">
-                  <Calendar size={14} className="text-accent-purple" />
-                  <span className="text-sm font-medium text-text-primary">Vorplanungs-Datum</span>
-                  <span className="text-xs text-text-muted">(geplantes Datum vor der Aufnahme)</span>
-                </div>
-                <input
-                  type="date"
-                  value={form.plannedDate}
-                  onChange={e => updateForm('plannedDate', e.target.value)}
-                  className="input"
-                />
-                {form.plannedDate && (['aufnahme', 'produktion', 'geplant', 'veroeffentlicht'].includes(form.status)) && (
-                  <p className="text-xs text-accent-green mt-1.5 flex items-center gap-1">
-                    <CheckCircle size={11} />
-                    Vorplanung aktiv – Aufnahme- und Veröffentlichungsdatum sind jetzt verbindlich.
-                  </p>
-                )}
-                {form.plannedDate && !(['aufnahme', 'produktion', 'geplant', 'veroeffentlicht'].includes(form.status)) && (
-                  <p className="text-xs text-text-muted mt-1.5 flex items-center gap-1">
-                    <Info size={11} />
-                    Vorplanung gesetzt – wird verbindlich sobald Status auf Aufnahme oder höher gesetzt wird.
-                  </p>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+          {activeTab === 'meta' && id && (
+            <div className="card space-y-5">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <label className="label flex items-center gap-1">
-                    Aufnahme
-                    {(['aufnahme', 'produktion', 'geplant', 'veroeffentlicht'].includes(form.status)) && (
-                      <span className="text-[10px] text-accent-orange font-semibold uppercase tracking-wide ml-1">Verbindlich</span>
-                    )}
-                  </label>
-                  <input type="date" value={form.recordingDate} onChange={e => updateForm('recordingDate', e.target.value)} className="input" />
+                  <h2 className="font-semibold text-text-primary">Metadaten · Inline-Editing</h2>
+                  <p className="text-xs text-text-muted mt-1">Validierte Änderungen werden nach zwei Sekunden automatisch gespeichert. Strg+Z/Strg+Y wirken feldbezogen.</p>
                 </div>
-                <div>
-                  <label className="label flex items-center gap-1">
-                    Veröffentlichung
-                    {form.status === 'veroeffentlicht' && (
-                      <span className="text-[10px] text-accent-green font-semibold uppercase tracking-wide ml-1">Veröffentlicht</span>
-                    )}
-                    {form.status === 'geplant' && (
-                      <span className="text-[10px] text-accent-purple font-semibold uppercase tracking-wide ml-1">Geplant</span>
-                    )}
-                  </label>
-                  <input type="date" value={form.publishDate} onChange={e => updateForm('publishDate', e.target.value)} className="input" />
-                </div>
+                <span className="badge bg-accent-green/10 text-accent-green">Auto-Save aktiv</span>
               </div>
-              <div><label className="label">Hosts</label><input type="text" value={form.hosts} onChange={e => updateForm('hosts', e.target.value)} className="input" placeholder="Name 1, Name 2" /></div>
-              <div><label className="label">Gäste</label><input type="text" value={form.guests} onChange={e => updateForm('guests', e.target.value)} className="input" placeholder="Gast 1, Gast 2" /></div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <EditableField episodeId={id} field="title" label="Titel *" value={form.title} onChange={value => updateForm('title', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} validate={value => !String(value || '').trim() ? 'Titel darf nicht leer sein.' : String(value).length > 240 ? 'Maximal 240 Zeichen.' : null} />
+                <EditableField episodeId={id} field="number" label="Nummer" value={form.number} onChange={value => updateForm('number', value ?? '')} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="number" validate={value => value !== null && Number(value) < 0 ? 'Nummer muss positiv sein.' : null} />
+              </div>
+
+              <EditableField episodeId={id} field="status" label="Status" value={form.status} onChange={value => updateForm('status', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="select" options={STATUS_OPTIONS.map(option => ({ value: option.value, label: option.label }))} />
+              <EditableField episodeId={id} field="subtitle" label="Untertitel" value={form.subtitle} onChange={value => updateForm('subtitle', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} placeholder="Optionaler Untertitel" />
+              <EditableField episodeId={id} field="description" label="Beschreibung (Markdown)" value={form.description} onChange={value => updateForm('description', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="textarea" rows={7} placeholder="Markdown-Beschreibung der Episode…" />
+
+              <div className="rounded-lg border border-surface-border bg-obsidian-800/40 p-3">
+                <div className="mb-3 flex items-center gap-2"><Calendar size={14} className="text-accent-purple" /><span className="text-sm font-medium text-text-primary">Zeitplanung</span></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <EditableField episodeId={id} field="plannedDate" label="Vorplanung" value={form.plannedDate} onChange={value => updateForm('plannedDate', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="date" />
+                  <EditableField episodeId={id} field="recordingDate" label="Aufnahme" value={form.recordingDate} onChange={value => updateForm('recordingDate', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="date" />
+                  <EditableField episodeId={id} field="publishDate" label="Veröffentlichung" value={form.publishDate} onChange={value => updateForm('publishDate', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="date" />
+                </div>
+                {form.plannedDate && <p className={`mt-2 flex items-center gap-1 text-xs ${['aufnahme', 'produktion', 'geplant', 'veroeffentlicht'].includes(form.status) ? 'text-accent-green' : 'text-text-muted'}`}><Info size={11} /> {['aufnahme', 'produktion', 'geplant', 'veroeffentlicht'].includes(form.status) ? 'Vorplanung aktiv; Aufnahme und Veröffentlichung gelten als verbindlich.' : 'Vorplanung wird ab dem Status Aufnahme verbindlich.'}</p>}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <EditableField episodeId={id} field="hosts" label="Hosts" value={form.hosts} onChange={value => updateForm('hosts', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} placeholder="Name 1, Name 2" toApiValue={value => String(value || '').split(',').map(item => item.trim()).filter(Boolean)} />
+                <EditableField episodeId={id} field="guests" label="Gäste" value={form.guests} onChange={value => updateForm('guests', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} placeholder="Gast 1, Gast 2" toApiValue={value => String(value || '').split(',').map(item => item.trim()).filter(Boolean)} />
+              </div>
             </div>
           )}
 
@@ -1442,6 +1474,8 @@ export default function EpisodeDetailPage() {
 
           {activeTab === 'ads' && (
             <div className="space-y-4">
+
+              {id && <SponsoringQuickBook episodeId={id} onBooked={booking => setAdBookings(previous => [...previous, booking])} />}
 
               {/* ── Sponsor-Status-Übersicht ─────────────────────────── */}
               {/* Konflikt-Warnung entfernt (v2.12.0) */}
@@ -1585,6 +1619,12 @@ export default function EpisodeDetailPage() {
           {/* ── Redaktionshub Tab ────────────────────────────────── */}
           {activeTab === 'hub' && (
             <div className="space-y-4">
+              {hubSyncState && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent-cyan/30 bg-accent-cyan/10 px-3 py-2 text-xs text-text-secondary">
+                  <span className="flex items-center gap-2"><RefreshCw size={13} className={isImportingHub ? 'animate-spin text-accent-cyan' : 'text-accent-cyan'} /> Live-Abgleich: {hubSyncState.scope}{hubSyncState.changedBy ? ` durch ${hubSyncState.changedBy}` : ''}</span>
+                  <span className="text-[10px] text-text-muted">{new Date(hubSyncState.at).toLocaleString('de-DE')}</span>
+                </div>
+              )}
               {/* Ideen-Suche */}
               <div className="card">
                 <div className="flex items-center justify-between mb-4">
@@ -1680,8 +1720,41 @@ export default function EpisodeDetailPage() {
           )}
         </div>
 
-        {/* Right: Sidebar */}
+        {/* Right: Sidebar / Split-View */}
         <div className="space-y-4">
+          <PreviewPane
+            episode={{ ...episode, ...form, hosts: form.hosts ? form.hosts.split(',').map((item: string) => item.trim()).filter(Boolean) : [], guests: form.guests ? form.guests.split(',').map((item: string) => item.trim()).filter(Boolean) : [] }}
+            blocks={blocks}
+            showNotes={showNotes}
+            totalDuration={totalDuration}
+          />
+          {id && <CommentThread episodeId={id} fieldKey={activeTab === 'meta' ? 'title' : activeTab === 'script' ? 'blocks' : activeTab === 'ads' ? 'sponsors' : 'general'} fieldOptions={[
+            { value: 'general', label: 'Allgemein' },
+            { value: 'title', label: 'Titel' },
+            { value: 'subtitle', label: 'Untertitel' },
+            { value: 'description', label: 'Beschreibung' },
+            { value: 'status', label: 'Status' },
+            { value: 'blocks', label: 'Script & Ablauf' },
+            { value: 'sponsors', label: 'Sponsoring' },
+            { value: 'media', label: 'Medien' },
+          ]} />}
+          {id && <ChangeHistory episodeId={id} onRollback={restored => {
+            setEpisode((current: any) => ({ ...current, ...restored }));
+            setForm((current: any) => ({
+              ...current,
+              title: restored.title ?? current.title,
+              subtitle: restored.subtitle ?? current.subtitle,
+              description: restored.description ?? current.description,
+              status: restored.status ?? current.status,
+              publishDate: restored.publishDate ?? current.publishDate,
+              category: restored.category ?? current.category,
+              tags: Array.isArray(restored.tags) ? restored.tags.join(', ') : current.tags,
+              hosts: Array.isArray(restored.hosts) ? restored.hosts.join(', ') : current.hosts,
+              guests: Array.isArray(restored.guests) ? restored.guests.join(', ') : current.guests,
+            }));
+            if (Array.isArray(restored.blocks)) setBlocks(restored.blocks);
+          }} />}
+
           <div className="card">
             <h3 className="font-semibold text-text-primary mb-3">Zusammenfassung</h3>
             <div className="space-y-3">

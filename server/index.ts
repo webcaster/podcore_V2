@@ -7,6 +7,7 @@ import morgan from 'morgan';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import http from 'http';
 
 import { getDb, DATA_DIR, ASSETS_DIR } from './database';
 import { verifyToken } from './middleware/auth';
@@ -27,6 +28,8 @@ import pdfLayoutsRouter from './routers/pdfLayouts';
 import approvalsRouter from './routers/approvals';
 import sponsorsV2Router from './routers/sponsors-v2';
 import updateRouter from './routers/update';
+import episodeWorkflowRouter from './routers/episodeWorkflow';
+import { initializeRealtime } from './services/realtime';
 
 const app: import("express").Express = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -36,9 +39,9 @@ const pkgPath = path.join(__dirname, '..', 'package.json');
 const APP_VERSION: string = (() => {
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    return pkg.version || '2.12.1';
+    return pkg.version || '2.14.0';
   } catch (_) {
-    return '2.12.1';
+    return '2.14.0';
   }
 })();
 // Always bind to 0.0.0.0 so the app is reachable in LAN
@@ -137,6 +140,7 @@ app.use('/api/stats', statsRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/pdf-layouts', pdfLayoutsRouter);
 app.use('/api/update', updateRouter);
+app.use('/api/episode-workflow', episodeWorkflowRouter);
 
 // Serve branding assets publicly (no auth needed for display)
 const brandingDir = path.join(DATA_DIR, 'branding');
@@ -194,7 +198,7 @@ if (fs.existsSync(publicDir)) {
 } else {
   app.get('/', (req, res) => {
     res.json({
-      message: 'PodCore API Server v2.12.1',
+      message: 'PodCore API Server v2.14.0',
       note: 'Frontend build not found. Run: npm run build:client',
       api: '/api',
     });
@@ -229,12 +233,15 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Start Server
 // ============================================================
 
-app.listen(PORT, HOST, () => {
+const server = http.createServer(app);
+initializeRealtime(server);
+
+server.listen(PORT, HOST, () => {
   const ips = getLocalNetworkIPs();
 
   console.log('');
   console.log('╔══════════════════════════════════════════════╗');
-  console.log('║           PodCore v2.12.1 Server              ║');
+  console.log(`║           PodCore v${APP_VERSION} Server${' '.repeat(Math.max(0, 19 - APP_VERSION.length))}║`);
   console.log('╠══════════════════════════════════════════════╣');
   console.log(`║  Lokal:   http://localhost:${PORT}               ║`);
   if (ips.length > 0) {

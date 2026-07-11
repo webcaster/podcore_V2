@@ -1011,6 +1011,106 @@ function initializeSchema(db: any): void {
     db.run("UPDATE ad_categories SET presentation_template = '' WHERE presentation_template = 'präsentiert von'");
   } catch (e) { console.error('[DB] Ad categories seed error:', e); }
 
+  // ============================================================
+  // v2.14.0: Episoden-Editor, Zusammenarbeit und Automatisierung
+  // ============================================================
+  try { db.exec(`CREATE TABLE IF NOT EXISTS episode_revisions (
+    id TEXT PRIMARY KEY,
+    episode_id TEXT NOT NULL,
+    revision_number INTEGER NOT NULL,
+    snapshot TEXT NOT NULL,
+    changed_fields TEXT NOT NULL DEFAULT '[]',
+    change_type TEXT NOT NULL DEFAULT 'update',
+    changed_by TEXT,
+    changed_by_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (episode_id) REFERENCES episodes(id) ON DELETE CASCADE,
+    FOREIGN KEY (changed_by) REFERENCES users(id),
+    UNIQUE (episode_id, revision_number)
+  )`); } catch (_) {}
+
+  try { db.exec(`CREATE TABLE IF NOT EXISTS episode_comments (
+    id TEXT PRIMARY KEY,
+    episode_id TEXT NOT NULL,
+    field_key TEXT NOT NULL DEFAULT 'general',
+    parent_id TEXT,
+    content TEXT NOT NULL,
+    mentions TEXT NOT NULL DEFAULT '[]',
+    is_resolved INTEGER NOT NULL DEFAULT 0,
+    resolved_by TEXT,
+    resolved_at TEXT,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (episode_id) REFERENCES episodes(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id) REFERENCES episode_comments(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id),
+    FOREIGN KEY (resolved_by) REFERENCES users(id)
+  )`); } catch (_) {}
+
+  try { db.exec(`CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    is_read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`); } catch (_) {}
+
+  try { db.exec(`CREATE TABLE IF NOT EXISTS episode_media_links (
+    id TEXT PRIMARY KEY,
+    episode_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    relation_type TEXT NOT NULL DEFAULT 'source',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (episode_id) REFERENCES episodes(id) ON DELETE CASCADE,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id),
+    UNIQUE (episode_id, asset_id)
+  )`); } catch (_) {}
+
+  try { db.exec(`CREATE TABLE IF NOT EXISTS audio_analysis_jobs (
+    id TEXT PRIMARY KEY,
+    episode_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    source TEXT,
+    progress INTEGER NOT NULL DEFAULT 0,
+    result TEXT,
+    error TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (episode_id) REFERENCES episodes(id) ON DELETE CASCADE,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id)
+  )`); } catch (_) {}
+
+  // Zeitstempel-Zuordnung für Interviewfragen.
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN timestamp_seconds INTEGER DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN timestamp_source TEXT DEFAULT NULL'); } catch (_) {}
+
+  // Zusätzliche, optionale Targeting-Felder für nachvollziehbares Sponsor-Matching.
+  try { db.exec("ALTER TABLE sponsors ADD COLUMN target_tags TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}
+  try { db.exec("ALTER TABLE sponsors ADD COLUMN target_categories TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN target_audience TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec("ALTER TABLE sponsors ADD COLUMN preferred_formats TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN min_episode_duration INTEGER DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN max_episode_duration INTEGER DEFAULT NULL'); } catch (_) {}
+
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_episode_revisions_episode ON episode_revisions(episode_id, revision_number DESC)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_episode_comments_episode_field ON episode_comments(episode_id, field_key, created_at)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read, created_at DESC)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_episode_media_links_episode ON episode_media_links(episode_id, sort_order)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_audio_analysis_episode ON audio_analysis_jobs(episode_id, created_at DESC)'); } catch (_) {}
+
   console.log('[DB] Database initialized at:', DB_PATH);
 }
 

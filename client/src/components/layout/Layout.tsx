@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
 import { api } from '../../lib/api';
+import NotificationCenter from './NotificationCenter';
 
 // Injected at build time by vite.config.ts
 declare const __APP_VERSION__: string;
@@ -198,6 +199,9 @@ export default function Layout() {
             {avatarInitials}
           </div>
         )}
+        <div className={`mb-1 ${collapsed && !mobile ? '' : 'px-0'}`}>
+          <NotificationCenter compact={collapsed && !mobile} />
+        </div>
         <button
           onClick={handleLogout}
           className={`flex items-center gap-2 text-text-muted hover:text-accent-red transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-accent-red/10 ${collapsed && !mobile ? 'justify-center px-0' : ''}`}
@@ -299,7 +303,7 @@ export default function Layout() {
           >
             <Menu size={20} />
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {branding.logoUrl ? (
               <img
                 src={branding.logoUrl}
@@ -316,6 +320,7 @@ export default function Layout() {
               {branding.podcastName || 'PodCore'}
             </span>
           </div>
+          <NotificationCenter compact />
         </div>
 
         {/* Page Content */}
