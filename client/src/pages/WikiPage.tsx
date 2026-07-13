@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   LayoutDashboard, Package, CheckCircle, Zap, BookOpen, Search, ChevronRight, ChevronDown, 
-  Settings, Users, Info, ArrowRight, Shield, Database, Folder, Globe, AlertCircle, Calendar
+  Settings, Users, Info, ArrowRight, Shield, Database, Folder, Globe, AlertCircle, Calendar,
+  FileEdit, MessageSquare, Cpu, Download, FileText
 } from 'lucide-react';
 
 interface WikiArticle {
@@ -23,40 +24,129 @@ interface WikiCategory {
 
 const wikiData: WikiCategory[] = [
   {
-    id: 'changelog',
-    label: 'Versionshistorie',
-    icon: <Package size={16} />,
+    id: 'general',
+    label: 'Allgemein',
+    icon: <LayoutDashboard size={16} />,
+    color: 'text-accent-blue',
+    articles: [
+      {
+        id: 'getting-started',
+        title: 'Erste Schritte',
+        summary: 'Einführung in PodCore und Übersicht über die Benutzeroberfläche.',
+        icon: <Zap size={18} />,
+        tags: ['einführung', 'grundlagen', 'ui'],
+        content: [
+          { heading: 'Willkommen bei PodCore', text: 'PodCore ist Ihre zentrale Plattform für Podcast-Management. Von der ersten Idee bis zur finalen Veröffentlichung unterstützt Sie PodCore in jedem Schritt.' },
+          { heading: 'Dashboard', text: 'Ihr Startpunkt mit Statistiken, aktuellen Episoden und Schnellzugriffen.' },
+          { heading: 'Navigation', text: 'Nutzen Sie die Seitenleiste, um zwischen Episoden, RedaktionsHub, Sponsoren und Medienbibliothek zu wechseln.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'editor',
+    label: 'Episoden-Editor',
+    icon: <FileEdit size={16} />,
+    color: 'text-accent-purple',
+    articles: [
+      {
+        id: 'editor-features',
+        title: 'Editor Funktionen',
+        summary: 'Details zum neuen Workflow-optimierten Editor.',
+        icon: <Zap size={18} />,
+        tags: ['editor', 'workflow', 'v2.14.0'],
+        content: [
+          { heading: 'Inline-Editing', text: 'Bearbeiten Sie Metadaten direkt in der Ansicht. Änderungen werden automatisch nach 2 Sekunden Inaktivität gespeichert.' },
+          { heading: 'Zuklappbare Sektionen', text: 'Medien- und Audioquellen können nun platzsparend zugeklappt werden.' },
+          { heading: 'Vorschau-Tab', text: 'Die Live-Vorschau befindet sich jetzt in einem eigenen Tab für volle Breite und bessere Übersicht.' },
+          { heading: 'Shortcuts', text: 'Nutzen Sie Strg+N im Dashboard für neue Episoden oder Strg+Z für Undo im Editor.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'collaboration',
+    label: 'Zusammenarbeit',
+    icon: <Users size={16} />,
+    color: 'text-accent-cyan',
+    articles: [
+      {
+        id: 'feedback-system',
+        title: 'Feedback & Versionen',
+        summary: 'Wie Sie im Team zusammenarbeiten und Änderungen verfolgen.',
+        icon: <MessageSquare size={18} />,
+        tags: ['team', 'kommentare', 'versionen'],
+        content: [
+          { heading: 'Kommentare', text: 'Fügen Sie feldbezogene Kommentare hinzu und nutzen Sie @Mentions, um Teammitglieder zu benachrichtigen.' },
+          { heading: 'Änderungsverlauf', text: 'Verfolgen Sie jede Änderung im Audit-Log und nutzen Sie den visuellen Diff-Vergleich.' },
+          { heading: 'Rollback', text: 'Stellen Sie bei Bedarf jederzeit eine frühere Version Ihrer Episode wieder her.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'automation',
+    label: 'Automatisierung',
+    icon: <Zap size={16} />,
+    color: 'text-accent-amber',
+    articles: [
+      {
+        id: 'smart-features',
+        title: 'Intelligente Funktionen',
+        summary: 'Datenbasierte Automatisierungen für effizienteres Arbeiten.',
+        icon: <Cpu size={18} />,
+        tags: ['ki', 'automatisierung', 'audio'],
+        content: [
+          { heading: 'Audio-Zeitstempel', text: 'Automatisches Auslesen von Kapitelmarken aus MP3/WAV-Dateien zur Zuordnung von Interviewfragen.' },
+          { heading: 'Sponsoring-Matchmaking', text: 'KI-gestützte Vorschläge für passende Sponsoren basierend auf Episoden-Inhalten.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'exports',
+    label: 'Exporte',
+    icon: <Download size={16} />,
     color: 'text-accent-green',
     articles: [
       {
-        id: 'v2-12-13',
-        title: 'v2.12.13 - Sponsoring-System, PDF-Layouts & Interview-Fix',
-        summary: 'Vollstaendige Stabilisierung des Sponsoring-Systems, PDF-Layout-Optimierungen, Interview-Block-Fix und Archiv-Reparatur.',
-        icon: <Package size={18} />,
-        tags: ['sponsoring', 'pdf', 'admin', 'permissions', 'interview', 'archiv', 'v2.12.13'],
+        id: 'pdf-exports',
+        title: 'PDF & Dokumente',
+        summary: 'Alles über den Export von Dokumenten.',
+        icon: <FileText size={18} />,
+        tags: ['pdf', 'export', 'buchungen'],
         content: [
-          { heading: 'Accept-Fehler behoben', text: 'Der Fehler beim Annehmen eines Angebots wurde durch Korrektur eines fehlerhaften SQL-Bindings behoben. Buchungen werden nun zuverlaessig angelegt.' },
-          { heading: 'PDF-Layout-Uebergabe', text: 'Das ausgewaehlte Layout wird nun korrekt beim PDF-Export uebergeben. CI-Farben, Sektionen und Schriften aus dem konfigurierten Layout werden im Angebots-PDF vollstaendig uebernommen.' },
-          { heading: 'Angebotsnummern-Einstellungen', text: 'Im Admin-Bereich (Einstellungen) kann das Schema fuer automatische Angebotsnummern konfiguriert werden: Praefix, Trennzeichen, Jahreszahl, Stellen und Startnummer.' },
-          { heading: 'Neue Rollen-Berechtigungen', text: 'Zwei neue Berechtigungen: canViewSponsorOffers und canManageSponsorOffers. Alle bestehenden Rollen wurden entsprechend angepasst.' },
-          { heading: 'Sponsor-Adresse im PDF', text: 'Name, Firma und Anschrift des Sponsors werden nun im Angebots-PDF angezeigt.' },
-          { heading: 'Kein Gesamtpreis bei Optionen', text: 'Bei Angeboten mit mehreren Varianten wird kein Gesamtpreis am Ende angezeigt.' },
-          { heading: 'Interview-Block-Fix', text: 'Fehler behoben: Interview-Partner konnten nicht mit Fragen als Block in den Episoden-Editor uebernommen werden, wenn keine Fragen als freigegeben markiert waren. Nun werden alle Fragen als Fallback verwendet.' },
-          { heading: 'Archiv-Seite repariert', text: 'Der doppelte Archiv-Tab in der Sponsoren-Uebersicht wurde entfernt. Die Archiv-Ansicht zeigt nun korrekt alle archivierten Angebote.' },
-          { heading: 'Episoden-Script-PDF: CI-Farben & Header', text: 'Das Tabellen-Skript-Layout im Episoden-Export nutzt nun vollstaendig die im PDF-Layout konfigurierten CI-Farben und Schriftarten. Der Header wird ueber die zentrale renderPdfHeader-Funktion gerendert.' }
+          { heading: 'Buchungsbestätigungen', text: 'Exportieren Sie einzelne oder gesammelte Buchungsbestätigungen für Sponsoren.' },
+          { heading: 'Layout-Manager', text: 'Passen Sie CI-Farben und Header-Designs für alle PDF-Exporte zentral an.' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'changelog',
+    label: 'Versionshistorie',
+    icon: <Package size={16} />,
+    color: 'text-text-secondary',
+    articles: [
+      {
+        id: 'v2-14-0',
+        title: 'v2.14.0 - Das Workflow-Update',
+        summary: 'Konsolidiertes Update mit Fokus auf Editor-Workflow, Kollaboration und Automatisierung.',
+        icon: <Package size={18} />,
+        tags: ['major', 'workflow', 'v2.14.0'],
+        content: [
+          { heading: 'Highlights', text: 'Inline-Editing, Auto-Save, Echtzeit-Synchronisation, Audio-Zeitstempel und neues Benachrichtigungscenter.' },
+          { heading: 'Fixes', text: 'Behebung der PDF-Export-Routen und Korrektur der Buchungs-Datenpersistenz.' }
         ]
       },
       {
-        id: 'v2-12-12-p2-4',
-        title: 'v2.12.12 - Patch 2.4: PDF & Layout Final',
-        summary: 'Finalisierung der PDF-Layout-Engine, Vorschau-Optimierung und automatische Angebotsnummerierung.',
+        id: 'v2-12-13',
+        title: 'v2.12.13 - Stabilität & Sponsoring',
+        summary: 'Stabilisierung des Sponsoring-Systems und PDF-Layout-Optimierungen.',
         icon: <Package size={18} />,
-        tags: ['patch', 'pdf', 'layout', 'branding', 'v2.12.12-p2.4'],
+        tags: ['sponsoring', 'pdf', 'v2.12.13'],
         content: [
-          { heading: 'PDF-Layout-Manager', text: 'Korrektur der Sektions-Auswahl für alle Export-Typen. Sektionen können nun präzise je Dokumententyp konfiguriert werden.' },
-          { heading: 'Vorschau-Optimierung', text: 'Export-Typ spezifische Mock-Daten für eine realitätsnahe PDF-Vorschau direkt im Manager.' },
-          { heading: 'Sponsoring-Fixes', text: 'Reparatur der PDF-Export-Route und Implementierung der automatischen Angebotsnummerierung (ANG-YYYY-NNN).' },
-          { heading: 'CI-Branding & Clipping', text: 'Konsequente Übernahme der CI-Farben in allen PDF-Tabellen und Summen-Boxen. Behebung von Text-Clipping in Summen.' }
+          { heading: 'Features', text: 'PDF-Layout-Uebergabe, Angebotsnummern-Einstellungen und neue Rollen-Berechtigungen.' }
         ]
       }
     ]
