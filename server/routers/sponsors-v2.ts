@@ -142,8 +142,40 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
 router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const b = req.body;
-  db.run(`UPDATE ad_bookings SET status = ?, invoice_status = ?, notes = ?, updated_at = datetime('now') WHERE id = ?`,
-    [b.status, b.invoiceStatus, b.notes, req.params.bookingId]);
+  const { bookingId } = req.params;
+  
+  // Berechne finalPrice basierend auf den aktualisierten Werten
+  const price = b.price !== undefined ? b.price : 0;
+  const priceAdjustment = b.priceAdjustment !== undefined ? b.priceAdjustment : 0;
+  const listenerFee = b.listenerFee !== undefined ? b.listenerFee : 0;
+  const discount = b.discount !== undefined ? b.discount : 0;
+  const discountType = b.discountType || 'absolute';
+  const discountAmount = discountType === 'percent' ? (price * (discount || 0)) / 100 : (discount || 0);
+  const finalPrice = Math.max(0, price + (priceAdjustment || 0) + listenerFee - discountAmount);
+  
+  db.run(
+    `UPDATE ad_bookings SET slot_id = ?, booking_date = ?, booking_end_date = ?, price = ?, price_adjustment = ?, listener_fee = ?, final_price = ?, status = ?, invoice_status = ?, notes = ?, contract_id = ?, placement_count = ?, episode_refs = ?, discount = ?, discount_type = ?, listener_count = ?, total_episodes = ?, updated_at = datetime('now') WHERE id = ?`,
+    [
+      b.slotId,
+      b.bookingDate,
+      b.bookingEndDate || null,
+      price,
+      priceAdjustment || 0,
+      listenerFee || 0,
+      finalPrice,
+      b.status || 'geplant',
+      b.invoiceStatus || 'offen',
+      b.notes || null,
+      b.contractId || null,
+      b.placementCount || 1,
+      JSON.stringify(b.episodeRefs || []),
+      discount || 0,
+      discountType || 'absolute',
+      b.listenerCount || null,
+      b.totalEpisodes || null,
+      bookingId
+    ]
+  );
   return res.json({ success: true });
 });
 
@@ -610,6 +642,244 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
     const fy = doc.page.height - 30;
     doc.fontSize(7).font('Helvetica').fillColor('#aaa')
       .text(`${podcastName} · Preisliste · ${nowStr}`, m, fy, { align: 'center', width: contentW });
+  }
+
+  doc.end();
+});
+
+// ============================================================
+// BOOKING CONFIRMATION PDF EXPORT (einzelne Buchung)
+// ============================================================
+router.get('/bookings/:bookingId/confirmation-pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { bookingId } = req.params;
+  const booking = db.get(
+    `SELECT ab.*, s.name as slot_name, c.name as category_name, sp.name as sponsor_name, sp.contact_person, sp.email, sp.phone
+     FROM ad_bookings ab
+     LEFT JOIN ad_slots s ON ab.slot_id = s.id
+     LEFT JOIN ad_categories c ON ab.slot_id = c.id
+     JOIN sponsors sp ON ab.sponsor_id = sp.id
+     WHERE ab.id = ?`,
+    [bookingId]
+  ) as any;
+
+  if (!booking) {
+    return res.status(404).json({ success: false, error: 'Buchung nicht gefunden' });
+  }
+
+  const layoutId = req.query.layoutId as string;
+  let layout: any;
+  try {
+    layout = layoutId ? getLayoutById(layoutId) : null;
+    if (!layout) layout = getDefaultLayoutForType('booking_confirmation' as any);
+  } catch (_) {
+    layout = { colors: {}, sections: {}, footer: {}, header: {}, typography: {}, pageMargin: 50 };
+  }
+
+  const cfg = layout || {};
+  const colors = cfg.colors || {};
+  const footerCfg = cfg.footer || {};
+  const m = cfg.pageMargin || 50;
+  const primaryColor: string = colors.primary || '#7c3aed';
+  const headerBgColor: string = colors.background || colors.primary || '#7c3aed';
+  const headerTextColor: string = colors.headerText || '#ffffff';
+
+  const { podcastName, companyName, logoPath } = loadBranding(db);
+
+  const PDFDocument = require('pdfkit');
+  const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c: Buffer) => chunks.push(c));
+  doc.on('end', () => {
+    const buf = Buffer.concat(chunks);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Buchungsbestaetigung_${booking.id}.pdf"`);
+    res.send(buf);
+  });
+
+  const contentW = doc.page.width - m * 2;
+  const nowStr = new Date().toLocaleDateString('de-DE');
+
+  // Header
+  doc.rect(0, 0, doc.page.width, 90).fill(headerBgColor);
+  if (logoPath && fs.existsSync(logoPath)) {
+    try { doc.image(logoPath, m, 15, { height: 40 }); } catch (_) {}
+  }
+  doc.fontSize(22).font('Helvetica-Bold').fillColor(headerTextColor)
+    .text('Buchungsbestätigung', m, 18, { align: 'right', width: contentW });
+  const subLine = [podcastName, companyName].filter(Boolean).join(' · ') + ` · ${nowStr}`;
+  doc.fontSize(9).font('Helvetica').fillColor(headerTextColor).opacity(0.8)
+    .text(subLine, m, 55, { align: 'right', width: contentW });
+  doc.opacity(1);
+  let y = 105;
+
+  // Sponsor-Informationen
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text('Sponsor:', m, y);
+  y += 16;
+  doc.fontSize(9).font('Helvetica').fillColor('#333')
+    .text(booking.sponsor_name || '—', m, y);
+  if (booking.contact_person) doc.text(`Kontaktperson: ${booking.contact_person}`, m, y + 14);
+  if (booking.email) doc.text(`E-Mail: ${booking.email}`, m, y + 28);
+  if (booking.phone) doc.text(`Telefon: ${booking.phone}`, m, y + 42);
+  y += 70;
+
+  // Buchungsdetails
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text('Buchungsdetails:', m, y);
+  y += 16;
+  const details = [
+    { label: 'Buchungs-ID:', value: booking.id },
+    { label: 'Werbeplatz:', value: booking.slot_name || booking.category_name || '—' },
+    { label: 'Buchungsdatum:', value: booking.booking_date ? new Date(booking.booking_date).toLocaleDateString('de-DE') : '—' },
+    { label: 'Buchungsende:', value: booking.booking_end_date ? new Date(booking.booking_end_date).toLocaleDateString('de-DE') : '—' },
+    { label: 'Status:', value: booking.status || '—' },
+    { label: 'Rechnungsstatus:', value: booking.invoice_status || '—' },
+  ];
+
+  doc.fontSize(9).font('Helvetica').fillColor('#333');
+  details.forEach(detail => {
+    doc.text(`${detail.label} ${detail.value}`, m, y);
+    y += 14;
+  });
+
+  y += 10;
+
+  // Preisdetails
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text('Preisdetails:', m, y);
+  y += 16;
+  const prices = [
+    { label: 'Basispreis:', value: `${Number(booking.price || 0).toFixed(2)} €` },
+    { label: 'Preisanpassung:', value: `${Number(booking.price_adjustment || 0).toFixed(2)} €` },
+    { label: 'Rabatt:', value: `${Number(booking.discount || 0).toFixed(2)} €` },
+    { label: 'Listener-Gebühr:', value: `${Number(booking.listener_fee || 0).toFixed(2)} €` },
+    { label: 'Gesamtpreis:', value: `${Number(booking.final_price || 0).toFixed(2)} €`, bold: true },
+  ];
+
+  doc.fontSize(9).font('Helvetica').fillColor('#333');
+  prices.forEach(price => {
+    if (price.bold) doc.font('Helvetica-Bold');
+    doc.text(`${price.label} ${price.value}`, m, y);
+    if (price.bold) doc.font('Helvetica');
+    y += 14;
+  });
+
+  // Footer
+  if (footerCfg.showPodcastName !== false || footerCfg.showDate !== false) {
+    const fy = doc.page.height - 30;
+    doc.fontSize(7).font('Helvetica').fillColor('#aaa')
+      .text(`${podcastName} · Buchungsbestätigung · ${nowStr}`, m, fy, { align: 'center', width: contentW });
+  }
+
+  doc.end();
+});
+
+// ============================================================
+// ALL BOOKINGS CONFIRMATION PDF EXPORT (alle Buchungen eines Sponsors)
+// ============================================================
+router.get('/:sponsorId/bookings/confirmation-pdf-all', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { sponsorId } = req.params;
+  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [sponsorId]) as any;
+
+  if (!sponsor) {
+    return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
+  }
+
+  const bookings = db.all(
+    `SELECT ab.*, s.name as slot_name, c.name as category_name
+     FROM ad_bookings ab
+     LEFT JOIN ad_slots s ON ab.slot_id = s.id
+     LEFT JOIN ad_categories c ON ab.slot_id = c.id
+     WHERE ab.sponsor_id = ?
+     ORDER BY ab.booking_date DESC`,
+    [sponsorId]
+  ) as any[];
+
+  const layoutId = req.query.layoutId as string;
+  let layout: any;
+  try {
+    layout = layoutId ? getLayoutById(layoutId) : null;
+    if (!layout) layout = getDefaultLayoutForType('booking_confirmation' as any);
+  } catch (_) {
+    layout = { colors: {}, sections: {}, footer: {}, header: {}, typography: {}, pageMargin: 50 };
+  }
+
+  const cfg = layout || {};
+  const colors = cfg.colors || {};
+  const footerCfg = cfg.footer || {};
+  const m = cfg.pageMargin || 50;
+  const primaryColor: string = colors.primary || '#7c3aed';
+  const headerBgColor: string = colors.background || colors.primary || '#7c3aed';
+  const headerTextColor: string = colors.headerText || '#ffffff';
+
+  const { podcastName, companyName, logoPath } = loadBranding(db);
+
+  const PDFDocument = require('pdfkit');
+  const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c: Buffer) => chunks.push(c));
+  doc.on('end', () => {
+    const buf = Buffer.concat(chunks);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Buchungsbestaetigung_${sponsor.name}_alle.pdf"`);
+    res.send(buf);
+  });
+
+  const contentW = doc.page.width - m * 2;
+  const nowStr = new Date().toLocaleDateString('de-DE');
+
+  // Header
+  doc.rect(0, 0, doc.page.width, 90).fill(headerBgColor);
+  if (logoPath && fs.existsSync(logoPath)) {
+    try { doc.image(logoPath, m, 15, { height: 40 }); } catch (_) {}
+  }
+  doc.fontSize(22).font('Helvetica-Bold').fillColor(headerTextColor)
+    .text('Alle Buchungen', m, 18, { align: 'right', width: contentW });
+  const subLine = [podcastName, companyName].filter(Boolean).join(' · ') + ` · ${nowStr}`;
+  doc.fontSize(9).font('Helvetica').fillColor(headerTextColor).opacity(0.8)
+    .text(subLine, m, 55, { align: 'right', width: contentW });
+  doc.opacity(1);
+  let y = 105;
+
+  // Sponsor-Informationen
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text('Sponsor:', m, y);
+  y += 16;
+  doc.fontSize(9).font('Helvetica').fillColor('#333')
+    .text(sponsor.name || '—', m, y);
+  y += 30;
+
+  // Tabellen-Header
+  const col1 = contentW * 0.25;
+  const col2 = contentW * 0.2;
+  const col3 = contentW * 0.2;
+  const col4 = contentW * 0.15;
+  const col5 = contentW * 0.2;
+  doc.rect(m, y, contentW, 22).fill(primaryColor);
+  doc.fontSize(8).font('Helvetica-Bold').fillColor('#fff');
+  doc.text('Werbeplatz', m + 5, y + 7, { width: col1 });
+  doc.text('Buchungsdatum', m + col1 + 5, y + 7, { width: col2 });
+  doc.text('Buchungsende', m + col1 + col2 + 5, y + 7, { width: col3 });
+  doc.text('Status', m + col1 + col2 + col3 + 5, y + 7, { width: col4 });
+  doc.text('Gesamtpreis', m + col1 + col2 + col3 + col4 + 5, y + 7, { width: col5, align: 'right' });
+  y += 22;
+
+  // Buchungen
+  bookings.forEach((booking: any, idx: number) => {
+    if (y + 20 > doc.page.height - 60) { doc.addPage(); y = m; }
+    doc.rect(m, y, contentW, 18).fill(idx % 2 === 0 ? '#ffffff' : '#f7f7f7');
+    doc.fontSize(8).font('Helvetica').fillColor('#222');
+    doc.text(booking.slot_name || booking.category_name || '—', m + 5, y + 4, { width: col1 });
+    doc.text(booking.booking_date ? new Date(booking.booking_date).toLocaleDateString('de-DE') : '—', m + col1 + 5, y + 4, { width: col2 });
+    doc.text(booking.booking_end_date ? new Date(booking.booking_end_date).toLocaleDateString('de-DE') : '—', m + col1 + col2 + 5, y + 4, { width: col3 });
+    doc.text(booking.status || '—', m + col1 + col2 + col3 + 5, y + 4, { width: col4 });
+    doc.text(`${Number(booking.final_price || 0).toFixed(2)} €`, m + col1 + col2 + col3 + col4 + 5, y + 4, { width: col5, align: 'right' });
+    y += 18;
+  });
+
+  // Footer
+  if (footerCfg.showPodcastName !== false || footerCfg.showDate !== false) {
+    const fy = doc.page.height - 30;
+    doc.fontSize(7).font('Helvetica').fillColor('#aaa')
+      .text(`${podcastName} · Alle Buchungen · ${nowStr}`, m, fy, { align: 'center', width: contentW });
   }
 
   doc.end();

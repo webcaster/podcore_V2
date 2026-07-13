@@ -8,7 +8,7 @@ import {
   AlertTriangle, Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle,
   Search, Star, CheckSquare, Square, BookOpen, UserCheck, Layers, ExternalLink, X,
   MessageSquare, HelpCircle, FileEdit, StickyNote, Target, Timer, Timer as TimerIcon,
-  RotateCcw, FolderOpen, RefreshCw
+  RotateCcw, FolderOpen, RefreshCw, Eye
 } from 'lucide-react';
 import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi, episodeWorkflowApi } from '../lib/api';
 import { sponsorsV2Api, episodeTemplatesApi } from '../lib/api-v2';
@@ -146,7 +146,8 @@ export default function EpisodeDetailPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [workflowUpdatedAt, setWorkflowUpdatedAt] = useState<string | undefined>();
-  const [activeTab, setActiveTab] = useState<'script' | 'shownotes' | 'meta' | 'production' | 'technical' | 'ads' | 'hub'>('script');
+  const [activeTab, setActiveTab] = useState<'script' | 'shownotes' | 'meta' | 'production' | 'technical' | 'ads' | 'hub' | 'preview'>('script');
+  const [expandedMediaSections, setExpandedMediaSections] = useState<{ [key: string]: boolean }>({ media: true, audio: true });
 
   // Redaktionshub-Tab States
   const [hubIdeas, setHubIdeas] = useState<any[]>([]);
@@ -158,6 +159,11 @@ export default function EpisodeDetailPage() {
   const [showIdeaImportModal, setShowIdeaImportModal] = useState(false);
   const [showInterviewModal, setShowInterviewModal] = useState(false);
   const [selectedInterview, setSelectedInterview] = useState<any>(null);
+  
+  // Toggle Media/Audio Sections
+  const toggleMediaSection = (section: string) => {
+    setExpandedMediaSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
   const [showNewInterviewModal, setShowNewInterviewModal] = useState(false);
   const [newInterviewForm, setNewInterviewForm] = useState({ name: '', company: '', role: '', email: '', bio: '', guestIntro: '' });
   const [adBookings, setAdBookings] = useState<any[]>([]);
@@ -937,6 +943,7 @@ export default function EpisodeDetailPage() {
           { key: 'production', label: 'Produktion', icon: <Wrench size={16} /> },
           { key: 'technical', label: 'Technik', icon: <Settings size={16} /> },
           { key: 'ads', label: 'Werbung', icon: <Megaphone size={16} /> },
+          { key: 'preview', label: 'Vorschau', icon: <Eye size={16} /> },
           { key: 'hub', label: 'Redaktionshub', icon: <BookOpen size={16} /> },
         ].map(tab => (
           <button
@@ -978,7 +985,23 @@ export default function EpisodeDetailPage() {
                 </div>
               </div>
 
-              {id && <div className="mb-5"><EpisodeMediaManager episodeId={id} onAnalyze={() => { if (linkedIdeaId) void handleImportFromHub(true); }} /></div>}
+              {id && (
+                <div className="mb-5 card">
+                  <button
+                    onClick={() => toggleMediaSection('media')}
+                    className="w-full flex items-center justify-between mb-3 hover:opacity-80 transition-opacity"
+                  >
+                    <h3 className="font-semibold text-text-primary flex items-center gap-2">
+                      <Music size={16} />
+                      Medien & Audioquellen
+                    </h3>
+                    {expandedMediaSections['media'] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                  {expandedMediaSections['media'] && (
+                    <EpisodeMediaManager episodeId={id} onAnalyze={() => { if (linkedIdeaId) void handleImportFromHub(true); }} />
+                  )}
+                </div>
+              )}
 
               {/* Block-Steuerung: Alle auf-/zuklappen */}
               {blocks.length > 1 && (
@@ -1617,6 +1640,11 @@ export default function EpisodeDetailPage() {
           )}
 
           {/* ── Redaktionshub Tab ────────────────────────────────── */}
+          {activeTab === 'preview' && (
+            <div className="flex-1 overflow-y-auto">
+              <PreviewPane episode={episode} />
+            </div>
+          )}
           {activeTab === 'hub' && (
             <div className="space-y-4">
               {hubSyncState && (
@@ -1721,13 +1749,8 @@ export default function EpisodeDetailPage() {
         </div>
 
         {/* Right: Sidebar / Split-View */}
+        {activeTab !== 'preview' && (
         <div className="space-y-4">
-          <PreviewPane
-            episode={{ ...episode, ...form, hosts: form.hosts ? form.hosts.split(',').map((item: string) => item.trim()).filter(Boolean) : [], guests: form.guests ? form.guests.split(',').map((item: string) => item.trim()).filter(Boolean) : [] }}
-            blocks={blocks}
-            showNotes={showNotes}
-            totalDuration={totalDuration}
-          />
           {id && <CommentThread episodeId={id} fieldKey={activeTab === 'meta' ? 'title' : activeTab === 'script' ? 'blocks' : activeTab === 'ads' ? 'sponsors' : 'general'} fieldOptions={[
             { value: 'general', label: 'Allgemein' },
             { value: 'title', label: 'Titel' },
@@ -1903,6 +1926,7 @@ export default function EpisodeDetailPage() {
             );
           })()}
         </div>
+        )}
       </div>
 
       {/* Media Picker Modal */}
