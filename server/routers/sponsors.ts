@@ -1,7 +1,40 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { getDb } from '../database';
+import { getDb, DATA_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+const sponsorLogoDir = path.join(DATA_DIR, 'sponsor-logos');
+if (!fs.existsSync(sponsorLogoDir)) fs.mkdirSync(sponsorLogoDir, { recursive: true });
+
+const sponsorLogoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, sponsorLogoDir),
+  filename: (req, file, cb) => {
+    const sponsorId = String((req as any).params?.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    cb(null, `${sponsorId}${path.extname(file.originalname).toLowerCase()}`);
+  },
+});
+
+const uploadSponsorLogo = multer({
+  storage: sponsorLogoStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowedExtensions.includes(extension) && allowedMimeTypes.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Nur JPG-, PNG-, WebP- oder GIF-Bilddateien sind erlaubt'));
+  },
+});
+
+function removeSponsorLogoFiles(sponsorId: string, exceptFile?: string) {
+  if (!fs.existsSync(sponsorLogoDir)) return;
+  fs.readdirSync(sponsorLogoDir)
+    .filter((filename) => filename.startsWith(`${sponsorId}.`) && filename !== exceptFile)
+    .forEach((filename) => fs.unlinkSync(path.join(sponsorLogoDir, filename)));
+}
 
 const router: import("express").Router = Router();
 router.use(requireAuth as any);
@@ -1347,15 +1380,52 @@ router.get('/:id', requirePermission('canViewSponsors') as any, (req: AuthReques
   return res.json({ success: true, data: sponsor });
 });
 
+router.get('/:id/logo-file', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const sponsor = db.get('SELECT id, logo FROM sponsors WHERE id = ?', [req.params.id]) as any;
+  if (!sponsor?.logo) return res.status(404).json({ success: false, error: 'Kein Sponsor-Logo vorhanden' });
+  const filename = fs.existsSync(sponsorLogoDir)
+    ? fs.readdirSync(sponsorLogoDir).find((entry) => entry.startsWith(`${req.params.id}.`))
+    : undefined;
+  if (!filename) return res.status(404).json({ success: false, error: 'Logo-Datei nicht gefunden' });
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  return res.sendFile(path.join(sponsorLogoDir, filename));
+});
+
+router.post('/:id/logo', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const sponsor = db.get('SELECT id FROM sponsors WHERE id = ?', [req.params.id]) as any;
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
+
+  uploadSponsorLogo.single('logo')(req as any, res as any, (error: any) => {
+    if (error) return res.status(400).json({ success: false, error: error.message || 'Logo-Upload fehlgeschlagen' });
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (!file) return res.status(400).json({ success: false, error: 'Keine Logo-Datei übermittelt' });
+    removeSponsorLogoFiles(req.params.id, file.filename);
+    const logo = `/api/sponsors/${req.params.id}/logo-file?v=${Date.now()}`;
+    db.run("UPDATE sponsors SET logo = ?, updated_at = datetime('now') WHERE id = ?", [logo, req.params.id]);
+    return res.json({ success: true, data: { logo } });
+  });
+});
+
+router.delete('/:id/logo', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const sponsor = db.get('SELECT id FROM sponsors WHERE id = ?', [req.params.id]) as any;
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
+  removeSponsorLogoFiles(req.params.id);
+  db.run("UPDATE sponsors SET logo = NULL, updated_at = datetime('now') WHERE id = ?", [req.params.id]);
+  return res.json({ success: true, data: { logo: null } });
+});
+
 router.post('/', requirePermission('canCreateSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const id = uuidv4();
-  const { name, company, contactName, contactEmail, contactPhone, website, logo, status = 'interessent', description, notes, tags = [], totalBudget, currency = 'EUR', customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
+  const { name, company, address, contactName, contactEmail, contactPhone, website, logo, status = 'interessent', description, notes, tags = [], totalBudget, currency = 'EUR', customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
 
   if (!name || !company) return res.status(400).json({ success: false, error: 'Name und Firma erforderlich' });
 
-  db.run('INSERT INTO sponsors (id, name, company, contact_name, contact_email, contact_phone, website, logo, status, description, notes, tags, total_budget, currency, customer_number, contract_start, contract_end, contact_hint, ad_delivery, color, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, name, company, contactName || null, contactEmail || null, contactPhone || null, website || null, logo || null, status, description || null, notes || null, JSON.stringify(tags), totalBudget || null, currency, customerNumber || null, contractStart || null, contractEnd || null, contactHint || null, adDelivery || 'self', color || null, req.user!.id]);
+  db.run('INSERT INTO sponsors (id, name, company, address, contact_name, contact_email, contact_phone, website, logo, status, description, notes, tags, total_budget, currency, customer_number, contract_start, contract_end, contact_hint, ad_delivery, color, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, name, company, address || null, contactName || null, contactEmail || null, contactPhone || null, website || null, logo || null, status, description || null, notes || null, JSON.stringify(tags), totalBudget || null, currency, customerNumber || null, contractStart || null, contractEnd || null, contactHint || null, adDelivery || 'self', color || null, req.user!.id]);
 
   const sponsor = parseSponsor(db.get('SELECT * FROM sponsors WHERE id = ?', [id]));
   sponsor.adSlots = [];
@@ -1364,10 +1434,10 @@ router.post('/', requirePermission('canCreateSponsors') as any, (req: AuthReques
 
 router.put('/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { name, company, contactName, contactEmail, contactPhone, website, logo, status, description, notes, tags, totalBudget, currency, customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
+  const { name, company, address, contactName, contactEmail, contactPhone, website, logo, status, description, notes, tags, totalBudget, currency, customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
 
-  db.run(`UPDATE sponsors SET name = COALESCE(?, name), company = COALESCE(?, company), contact_name = ?, contact_email = ?, contact_phone = ?, website = ?, logo = ?, status = COALESCE(?, status), description = ?, notes = ?, tags = COALESCE(?, tags), total_budget = ?, currency = COALESCE(?, currency), customer_number = ?, contract_start = ?, contract_end = ?, contact_hint = ?, ad_delivery = COALESCE(?, ad_delivery), color = COALESCE(?, color), updated_at = datetime('now') WHERE id = ?`,
-    [name ?? null, company ?? null, contactName ?? null, contactEmail ?? null, contactPhone ?? null, website ?? null, logo ?? null, status ?? null, description ?? null, notes ?? null, tags ? JSON.stringify(tags) : null, totalBudget ?? null, currency ?? null, customerNumber ?? null, contractStart ?? null, contractEnd ?? null, contactHint ?? null, adDelivery ?? null, color ?? null, req.params.id]);
+  db.run(`UPDATE sponsors SET name = COALESCE(?, name), company = COALESCE(?, company), address = ?, contact_name = ?, contact_email = ?, contact_phone = ?, website = ?, logo = COALESCE(?, logo), status = COALESCE(?, status), description = ?, notes = ?, tags = COALESCE(?, tags), total_budget = ?, currency = COALESCE(?, currency), customer_number = ?, contract_start = ?, contract_end = ?, contact_hint = ?, ad_delivery = COALESCE(?, ad_delivery), color = COALESCE(?, color), updated_at = datetime('now') WHERE id = ?`,
+    [name ?? null, company ?? null, address ?? null, contactName ?? null, contactEmail ?? null, contactPhone ?? null, website ?? null, logo ?? null, status ?? null, description ?? null, notes ?? null, tags ? JSON.stringify(tags) : null, totalBudget ?? null, currency ?? null, customerNumber ?? null, contractStart ?? null, contractEnd ?? null, contactHint ?? null, adDelivery ?? null, color ?? null, req.params.id]);
 
   const row = db.get('SELECT * FROM sponsors WHERE id = ?', [req.params.id]) as any;
   if (!row) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
@@ -1387,6 +1457,7 @@ router.delete('/:id', requirePermission('canDeleteSponsors') as any, (req: AuthR
     db.run('DELETE FROM ad_slots WHERE sponsor_id = ?', [req.params.id]);
     db.run('DELETE FROM episode_ad_bookings WHERE sponsor_id = ?', [req.params.id]);
     db.run('DELETE FROM sponsors WHERE id = ?', [req.params.id]);
+    removeSponsorLogoFiles(req.params.id);
     db.run('PRAGMA foreign_keys = ON');
     return res.json({ success: true, message: 'Sponsor gelöscht' });
   } catch (err: any) {

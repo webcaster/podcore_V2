@@ -410,12 +410,14 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsorOffers') as 
       offerOptions.forEach((opt: any, optIdx: number) => {
         if (doc.y + 60 > doc.page.height - 80) { doc.addPage(); doc.y = m; }
 
+        const optionName = [opt.label, opt.title, opt.name]
+          .find((value) => typeof value === 'string' && value.trim())?.trim() || `Option ${optIdx + 1}`;
         const optBg = optionColors[optIdx % optionColors.length];
         const optHeaderY = doc.y;
         doc.rect(m, optHeaderY, contentW, 22).fill(optBg);
         doc.rect(m, optHeaderY, 4, 22).fill(accentColor);
         doc.fontSize(12).font('Helvetica-Bold').fillColor('#111')
-          .text(opt.title && opt.title.trim() ? opt.title : `Option ${optIdx + 1}`, m + 12, optHeaderY + 5, { width: contentW - 20 });
+          .text(optionName, m + 12, optHeaderY + 5, { width: contentW - 20 });
         doc.y = optHeaderY + 24;
         doc.moveDown(0.2);
 
@@ -437,7 +439,7 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsorOffers') as 
           const sumY = doc.y;
           doc.rect(m, sumY, contentW, 20).fill(optBg);
           doc.fontSize(9).font('Helvetica-Bold').fillColor('#333')
-            .text('Gesamt Option:', m + 5, sumY + 5, { width: contentW * 0.72, align: 'right' });
+            .text(`Gesamt ${optionName}:`, m + 5, sumY + 5, { width: contentW * 0.72, align: 'right' });
           doc.fontSize(10).font('Helvetica-Bold').fillColor('#111')
             .text(`${optTotal.toFixed(2)} €`, m + contentW * 0.73, sumY + 4, { width: contentW * 0.27 - 5, align: 'right' });
           doc.y = sumY + 22;

@@ -1113,6 +1113,53 @@ function initializeSchema(db: any): void {
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_episode_media_links_episode ON episode_media_links(episode_id, sort_order)'); } catch (_) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_audio_analysis_episode ON audio_analysis_jobs(episode_id, created_at DESC)'); } catch (_) {}
 
+  // ============================================================
+  // v2.14.1: Themenwerkstatt und wiederverwendbare Textbausteine
+  // ============================================================
+  try { db.exec(`CREATE TABLE IF NOT EXISTS idea_topic_drafts (
+    id TEXT PRIMARY KEY,
+    idea_id TEXT NOT NULL UNIQUE,
+    angle TEXT,
+    guiding_question TEXT,
+    core_thesis TEXT,
+    audience_value TEXT,
+    working_titles TEXT NOT NULL DEFAULT '[]',
+    teaser TEXT,
+    episode_description TEXT,
+    show_notes TEXT,
+    call_to_action TEXT,
+    body TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    created_by TEXT NOT NULL,
+    updated_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (idea_id) REFERENCES ideas(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id),
+    FOREIGN KEY (updated_by) REFERENCES users(id)
+  )`); } catch (_) {}
+
+  try { db.exec(`CREATE TABLE IF NOT EXISTS editorial_text_blocks (
+    id TEXT PRIMARY KEY,
+    idea_id TEXT,
+    title TEXT NOT NULL,
+    block_type TEXT NOT NULL DEFAULT 'custom',
+    content TEXT NOT NULL,
+    tags TEXT NOT NULL DEFAULT '[]',
+    is_favorite INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT NOT NULL,
+    updated_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (idea_id) REFERENCES ideas(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id),
+    FOREIGN KEY (updated_by) REFERENCES users(id)
+  )`); } catch (_) {}
+
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_topic_drafts_idea ON idea_topic_drafts(idea_id)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_editorial_text_blocks_idea_type ON editorial_text_blocks(idea_id, block_type, updated_at DESC)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_editorial_text_blocks_global ON editorial_text_blocks(block_type, is_favorite, updated_at DESC)'); } catch (_) {}
+
   console.log('[DB] Database initialized at:', DB_PATH);
 }
 

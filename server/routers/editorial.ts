@@ -26,6 +26,48 @@ function broadcastEditorialResourceUpdated(db: any, resource: any, req: AuthRequ
   if (episodeId) broadcastRealtime({ type: 'editorial.idea.updated', episodeId, userId: req.user?.id, payload: { ideaId, scope, changedBy: req.user?.displayName || req.user?.username } });
 }
 
+const TOPIC_DRAFT_STATUSES = new Set(['draft', 'review', 'ready']);
+const TEXT_BLOCK_TYPES = new Set(['intro', 'outro', 'teaser', 'description', 'show-notes', 'cta', 'sponsor', 'transition', 'question', 'custom']);
+
+function normalizeTopicDraft(row: any): any {
+  if (!row) return null;
+  return {
+    id: row.id,
+    ideaId: row.idea_id,
+    angle: row.angle || '',
+    guidingQuestion: row.guiding_question || '',
+    coreThesis: row.core_thesis || '',
+    audienceValue: row.audience_value || '',
+    workingTitles: JSON.parse(row.working_titles || '[]'),
+    teaser: row.teaser || '',
+    episodeDescription: row.episode_description || '',
+    showNotes: row.show_notes || '',
+    callToAction: row.call_to_action || '',
+    body: row.body || '',
+    status: row.status || 'draft',
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function normalizeTextBlock(row: any): any {
+  return {
+    id: row.id,
+    ideaId: row.idea_id,
+    title: row.title,
+    type: row.block_type,
+    content: row.content,
+    tags: JSON.parse(row.tags || '[]'),
+    isFavorite: row.is_favorite === 1,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 // ============================================================
 // IDEAS
 // ============================================================
@@ -1100,6 +1142,130 @@ router.get('/interviews/for-episode', requirePermission('canViewInterviews') as 
     };
   });
   return res.json({ success: true, data: result });
+});
+
+// ============================================================
+// v2.14.1: THEMENWERKSTATT UND TEXTBAUSTEINE
+// ============================================================
+
+router.get('/ideas/:id/topic-workshop', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const idea = db.get('SELECT id FROM ideas WHERE id = ?', [req.params.id]);
+  if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+  const draft = db.get('SELECT * FROM idea_topic_drafts WHERE idea_id = ?', [req.params.id]);
+  return res.json({ success: true, data: normalizeTopicDraft(draft) });
+});
+
+router.put('/ideas/:id/topic-workshop', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const idea = db.get('SELECT id FROM ideas WHERE id = ?', [req.params.id]);
+  if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+
+  const {
+    angle = '', guidingQuestion = '', coreThesis = '', audienceValue = '', workingTitles = [],
+    teaser = '', episodeDescription = '', showNotes = '', callToAction = '', body = '', status = 'draft',
+  } = req.body || {};
+  if (!Array.isArray(workingTitles)) return res.status(400).json({ success: false, error: 'Arbeitstitel müssen als Liste übergeben werden' });
+  if (!TOPIC_DRAFT_STATUSES.has(status)) return res.status(400).json({ success: false, error: 'Ungültiger Entwurfsstatus' });
+
+  const existing = db.get('SELECT id FROM idea_topic_drafts WHERE idea_id = ?', [req.params.id]) as any;
+  const id = existing?.id || uuidv4();
+  db.run(`INSERT INTO idea_topic_drafts (
+      id, idea_id, angle, guiding_question, core_thesis, audience_value, working_titles,
+      teaser, episode_description, show_notes, call_to_action, body, status, created_by, updated_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(idea_id) DO UPDATE SET
+      angle = excluded.angle, guiding_question = excluded.guiding_question,
+      core_thesis = excluded.core_thesis, audience_value = excluded.audience_value,
+      working_titles = excluded.working_titles, teaser = excluded.teaser,
+      episode_description = excluded.episode_description, show_notes = excluded.show_notes,
+      call_to_action = excluded.call_to_action, body = excluded.body, status = excluded.status,
+      updated_by = excluded.updated_by, updated_at = datetime('now')`,
+    [id, req.params.id, angle, guidingQuestion, coreThesis, audienceValue,
+      JSON.stringify(workingTitles.map((title: unknown) => String(title).trim()).filter(Boolean).slice(0, 12)),
+      teaser, episodeDescription, showNotes, callToAction, body, status, req.user!.id, req.user!.id]);
+
+  const draft = db.get('SELECT * FROM idea_topic_drafts WHERE idea_id = ?', [req.params.id]);
+  broadcastIdeaUpdated(db, req.params.id, req, 'topic-workshop');
+  return res.json({ success: true, data: normalizeTopicDraft(draft) });
+});
+
+router.get('/text-blocks', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const ideaId = typeof req.query.ideaId === 'string' ? req.query.ideaId : null;
+  const scope = typeof req.query.scope === 'string' ? req.query.scope : 'all';
+  const type = typeof req.query.type === 'string' ? req.query.type : null;
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  const params: any[] = [];
+  let query = 'SELECT * FROM editorial_text_blocks WHERE 1=1';
+
+  if (scope === 'global') query += ' AND idea_id IS NULL';
+  else if (scope === 'idea' && ideaId) { query += ' AND idea_id = ?'; params.push(ideaId); }
+  else if (ideaId) { query += ' AND (idea_id IS NULL OR idea_id = ?)'; params.push(ideaId); }
+  if (type) { query += ' AND block_type = ?'; params.push(type); }
+  if (search) {
+    query += ' AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)';
+    const term = `%${search}%`;
+    params.push(term, term, term);
+  }
+  query += ' ORDER BY is_favorite DESC, updated_at DESC, title ASC';
+  const blocks = db.all(query, params).map(normalizeTextBlock);
+  return res.json({ success: true, data: blocks });
+});
+
+router.post('/text-blocks', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { ideaId = null, title, type = 'custom', content, tags = [], isFavorite = false } = req.body || {};
+  if (!String(title || '').trim()) return res.status(400).json({ success: false, error: 'Titel erforderlich' });
+  if (!String(content || '').trim()) return res.status(400).json({ success: false, error: 'Inhalt erforderlich' });
+  if (!TEXT_BLOCK_TYPES.has(type)) return res.status(400).json({ success: false, error: 'Ungültiger Textbaustein-Typ' });
+  if (!Array.isArray(tags)) return res.status(400).json({ success: false, error: 'Tags müssen als Liste übergeben werden' });
+  if (ideaId && !db.get('SELECT id FROM ideas WHERE id = ?', [ideaId])) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+
+  const id = uuidv4();
+  db.run(`INSERT INTO editorial_text_blocks (id, idea_id, title, block_type, content, tags, is_favorite, created_by, updated_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, ideaId || null, String(title).trim(), type, String(content), JSON.stringify(tags), isFavorite ? 1 : 0, req.user!.id, req.user!.id]);
+  const block = db.get('SELECT * FROM editorial_text_blocks WHERE id = ?', [id]) as any;
+  if (ideaId) broadcastIdeaUpdated(db, ideaId, req, 'text-blocks');
+  else broadcastRealtime({ type: 'editorial.text-blocks.updated', userId: req.user?.id, payload: { blockId: id, scope: 'global', changedBy: req.user?.displayName || req.user?.username } });
+  return res.status(201).json({ success: true, data: normalizeTextBlock(block) });
+});
+
+router.put('/text-blocks/:id', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const current = db.get('SELECT * FROM editorial_text_blocks WHERE id = ?', [req.params.id]) as any;
+  if (!current) return res.status(404).json({ success: false, error: 'Textbaustein nicht gefunden' });
+
+  const nextIdeaId = Object.prototype.hasOwnProperty.call(req.body || {}, 'ideaId') ? (req.body.ideaId || null) : current.idea_id;
+  const nextType = req.body?.type ?? current.block_type;
+  const nextTitle = req.body?.title ?? current.title;
+  const nextContent = req.body?.content ?? current.content;
+  const nextTags = req.body?.tags ?? JSON.parse(current.tags || '[]');
+  const nextFavorite = req.body?.isFavorite ?? (current.is_favorite === 1);
+  if (!String(nextTitle || '').trim() || !String(nextContent || '').trim()) return res.status(400).json({ success: false, error: 'Titel und Inhalt sind erforderlich' });
+  if (!TEXT_BLOCK_TYPES.has(nextType)) return res.status(400).json({ success: false, error: 'Ungültiger Textbaustein-Typ' });
+  if (!Array.isArray(nextTags)) return res.status(400).json({ success: false, error: 'Tags müssen als Liste übergeben werden' });
+  if (nextIdeaId && !db.get('SELECT id FROM ideas WHERE id = ?', [nextIdeaId])) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+
+  db.run(`UPDATE editorial_text_blocks SET idea_id = ?, title = ?, block_type = ?, content = ?, tags = ?,
+    is_favorite = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
+    [nextIdeaId, String(nextTitle).trim(), nextType, String(nextContent), JSON.stringify(nextTags), nextFavorite ? 1 : 0, req.user!.id, req.params.id]);
+  const block = db.get('SELECT * FROM editorial_text_blocks WHERE id = ?', [req.params.id]) as any;
+  const affectedIdeas = new Set<string>([current.idea_id, nextIdeaId].filter(Boolean));
+  affectedIdeas.forEach(idea => broadcastIdeaUpdated(db, idea, req, 'text-blocks'));
+  if (!affectedIdeas.size) broadcastRealtime({ type: 'editorial.text-blocks.updated', userId: req.user?.id, payload: { blockId: req.params.id, scope: 'global', changedBy: req.user?.displayName || req.user?.username } });
+  return res.json({ success: true, data: normalizeTextBlock(block) });
+});
+
+router.delete('/text-blocks/:id', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const current = db.get('SELECT * FROM editorial_text_blocks WHERE id = ?', [req.params.id]) as any;
+  if (!current) return res.status(404).json({ success: false, error: 'Textbaustein nicht gefunden' });
+  db.run('DELETE FROM editorial_text_blocks WHERE id = ?', [req.params.id]);
+  if (current.idea_id) broadcastIdeaUpdated(db, current.idea_id, req, 'text-blocks');
+  else broadcastRealtime({ type: 'editorial.text-blocks.updated', userId: req.user?.id, payload: { blockId: req.params.id, scope: 'global', deleted: true, changedBy: req.user?.displayName || req.user?.username } });
+  return res.json({ success: true, message: 'Textbaustein gelöscht' });
 });
 
 export default router;

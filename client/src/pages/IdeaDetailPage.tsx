@@ -4,13 +4,14 @@ import {
   ArrowLeft, Edit2, Save, Trash2, Plus, X, Check, ChevronDown, ChevronUp,
   FileText, Search, Users, StickyNote, CheckSquare, Rocket, Upload,
   Download, ExternalLink, Link2, BookOpen, Tag, Calendar, Clock,
-  User, AlertCircle, Loader2, RefreshCw, Play, Mic, List, Globe,
+  User, AlertCircle, Loader2, RefreshCw, Play, Mic, List, Globe, Lightbulb,
 } from 'lucide-react';
 import { editorialApi } from '../lib/api';
 import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
+import TopicWorkshop from '../components/editorial/TopicWorkshop';
 import { useApp } from '../contexts/AppContext';
 
-type IdeaTab = 'overview' | 'research' | 'interview' | 'notes' | 'checklist' | 'episode';
+type IdeaTab = 'overview' | 'workshop' | 'research' | 'interview' | 'notes' | 'checklist' | 'episode';
 
 const STATUS_LABELS: Record<string, string> = {
   neu: 'Neu', in_bearbeitung: 'In Bearbeitung', bereit: 'Bereit', archiviert: 'Archiviert',
@@ -354,6 +355,7 @@ export default function IdeaDetailPage() {
 
   const TABS: { key: IdeaTab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Übersicht', icon: <FileText size={15} /> },
+    { key: 'workshop', label: 'Themenwerkstatt', icon: <Lightbulb size={15} /> },
     { key: 'research', label: 'Recherche', icon: <Search size={15} /> },
     { key: 'interview', label: 'Interview', icon: <Mic size={15} /> },
     { key: 'notes', label: 'Notizen', icon: <StickyNote size={15} /> },
@@ -485,6 +487,16 @@ export default function IdeaDetailPage() {
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'workshop' && id && (
+        <TopicWorkshop
+          ideaId={id}
+          idea={idea}
+          canEdit={can('canEditIdeas')}
+          notify={(type, message) => addToast(type, message)}
+          onSaved={() => loadIdea()}
+        />
+      )}
+
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">

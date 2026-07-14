@@ -1,12 +1,12 @@
 #!/bin/bash
 # PodCore Deploy Script
 # Usage: ./deploy.sh <version>
-# Example: ./deploy.sh 2.6.1
+# Example: ./deploy.sh 2.14.1
 # This script sets the version BEFORE building to ensure correct version in bundles
 
-set -e
+set -euo pipefail
 
-VERSION=${1:-"2.6.1"}
+VERSION=${1:-"2.14.1"}
 echo "=================================================="
 echo "  PodCore Deploy — v${VERSION}"
 echo "=================================================="
@@ -14,6 +14,7 @@ echo "=================================================="
 # 1. Set version in ALL files BEFORE building
 echo "[1/6] Setting version to v${VERSION}..."
 sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"${VERSION}\"/" package.json
+sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"${VERSION}\"/" client/package.json 2>/dev/null || true
 sed -i "s/\"version\": \"[0-9.]*\"/\"version\": \"${VERSION}\"/" server/package.json 2>/dev/null || true
 sed -i "s/version: '[0-9.]*'/version: '${VERSION}'/" server/index.ts
 sed -i "s/PodCore API Server v[0-9.]*/PodCore API Server v${VERSION}/" server/index.ts
@@ -25,20 +26,17 @@ echo "    Version set to v${VERSION} ✓"
 
 # 2. Build client (version is now correct in package.json)
 echo "[2/6] Building client..."
-cd client && npm run build 2>&1 | tail -3
-cd ..
+pnpm --dir client run build 2>&1 | tail -3
 echo "    Client built ✓"
 
 # 3. Compile server TypeScript
 echo "[3/6] Compiling server..."
-cd server && npx tsc 2>&1 | tail -3
-cd ..
+pnpm --dir server run build 2>&1 | tail -3
 echo "    Server compiled ✓"
 
 # 4. Deploy: copy fresh public build to dist/public (THE CRITICAL STEP)
 echo "[4/6] Deploying public assets to dist/public..."
-rm -rf server/dist/public
-cp -r server/public server/dist/public
+pnpm run sync:public
 echo "    Assets deployed to dist/public ✓"
 
 # 5. Copy to release folder
@@ -51,8 +49,8 @@ echo "    Release folder updated ✓"
 
 # 5b. Sync new dependencies to release folder
 echo "[5b] Syncing dependencies..."
-cp server/package.json ../podcore-release/server/package.json 2>/dev/null || true
-cd ../podcore-release/server && npm install --production --silent 2>&1 | tail -2
+cp server/package.json server/pnpm-lock.yaml ../podcore-release/server/ 2>/dev/null || true
+cd ../podcore-release/server && pnpm install --prod --frozen-lockfile --silent 2>&1 | tail -2
 cd - > /dev/null
 echo "    Dependencies synced ✓"
 

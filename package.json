@@ -1,18 +1,18 @@
 {
   "name": "podcore",
-  "version": "2.14.0",
+  "version": "2.14.1",
   "description": "PodCore - Professionelles Podcast Management System",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "cd server && npx ts-node-dev --respawn --transpile-only index.ts",
-    "dev:client": "cd client && npx vite",
-    "build": "npm run build:client && npm run build:server && npm run sync:public",
-    "build:client": "cd client && node_modules/.bin/vite build",
-    "build:server": "cd server && node_modules/.bin/tsc",
-    "sync:public": "rm -rf server/dist/public && cp -r server/public server/dist/public",
+    "dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:client\"",
+    "dev:server": "pnpm --dir server run dev",
+    "dev:client": "pnpm --dir client run dev",
+    "build": "pnpm run build:client && pnpm run build:server && pnpm run sync:public",
+    "build:client": "pnpm --dir client run build",
+    "build:server": "pnpm --dir server run build",
+    "sync:public": "node scripts/sync-public.cjs",
     "start": "node server/dist/index.js",
-    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+    "install:all": "pnpm install --frozen-lockfile && pnpm --dir client install --frozen-lockfile && pnpm --dir server install --frozen-lockfile"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

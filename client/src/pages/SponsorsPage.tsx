@@ -317,10 +317,16 @@ export default function SponsorsPage() {
                 const delivery = AD_DELIVERY.find(d => d.value === sp.adDelivery);
                 return (
                   <Link key={sp.id} to={`/sponsors/${sp.id}`} className="card flex items-center gap-4 hover:border-accent-green/50 transition-all group">
-                    {/* Avatar */}
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0" style={{ backgroundColor: sp.color || '#059669' }}>
-                      {sp.name[0]?.toUpperCase()}
-                    </div>
+                    {/* Logo oder Initialen-Avatar */}
+                    {sp.logo ? (
+                      <div className="w-12 h-12 rounded-xl border border-surface-border bg-white p-1.5 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <img src={sp.logo} alt={`Logo von ${sp.name}`} className="w-full h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0" style={{ backgroundColor: sp.color || '#059669' }}>
+                        {sp.name[0]?.toUpperCase()}
+                      </div>
+                    )}
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">

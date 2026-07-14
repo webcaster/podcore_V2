@@ -1,66 +1,40 @@
-# PodCore v2.14.0 - Release Notes
+# PodCore – Release Notes
 
-Dieses Update konzentriert sich auf die Optimierung des Workflows, die Verbesserung der Zusammenarbeit und die Einführung datenbasierter Automatisierungen im Episoden-Editor und Redaktions-Hub.
+## v2.14.1 – RedaktionsHub-, Sponsoring- und PDF-Wartungsupdate
 
-## Neue Funktionen und Verbesserungen
+Version **2.14.1** vervollständigt die bidirektionale Zusammenarbeit zwischen RedaktionsHub und Episoden-Editor, erweitert die Sponsor-Stammdaten um einen optionalen Logo-Upload und schließt mehrere Lücken in Wiki-, Dossier- und Angebots-PDF-Funktionen.
 
-### 1. Workflow-Optimierung & Live-Vorschau
+| Bereich | Änderung |
+|---|---|
+| RedaktionsHub und Episoden-Editor | Verknüpfte Themenentwürfe können gezielt in Episodenbeschreibung, Show Notes, Notizen oder neue Script-Blöcke übernommen werden. Globale und ideenbezogene Textbausteine stehen im Editor mit Suche und Typfilter bereit. |
+| Themenfindung | Leitfrage, Kernaussage, Teaser, Episodenbeschreibung, Show Notes und Call-to-Action eines verknüpften Themenentwurfs lassen sich einzeln übernehmen. |
+| Sponsor-Logo | Sponsor-Logos sind optional als JPG, PNG, WebP oder GIF bis 10 MB hochladbar, austauschbar und entfernbar. Logo-Dateien werden im persistenten PodCore-Datenverzeichnis gespeichert und in Übersicht sowie Detailkopf angezeigt. |
+| Sponsor-Adresse | Das Adressfeld wird im Datenbankschema, in der Migration, im Sponsor-Formular sowie in Erstellen- und Aktualisieren-Routen vollständig persistiert. |
+| Sponsor-Übersicht | Der Sponsorname bleibt die primäre Information; Firma und Kontaktperson werden nachgeordnet dargestellt. |
+| Sponsor-Dossier | Die fehlende Dossier-PDF-Route ist vorhanden und mit dem Exportdialog der Sponsor-Detailseite verbunden. |
+| Angebot-PDF | Individuelle Optionsnamen werden aus dem in der Oberfläche gepflegten Feld `label` übernommen. Für ältere Datensätze bleiben `title` und `name` als Fallbacks erhalten. Der individuelle Name erscheint auch in der Optionssumme. |
+| Wiki | Die Wiki-Seite enthält wieder direkt gerenderte Hilfetexte, eine aktualisierte Versionshistorie und eine pnpm-Installationsanleitung. |
+| Installation und Start | `install.sh` und `install.bat` installieren mit pnpm reproduzierbar in Root, `client/` und `server/` und erstellen den Produktions-Build. Die Startskripte installieren nichts mehr nach, prüfen den Build-Zustand und berücksichtigen einen konfigurierten `PORT`. Der vollständige Installer und ein isolierter Produktionsstart wurden erfolgreich getestet. |
 
-- **Dashboard (EpisodesDashboard.tsx):**
-  - Zentrales Schnellzugriff-Dashboard mit Statistiken und Filterfunktionen.
-  - Tastatur-Shortcuts für schnelle Aktionen (z.B. `Strg+N` für neue Episoden).
-- **Inline-Editing (EditableField.tsx):**
-  - Umstellung der Metadaten-Eingabe von Modals auf direktes Inline-Editing.
-  - Automatische Speicherung nach 2 Sekunden Inaktivität.
-  - Echtzeit-Validierung der Eingaben.
-  - Undo/Redo-Unterstützung (`Strg+Z`).
-- **Sponsoring & Medien:**
-  - **Sponsoring-Schnellbuchung (SponsoringQuickBook.tsx):** 1-Klick-Buchungssystem für Werbeplätze.
-  - **Integrierte Medienverwaltung (EpisodeMediaManager.tsx):** Drag-and-Drop-Upload direkt im Editor.
-- **Split-View (PreviewPane.tsx):**
-  - Live-Vorschau parallel zum Editor.
-  - Echtzeit-Rendering von Markdown-Beschreibungen und Episoden-Status.
+### Bedienung
 
-### 2. Zusammenarbeit & Feedback-System
+Im **Episoden-Editor** erscheint bei einer mit einer Idee verknüpften Episode der Bereich **RedaktionsHub-Inhalte**. Vor der Übernahme zeigt jede Aktion ihr Ziel an. Bestehende Texte werden nicht still überschrieben: Für Beschreibung, Show Notes und Notizen wird neuer Inhalt angehängt; Script-Übernahmen erzeugen einen neuen Block.
 
-- **Kommentare (CommentThread.tsx):**
-  - Feldbezogenes Kommentarsystem mit Diskussions-Threads.
-  - `@Mentions` für Teammitglieder.
-  - 
-  - "Gelöst"-Status für Kommentare.
-- **Versionsverlauf (ChangeHistory.tsx):**
-  - Lückenloser Änderungsverlauf mit Audit-Log (Wer hat was wann geändert?).
-  - Visueller Diff-Vergleich.
-  - Rollback-Funktion zur Wiederherstellung älterer Stände.
-- **Benachrichtigungen:**
-  - Echtzeit-Benachrichtigungen via WebSockets bei Statusänderungen oder neuen Kommentaren.
+Das **Sponsor-Logo** wird unter **Sponsoren → Sponsor öffnen → Stammdaten → Optionales Sponsor-Logo** verwaltet. Das normale Speichern der Stammdaten lässt ein vorhandenes Logo unverändert. Beim Löschen eines Sponsors wird dessen Logo-Datei ebenfalls entfernt.
 
-### 3. Datenbasierte Automatisierungen
+### Aktualisierung
 
-- **Automatische Zeitstempel:**
-  - Integration einer Funktion, die Interviewfragen automatisch mit Zeitstempeln versieht.
-  - Auslesen von eingebetteten Audiomarkern (ID3-Tags/Kapitelmarken) aus hochgeladenen MP3/WAV-Dateien.
-  - Asynchrone client-/serverseitige Analyse von Audiometadaten zur Strukturierung.
-- **Sponsoring-Empfehlungen:**
-  - Intelligentes Matchmaking-System im Backend.
-  - Abgleich von Episoden-Tags und -Kategorien mit Sponsor-Profilen und Zielgruppenkriterien.
-  - Direkte Vorschläge passender Sponsoren im Sponsoring-Tab.
+Vor dem Update sollte eine Sicherung des persistenten PodCore-Datenverzeichnisses erstellt werden. Bei einer manuellen Aktualisierung werden nach `git pull` die Abhängigkeiten mit pnpm im Root-Verzeichnis sowie separat in `client/` und `server/` installiert; anschließend folgen `pnpm run build` und `pnpm start`. Alternativ führt `pnpm run install:all` die drei Installationsschritte aus. Die Installationsskripte für Linux, macOS und Windows bilden denselben Ablauf ab. Die Datenbankmigrationen laufen beim Serverstart automatisch; für 2.14.1 sind keine manuellen SQL-Schritte erforderlich.
 
-## Integration mit RedaktionsHub
+## v2.14.0 – Workflow-Update
 
-- Der Episoden-Editor und der RedaktionsHub arbeiten nun nahtlos zusammen, um einen reibungslosen Workflow zu gewährleisten.
-- Änderungen im RedaktionsHub werden in Echtzeit im Episoden-Editor synchronisiert.
+Version 2.14.0 konzentrierte sich auf die Optimierung des Episoden-Workflows, die Zusammenarbeit und datenbasierte Automatisierungen.
 
-## Technische Hinweise
+| Bereich | Hauptänderungen |
+|---|---|
+| Editor | Inline-Editing, automatische Speicherung, Undo/Redo, Live-Vorschau und integrierte Medienverwaltung. |
+| Zusammenarbeit | Feldbezogene Kommentare, Erwähnungen, Änderungsverlauf, Diff-Vergleich und Echtzeit-Benachrichtigungen. |
+| Automatisierung | Audio-Zeitstempel, Analyse-Jobs und Sponsoring-Empfehlungen. |
+| Technik | Erweiterte SQLite-Tabellen, zentrale WebSocket-Schicht und überarbeiteter Episoden-Editor. |
 
-- **Backend:** Erweiterung des SQLite-Schemas um neue Tabellen für Revisionsverlauf, Kommentare, Benachrichtigungen, Medienverknüpfungen, Audioanalyse-Jobs und Sponsor-Targeting.
-- **Echtzeit:** Implementierung einer zentralen WebSocket-Schicht für Episodenereignisse und persönliche Benachrichtigungen.
-- **Frontend:** Umfassende Überarbeitung des Episoden-Editors mit neuen Komponenten für Inline-Editing, Live-Vorschau, Sponsoring-Schnellbuchung und Medienverwaltung.
-
-## Installation und Update
-
-Für ein Update auf Version 2.14.0 führen Sie bitte die üblichen Schritte für die Aktualisierung Ihrer PodCore-Installation aus. Es sind keine manuellen Migrationsschritte für die Datenbank erforderlich, da diese automatisch beim Start des Servers aktualisiert wird.
-
-## Danksagung
-
-Vielen Dank an alle Mitwirkenden für ihre Beiträge zu diesem umfangreichen Update!
+Für Version 2.14.0 wurden Datenbankänderungen ebenfalls automatisch beim Start angewendet.

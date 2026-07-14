@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Save, Plus, Trash2, GripVertical, Mic2, Music, Megaphone,
@@ -10,7 +10,7 @@ import {
   MessageSquare, HelpCircle, FileEdit, StickyNote, Target, Timer, Timer as TimerIcon,
   RotateCcw, FolderOpen, RefreshCw, Eye
 } from 'lucide-react';
-import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi, episodeWorkflowApi } from '../lib/api';
+import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi, episodeWorkflowApi, type EditorialTextBlock, type TopicWorkshopDraft } from '../lib/api';
 import { sponsorsV2Api, episodeTemplatesApi } from '../lib/api-v2';
 import Modal from '../components/ui/Modal';
 import IdeaImportModal from '../components/ui/IdeaImportModal';
@@ -45,6 +45,20 @@ const STATUS_OPTIONS = [
   { value: 'geplant', label: 'Geplant', color: 'bg-accent-purple/20 text-accent-purple' },
   { value: 'veroeffentlicht', label: 'Veröffentlicht', color: 'bg-accent-green/20 text-accent-green' },
   { value: 'archiviert', label: 'Archiviert', color: 'bg-surface-overlay text-text-muted' },
+];
+
+const TEXT_BLOCK_TYPE_OPTIONS: Array<{ value: EditorialTextBlock['type'] | 'all'; label: string }> = [
+  { value: 'all', label: 'Alle Typen' },
+  { value: 'intro', label: 'Intro' },
+  { value: 'outro', label: 'Outro' },
+  { value: 'teaser', label: 'Teaser' },
+  { value: 'description', label: 'Beschreibung' },
+  { value: 'show-notes', label: 'Show Notes' },
+  { value: 'cta', label: 'Call-to-Action' },
+  { value: 'sponsor', label: 'Sponsoring' },
+  { value: 'transition', label: 'Übergang' },
+  { value: 'question', label: 'Frage' },
+  { value: 'custom', label: 'Freier Baustein' },
 ];
 
 // ── Rich Text Toolbar ──────────────────────────────────────────────────────
@@ -154,6 +168,10 @@ export default function EpisodeDetailPage() {
   const [hubInterviews, setHubInterviews] = useState<any[]>([]);
   const [hubSearch, setHubSearch] = useState('');
   const [hubStatusFilter, setHubStatusFilter] = useState('');
+  const [hubTopicDraft, setHubTopicDraft] = useState<TopicWorkshopDraft | null>(null);
+  const [hubTextBlocks, setHubTextBlocks] = useState<EditorialTextBlock[]>([]);
+  const [hubTextBlockSearch, setHubTextBlockSearch] = useState('');
+  const [hubTextBlockType, setHubTextBlockType] = useState<EditorialTextBlock['type'] | 'all'>('all');
   const [isLoadingHub, setIsLoadingHub] = useState(false);
   const [selectedHubIdea, setSelectedHubIdea] = useState<any>(null);
   const [showIdeaImportModal, setShowIdeaImportModal] = useState(false);
@@ -253,19 +271,36 @@ export default function EpisodeDetailPage() {
   const [v2BookingForm, setV2BookingForm] = useState<any>({ slotId: '', startDate: '', endDate: '', price: '', notes: '' });
   const [v2SponsorSlots, setV2SponsorSlots] = useState<any[]>([]);
 
+  const visibleHubTextBlocks = useMemo(() => {
+    const query = hubTextBlockSearch.trim().toLocaleLowerCase('de-DE');
+    return hubTextBlocks.filter((block) => {
+      if (hubTextBlockType !== 'all' && block.type !== hubTextBlockType) return false;
+      if (!query) return true;
+      return [block.title, block.content, ...(block.tags || [])]
+        .some((value) => String(value || '').toLocaleLowerCase('de-DE').includes(query));
+    });
+  }, [hubTextBlocks, hubTextBlockSearch, hubTextBlockType]);
+
   useEffect(() => {
-    if (activeTab === 'hub') loadHubData();
-  }, [activeTab]);
+    if (activeTab === 'hub') void loadHubData();
+  }, [activeTab, linkedIdeaId]);
 
   const loadHubData = async () => {
     setIsLoadingHub(true);
     try {
-      const [ideas, interviews] = await Promise.all([
+      const [ideas, interviews, topicDraft, textBlocks] = await Promise.all([
         editorialHubApi.getIdeasForEpisode({ search: hubSearch || undefined, status: hubStatusFilter || undefined }),
         editorialHubApi.getInterviewsForEpisode(),
+        linkedIdeaId ? editorialHubApi.getTopicWorkshop(linkedIdeaId) : Promise.resolve(null),
+        editorialHubApi.listTextBlocks({
+          ideaId: linkedIdeaId || undefined,
+          scope: linkedIdeaId ? 'all' : 'global',
+        }),
       ]);
       setHubIdeas(ideas);
       setHubInterviews(interviews);
+      setHubTopicDraft(topicDraft);
+      setHubTextBlocks(textBlocks);
     } catch (err: any) { showError(err.message); }
     finally { setIsLoadingHub(false); }
   };
@@ -281,6 +316,9 @@ export default function EpisodeDetailPage() {
   };
 
   const handleApplyIdeaToEpisode = (idea: any, options: { title: boolean; description: boolean; tags: boolean; notes: boolean; guests: boolean; blocks: boolean }) => {
+    setLinkedIdeaId(idea.id);
+    setEpisode((previous: any) => ({ ...previous, ideaId: idea.id }));
+    updateForm('ideaId', idea.id);
     if (options.title && idea.title) updateForm('title', idea.title);
     if (options.description && idea.description) updateForm('description', idea.description);
     if (options.tags && idea.tags?.length) updateForm('tags', [...(form.tags || []), ...idea.tags.filter((t: string) => !(form.tags || []).includes(t))]);
@@ -328,6 +366,107 @@ export default function EpisodeDetailPage() {
     showSuccess('Idee übernommen');
     setShowIdeaImportModal(false);
     markDirty();
+  };
+
+  const appendPlainText = (current: string, content: string) => {
+    const cleanCurrent = String(current || '').trim();
+    const cleanContent = String(content || '').trim();
+    return `${cleanCurrent}${cleanCurrent && cleanContent ? '\n\n' : ''}${cleanContent}`;
+  };
+
+  const plainTextToHtml = (content: string) => {
+    const escapeHtml = (value: string) => value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+    return String(content || '').trim().split(/\n{2,}/)
+      .filter(Boolean)
+      .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  };
+
+  const appendRichText = (current: string, content: string) => {
+    const richContent = plainTextToHtml(content);
+    const cleanCurrent = String(current || '').trim();
+    return `${cleanCurrent}${cleanCurrent && richContent ? '<p><br></p>' : ''}${richContent}`;
+  };
+
+  const addScriptTextBlock = (title: string, content: string, type: string = 'custom') => {
+    const blockType = ['intro', 'outro', 'transition', 'sponsor'].includes(type)
+      ? (type === 'transition' ? 'segment' : type === 'sponsor' ? 'ad' : type)
+      : 'custom';
+    const richContent = plainTextToHtml(content);
+    const newBlock = {
+      id: Math.random().toString(36).slice(2),
+      type: blockType,
+      title,
+      content: richContent,
+      duration: calculateDuration(richContent),
+      order: blocks.length,
+      assetId: null,
+      assetName: null,
+    };
+    setBlocks((previous) => [...previous, newBlock]);
+    setActiveTab('script');
+    markDirty();
+  };
+
+  const getTextBlockTarget = (block: EditorialTextBlock): 'description' | 'showNotes' | 'notes' | 'script' => {
+    if (block.type === 'description' || block.type === 'teaser') return 'description';
+    if (block.type === 'show-notes') return 'showNotes';
+    if (block.type === 'question' || block.type === 'custom') return 'notes';
+    return 'script';
+  };
+
+  const handleUseTextBlock = (block: EditorialTextBlock) => {
+    const target = getTextBlockTarget(block);
+    if (target === 'description') updateForm('description', appendPlainText(form.description, block.content));
+    else if (target === 'showNotes') {
+      setShowNotes((current) => appendRichText(current, block.content));
+      markDirty();
+    } else if (target === 'notes') updateForm('notes', appendPlainText(form.notes, block.content));
+    else addScriptTextBlock(block.title, block.content, block.type);
+    showSuccess(`„${block.title}“ wurde ${target === 'script' ? 'als Script-Block' : target === 'showNotes' ? 'in die Show Notes' : target === 'description' ? 'in die Beschreibung' : 'in die Notizen'} übernommen`);
+  };
+
+  const handleUseTopicDraftField = (field: keyof TopicWorkshopDraft) => {
+    if (!hubTopicDraft) return;
+    const value = hubTopicDraft[field];
+    if (typeof value !== 'string' || !value.trim()) return;
+    if (field === 'episodeDescription' || field === 'teaser') {
+      updateForm('description', appendPlainText(form.description, value));
+      showSuccess(field === 'teaser' ? 'Teaser in die Beschreibung übernommen' : 'Episodenbeschreibung übernommen');
+      return;
+    }
+    if (field === 'showNotes') {
+      setShowNotes((current) => appendRichText(current, value));
+      markDirty();
+      showSuccess('Show Notes übernommen');
+      return;
+    }
+    if (field === 'body' || field === 'callToAction') {
+      addScriptTextBlock(field === 'body' ? 'Konzeptentwurf' : 'Call-to-Action', value, field === 'callToAction' ? 'cta' : 'custom');
+      showSuccess(field === 'body' ? 'Konzeptentwurf als Script-Block übernommen' : 'Call-to-Action als Script-Block übernommen');
+      return;
+    }
+    updateForm('notes', appendPlainText(form.notes, `${field === 'angle' ? 'Perspektive' : field === 'guidingQuestion' ? 'Leitfrage' : field === 'coreThesis' ? 'Kernaussage' : 'Zielgruppennutzen'}:\n${value}`));
+    showSuccess('Konzeptinhalt in die Notizen übernommen');
+  };
+
+  const handleUseTopicConcept = () => {
+    if (!hubTopicDraft) return;
+    const sections = [
+      ['Perspektive', hubTopicDraft.angle],
+      ['Leitfrage', hubTopicDraft.guidingQuestion],
+      ['Kernaussage', hubTopicDraft.coreThesis],
+      ['Nutzen für die Zielgruppe', hubTopicDraft.audienceValue],
+    ].filter(([, value]) => String(value || '').trim());
+    if (!sections.length) return;
+    const content = `## Themenkonzept\n${sections.map(([label, value]) => `### ${label}\n${value}`).join('\n\n')}`;
+    updateForm('notes', appendPlainText(form.notes, content));
+    showSuccess('Themenkonzept in die Episoden-Notizen übernommen');
   };
 
   const handleAddInterviewBlock = (partner: any) => {
@@ -1702,6 +1841,127 @@ export default function EpisodeDetailPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Themenentwurf der verknüpften Ideenmappe */}
+              <div className="card">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                  <div>
+                    <h2 className="font-semibold text-text-primary flex items-center gap-2"><Lightbulb size={16} /> Themenentwurf</h2>
+                    <p className="text-xs text-text-muted mt-1">Vorformulierte Inhalte aus der Themenwerkstatt gezielt in die Episode übernehmen.</p>
+                  </div>
+                  {linkedIdeaId && (
+                    <Link to={`/editorial/ideas/${linkedIdeaId}`} target="_blank" className="btn-ghost text-xs py-1.5 px-2">
+                      <ExternalLink size={12} /> Themenwerkstatt öffnen
+                    </Link>
+                  )}
+                </div>
+                {!linkedIdeaId ? (
+                  <div className="rounded-lg border border-dashed border-surface-border bg-obsidian-800/50 px-4 py-6 text-center">
+                    <p className="text-sm text-text-secondary">Noch keine Ideenmappe verknüpft.</p>
+                    <p className="text-xs text-text-muted mt-1">Übernimm oben eine Idee. Danach erscheinen deren Themenentwurf und ideenbezogene Textbausteine automatisch.</p>
+                  </div>
+                ) : isLoadingHub ? (
+                  <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-accent-purple" /></div>
+                ) : !hubTopicDraft ? (
+                  <div className="rounded-lg border border-dashed border-surface-border bg-obsidian-800/50 px-4 py-6 text-center">
+                    <p className="text-sm text-text-secondary">Für diese Ideenmappe wurde noch kein Themenentwurf gespeichert.</p>
+                    <Link to={`/editorial/ideas/${linkedIdeaId}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-accent-cyan mt-2 hover:underline"><ExternalLink size={11} /> Jetzt in der Themenwerkstatt erstellen</Link>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {hubTopicDraft.workingTitles.length > 0 && (
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-text-muted mb-2">Arbeitstitel</p>
+                        <div className="flex flex-wrap gap-2">
+                          {hubTopicDraft.workingTitles.map((title, index) => (
+                            <button key={`${title}-${index}`} type="button" onClick={() => { updateForm('title', title); showSuccess('Arbeitstitel als Episodentitel übernommen'); }} className="rounded-lg border border-accent-purple/30 bg-accent-purple/10 px-3 py-2 text-left text-xs text-text-primary hover:border-accent-purple" title="Als Episodentitel übernehmen">
+                              <span className="text-accent-purple mr-1">{index + 1}.</span>{title}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {[
+                        { key: 'angle', label: 'Perspektive', value: hubTopicDraft.angle },
+                        { key: 'guidingQuestion', label: 'Leitfrage', value: hubTopicDraft.guidingQuestion },
+                        { key: 'coreThesis', label: 'Kernaussage', value: hubTopicDraft.coreThesis },
+                        { key: 'audienceValue', label: 'Zielgruppennutzen', value: hubTopicDraft.audienceValue },
+                      ].filter((item) => item.value).map((item) => (
+                        <div key={item.key} className="rounded-lg border border-surface-border bg-obsidian-800 p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-accent-cyan">{item.label}</span>
+                            <button type="button" onClick={() => handleUseTopicDraftField(item.key as keyof TopicWorkshopDraft)} className="btn-ghost text-[10px] py-1 px-2">In Notizen</button>
+                          </div>
+                          <p className="text-xs text-text-secondary whitespace-pre-wrap line-clamp-3">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {[{ key: 'teaser', label: 'Teaser → Beschreibung' }, { key: 'episodeDescription', label: 'Beschreibung übernehmen' }, { key: 'showNotes', label: 'Show Notes übernehmen' }, { key: 'body', label: 'Konzept → Script-Block' }, { key: 'callToAction', label: 'CTA → Script-Block' }]
+                        .filter((item) => String(hubTopicDraft[item.key as keyof TopicWorkshopDraft] || '').trim())
+                        .map((item) => <button key={item.key} type="button" onClick={() => handleUseTopicDraftField(item.key as keyof TopicWorkshopDraft)} className="btn-secondary text-xs py-1.5 px-2"><Plus size={12} /> {item.label}</button>)}
+                      {[hubTopicDraft.angle, hubTopicDraft.guidingQuestion, hubTopicDraft.coreThesis, hubTopicDraft.audienceValue].some((value) => value.trim()) && (
+                        <button type="button" onClick={handleUseTopicConcept} className="btn-primary text-xs py-1.5 px-2"><Layers size={12} /> Gesamtkonzept in Notizen</button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Textbausteine */}
+              <div className="card">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                  <div>
+                    <h2 className="font-semibold text-text-primary flex items-center gap-2"><FileEdit size={16} /> Textbausteine</h2>
+                    <p className="text-xs text-text-muted mt-1">Globale Bausteine und Inhalte der verknüpften Ideenmappe direkt einfügen.</p>
+                  </div>
+                  <span className="rounded-full bg-surface-overlay px-2.5 py-1 text-[11px] text-text-muted">{visibleHubTextBlocks.length} verfügbar</span>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px] mb-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
+                    <input type="text" value={hubTextBlockSearch} onChange={(event) => setHubTextBlockSearch(event.target.value)} className="input pl-9 text-sm" placeholder="Textbausteine suchen …" />
+                  </div>
+                  <select value={hubTextBlockType} onChange={(event) => setHubTextBlockType(event.target.value as typeof hubTextBlockType)} className="input text-sm">
+                    {TEXT_BLOCK_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </div>
+                {isLoadingHub ? (
+                  <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-accent-purple" /></div>
+                ) : visibleHubTextBlocks.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-surface-border px-4 py-7 text-center">
+                    <p className="text-sm text-text-muted">Keine passenden Textbausteine vorhanden.</p>
+                    {linkedIdeaId && <Link to={`/editorial/ideas/${linkedIdeaId}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-accent-cyan mt-2 hover:underline"><ExternalLink size={11} /> In der Themenwerkstatt erstellen</Link>}
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                    {visibleHubTextBlocks.map((block) => {
+                      const target = getTextBlockTarget(block);
+                      return (
+                        <article key={block.id} className="rounded-lg border border-surface-border bg-obsidian-800 p-3 hover:border-accent-cyan/40 transition-colors">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
+                                <p className="text-sm font-medium text-text-primary">{block.title}</p>
+                                <span className="rounded-full bg-accent-blue/10 px-2 py-0.5 text-[10px] text-accent-blue">{TEXT_BLOCK_TYPE_OPTIONS.find((item) => item.value === block.type)?.label || block.type}</span>
+                                <span className="text-[10px] text-text-muted">{block.ideaId ? 'Ideenbezogen' : 'Global'}</span>
+                                {block.isFavorite && <Star size={11} className="fill-accent-yellow text-accent-yellow" />}
+                              </div>
+                              <p className="text-xs leading-relaxed text-text-secondary whitespace-pre-wrap line-clamp-4">{block.content}</p>
+                              {block.tags?.length > 0 && <p className="text-[10px] text-text-muted mt-2">{block.tags.map((tag) => `#${tag}`).join(' ')}</p>}
+                            </div>
+                            <div className="flex flex-col items-end gap-1.5 shrink-0">
+                              <button type="button" onClick={() => handleUseTextBlock(block)} className="btn-primary text-xs py-1.5 px-2"><Plus size={12} /> Einfügen</button>
+                              <span className="text-[10px] text-text-muted">Ziel: {target === 'description' ? 'Beschreibung' : target === 'showNotes' ? 'Show Notes' : target === 'notes' ? 'Notizen' : 'Script'}</span>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 )}
               </div>

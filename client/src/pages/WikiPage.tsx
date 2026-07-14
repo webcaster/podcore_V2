@@ -40,6 +40,18 @@ const wikiData: WikiCategory[] = [
           { heading: 'Dashboard', text: 'Ihr Startpunkt mit Statistiken, aktuellen Episoden und Schnellzugriffen.' },
           { heading: 'Navigation', text: 'Nutzen Sie die Seitenleiste, um zwischen Episoden, RedaktionsHub, Sponsoren und Medienbibliothek zu wechseln.' }
         ]
+      },
+      {
+        id: 'installation-update',
+        title: 'Installation & Update mit pnpm',
+        summary: 'Abhängigkeiten zuverlässig in Root, Client und Server installieren.',
+        icon: <Download size={18} />,
+        tags: ['installation', 'update', 'pnpm', 'v2.14.1'],
+        content: [
+          { heading: 'Voraussetzungen', text: 'PodCore benötigt Node.js 18 oder neuer und pnpm. Aktivieren Sie pnpm bei Bedarf mit „corepack enable“ und „corepack prepare pnpm@10 --activate“.' },
+          { heading: 'Drei Paketverzeichnisse', text: 'Installieren oder aktualisieren Sie die Abhängigkeiten im PodCore-Root sowie separat in den Verzeichnissen client und server.', list: ['pnpm install --frozen-lockfile', 'pnpm --dir client install --frozen-lockfile', 'pnpm --dir server install --frozen-lockfile'] },
+          { heading: 'Bauen und starten', text: 'Erstellen Sie danach mit „pnpm run build“ den Produktions-Build und starten Sie PodCore mit „pnpm start“. Alternativ übernehmen install.sh beziehungsweise install.bat Installation und Build.' }
+        ]
       }
     ]
   },
@@ -128,6 +140,18 @@ const wikiData: WikiCategory[] = [
     icon: <Package size={16} />,
     color: 'text-text-secondary',
     articles: [
+      {
+        id: 'v2-14-1',
+        title: 'v2.14.1 - Wartungsupdate',
+        summary: 'RedaktionsHub-Integration, Sponsor-Logo, Adresspersistenz sowie korrigierte Dossier- und Options-PDFs.',
+        icon: <Package size={18} />,
+        tags: ['wartung', 'sponsoring', 'redaktionshub', 'v2.14.1'],
+        content: [
+          { heading: 'RedaktionsHub', text: 'Themenentwürfe und globale oder ideenbezogene Textbausteine lassen sich direkt in Episodenbeschreibung, Show Notes, Notizen oder neue Script-Blöcke übernehmen.' },
+          { heading: 'Sponsoring', text: 'Sponsor-Adressen werden vollständig gespeichert, Logos können optional hochgeladen werden und individuelle Optionsnamen erscheinen korrekt im Angebot-PDF.' },
+          { heading: 'Installation', text: 'Root-, Client- und Server-Abhängigkeiten werden mit pnpm separat installiert. Die Installationsskripte führen diesen Ablauf automatisch aus.' }
+        ]
+      },
       {
         id: 'v2-14-0',
         title: 'v2.14.0 - Das Workflow-Update',

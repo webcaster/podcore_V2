@@ -1,75 +1,73 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ============================================================
 # PodCore Installer für macOS und Linux
-# Führt alle notwendigen Schritte für die Erstinstallation aus
+# Installiert Root-, Client- und Server-Abhängigkeiten mit pnpm
+# und erstellt einen lokalen Produktions-Build.
 # ============================================================
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "2.12.4")
+VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unbekannt")
 
 echo "==================================================="
 echo "PodCore v${VERSION} - Installer"
 echo "==================================================="
 echo ""
 
-# ---- Node.js prüfen ----
-if ! command -v node &> /dev/null; then
-    echo "[ERROR] Node.js ist nicht installiert!"
-    echo ""
-    echo "Bitte installieren Sie Node.js (Version 18 oder neuer):"
-    echo "  macOS:  https://nodejs.org  oder  brew install node"
-    echo "  Linux:  sudo apt install nodejs npm  oder  https://nodejs.org"
-    echo ""
+if ! command -v node >/dev/null 2>&1; then
+    echo "[ERROR] Node.js ist nicht installiert."
+    echo "Bitte installieren Sie Node.js 18 oder neuer:"
+    echo "  macOS: https://nodejs.org oder brew install node"
+    echo "  Linux: https://nodejs.org oder über den Paketmanager Ihrer Distribution"
     exit 1
 fi
 
-NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-echo "[INFO] Node.js $(node -v) gefunden ✓"
-
+NODE_VERSION=$(node -p "Number(process.versions.node.split('.')[0])")
+echo "[INFO] Node.js $(node -v) gefunden."
 if [ "$NODE_VERSION" -lt 18 ]; then
-    echo "[WARNUNG] Node.js v${NODE_VERSION} ist veraltet. Empfohlen: v18 oder neuer."
+    echo "[ERROR] PodCore benötigt Node.js 18 oder neuer."
+    exit 1
 fi
 
-# ---- Server-Abhängigkeiten installieren ----
-echo "[INFO] Installiere Server-Abhängigkeiten..."
-cd server && npm install --production --silent && cd "$SCRIPT_DIR"
-echo "[INFO] Server-Abhängigkeiten installiert ✓"
-
-# ---- TypeScript-Compiler installieren ----
-if [ ! -f "server/node_modules/.bin/tsc" ]; then
-    echo "[INFO] Installiere TypeScript-Compiler..."
-    cd server && npm install --save-dev typescript --silent && cd "$SCRIPT_DIR"
-    echo "[INFO] TypeScript-Compiler installiert ✓"
+if ! command -v pnpm >/dev/null 2>&1; then
+    echo "[INFO] pnpm wurde nicht gefunden. Versuche die Aktivierung über Corepack ..."
+    if command -v corepack >/dev/null 2>&1 && corepack enable >/dev/null 2>&1 && corepack prepare pnpm@10 --activate >/dev/null 2>&1; then
+        hash -r
+    fi
 fi
 
-# ---- Server kompilieren ----
-echo "[INFO] Kompiliere Server (TypeScript → JavaScript)..."
-cd server && ./node_modules/.bin/tsc && cd "$SCRIPT_DIR"
-echo "[INFO] Server kompiliert ✓"
-
-# ---- Frontend-Build synchronisieren ----
-if [ -d "server/public" ]; then
-    echo "[INFO] Synchronisiere Frontend-Build..."
-    rm -rf server/dist/public
-    cp -r server/public server/dist/public
-    echo "[INFO] Frontend-Build synchronisiert ✓"
-else
-    echo "[WARNUNG] server/public nicht gefunden – Frontend-Build fehlt."
+if ! command -v pnpm >/dev/null 2>&1; then
+    echo "[ERROR] pnpm konnte nicht aktiviert werden."
+    echo "Installieren Sie pnpm und starten Sie den Installer erneut:"
+    echo "  corepack enable"
+    echo "  corepack prepare pnpm@10 --activate"
+    echo "Alternativ: npm install -g pnpm@10"
+    exit 1
 fi
 
-# ---- Ausführungsrechte setzen ----
+echo "[INFO] pnpm $(pnpm --version) gefunden."
+echo ""
+
+echo "[1/4] Installiere Root-Abhängigkeiten ..."
+pnpm install --frozen-lockfile
+
+echo "[2/4] Installiere Client-Abhängigkeiten ..."
+pnpm --dir client install --frozen-lockfile
+
+echo "[3/4] Installiere Server-Abhängigkeiten ..."
+pnpm --dir server install --frozen-lockfile
+
+echo "[4/4] Erstelle Produktions-Build ..."
+pnpm run build
+
 chmod +x start-unix.sh install.sh 2>/dev/null || true
 
 echo ""
 echo "==================================================="
-echo "Installation abgeschlossen!"
-echo ""
-echo "Starten Sie PodCore mit:"
-echo "  ./start-unix.sh"
-echo ""
-echo "Das System ist dann unter http://localhost:3001 erreichbar."
+echo "Installation abgeschlossen."
+echo "Starten Sie PodCore mit: ./start-unix.sh"
+echo "Lokal: http://localhost:3001"
 echo "==================================================="

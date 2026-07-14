@@ -5,7 +5,7 @@ import {
   Building2, CalendarRange, CheckCircle, AlertCircle, Megaphone,
   FileText, Download, FileSpreadsheet, Info, Receipt, Files,
   X, ChevronDown, ChevronUp, BookOpen, Star, Send, ClipboardList,
-  Tag, Percent, Users, Hash, Clock, ExternalLink, Archive
+  Tag, Percent, Users, Hash, Clock, ExternalLink, Archive, Upload, Image as ImageIcon
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
 import { sponsorsV2Api } from '../lib/api-v2';
@@ -504,6 +504,15 @@ export default function SponsorDetailPageV2() {
           <button onClick={() => navigate('/sponsors')} className="text-gray-400 hover:text-white transition-colors">
             <ArrowLeft size={20} />
           </button>
+          {sponsor.logo ? (
+            <div className="w-14 h-14 rounded-xl border border-gray-700 bg-white p-1.5 flex items-center justify-center overflow-hidden shrink-0">
+              <img src={sponsor.logo} alt={`Logo von ${sponsor.name}`} className="w-full h-full object-contain" />
+            </div>
+          ) : (
+            <div className="w-14 h-14 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-xl font-bold text-purple-300 shrink-0">
+              {sponsor.name?.[0]?.toUpperCase() || <Building2 size={22} />}
+            </div>
+          )}
           <div>
             <h1 className="text-2xl font-bold text-white">{sponsor.name}</h1>
             <p className="text-sm text-gray-400">{sponsor.company}{sponsor.customer_number ? ` · KD-Nr: ${sponsor.customer_number}` : ''}</p>
@@ -2186,6 +2195,7 @@ export default function SponsorDetailPageV2() {
 function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (data: any) => void }) {
   const { showSuccess, showError } = useApp();
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdatingLogo, setIsUpdatingLogo] = useState(false);
   const [form, setForm] = useState({
     name: sponsor.name || '',
     company: sponsor.company || '',
@@ -2215,6 +2225,43 @@ function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (d
     finally { setIsSaving(false); }
   };
 
+  const handleLogoUpload = async (file?: File) => {
+    if (!file) return;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      showError('Bitte eine JPG-, PNG-, WebP- oder GIF-Datei auswählen');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showError('Das Sponsor-Logo darf maximal 10 MB groß sein');
+      return;
+    }
+    setIsUpdatingLogo(true);
+    try {
+      const result = await sponsorsApi.uploadLogo(sponsor.id, file);
+      onSaved({ logo: result.logo });
+      showSuccess('Sponsor-Logo erfolgreich hochgeladen');
+    } catch (error: any) {
+      showError(error.message || 'Sponsor-Logo konnte nicht hochgeladen werden');
+    } finally {
+      setIsUpdatingLogo(false);
+    }
+  };
+
+  const handleDeleteLogo = async () => {
+    if (!confirm('Sponsor-Logo wirklich entfernen?')) return;
+    setIsUpdatingLogo(true);
+    try {
+      await sponsorsApi.deleteLogo(sponsor.id);
+      onSaved({ logo: null });
+      showSuccess('Sponsor-Logo entfernt');
+    } catch (error: any) {
+      showError(error.message || 'Sponsor-Logo konnte nicht entfernt werden');
+    } finally {
+      setIsUpdatingLogo(false);
+    }
+  };
+
   const inputClass = "w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500";
   const labelClass = "block text-xs font-medium text-gray-400 mb-1";
 
@@ -2223,6 +2270,47 @@ function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (d
       <h2 className="text-lg font-semibold text-white flex items-center gap-2">
         <Building2 size={18} className="text-purple-400" /> Sponsor-Stammdaten
       </h2>
+
+      <div>
+        <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wide">Optionales Sponsor-Logo</h3>
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-gray-800 bg-gray-950/50 p-4">
+          {sponsor.logo ? (
+            <div className="w-24 h-24 rounded-xl border border-gray-700 bg-white p-2 flex items-center justify-center overflow-hidden">
+              <img src={sponsor.logo} alt={`Logo von ${sponsor.name}`} className="w-full h-full object-contain" />
+            </div>
+          ) : (
+            <div className="w-24 h-24 rounded-xl border border-dashed border-gray-700 bg-gray-900 flex flex-col items-center justify-center text-gray-500">
+              <ImageIcon size={28} />
+              <span className="text-[10px] mt-1">Kein Logo</span>
+            </div>
+          )}
+          <div className="min-w-[220px] flex-1">
+            <p className="text-sm text-gray-300">Das Logo ist optional und wird im Sponsor-Kopf sowie in der Sponsor-Übersicht angezeigt.</p>
+            <p className="text-xs text-gray-500 mt-1">JPG, PNG, WebP oder GIF, maximal 10 MB. Transparente PNG- oder WebP-Dateien eignen sich besonders gut.</p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition-colors ${isUpdatingLogo ? 'opacity-50 pointer-events-none' : ''}`}>
+                {isUpdatingLogo ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                {sponsor.logo ? 'Logo austauschen' : 'Logo hochladen'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  disabled={isUpdatingLogo}
+                  onChange={(event) => {
+                    void handleLogoUpload(event.target.files?.[0]);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+              {sponsor.logo && (
+                <button type="button" onClick={() => void handleDeleteLogo()} disabled={isUpdatingLogo} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm border border-red-900/60 text-red-400 hover:bg-red-950/40 disabled:opacity-50">
+                  <Trash2 size={15} /> Logo entfernen
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div>
         <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wide">Basis-Informationen</h3>

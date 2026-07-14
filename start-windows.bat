@@ -3,76 +3,47 @@ setlocal enabledelayedexpansion
 title PodCore - Startup
 chcp 65001 >nul 2>&1
 
-:: Ins Verzeichnis des Skripts wechseln
 cd /d "%~dp0"
 
-:: Version aus package.json lesen
-for /f "tokens=2 delims=:, " %%v in ('findstr "\"version\"" package.json') do (
-    set RAW_VERSION=%%v
-)
+for /f "tokens=2 delims=:, " %%v in ('findstr "\"version\"" package.json') do set RAW_VERSION=%%v
 set APP_VERSION=%RAW_VERSION:"=%
+if not defined PORT set PORT=3001
 
 echo ===================================================
 echo PodCore v%APP_VERSION% - Podcast Management System
 echo ===================================================
 echo.
 
-:: Node.js pruefen
-node -v >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] Node.js ist nicht installiert!
-    echo.
-    echo Bitte installieren Sie Node.js (Version 18 oder neuer):
-    echo   https://nodejs.org
-    echo.
+where node >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Node.js ist nicht installiert.
+    echo Installieren Sie Node.js 18 oder neuer und fuehren Sie install.bat aus.
     pause
     exit /b 1
 )
 
-:: Server-Abhaengigkeiten installieren
-if not exist "server\node_modules" (
-    echo [INFO] Installiere Server-Abhaengigkeiten (einmalig)...
-    cd server
-    call npm install --production --silent
-    cd ..
-    echo [INFO] Server-Abhaengigkeiten installiert.
+for /f %%v in ('node -p "Number(process.versions.node.split('.')[0])"') do set NODE_MAJOR=%%v
+if %NODE_MAJOR% LSS 18 (
+    echo [ERROR] PodCore benoetigt Node.js 18 oder neuer.
+    pause
+    exit /b 1
 )
 
-:: Server kompilieren falls dist\index.js fehlt
-if not exist "server\dist\index.js" (
-    echo [INFO] Kompiliere Server (TypeScript zu JavaScript)...
-    echo        (Dies ist nur beim ersten Start oder nach Updates noetig)
+if not exist "server\node_modules" goto :not_installed
+if not exist "server\dist\index.js" goto :not_installed
+if not exist "server\dist\public" goto :not_installed
 
-    if not exist "server\node_modules\.bin\tsc.cmd" (
-        echo [INFO] Installiere TypeScript-Compiler...
-        cd server
-        call npm install --save-dev typescript --silent
-        cd ..
-    )
-
-    cd server
-    call node_modules\.bin\tsc
-    cd ..
-    echo [INFO] Server kompiliert.
-)
-
-:: Frontend-Build synchronisieren
-if exist "server\public" (
-    echo [INFO] Synchronisiere Frontend-Build...
-    if exist "server\dist\public" rmdir /s /q "server\dist\public"
-    xcopy /e /i /q "server\public" "server\dist\public" >nul
-    echo [INFO] Frontend-Build synchronisiert.
-) else (
-    echo [WARNUNG] server\public nicht gefunden - Frontend-Build fehlt.
-)
-
-echo.
-echo [INFO] Starte PodCore Server v%APP_VERSION%...
-echo [INFO] Lokal:    http://localhost:3001
+echo [INFO] Starte PodCore Server v%APP_VERSION% ...
+echo [INFO] Lokal: http://localhost:%PORT%
 echo [INFO] Druecken Sie STRG+C, um den Server zu beenden.
 echo.
 
-:: Server starten
-cd server
-node dist\index.js
+node server\dist\index.js
 pause
+exit /b %errorlevel%
+
+:not_installed
+echo [ERROR] PodCore ist noch nicht vollstaendig installiert oder gebaut.
+echo Fuehren Sie im PodCore-Verzeichnis aus: install.bat
+pause
+exit /b 1

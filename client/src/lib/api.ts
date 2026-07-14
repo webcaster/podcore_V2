@@ -126,6 +126,36 @@ export const episodesApi = {
 // ============================================================
 // Editorial API
 // ============================================================
+export type TopicWorkshopDraft = {
+  id?: string;
+  ideaId?: string;
+  angle: string;
+  guidingQuestion: string;
+  coreThesis: string;
+  audienceValue: string;
+  workingTitles: string[];
+  teaser: string;
+  episodeDescription: string;
+  showNotes: string;
+  callToAction: string;
+  body: string;
+  status: 'draft' | 'review' | 'ready';
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type EditorialTextBlock = {
+  id: string;
+  ideaId: string | null;
+  title: string;
+  type: 'intro' | 'outro' | 'teaser' | 'description' | 'show-notes' | 'cta' | 'sponsor' | 'transition' | 'question' | 'custom';
+  content: string;
+  tags: string[];
+  isFavorite: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export const editorialApi = {
   // Ideas
   listIdeas: (params?: any) => {
@@ -157,6 +187,15 @@ export const editorialApi = {
     const qs = layoutId ? `?layoutId=${encodeURIComponent(layoutId)}` : '';
     window.location.href = `/api/editorial/ideas/${ideaId}/export-pdf${qs}`;
   },
+  getTopicWorkshop: (ideaId: string) => api.get<TopicWorkshopDraft | null>(`/editorial/ideas/${ideaId}/topic-workshop`),
+  saveTopicWorkshop: (ideaId: string, data: TopicWorkshopDraft) => api.put<TopicWorkshopDraft>(`/editorial/ideas/${ideaId}/topic-workshop`, data),
+  listTextBlocks: (params?: { ideaId?: string; scope?: 'all' | 'global' | 'idea'; type?: string; search?: string }) =>
+    api.get<EditorialTextBlock[]>(`/editorial/text-blocks${buildQs(params)}`),
+  createTextBlock: (data: Omit<EditorialTextBlock, 'id' | 'createdAt' | 'updatedAt'>) =>
+    api.post<EditorialTextBlock>('/editorial/text-blocks', data),
+  updateTextBlock: (id: string, data: Partial<Omit<EditorialTextBlock, 'id' | 'createdAt' | 'updatedAt'>>) =>
+    api.put<EditorialTextBlock>(`/editorial/text-blocks/${id}`, data),
+  deleteTextBlock: (id: string) => api.delete(`/editorial/text-blocks/${id}`),
 
   // Plan
   listPlan: (params?: any) => {
@@ -220,6 +259,9 @@ export const editorialHubApi = {
     api.get<any[]>(`/editorial/ideas-for-episode${buildQs(params)}`),
   getIdeaFull: (id: string) => api.get<any>(`/editorial/ideas/${id}/full`),
   getInterviewsForEpisode: () => api.get<any[]>('/editorial/interviews/for-episode'),
+  getTopicWorkshop: (ideaId: string) => api.get<TopicWorkshopDraft | null>(`/editorial/ideas/${ideaId}/topic-workshop`),
+  listTextBlocks: (params?: { ideaId?: string; scope?: 'all' | 'global' | 'idea'; type?: string; search?: string }) =>
+    api.get<EditorialTextBlock[]>(`/editorial/text-blocks${buildQs(params)}`),
 };
 
 // ============================================================
@@ -268,6 +310,12 @@ export const sponsorsApi = {
   create: (data: any) => api.post<any>('/sponsors', data),
   update: (id: string, data: any) => api.put<any>(`/sponsors/${id}`, data),
   delete: (id: string) => api.delete(`/sponsors/${id}`),
+  uploadLogo: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    return api.upload<{ logo: string }>(`/sponsors/${id}/logo`, formData);
+  },
+  deleteLogo: (id: string) => api.delete<{ logo: null }>(`/sponsors/${id}/logo`),
 
   // Ad Slots
   listSlots: (sponsorId: string) => api.get<any[]>(`/sponsors/${sponsorId}/slots`),

@@ -3,13 +3,9 @@ setlocal enabledelayedexpansion
 title PodCore - Installer
 chcp 65001 >nul 2>&1
 
-:: Ins Verzeichnis des Skripts wechseln
 cd /d "%~dp0"
 
-:: Version aus package.json lesen
-for /f "tokens=2 delims=:, " %%v in ('findstr "\"version\"" package.json') do (
-    set RAW_VERSION=%%v
-)
+for /f "tokens=2 delims=:, " %%v in ('findstr "\"version\"" package.json') do set RAW_VERSION=%%v
 set APP_VERSION=%RAW_VERSION:"=%
 
 echo ===================================================
@@ -17,62 +13,77 @@ echo PodCore v%APP_VERSION% - Installer
 echo ===================================================
 echo.
 
-:: Node.js pruefen
-node -v >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] Node.js ist nicht installiert!
-    echo.
-    echo Bitte installieren Sie Node.js (Version 18 oder neuer):
-    echo   https://nodejs.org
-    echo.
+where node >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Node.js ist nicht installiert.
+    echo Bitte installieren Sie Node.js 18 oder neuer: https://nodejs.org
     pause
     exit /b 1
 )
 
-for /f %%v in ('node -v') do set NODE_VER=%%v
-echo [INFO] Node.js %NODE_VER% gefunden.
-
-:: Server-Abhaengigkeiten installieren
-echo [INFO] Installiere Server-Abhaengigkeiten...
-cd server
-call npm install --production --silent
-cd ..
-echo [INFO] Server-Abhaengigkeiten installiert.
-
-:: TypeScript-Compiler installieren
-if not exist "server\node_modules\.bin\tsc.cmd" (
-    echo [INFO] Installiere TypeScript-Compiler...
-    cd server
-    call npm install --save-dev typescript --silent
-    cd ..
-    echo [INFO] TypeScript-Compiler installiert.
+for /f %%v in ('node -p "Number(process.versions.node.split('.')[0])"') do set NODE_MAJOR=%%v
+for /f %%v in ('node -v') do set NODE_VERSION=%%v
+echo [INFO] Node.js %NODE_VERSION% gefunden.
+if %NODE_MAJOR% LSS 18 (
+    echo [ERROR] PodCore benoetigt Node.js 18 oder neuer.
+    pause
+    exit /b 1
 )
 
-:: Server kompilieren
-echo [INFO] Kompiliere Server (TypeScript zu JavaScript)...
-cd server
-call node_modules\.bin\tsc
-cd ..
-echo [INFO] Server kompiliert.
-
-:: Frontend-Build synchronisieren
-if exist "server\public" (
-    echo [INFO] Synchronisiere Frontend-Build...
-    if exist "server\dist\public" rmdir /s /q "server\dist\public"
-    xcopy /e /i /q "server\public" "server\dist\public" >nul
-    echo [INFO] Frontend-Build synchronisiert.
-) else (
-    echo [WARNUNG] server\public nicht gefunden - Frontend-Build fehlt.
+where pnpm >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] pnpm wurde nicht gefunden. Versuche die Aktivierung ueber Corepack ...
+    where corepack >nul 2>&1
+    if not errorlevel 1 (
+        call corepack enable >nul 2>&1
+        call corepack prepare pnpm@10 --activate >nul 2>&1
+    )
 )
+
+where pnpm >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] pnpm konnte nicht aktiviert werden.
+    echo Fuehren Sie diese Befehle aus und starten Sie den Installer erneut:
+    echo   corepack enable
+    echo   corepack prepare pnpm@10 --activate
+    echo Alternativ: npm install -g pnpm@10
+    pause
+    exit /b 1
+)
+
+for /f %%v in ('pnpm --version') do set PNPM_VERSION=%%v
+echo [INFO] pnpm %PNPM_VERSION% gefunden.
+echo.
+
+echo [1/4] Installiere Root-Abhaengigkeiten ...
+call pnpm install --frozen-lockfile
+if errorlevel 1 goto :install_error
+
+echo [2/4] Installiere Client-Abhaengigkeiten ...
+call pnpm --dir client install --frozen-lockfile
+if errorlevel 1 goto :install_error
+
+echo [3/4] Installiere Server-Abhaengigkeiten ...
+call pnpm --dir server install --frozen-lockfile
+if errorlevel 1 goto :install_error
+
+echo [4/4] Erstelle Produktions-Build ...
+call pnpm run build
+if errorlevel 1 goto :install_error
 
 echo.
 echo ===================================================
-echo Installation abgeschlossen!
-echo.
-echo Starten Sie PodCore mit:
-echo   start-windows.bat
-echo.
-echo Das System ist dann unter http://localhost:3001 erreichbar.
+echo Installation abgeschlossen.
+echo Starten Sie PodCore mit: start-windows.bat
+echo Lokal: http://localhost:3001
 echo ===================================================
 echo.
 pause
+exit /b 0
+
+:install_error
+echo.
+echo [ERROR] Die Installation wurde wegen eines Fehlers abgebrochen.
+echo Pruefen Sie die Ausgabe oberhalb und starten Sie install.bat erneut.
+pause
+exit /b 1

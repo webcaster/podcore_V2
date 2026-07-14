@@ -2,6 +2,8 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
+**Aktuelle Version: 2.14.1**
+
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
 ---
@@ -13,6 +15,8 @@
 - Verwaltung von Interview-Gästen inkl. Fragenkatalog
 - Checklisten und Notizen pro Idee
 - Nahtlose Übernahme von Ideen in fertige Episoden
+- Übernahme verknüpfter Themenentwürfe in Beschreibung, Show Notes, Notizen oder Script-Blöcke
+- Durchsuchbare globale und ideenbezogene Textbausteine direkt im Episoden-Editor
 
 ### 🎙️ Episoden-Editor
 - Rich-Text-Editor für Show-Notes und Skripte
@@ -25,8 +29,10 @@
 ### 💰 Sponsoren & Monetarisierung (v2)
 - CRM für Sponsoren und Werbepartner
 - Verwaltung von Werbekategorien (Pre-Roll, Mid-Roll, Post-Roll, Folgen-Sponsoring)
-- Erstellung individueller Angebote mit Varianten (Option A/B/C)
-- Automatische Generierung von PDF-Angeboten im Corporate Design
+- Erstellung individueller Angebote mit frei benennbaren Varianten
+- Automatische Generierung von PDF-Angeboten mit den individuellen Optionsnamen im Corporate Design
+- Optionaler Sponsor-Logo-Upload mit Anzeige in Übersicht und Detailseite
+- Sponsor-Adresse und Kontaktperson als getrennte Stammdaten
 - Buchungs-Verwaltung mit Konflikt-Prüfung im Kalender
 - Automatische Abrechnung mit Preisanpassungen und variabler Hörerbeteiligung
 - Leistungsübersichten und Rechnungs-Export
@@ -55,10 +61,20 @@
 PodCore ist als Node.js-Anwendung konzipiert und verwendet SQLite als Datenbank, wodurch keine externe Datenbank-Einrichtung erforderlich ist.
 
 ### Voraussetzungen
-- Node.js (v18 oder höher)
-- npm, yarn oder pnpm
 
-### Lokale Installation
+- Node.js 18 oder höher
+- pnpm; empfohlen ist die Aktivierung über Corepack mit `corepack enable` und `corepack prepare pnpm@10 --activate`
+
+### Automatische Installation
+
+Nach dem Klonen kann PodCore einschließlich aller Root-, Client- und Server-Abhängigkeiten automatisch installiert und als Produktionsversion gebaut werden.
+
+| Plattform | Installation | Start |
+|---|---|---|
+| Linux und macOS | `chmod +x install.sh && ./install.sh` | `./start-unix.sh` |
+| Windows | `install.bat` | `start-windows.bat` |
+
+### Manuelle Installation
 
 1. **Repository klonen**
    ```bash
@@ -66,27 +82,44 @@ PodCore ist als Node.js-Anwendung konzipiert und verwendet SQLite als Datenbank,
    cd podcore_V2
    ```
 
-2. **Abhängigkeiten installieren**
+2. **pnpm aktivieren**
    ```bash
-   npm install
+   corepack enable
+   corepack prepare pnpm@10 --activate
    ```
 
-3. **Anwendung bauen**
+3. **Abhängigkeiten in allen relevanten Verzeichnissen installieren**
+
+   PodCore besteht aus drei eigenständigen Paketverzeichnissen. Deshalb müssen Root, Client und Server jeweils installiert werden:
+
    ```bash
-   npm run build
+   pnpm install --frozen-lockfile
+   pnpm --dir client install --frozen-lockfile
+   pnpm --dir server install --frozen-lockfile
    ```
 
-4. **Server starten**
+   Alternativ fasst `pnpm run install:all` diese drei Schritte zusammen.
+
+4. **Anwendung bauen**
    ```bash
-   npm start
+   pnpm run build
+   ```
+
+5. **Server starten**
+   ```bash
+   pnpm start
    ```
 
 Die Anwendung ist nun unter `http://localhost:3001` erreichbar.
 
 ### Start-Skripte
-Für einen noch einfacheren Start liegen Skripte bei:
-- **Windows**: `start-windows.bat` ausführen
-- **Linux/Mac**: `./start-unix.sh` ausführen
+
+Die Startskripte starten ausschließlich den vorhandenen Produktions-Build. Sie installieren keine Pakete im Hintergrund. Fehlen `server/node_modules`, `server/dist/index.js` oder `server/dist/public`, verweisen sie auf den passenden Installer.
+
+| Plattform | Startbefehl |
+|---|---|
+| Windows | `start-windows.bat` |
+| Linux und macOS | `./start-unix.sh` |
 
 ---
 
@@ -94,7 +127,20 @@ Für einen noch einfacheren Start liegen Skripte bei:
 
 PodCore verfügt über ein integriertes Update-System. Neue Versionen können direkt über die Einstellungen in der App als ZIP-Datei hochgeladen werden. Die App entpackt das Update, führt notwendige Datenbank-Migrationen durch und startet sich selbst neu.
 
-Aktuelle Release-ZIPs finden Sie unter [Releases](https://github.com/webcaster/podcore_V2/releases).
+Aktuelle Release-ZIPs finden Sie unter [Releases](https://github.com/webcaster/podcore_V2/releases). Vor jedem Update sollte das persistente PodCore-Datenverzeichnis gesichert werden.
+
+Für ein manuelles Update installieren Sie nach `git pull` die Abhängigkeiten in **allen drei Paketverzeichnissen** erneut und erstellen anschließend den Produktions-Build:
+
+```bash
+git pull
+pnpm install --frozen-lockfile
+pnpm --dir client install --frozen-lockfile
+pnpm --dir server install --frozen-lockfile
+pnpm run build
+pnpm start
+```
+
+Alternativ können Sie für die drei Installationsschritte `pnpm run install:all` verwenden. Die Migrationen für **2.14.1** werden beim Serverstart automatisch ausgeführt. Es sind keine manuellen SQL-Schritte erforderlich. Eine ausführliche Bedien- und Update-Anleitung steht unter [`docs/UPDATE-2.14.1.md`](docs/UPDATE-2.14.1.md).
 
 ---
 
