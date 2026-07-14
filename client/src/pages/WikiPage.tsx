@@ -154,7 +154,7 @@ const wikiData: WikiCategory[] = [
 ];
 
 export default function WikiPage() {
-  const [activeTab, setActiveTab] = useState('changelog');
+  const [activeTab, setActiveTab] = useState('general');
   const [search, setSearch] = useState('');
 
   return (

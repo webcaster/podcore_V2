@@ -2189,6 +2189,7 @@ function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (d
   const [form, setForm] = useState({
     name: sponsor.name || '',
     company: sponsor.company || '',
+    address: sponsor.address || '',
     customerNumber: sponsor.customer_number || sponsor.customerNumber || '',
     contactName: sponsor.contact_name || sponsor.contactName || '',
     contactEmail: sponsor.contact_email || sponsor.contactEmail || '',
@@ -2228,6 +2229,7 @@ function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (d
         <div className="grid grid-cols-2 gap-4">
           <div><label className={labelClass}>Name *</label><input className={inputClass} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Sponsor-Name" /></div>
           <div><label className={labelClass}>Firma</label><input className={inputClass} value={form.company} onChange={e => setForm(p => ({ ...p, company: e.target.value }))} placeholder="Firmenname" /></div>
+          <div className="col-span-2"><label className={labelClass}>Adresse</label><input className={inputClass} value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="Straße, Hausnummer, PLZ, Stadt" /></div>
           <div><label className={labelClass}>Kundennummer</label><input className={`${inputClass} font-mono`} value={form.customerNumber} onChange={e => setForm(p => ({ ...p, customerNumber: e.target.value }))} placeholder="z.B. KD-2024-001" /></div>
           <div><label className={labelClass}>Status</label>
             <select className={inputClass} value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>

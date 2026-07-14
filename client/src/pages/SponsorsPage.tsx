@@ -326,12 +326,11 @@ export default function SponsorsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-text-primary font-semibold group-hover:text-accent-green transition-colors">{sp.name}</h3>
-                        {sp.company && sp.company !== sp.name && (
-                          <span className="text-text-muted text-sm">· {sp.company}</span>
-                        )}
                         <span className={`badge text-xs ${si.color}`}>{si.label}</span>
                       </div>
                       <div className="flex items-center gap-4 mt-1 text-text-muted text-xs flex-wrap">
+                        {sp.company && sp.company !== sp.name && <span className="flex items-center gap-1"><Building2 size={11} />{sp.company}</span>}
+                        {sp.contactName && <span className="flex items-center gap-1">Kontakt: {sp.contactName}</span>}
                         {sp.email && <span className="flex items-center gap-1"><Mail size={11} />{sp.email}</span>}
                         {delivery && <span className="flex items-center gap-1">{delivery.icon} {delivery.label}</span>}
                         {sp.placements > 0 && <span className="flex items-center gap-1"><Tag size={11} />{sp.placements} Platzierung{sp.placements !== 1 ? 'en' : ''}</span>}

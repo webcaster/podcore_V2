@@ -187,6 +187,7 @@ function initializeSchema(db: any): void {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       company TEXT NOT NULL,
+      address TEXT,
       contact_name TEXT,
       contact_email TEXT,
       contact_phone TEXT,
@@ -1104,6 +1105,7 @@ function initializeSchema(db: any): void {
   try { db.exec("ALTER TABLE sponsors ADD COLUMN preferred_formats TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}
   try { db.exec('ALTER TABLE sponsors ADD COLUMN min_episode_duration INTEGER DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE sponsors ADD COLUMN max_episode_duration INTEGER DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE sponsors ADD COLUMN address TEXT DEFAULT NULL'); } catch (_) {}
 
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_episode_revisions_episode ON episode_revisions(episode_id, revision_number DESC)'); } catch (_) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_episode_comments_episode_field ON episode_comments(episode_id, field_key, created_at)'); } catch (_) {}

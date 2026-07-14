@@ -415,7 +415,7 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsorOffers') as 
         doc.rect(m, optHeaderY, contentW, 22).fill(optBg);
         doc.rect(m, optHeaderY, 4, 22).fill(accentColor);
         doc.fontSize(12).font('Helvetica-Bold').fillColor('#111')
-          .text(opt.title || `Option ${optIdx + 1}`, m + 12, optHeaderY + 5, { width: contentW - 20 });
+          .text(opt.title && opt.title.trim() ? opt.title : `Option ${optIdx + 1}`, m + 12, optHeaderY + 5, { width: contentW - 20 });
         doc.y = optHeaderY + 24;
         doc.moveDown(0.2);
 
@@ -880,6 +880,136 @@ router.get('/:sponsorId/bookings/confirmation-pdf-all', requirePermission('canVi
     const fy = doc.page.height - 30;
     doc.fontSize(7).font('Helvetica').fillColor('#aaa')
       .text(`${podcastName} · Alle Buchungen · ${nowStr}`, m, fy, { align: 'center', width: contentW });
+  }
+
+    doc.end();
+});
+
+// ============================================================
+// SPONSOR DOSSIER PDF EXPORT
+// ============================================================
+router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { sponsorId } = req.params;
+  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [sponsorId]) as any;
+
+  if (!sponsor) {
+    return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
+  }
+
+  const layoutId = req.query.layoutId as string;
+  let layout: any;
+  try {
+    layout = layoutId ? getLayoutById(layoutId) : null;
+    if (!layout) layout = getDefaultLayoutForType('sponsor_dossier' as any);
+  } catch (_) {
+    layout = { colors: {}, sections: {}, footer: {}, header: {}, typography: {}, pageMargin: 50 };
+  }
+
+  const cfg = layout || {};
+  const colors = cfg.colors || {};
+  const sections = cfg.sections || {};
+  const footerCfg = cfg.footer || {};
+  const m = cfg.pageMargin || 50;
+  const primaryColor: string = colors.primary || '#7c3aed';
+  const headerBgColor: string = colors.background || colors.primary || '#7c3aed';
+  const headerTextColor: string = colors.headerText || '#ffffff';
+
+  const { podcastName, companyName, logoPath } = loadBranding(db);
+
+  const PDFDocument = require('pdfkit');
+  const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c: Buffer) => chunks.push(c));
+  doc.on('end', () => {
+    const buf = Buffer.concat(chunks);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Sponsor-Dossier_${sponsor.name?.replace(/\s+/g, '-').toLowerCase() || sponsorId}.pdf"`);
+    res.send(buf);
+  });
+
+  const contentW = doc.page.width - m * 2;
+  const nowStr = new Date().toLocaleDateString('de-DE');
+
+  // Header
+  doc.rect(0, 0, doc.page.width, 90).fill(headerBgColor);
+  if (logoPath && fs.existsSync(logoPath)) {
+    try { doc.image(logoPath, m, 15, { height: 40 }); } catch (_) {}
+  }
+  doc.fontSize(22).font('Helvetica-Bold').fillColor(headerTextColor)
+    .text('Sponsor-Dossier', m, 18, { align: 'right', width: contentW });
+  const subLine = [podcastName, companyName].filter(Boolean).join(' · ') + ` · ${nowStr}`;
+  doc.fontSize(9).font('Helvetica').fillColor(headerTextColor).opacity(0.8)
+    .text(subLine, m, 55, { align: 'right', width: contentW });
+  doc.opacity(1);
+  let y = 105;
+
+  // Sponsor-Metadaten
+  if (sections.showDossierMeta !== false) {
+    doc.fontSize(14).font('Helvetica-Bold').fillColor('#111').text('Sponsor-Informationen', m, y);
+    y += 25;
+    
+    const infoData = [
+      ['Name:', sponsor.name || '—'],
+      ['Firma:', sponsor.company || '—'],
+      ['Adresse:', sponsor.address || '—'],
+      ['Kontaktperson:', sponsor.contact_name || '—'],
+      ['E-Mail:', sponsor.email || '—'],
+      ['Telefon:', sponsor.phone || '—'],
+      ['Website:', sponsor.website || '—']
+    ];
+
+    infoData.forEach(([label, value]) => {
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#333').text(label, m, y, { width: 100 });
+      doc.fontSize(9).font('Helvetica').fillColor('#555').text(value, m + 110, y, { width: contentW - 110 });
+      y += 18;
+    });
+    y += 10;
+  }
+
+  // Verträge
+  if (sections.showDossierContracts !== false) {
+    const contracts = db.all('SELECT * FROM sponsor_contracts WHERE sponsor_id = ? ORDER BY start_date DESC', [sponsorId]) as any[];
+    if (contracts.length > 0) {
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#111').text('Verträge', m, y);
+      y += 20;
+      contracts.forEach((contract: any) => {
+        doc.fontSize(9).font('Helvetica').fillColor('#333')
+          .text(`${contract.start_date} bis ${contract.end_date} · ${contract.terms || '—'}`, m, y);
+        y += 16;
+      });
+      y += 10;
+    }
+  }
+
+  // Buchungen
+  if (sections.showDossierBookings !== false) {
+    const bookings = db.all(
+      `SELECT ab.*, s.name as slot_name, c.name as category_name
+       FROM ad_bookings ab
+       LEFT JOIN ad_slots s ON ab.slot_id = s.id
+       LEFT JOIN ad_categories c ON ab.slot_id = c.id
+       WHERE ab.sponsor_id = ?
+       ORDER BY ab.booking_date DESC LIMIT 10`,
+      [sponsorId]
+    ) as any[];
+    if (bookings.length > 0) {
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#111').text('Aktuelle Buchungen', m, y);
+      y += 20;
+      bookings.forEach((booking: any) => {
+        doc.fontSize(9).font('Helvetica').fillColor('#333')
+          .text(`${booking.booking_date} · ${booking.slot_name || booking.category_name || '—'} · ${booking.final_price || 0} €`, m, y);
+        y += 16;
+      });
+      y += 10;
+    }
+  }
+
+  // Footer
+  if (footerCfg.showPodcastName !== false || footerCfg.showDate !== false) {
+    const fy = doc.page.height - 30;
+    doc.fontSize(7).font('Helvetica').fillColor('#aaa')
+      .text(`${podcastName} · Sponsor-Dossier · ${nowStr}`, m, fy, { align: 'center', width: contentW });
   }
 
   doc.end();
