@@ -155,7 +155,7 @@ export default function TextBlockLibrary({ ideaId, canEdit, notify, onUse }: Pro
     }
   };
 
-  const inputClass = 'w-full rounded-xl border border-obsidian-600 bg-obsidian-900/60 px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-accent-blue disabled:opacity-60';
+  const inputClass = 'editorial-field w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition disabled:opacity-60';
 
   const renderBlock = (block: EditorialTextBlock) => (
     <article key={block.id} className="rounded-2xl border border-obsidian-600 bg-obsidian-900/40 p-4 transition hover:border-obsidian-500">

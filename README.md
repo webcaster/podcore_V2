@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.14.1**
+**Aktuelle Version: 2.14.2**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -17,6 +17,8 @@
 - Nahtlose Übernahme von Ideen in fertige Episoden
 - Übernahme verknüpfter Themenentwürfe in Beschreibung, Show Notes, Notizen oder Script-Blöcke
 - Durchsuchbare globale und ideenbezogene Textbausteine direkt im Episoden-Editor
+- Freie Texte als eigenständiger Recherchetyp ohne erforderliche URL
+- Vollständiger Themenwerkstatt-Abschnitt im Ideenmappen-PDF mit allen befüllten Entwurfsfeldern
 
 ### 🎙️ Episoden-Editor
 - Rich-Text-Editor für Show-Notes und Skripte
@@ -33,8 +35,10 @@
 - Automatische Generierung von PDF-Angeboten mit den individuellen Optionsnamen im Corporate Design
 - Optionaler Sponsor-Logo-Upload mit Anzeige in Übersicht und Detailseite
 - Sponsor-Adresse und Kontaktperson als getrennte Stammdaten
-- Buchungs-Verwaltung mit Konflikt-Prüfung im Kalender
+- Buchungs-Verwaltung mit vollständiger Speicherung von Slot, Laufzeit, Folgen, Preisen, Rabatt und Status sowie Konflikt-Prüfung im Kalender
 - Automatische Abrechnung mit Preisanpassungen und variabler Hörerbeteiligung
+- Vollständige Preislisten-PDFs mit Beschreibung, Präsentationstext, allen Preismodellen, Währung, Farbe, Exklusivität und Status
+- Konfigurierbare Sponsor-Dossiers mit Stammdaten, Verträgen, Buchungen, Abrechnung und optionalen Notizen
 - Leistungsübersichten und Rechnungs-Export
 
 ### 📅 Kalender & Planung
@@ -53,6 +57,12 @@
 - Granulare Rechte für jeden Bereich der App
 - Freigabe-Workflows für Episoden (Approval-System)
 - Integrierter Team-Chat
+
+### 📚 In-App-Handbuch
+- Durchsuchbares Endnutzer-Nachschlagewerk für sämtliche Hauptbereiche
+- Kategorisierte, aufklappbare Anleitungen zu Episoden, RedaktionsHub, Medien, Sponsoring, Statistiken, PDF-Exporten und Einstellungen
+- Kennzeichnung berechtigungsabhängiger Administrationsfunktionen
+- Kompakte und übersichtliche Versionshistorie
 
 ---
 
@@ -140,7 +150,7 @@ pnpm run build
 pnpm start
 ```
 
-Alternativ können Sie für die drei Installationsschritte `pnpm run install:all` verwenden. Die Migrationen für **2.14.1** werden beim Serverstart automatisch ausgeführt. Es sind keine manuellen SQL-Schritte erforderlich. Eine ausführliche Bedien- und Update-Anleitung steht unter [`docs/UPDATE-2.14.1.md`](docs/UPDATE-2.14.1.md).
+Alternativ können Sie für die drei Installationsschritte `pnpm run install:all` verwenden. Für **2.14.2** sind keine manuellen SQL-Schritte erforderlich. Eine ausführliche Bedien- und Update-Anleitung steht unter [`docs/UPDATE-2.14.2.md`](docs/UPDATE-2.14.2.md).
 
 ---
 

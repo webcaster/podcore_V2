@@ -359,6 +359,62 @@ router.get('/ideas/:id/export-pdf', requirePermission('canViewIdeas') as any, (r
     if (idea.tags && idea.tags !== '[]') doc.text(`Tags: ${JSON.parse(idea.tags).join(', ')}`);
     doc.moveDown(0.5);
 
+    // Themenwerkstatt
+    const topicWorkshop = db.get('SELECT * FROM idea_topic_drafts WHERE idea_id = ?', [req.params.id]) as any;
+    if (topicWorkshop) {
+      let workingTitles: string[] = [];
+      try {
+        const parsedTitles = JSON.parse(topicWorkshop.working_titles || '[]');
+        if (Array.isArray(parsedTitles)) {
+          workingTitles = parsedTitles.map((title: unknown) => String(title).trim()).filter(Boolean);
+        }
+      } catch {
+        workingTitles = [];
+      }
+
+      const topicFields = [
+        { label: 'Perspektive', value: topicWorkshop.angle },
+        { label: 'Leitfrage', value: topicWorkshop.guiding_question },
+        { label: 'Kernaussage', value: topicWorkshop.core_thesis },
+        { label: 'Zielgruppennutzen', value: topicWorkshop.audience_value },
+        { label: 'Teaser', value: topicWorkshop.teaser },
+        { label: 'Episodenbeschreibung', value: topicWorkshop.episode_description },
+        { label: 'Show Notes', value: topicWorkshop.show_notes },
+        { label: 'Call-to-Action', value: topicWorkshop.call_to_action },
+        { label: 'Haupttext', value: topicWorkshop.body },
+      ].map((field) => ({ ...field, value: String(field.value || '').trim() }));
+
+      if (workingTitles.length > 0 || topicFields.some((field) => field.value)) {
+        renderSectionHeading(doc, layout, 'Themenwerkstatt');
+
+        const renderTopicField = (label: string, value: string) => {
+          doc.fontSize(layout.typography.bodySize).font(`${layout.typography.fontFamily}-Bold`)
+            .fillColor(layout.colors.secondary).text(label);
+          doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily)
+            .fillColor(layout.colors.text).text(value, { paragraphGap: 3 });
+          doc.moveDown(0.25);
+        };
+
+        topicFields.slice(0, 4).forEach((field) => {
+          if (field.value) renderTopicField(field.label, field.value);
+        });
+
+        if (workingTitles.length > 0) {
+          doc.fontSize(layout.typography.bodySize).font(`${layout.typography.fontFamily}-Bold`)
+            .fillColor(layout.colors.secondary).text('Arbeitstitel');
+          doc.fontSize(layout.typography.bodySize).font(layout.typography.fontFamily).fillColor(layout.colors.text);
+          workingTitles.forEach((title) => doc.text(`• ${title}`, { indent: 10 }));
+          doc.moveDown(0.25);
+        }
+
+        topicFields.slice(4).forEach((field) => {
+          if (field.value) renderTopicField(field.label, field.value);
+        });
+
+        doc.moveDown(0.5);
+      }
+    }
+
     // Recherche-Quellen
     if (layout.sections.showIdeaResearch) {
       const sources = db.all('SELECT title, url, description FROM research_sources WHERE related_idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];

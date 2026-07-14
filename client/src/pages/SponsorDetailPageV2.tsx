@@ -178,6 +178,18 @@ export default function SponsorDetailPageV2() {
   // ── Booking Handlers ──────────────────────────────────────────────────────
   const handleSaveBooking = async () => {
     if (!id) return;
+    if (!bookingForm.slotId) {
+      showError('Bitte eine Werbekategorie auswählen');
+      return;
+    }
+    if (!bookingForm.bookingDate || !bookingForm.bookingEndDate) {
+      showError('Bitte Laufzeit von und Laufzeit bis vollständig angeben');
+      return;
+    }
+    if (bookingForm.bookingEndDate < bookingForm.bookingDate) {
+      showError('Das Laufzeitende darf nicht vor dem Laufzeitbeginn liegen');
+      return;
+    }
     setIsSaving(true);
     try {
       const rawPrice = parseFloat(bookingForm.price) || 0;
@@ -411,7 +423,7 @@ export default function SponsorDetailPageV2() {
     setIsExportingDossier(true);
     try {
       const params = new URLSearchParams();
-      if (dossierTitle) params.set('title', encodeURIComponent(dossierTitle));
+      if (dossierTitle) params.set('title', dossierTitle);
       Object.entries(dossierOptions).forEach(([k, v]) => params.set(k, v ? '1' : '0'));
       const qs = params.toString() ? `?${params.toString()}` : '';
       const res = await fetch(`/api/sponsors/v2/${id}/dossier-pdf${qs}`, { credentials: 'include' });

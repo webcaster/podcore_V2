@@ -24,6 +24,10 @@ const PRIORITY_LABELS: Record<string, string> = { hoch: 'Hoch', mittel: 'Mittel'
 const PRIORITY_COLORS: Record<string, string> = {
   hoch: 'bg-red-500/20 text-red-400', mittel: 'bg-yellow-500/20 text-yellow-400', niedrig: 'bg-green-500/20 text-green-400',
 };
+const RESEARCH_TYPE_LABELS: Record<string, string> = {
+  link: 'Link', buch: 'Buch', artikel: 'Artikel', studie: 'Studie', video: 'Video',
+  podcast: 'Podcast', freitext: 'Freier Text', sonstiges: 'Sonstiges',
+};
 
 export default function IdeaDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -190,12 +194,14 @@ export default function IdeaDetailPage() {
   const handleSaveResearch = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const isFreeText = researchForm.type === 'freitext';
+      const payload = { ...researchForm, url: isFreeText ? '' : researchForm.url, relatedIdeaId: id };
       if (editingResearch) {
-        await editorialApi.updateResearch(editingResearch.id, { ...researchForm, relatedIdeaId: id });
-        showSuccess('Quelle aktualisiert');
+        await editorialApi.updateResearch(editingResearch.id, payload);
+        showSuccess(isFreeText ? 'Freier Text aktualisiert' : 'Quelle aktualisiert');
       } else {
-        await editorialApi.createResearch({ ...researchForm, relatedIdeaId: id });
-        showSuccess('Quelle hinzugefügt');
+        await editorialApi.createResearch(payload);
+        showSuccess(isFreeText ? 'Freier Text hinzugefügt' : 'Quelle hinzugefügt');
       }
       setShowResearchModal(false);
       setEditingResearch(null);
@@ -659,17 +665,17 @@ export default function IdeaDetailPage() {
           {/* Research Sources */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-text-primary flex items-center gap-2"><BookOpen size={16} /> Quellen & Links ({research.length})</h3>
+              <h3 className="font-semibold text-text-primary flex items-center gap-2"><BookOpen size={16} /> Quellen & freie Texte ({research.length})</h3>
               {can('canEditIdeas') && (
                 <button onClick={() => { setEditingResearch(null); setResearchForm({ title: '', url: '', type: 'link', description: '', content: '' }); setShowResearchModal(true); }} className="btn-primary text-sm">
-                  <Plus size={14} /><span>Quelle hinzufügen</span>
+                  <Plus size={14} /><span>Rechercheelement hinzufügen</span>
                 </button>
               )}
             </div>
             {research.length === 0 ? (
               <div className="card text-center py-10">
                 <Globe size={32} className="text-text-muted mx-auto mb-3" />
-                <p className="text-text-secondary">Noch keine Quellen</p>
+                <p className="text-text-secondary">Noch keine Quellen oder freien Texte</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -678,12 +684,13 @@ export default function IdeaDetailPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs bg-obsidian-700 text-text-muted px-1.5 py-0.5 rounded">{src.type}</span>
+                          <span className="text-xs bg-obsidian-700 text-text-muted px-1.5 py-0.5 rounded">{RESEARCH_TYPE_LABELS[src.type] || src.type}</span>
                           {src.status && <span className="text-xs text-text-muted">{src.status}</span>}
                         </div>
                         <p className="font-medium text-text-primary text-sm truncate">{src.title}</p>
                         {src.url && <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent-blue hover:underline flex items-center gap-1 mt-0.5 truncate"><ExternalLink size={10} />{src.url}</a>}
                         {src.description && <p className="text-xs text-text-muted mt-1 line-clamp-2">{src.description}</p>}
+                        {src.content && <p className={`mt-2 whitespace-pre-wrap text-xs leading-relaxed text-text-secondary ${src.type === 'freitext' ? 'line-clamp-6' : 'line-clamp-3'}`}>{src.content}</p>}
                       </div>
                       {can('canEditIdeas') && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
@@ -972,7 +979,7 @@ export default function IdeaDetailPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-obsidian-800 rounded-xl w-full max-w-lg shadow-2xl">
             <div className="flex items-center justify-between p-5 border-b border-obsidian-700">
-              <h3 className="font-semibold text-text-primary">{editingResearch ? 'Quelle bearbeiten' : 'Quelle hinzufügen'}</h3>
+              <h3 className="font-semibold text-text-primary">{editingResearch ? 'Rechercheelement bearbeiten' : 'Rechercheelement hinzufügen'}</h3>
               <button onClick={() => setShowResearchModal(false)} className="p-1 text-text-muted hover:text-text-primary"><X size={18} /></button>
             </div>
             <form onSubmit={handleSaveResearch} className="p-5 space-y-4">
@@ -990,21 +997,35 @@ export default function IdeaDetailPage() {
                     <option value="studie">Studie</option>
                     <option value="video">Video</option>
                     <option value="podcast">Podcast</option>
+                    <option value="freitext">Freier Text</option>
                     <option value="sonstiges">Sonstiges</option>
                   </select>
                 </div>
-                <div>
-                  <label className="label">URL</label>
-                  <input value={researchForm.url} onChange={e => setResearchForm(p => ({ ...p, url: e.target.value }))} className="input" placeholder="https://..." />
-                </div>
+                {researchForm.type !== 'freitext' ? (
+                  <div>
+                    <label className="label">URL</label>
+                    <input value={researchForm.url} onChange={e => setResearchForm(p => ({ ...p, url: e.target.value }))} className="input" placeholder="https://..." />
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-accent-blue/20 bg-accent-blue/5 p-3 text-xs leading-relaxed text-text-muted">
+                    Freie Texte werden direkt in PodCore erfasst und benötigen keine URL.
+                  </div>
+                )}
               </div>
               <div>
-                <label className="label">Beschreibung</label>
-                <textarea value={researchForm.description} onChange={e => setResearchForm(p => ({ ...p, description: e.target.value }))} className="textarea" rows={2} />
+                <label className="label">Kurzbeschreibung</label>
+                <textarea value={researchForm.description} onChange={e => setResearchForm(p => ({ ...p, description: e.target.value }))} className="textarea" rows={2} placeholder="Optional: kurze Einordnung des Rechercheelements" />
               </div>
               <div>
-                <label className="label">Inhalt / Notizen</label>
-                <textarea value={researchForm.content} onChange={e => setResearchForm(p => ({ ...p, content: e.target.value }))} className="textarea" rows={3} placeholder="Wichtige Punkte, Zitate..." />
+                <label className="label">{researchForm.type === 'freitext' ? 'Freier Text *' : 'Inhalt / Notizen'}</label>
+                <textarea
+                  value={researchForm.content}
+                  onChange={e => setResearchForm(p => ({ ...p, content: e.target.value }))}
+                  className="textarea"
+                  rows={researchForm.type === 'freitext' ? 8 : 3}
+                  required={researchForm.type === 'freitext'}
+                  placeholder={researchForm.type === 'freitext' ? 'Recherchetext, Gedanken, Zusammenfassung oder Rohnotizen erfassen …' : 'Wichtige Punkte, Zitate …'}
+                />
               </div>
               <div className="flex gap-2 justify-end pt-2">
                 <button type="button" onClick={() => setShowResearchModal(false)} className="btn-secondary">Abbrechen</button>

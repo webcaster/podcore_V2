@@ -1,5 +1,25 @@
 # PodCore – Release Notes
 
+## v2.14.2 – Stabilitätsupdate für Redaktion, Sponsoring und PDF-Exporte
+
+Version **2.14.2** verbessert die Lesbarkeit und Vollständigkeit zentraler Redaktionsfunktionen, stabilisiert Sponsor-Buchungen und korrigiert mehrere geschäftsrelevante PDF-Exporte. Das In-App-Wiki wurde zugleich zu einem durchsuchbaren Endnutzer-Handbuch für alle PodCore-Bereiche ausgebaut.
+
+| Bereich | Änderung |
+|---|---|
+| Textbaustein-Bibliothek | Eingabe- und Auswahlfelder verwenden kontrastfeste Vorder- und Hintergrundfarben. Titel, Inhalt, Typ und Schlagwörter bleiben dadurch auch im Dunkelmodus klar lesbar. |
+| Recherche | Der neue Typ **Freier Text** ermöglicht eigenständige Rechercheeinträge ohne URL. Titel, Haupttext und eine optionale Zusammenfassung werden als übersichtliche Karte dargestellt. |
+| Ideenmappen-PDF | Der neue Abschnitt **Themenwerkstatt** exportiert alle befüllten Inhalte aus Perspektive, Leitfrage, Kernaussage, Zielgruppennutzen, Arbeitstiteln, Teaser, Episodenbeschreibung, Show Notes, Call-to-Action und Haupttext. |
+| Sponsor-Buchungen | Anlegen, vollständiges Bearbeiten und partielle Statusänderungen speichern alle Formularangaben konsistent. API-Rückgaben verwenden die vom Client erwarteten Feldnamen; nicht geänderte Buchungswerte werden bei Teilupdates nicht mehr überschrieben. Pflichtfelder und unzulässige Laufzeiten werden vor dem Speichern verständlich angezeigt. |
+| Sponsor-Dossier | Der Export verwendet die korrekten Vertragsdaten, übernimmt den individuellen Dokumenttitel und exportiert die gewählten Bereiche Stammdaten, Verträge, Buchungen, Abrechnung und Notizen. Der zuvor mögliche interne Serverfehler und zusätzliche reine Footer-Seiten sind behoben. |
+| Preislisten-PDF | Jede aktive Werbekategorie wird vollständig mit Beschreibung, Präsentationstext, Festpreis, Preis pro Folge, CPM-Preis, Währung, Farbe, Exklusivität und Status ausgegeben. Ausgewähltes PDF-Layout, Header, Footer, Wasserzeichen und Seitenumbrüche werden berücksichtigt. |
+| PDF-Grundlayout | Der zentrale Footer-Renderer zeichnet Fußzeilen innerhalb der echten Seitenränder und erzeugt dadurch keine leeren Zusatzseiten mehr. |
+| In-App-Wiki | Das Wiki ist ein vollständiges, durchsuchbares Endnutzer-Handbuch. Es erklärt Navigation, Episoden, RedaktionsHub, Media Library, Sponsoring, Statistiken, PDF-Exporte, Einstellungen, Datenpflege und Administration. Berechtigungsabhängige Inhalte sind gekennzeichnet; die Versionshistorie erscheint kompakt. |
+| Technik | Root, Client, Server und Browser-Titel melden einheitlich Version 2.14.2. Für dieses Bugfix-Update sind keine manuellen Datenbankänderungen erforderlich. Ein isolierter Ende-zu-Ende-Test deckt Version, Freitext-Recherche, Themenwerkstatt, Sponsor-Buchungen einschließlich Teilupdate, Dossier und vollständige Preisliste ab. |
+
+### Aktualisierung
+
+Vor dem Update sollte das persistente PodCore-Datenverzeichnis gesichert werden. Das Release-ZIP **PodCore-v2.14.2.zip** kann über die integrierte Update-Funktion eingespielt werden. Bei einer manuellen Aktualisierung werden nach `git pull` die Abhängigkeiten mit pnpm in Root, `client/` und `server/` installiert und anschließend der Produktions-Build erstellt. Eine ausführliche Anleitung mit Bedienwegen und Prüfplan steht unter [`docs/UPDATE-2.14.2.md`](docs/UPDATE-2.14.2.md).
+
 ## v2.14.1 – RedaktionsHub-, Sponsoring- und PDF-Wartungsupdate
 
 Version **2.14.1** vervollständigt die bidirektionale Zusammenarbeit zwischen RedaktionsHub und Episoden-Editor, erweitert die Sponsor-Stammdaten um einen optionalen Logo-Upload und schließt mehrere Lücken in Wiki-, Dossier- und Angebots-PDF-Funktionen.

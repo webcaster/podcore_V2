@@ -1042,8 +1042,18 @@ export function renderPdfFooter(doc: any, layout: PdfLayout, opts: { podcastName
   if (footer.showPageNumbers && opts.pageNum != null) parts.push(`Seite ${opts.pageNum}`);
 
   if (parts.length > 0) {
+    // PDFKit erzwingt standardmäßig einen Seitenumbruch, wenn Text unterhalb
+    // des Inhaltsbereichs liegt. Für echte Fußzeilen den unteren Rand nur
+    // während des Zeichnens freigeben, damit keine leeren Zusatzseiten entstehen.
+    const originalBottomMargin = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
     doc.fontSize(typography.smallSize).font(typography.fontFamily).fillColor(colors.muted)
-      .text(parts.join('   ·   '), pageMargin, footerY, { width: pageWidth - pageMargin * 2, align: 'center' });
+      .text(parts.join('   ·   '), pageMargin, footerY, {
+        width: pageWidth - pageMargin * 2,
+        align: 'center',
+        lineBreak: false,
+      });
+    doc.page.margins.bottom = originalBottomMargin;
   }
 }
 

@@ -5,7 +5,7 @@ import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth'
 import * as fs from 'fs';
 import * as path from 'path';
 import { DATA_DIR } from '../database';
-import { getDefaultLayoutForType, getLayoutById } from '../pdfLayouts';
+import { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark } from '../pdfLayouts';
 
 const router: express.Router = express.Router();
 
@@ -112,6 +112,58 @@ router.delete('/contracts/:contractId', requirePermission('canEditSponsors') as 
 // AD BOOKINGS
 // ============================================================
 
+function mapBookingRow(b: any) {
+  let episodeRefs: any[] = [];
+  try {
+    const parsed = typeof b.episode_refs === 'string' ? JSON.parse(b.episode_refs) : b.episode_refs;
+    episodeRefs = Array.isArray(parsed) ? parsed : [];
+  } catch (_) {}
+
+  return {
+    id: b.id,
+    slotId: b.slot_id,
+    sponsorId: b.sponsor_id,
+    episodeId: b.episode_id,
+    bookingDate: b.booking_date,
+    bookingEndDate: b.booking_end_date,
+    price: b.price,
+    priceAdjustment: b.price_adjustment,
+    listenerFee: b.listener_fee,
+    finalPrice: b.final_price,
+    invoiceStatus: b.invoice_status,
+    invoiceNumber: b.invoice_number,
+    invoiceDate: b.invoice_date,
+    deliveryConfirmed: Boolean(b.delivery_confirmed),
+    listenerCount: b.listener_count,
+    status: b.status,
+    notes: b.notes,
+    performanceNotes: b.performance_notes,
+    contractId: b.contract_id,
+    placementCount: b.placement_count,
+    episodeRefs,
+    discount: b.discount,
+    discountType: b.discount_type,
+    totalEpisodes: b.total_episodes,
+    slotName: b.slot_name,
+    sponsorName: b.sponsor_name,
+    createdAt: b.created_at,
+    updatedAt: b.updated_at,
+  };
+}
+
+function getMappedBooking(db: any, bookingId: string) {
+  const booking = db.get(
+    `SELECT ab.*, COALESCE(s.name, c.name) as slot_name, sp.name as sponsor_name
+     FROM ad_bookings ab
+     LEFT JOIN ad_slots s ON ab.slot_id = s.id
+     LEFT JOIN ad_categories c ON ab.slot_id = c.id
+     JOIN sponsors sp ON ab.sponsor_id = sp.id
+     WHERE ab.id = ?`,
+    [bookingId],
+  ) as any;
+  return booking ? mapBookingRow(booking) : null;
+}
+
 router.get('/:sponsorId/bookings', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const { from, to, status } = req.query;
@@ -122,61 +174,79 @@ router.get('/:sponsorId/bookings', requirePermission('canViewSponsors') as any, 
   if (status) { query += ' AND ab.status = ?'; params.push(status); }
   query += ' ORDER BY ab.booking_date DESC';
   const bookings = db.all(query, params) as any[];
-  return res.json({ success: true, data: bookings.map(b => ({ ...b, slotName: b.slot_name, sponsorName: b.sponsor_name })) });
+  return res.json({ success: true, data: bookings.map(mapBookingRow) });
 });
 
 router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const { slotId, bookingDate, bookingEndDate, price = 0, priceAdjustment = 0, listenerFee = 0, notes, invoiceStatus, status, contractId, placementCount, episodeRefs, discount = 0, discountType = 'absolute', listenerCount, totalEpisodes } = req.body;
-  if (!slotId || !bookingDate) return res.status(400).json({ success: false, error: 'slotId und bookingDate erforderlich' });
+  if (!slotId || !bookingDate) return res.status(400).json({ success: false, error: 'Werbe-Slot und Laufzeitbeginn sind erforderlich' });
   const id = uuidv4();
-  const discountAmount = discountType === 'percent' ? (price * (discount || 0)) / 100 : (discount || 0);
-  const finalPrice = Math.max(0, price + (priceAdjustment || 0) + listenerFee - discountAmount);
+  const basePrice = Number(price || 0) + Number(priceAdjustment || 0) + Number(listenerFee || 0);
+  const discountAmount = discountType === 'percent' ? basePrice * Number(discount || 0) / 100 : Number(discount || 0);
+  const requestedFinalPrice = Number(req.body.finalPrice);
+  const finalPrice = Number.isFinite(requestedFinalPrice)
+    ? Math.max(0, requestedFinalPrice)
+    : Math.max(0, basePrice - discountAmount);
   db.run(
     `INSERT INTO ad_bookings (id, slot_id, sponsor_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs, discount, discount_type, listener_count, total_episodes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, slotId, req.params.sponsorId, bookingDate, bookingEndDate || null, price, priceAdjustment || 0, listenerFee || 0, finalPrice, status || 'geplant', invoiceStatus || 'offen', notes || null, contractId || null, placementCount || 1, JSON.stringify(episodeRefs || []), discount || 0, discountType || 'absolute', listenerCount || null, totalEpisodes || null],
   );
-  return res.status(201).json({ success: true, data: { id } });
+  return res.status(201).json({ success: true, data: getMappedBooking(db, id) });
 });
 
 router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const b = req.body;
   const { bookingId } = req.params;
-  
-  // Berechne finalPrice basierend auf den aktualisierten Werten
-  const price = b.price !== undefined ? b.price : 0;
-  const priceAdjustment = b.priceAdjustment !== undefined ? b.priceAdjustment : 0;
-  const listenerFee = b.listenerFee !== undefined ? b.listenerFee : 0;
-  const discount = b.discount !== undefined ? b.discount : 0;
-  const discountType = b.discountType || 'absolute';
-  const discountAmount = discountType === 'percent' ? (price * (discount || 0)) / 100 : (discount || 0);
-  const finalPrice = Math.max(0, price + (priceAdjustment || 0) + listenerFee - discountAmount);
-  
+  const existing = db.get('SELECT * FROM ad_bookings WHERE id = ?', [bookingId]) as any;
+  if (!existing) return res.status(404).json({ success: false, error: 'Buchung nicht gefunden' });
+
+  const slotId = b.slotId !== undefined ? b.slotId : existing.slot_id;
+  const bookingDate = b.bookingDate !== undefined ? b.bookingDate : existing.booking_date;
+  const bookingEndDate = b.bookingEndDate !== undefined ? (b.bookingEndDate || null) : existing.booking_end_date;
+  const price = b.price !== undefined ? Number(b.price || 0) : Number(existing.price || 0);
+  const priceAdjustment = b.priceAdjustment !== undefined ? Number(b.priceAdjustment || 0) : Number(existing.price_adjustment || 0);
+  const listenerFee = b.listenerFee !== undefined ? Number(b.listenerFee || 0) : Number(existing.listener_fee || 0);
+  const discount = b.discount !== undefined ? Number(b.discount || 0) : Number(existing.discount || 0);
+  const discountType = b.discountType !== undefined ? b.discountType : (existing.discount_type || 'absolute');
+  const requestedFinalPrice = Number(b.finalPrice);
+  const priceChanged = ['price', 'priceAdjustment', 'listenerFee', 'discount', 'discountType'].some(key => b[key] !== undefined);
+  const basePrice = price + priceAdjustment + listenerFee;
+  const discountAmount = discountType === 'percent' ? basePrice * discount / 100 : discount;
+  const finalPrice = b.finalPrice !== undefined && Number.isFinite(requestedFinalPrice)
+    ? Math.max(0, requestedFinalPrice)
+    : priceChanged
+      ? Math.max(0, basePrice - discountAmount)
+      : Number(existing.final_price || 0);
+  const episodeRefs = b.episodeRefs !== undefined
+    ? JSON.stringify(Array.isArray(b.episodeRefs) ? b.episodeRefs : [])
+    : existing.episode_refs;
+
   db.run(
     `UPDATE ad_bookings SET slot_id = ?, booking_date = ?, booking_end_date = ?, price = ?, price_adjustment = ?, listener_fee = ?, final_price = ?, status = ?, invoice_status = ?, notes = ?, contract_id = ?, placement_count = ?, episode_refs = ?, discount = ?, discount_type = ?, listener_count = ?, total_episodes = ?, updated_at = datetime('now') WHERE id = ?`,
     [
-      b.slotId,
-      b.bookingDate,
-      b.bookingEndDate || null,
+      slotId,
+      bookingDate,
+      bookingEndDate,
       price,
-      priceAdjustment || 0,
-      listenerFee || 0,
+      priceAdjustment,
+      listenerFee,
       finalPrice,
-      b.status || 'geplant',
-      b.invoiceStatus || 'offen',
-      b.notes || null,
-      b.contractId || null,
-      b.placementCount || 1,
-      JSON.stringify(b.episodeRefs || []),
-      discount || 0,
-      discountType || 'absolute',
-      b.listenerCount || null,
-      b.totalEpisodes || null,
-      bookingId
-    ]
+      b.status !== undefined ? b.status : existing.status,
+      b.invoiceStatus !== undefined ? b.invoiceStatus : existing.invoice_status,
+      b.notes !== undefined ? (b.notes || null) : existing.notes,
+      b.contractId !== undefined ? (b.contractId || null) : existing.contract_id,
+      b.placementCount !== undefined ? (Number(b.placementCount) || 1) : existing.placement_count,
+      episodeRefs,
+      discount,
+      discountType,
+      b.listenerCount !== undefined ? (b.listenerCount || null) : existing.listener_count,
+      b.totalEpisodes !== undefined ? (b.totalEpisodes || null) : existing.total_episodes,
+      bookingId,
+    ],
   );
-  return res.json({ success: true });
+  return res.json({ success: true, data: getMappedBooking(db, bookingId) });
 });
 
 router.delete('/bookings/:bookingId', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
@@ -555,8 +625,8 @@ function renderPositionsTable(doc: any, positions: any[], m: number, contentW: n
 // ============================================================
 router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const rawTitle = (req.query.title as string) || 'Preisliste';
-  const rawDesc = (req.query.description as string) || '';
+  const rawTitle = String(req.query.title || 'Werbekategorien & Preisliste').trim() || 'Werbekategorien & Preisliste';
+  const rawDesc = String(req.query.description || '').trim();
   const categories = db.all(`SELECT * FROM ad_categories WHERE is_active = 1 ORDER BY sort_order ASC, name ASC`) as any[];
 
   const layoutId = req.query.layoutId as string;
@@ -565,85 +635,158 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
     layout = layoutId ? getLayoutById(layoutId) : null;
     if (!layout) layout = getDefaultLayoutForType('sponsor_offer' as any);
   } catch (_) {
-    layout = { colors: {}, sections: {}, footer: {}, header: {}, typography: {}, pageMargin: 50 };
+    layout = getDefaultLayoutForType('sponsor_offer' as any);
   }
 
-  const cfg = layout || {};
-  const colors = cfg.colors || {};
-  const footerCfg = cfg.footer || {};
-  const m = cfg.pageMargin || 50;
-  const primaryColor: string = colors.primary || '#7c3aed';
-  const headerBgColor: string = colors.background || colors.primary || '#7c3aed';
-  const headerTextColor: string = colors.headerText || '#ffffff';
-
+  const sections = layout.sections || {};
+  const showDescriptions = sections.showPricelistDescriptions !== false;
+  const showExclusive = sections.showPricelistExclusive !== false;
+  const colors = layout.colors;
+  const typography = layout.typography;
+  const m = Number(layout.pageMargin) || 50;
+  const bodySize = Math.max(8, Number(typography.bodySize) || 10);
+  const smallSize = Math.max(6, Number(typography.smallSize) || 8);
   const { podcastName, companyName, logoPath } = loadBranding(db);
 
   const PDFDocument = require('pdfkit');
-  const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true });
+  const doc = new PDFDocument({
+    margin: m,
+    size: layout.pageSize || 'A4',
+    layout: layout.pageOrientation === 'landscape' ? 'landscape' : 'portrait',
+    autoFirstPage: false,
+    bufferPages: true,
+  });
   const chunks: Buffer[] = [];
   doc.on('data', (c: Buffer) => chunks.push(c));
   doc.on('end', () => {
     const buf = Buffer.concat(chunks);
+    const safeTitle = rawTitle.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '-').replace(/^-+|-+$/g, '') || 'Preisliste';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Preisliste.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.pdf"`);
     res.send(buf);
   });
 
-  const contentW = doc.page.width - m * 2;
-  const nowStr = new Date().toLocaleDateString('de-DE');
+  let pageNum = 0;
+  let contentW = 0;
+  let y = 0;
+  const addDecoratedPage = () => {
+    doc.addPage();
+    pageNum += 1;
+    contentW = doc.page.width - m * 2;
+    renderWatermark(doc, layout);
+    renderPdfHeader(doc, layout, { podcastName, documentTitle: rawTitle, logoPath });
+    y = Math.max(doc.y, m);
+  };
+  const ensureSpace = (requiredHeight: number) => {
+    if (y + requiredHeight > doc.page.height - 55) addDecoratedPage();
+  };
+  const formatPrice = (value: unknown, currency: string) => {
+    if (value === null || value === undefined || value === '') return '–';
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return '–';
+    return `${amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  };
 
-  // Header
-  doc.rect(0, 0, doc.page.width, 90).fill(headerBgColor);
-  if (logoPath && fs.existsSync(logoPath)) {
-    try { doc.image(logoPath, m, 15, { height: 40 }); } catch (_) {}
-  }
-  doc.fontSize(22).font('Helvetica-Bold').fillColor(headerTextColor)
-    .text(rawTitle, m, 18, { align: 'right', width: contentW });
-  const subLine = [podcastName, companyName].filter(Boolean).join(' · ') + ` · ${nowStr}`;
-  doc.fontSize(9).font('Helvetica').fillColor(headerTextColor).opacity(0.8)
-    .text(subLine, m, 55, { align: 'right', width: contentW });
-  doc.opacity(1);
-  let y = 105;
+  addDecoratedPage();
 
   if (rawDesc) {
-    doc.fontSize(10).font('Helvetica').fillColor('#333').text(rawDesc, m, y, { width: contentW });
-    y += doc.heightOfString(rawDesc, { width: contentW }) + 16;
+    doc.font(typography.fontFamily).fontSize(bodySize).fillColor(colors.text);
+    const descHeight = doc.heightOfString(rawDesc, { width: contentW });
+    ensureSpace(descHeight + 14);
+    doc.text(rawDesc, m, y, { width: contentW });
+    y += descHeight + 14;
   }
 
-  // Tabellen-Header
-  const col1 = contentW * 0.38;
-  const col2 = contentW * 0.12;
-  const col3 = contentW * 0.12;
-  const col4 = contentW * 0.19;
-  const col5 = contentW * 0.19;
-  doc.rect(m, y, contentW, 22).fill(primaryColor);
-  doc.fontSize(8).font('Helvetica-Bold').fillColor('#fff');
-  doc.text('Werbeplatz', m + 5, y + 7, { width: col1 });
-  doc.text('Position', m + col1 + 5, y + 7, { width: col2 });
-  doc.text('Dauer', m + col1 + col2 + 5, y + 7, { width: col3, align: 'right' });
-  doc.text('Basispreis', m + col1 + col2 + col3 + 5, y + 7, { width: col4, align: 'right' });
-  doc.text('Pro Folge', m + col1 + col2 + col3 + col4 + 5, y + 7, { width: col5, align: 'right' });
-  y += 22;
+  const summaryLine = `${categories.length} aktive ${categories.length === 1 ? 'Werbekategorie' : 'Werbekategorien'} · Stand: ${new Date().toLocaleDateString('de-DE')}`;
+  doc.font(typography.fontFamily).fontSize(smallSize).fillColor(colors.muted)
+    .text(summaryLine, m, y, { width: contentW });
+  y += 18;
 
-  categories.forEach((cat: any, idx: number) => {
-    if (y + 28 > doc.page.height - 60) { doc.addPage(); y = m; }
-    doc.rect(m, y, contentW, 26).fill(idx % 2 === 0 ? '#ffffff' : '#f7f7f7');
-    doc.fontSize(9).font('Helvetica-Bold').fillColor('#111').text(cat.name || '–', m + 5, y + 4, { width: col1 });
-    if (cat.description) {
-      doc.fontSize(7).font('Helvetica').fillColor('#666').text(cat.description, m + 5, y + 14, { width: col1 - 5 });
-    }
-    doc.fontSize(9).font('Helvetica').fillColor('#444').text(cat.default_position || '–', m + col1 + 5, y + 8, { width: col2 });
-    doc.text(cat.default_duration ? `${cat.default_duration}s` : '–', m + col1 + col2 + 5, y + 8, { width: col3, align: 'right' });
-    doc.text(cat.base_price ? `${Number(cat.base_price).toFixed(2)} €` : '–', m + col1 + col2 + col3 + 5, y + 8, { width: col4, align: 'right' });
-    doc.text(cat.price_per_episode ? `${Number(cat.price_per_episode).toFixed(2)} €` : '–', m + col1 + col2 + col3 + col4 + 5, y + 8, { width: col5, align: 'right' });
-    y += 26;
-  });
+  if (categories.length === 0) {
+    ensureSpace(40);
+    doc.font(typography.fontFamily).fontSize(bodySize).fillColor(colors.muted)
+      .text('Es sind derzeit keine aktiven Werbekategorien hinterlegt.', m, y, { width: contentW });
+  } else {
+    categories.forEach((cat: any) => {
+      const currency = String(cat.currency || 'EUR');
+      const description = showDescriptions ? String(cat.description || '').trim() : '';
+      const presentation = String(cat.presentation_template || '').trim();
+      const details = [
+        ['Standardposition', cat.default_position || '–'],
+        ['Standarddauer', cat.default_duration !== null && cat.default_duration !== undefined ? `${cat.default_duration} Sekunden` : '–'],
+        ['Basispreis', formatPrice(cat.base_price, currency)],
+        ['Preis pro Folge', formatPrice(cat.price_per_episode, currency)],
+        ['Preis pro 1.000 Hörer', formatPrice(cat.price_per_1000_listens, currency)],
+        ['Währung', currency],
+        ...(showExclusive ? [['Exklusiv', cat.is_exclusive === 1 ? 'Ja' : 'Nein']] : []),
+        ['Status', cat.is_active === 1 ? 'Aktiv' : 'Inaktiv'],
+        ['Anzeigefarbe', cat.color || '–'],
+        ['Reihenfolge', String(cat.sort_order ?? '–')],
+      ];
+      const detailColumns = 3;
+      const detailRows = Math.ceil(details.length / detailColumns);
+      const innerWidth = contentW - 20;
+      const gap = 10;
+      const detailWidth = (innerWidth - gap * (detailColumns - 1)) / detailColumns;
 
-  // Footer
-  if (footerCfg.showPodcastName !== false || footerCfg.showDate !== false) {
-    const fy = doc.page.height - 30;
-    doc.fontSize(7).font('Helvetica').fillColor('#aaa')
-      .text(`${podcastName} · Preisliste · ${nowStr}`, m, fy, { align: 'center', width: contentW });
+      doc.font(typography.fontFamily).fontSize(bodySize);
+      const titleHeight = Math.max(13, doc.heightOfString(String(cat.name || 'Ohne Bezeichnung'), { width: innerWidth - 20 }));
+      let descriptionHeight = 0;
+      if (description) {
+        doc.font(typography.fontFamily).fontSize(smallSize + 1);
+        descriptionHeight = doc.heightOfString(description, { width: innerWidth });
+      }
+      let presentationHeight = 0;
+      if (presentation) {
+        doc.font(typography.fontFamily).fontSize(smallSize + 1);
+        presentationHeight = doc.heightOfString(presentation, { width: innerWidth });
+      }
+      const cardHeight = 12 + titleHeight + (description ? descriptionHeight + 9 : 2) + detailRows * 29 + (presentation ? presentationHeight + 27 : 7);
+      ensureSpace(cardHeight + 10);
+
+      const cardTop = y;
+      doc.roundedRect(m, cardTop, contentW, cardHeight, 5).fillAndStroke('#f8fafc', colors.accent);
+      doc.rect(m, cardTop, 6, cardHeight).fill(cat.color || colors.primary);
+      doc.font(`${typography.fontFamily}-Bold`).fontSize(bodySize + 2).fillColor(colors.primary)
+        .text(String(cat.name || 'Ohne Bezeichnung'), m + 12, cardTop + 9, { width: innerWidth - 20 });
+
+      let cursorY = cardTop + 9 + titleHeight;
+      if (description) {
+        cursorY += 4;
+        doc.font(typography.fontFamily).fontSize(smallSize + 1).fillColor(colors.text)
+          .text(description, m + 10, cursorY, { width: innerWidth });
+        cursorY += descriptionHeight + 7;
+      } else {
+        cursorY += 3;
+      }
+
+      details.forEach(([label, value], detailIndex) => {
+        const row = Math.floor(detailIndex / detailColumns);
+        const column = detailIndex % detailColumns;
+        const detailX = m + 10 + column * (detailWidth + gap);
+        const detailY = cursorY + row * 29;
+        doc.font(`${typography.fontFamily}-Bold`).fontSize(smallSize).fillColor(colors.muted)
+          .text(String(label), detailX, detailY, { width: detailWidth });
+        doc.font(typography.fontFamily).fontSize(smallSize + 1).fillColor(colors.text)
+          .text(String(value), detailX, detailY + 11, { width: detailWidth });
+      });
+      cursorY += detailRows * 29;
+
+      if (presentation) {
+        doc.font(`${typography.fontFamily}-Bold`).fontSize(smallSize).fillColor(colors.muted)
+          .text('Präsentationsvorlage', m + 10, cursorY, { width: innerWidth });
+        doc.font(typography.fontFamily).fontSize(smallSize + 1).fillColor(colors.text)
+          .text(presentation, m + 10, cursorY + 12, { width: innerWidth });
+      }
+
+      y = cardTop + cardHeight + 10;
+    });
+  }
+
+  const pageRange = doc.bufferedPageRange();
+  for (let pageIndex = pageRange.start; pageIndex < pageRange.start + pageRange.count; pageIndex += 1) {
+    doc.switchToPage(pageIndex);
+    renderPdfFooter(doc, layout, { podcastName: companyName ? `${podcastName} · ${companyName}` : podcastName, pageNum: pageIndex + 1 });
   }
 
   doc.end();
@@ -913,6 +1056,14 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
   const sections = cfg.sections || {};
   const footerCfg = cfg.footer || {};
   const m = cfg.pageMargin || 50;
+  const queryEnabled = (key: string, fallback = true) => req.query[key] === undefined ? fallback : req.query[key] !== '0';
+  const showMeta = queryEnabled('stammdaten', sections.showDossierMeta !== false);
+  const showContracts = queryEnabled('contracts', sections.showDossierContracts !== false);
+  const showBookings = queryEnabled('bookings', sections.showDossierBookings !== false);
+  const showBilling = queryEnabled('billing', sections.showDossierBilling !== false);
+  const showNotes = queryEnabled('notes', true);
+  let documentTitle = String(req.query.title || 'Sponsor-Dossier');
+  try { documentTitle = decodeURIComponent(documentTitle); } catch (_) {}
   const primaryColor: string = colors.primary || '#7c3aed';
   const headerBgColor: string = colors.background || colors.primary || '#7c3aed';
   const headerTextColor: string = colors.headerText || '#ffffff';
@@ -920,7 +1071,7 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
   const { podcastName, companyName, logoPath } = loadBranding(db);
 
   const PDFDocument = require('pdfkit');
-  const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true });
+  const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true, bufferPages: true });
   const chunks: Buffer[] = [];
   doc.on('data', (c: Buffer) => chunks.push(c));
   doc.on('end', () => {
@@ -939,15 +1090,21 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
     try { doc.image(logoPath, m, 15, { height: 40 }); } catch (_) {}
   }
   doc.fontSize(22).font('Helvetica-Bold').fillColor(headerTextColor)
-    .text('Sponsor-Dossier', m, 18, { align: 'right', width: contentW });
+    .text(documentTitle, m, 18, { align: 'right', width: contentW });
   const subLine = [podcastName, companyName].filter(Boolean).join(' · ') + ` · ${nowStr}`;
   doc.fontSize(9).font('Helvetica').fillColor(headerTextColor).opacity(0.8)
     .text(subLine, m, 55, { align: 'right', width: contentW });
   doc.opacity(1);
   let y = 105;
 
+  const ensureSpace = (needed: number) => {
+    if (y + needed <= doc.page.height - 55) return;
+    doc.addPage();
+    y = m;
+  };
+
   // Sponsor-Metadaten
-  if (sections.showDossierMeta !== false) {
+  if (showMeta) {
     doc.fontSize(14).font('Helvetica-Bold').fillColor('#111').text('Sponsor-Informationen', m, y);
     y += 25;
     
@@ -956,8 +1113,8 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
       ['Firma:', sponsor.company || '—'],
       ['Adresse:', sponsor.address || '—'],
       ['Kontaktperson:', sponsor.contact_name || '—'],
-      ['E-Mail:', sponsor.email || '—'],
-      ['Telefon:', sponsor.phone || '—'],
+      ['E-Mail:', sponsor.contact_email || '—'],
+      ['Telefon:', sponsor.contact_phone || '—'],
       ['Website:', sponsor.website || '—']
     ];
 
@@ -970,22 +1127,25 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
   }
 
   // Verträge
-  if (sections.showDossierContracts !== false) {
-    const contracts = db.all('SELECT * FROM sponsor_contracts WHERE sponsor_id = ? ORDER BY start_date DESC', [sponsorId]) as any[];
+  if (showContracts) {
+    const contracts = db.all('SELECT * FROM sponsor_contracts WHERE sponsor_id = ? ORDER BY contract_start DESC', [sponsorId]) as any[];
     if (contracts.length > 0) {
+      ensureSpace(45);
       doc.fontSize(14).font('Helvetica-Bold').fillColor('#111').text('Verträge', m, y);
       y += 20;
       contracts.forEach((contract: any) => {
-        doc.fontSize(9).font('Helvetica').fillColor('#333')
-          .text(`${contract.start_date} bis ${contract.end_date} · ${contract.terms || '—'}`, m, y);
-        y += 16;
+        ensureSpace(20);
+        const period = `${contract.contract_start || '—'} bis ${contract.contract_end || '—'}`;
+        const details = [contract.sponsoring_type, contract.status, contract.notes].filter(Boolean).join(' · ') || '—';
+        doc.fontSize(9).font('Helvetica').fillColor('#333').text(`${period} · ${details}`, m, y, { width: contentW });
+        y += Math.max(16, doc.heightOfString(`${period} · ${details}`, { width: contentW }) + 5);
       });
       y += 10;
     }
   }
 
   // Buchungen
-  if (sections.showDossierBookings !== false) {
+  if (showBookings) {
     const bookings = db.all(
       `SELECT ab.*, s.name as slot_name, c.name as category_name
        FROM ad_bookings ab
@@ -996,22 +1156,60 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
       [sponsorId]
     ) as any[];
     if (bookings.length > 0) {
+      ensureSpace(45);
       doc.fontSize(14).font('Helvetica-Bold').fillColor('#111').text('Aktuelle Buchungen', m, y);
       y += 20;
       bookings.forEach((booking: any) => {
+        ensureSpace(20);
         doc.fontSize(9).font('Helvetica').fillColor('#333')
-          .text(`${booking.booking_date} · ${booking.slot_name || booking.category_name || '—'} · ${booking.final_price || 0} €`, m, y);
+          .text(`${booking.booking_date || '—'} bis ${booking.booking_end_date || '—'} · ${booking.slot_name || booking.category_name || '—'} · ${Number(booking.final_price || 0).toFixed(2)} €`, m, y, { width: contentW });
         y += 16;
       });
       y += 10;
     }
   }
 
-  // Footer
-  if (footerCfg.showPodcastName !== false || footerCfg.showDate !== false) {
-    const fy = doc.page.height - 30;
-    doc.fontSize(7).font('Helvetica').fillColor('#aaa')
-      .text(`${podcastName} · Sponsor-Dossier · ${nowStr}`, m, fy, { align: 'center', width: contentW });
+  // Abrechnungsübersicht
+  if (showBilling) {
+    const billing = db.all(
+      `SELECT invoice_status, COUNT(*) as booking_count, COALESCE(SUM(final_price), 0) as total
+       FROM ad_bookings WHERE sponsor_id = ? GROUP BY invoice_status ORDER BY invoice_status`,
+      [sponsorId],
+    ) as any[];
+    if (billing.length > 0) {
+      ensureSpace(45);
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#111').text('Abrechnungsübersicht', m, y);
+      y += 20;
+      billing.forEach((row: any) => {
+        ensureSpace(18);
+        doc.fontSize(9).font('Helvetica').fillColor('#333')
+          .text(`${row.invoice_status || 'offen'} · ${row.booking_count} Buchung(en) · ${Number(row.total || 0).toFixed(2)} €`, m, y, { width: contentW });
+        y += 16;
+      });
+      y += 10;
+    }
+  }
+
+  // Notizen
+  if (showNotes) {
+    const notes = [sponsor.description, sponsor.notes, sponsor.contact_hint].filter(Boolean).join('\n\n');
+    if (notes) {
+      ensureSpace(50);
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#111').text('Notizen', m, y);
+      y += 20;
+      doc.fontSize(9).font('Helvetica').fillColor('#333').text(notes, m, y, { width: contentW });
+      y += doc.heightOfString(notes, { width: contentW }) + 10;
+    }
+  }
+
+  // Layoutgesteuerte Fußzeile auf allen echten Inhaltsseiten.
+  const pageRange = doc.bufferedPageRange();
+  for (let pageIndex = pageRange.start; pageIndex < pageRange.start + pageRange.count; pageIndex += 1) {
+    doc.switchToPage(pageIndex);
+    renderPdfFooter(doc, layout, {
+      podcastName: companyName ? `${podcastName} · ${companyName}` : podcastName,
+      pageNum: pageIndex + 1,
+    });
   }
 
   doc.end();
