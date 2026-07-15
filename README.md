@@ -70,6 +70,8 @@
 
 PodCore ist als Node.js-Anwendung konzipiert und verwendet SQLite als Datenbank, wodurch keine externe Datenbank-Einrichtung erforderlich ist.
 
+Für die produktive Bereitstellung unter Ubuntu mit dediziertem Dienstkonto, `systemd`, UFW, optionalem Caddy-Reverse-Proxy, Backup, Update, Rollback und Fehlerdiagnose gilt die IT-Anleitung [`docs/INSTALL-UBUNTU.md`](docs/INSTALL-UBUNTU.md).
+
 ### Voraussetzungen
 
 - Node.js 18 oder höher
@@ -150,7 +152,7 @@ pnpm run build
 pnpm start
 ```
 
-Alternativ können Sie für die drei Installationsschritte `pnpm run install:all` verwenden. Für **2.14.2** sind keine manuellen SQL-Schritte erforderlich. Eine ausführliche Bedien- und Update-Anleitung steht unter [`docs/UPDATE-2.14.2.md`](docs/UPDATE-2.14.2.md).
+Alternativ können Sie für die drei Installationsschritte `pnpm run install:all` verwenden. Für **2.14.2** sind keine manuellen SQL-Schritte erforderlich. Die ausführliche Bedien- und Update-Anleitung steht unter [`docs/UPDATE-2.14.2.md`](docs/UPDATE-2.14.2.md); die produktive Ubuntu-Installation und der laufende IT-Betrieb sind unter [`docs/INSTALL-UBUNTU.md`](docs/INSTALL-UBUNTU.md) dokumentiert.
 
 ---
 
