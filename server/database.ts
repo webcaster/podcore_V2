@@ -140,6 +140,8 @@ function initializeSchema(db: any): void {
       sort_order INTEGER NOT NULL DEFAULT 0,
       answered INTEGER NOT NULL DEFAULT 0,
       notes TEXT,
+      is_pool INTEGER NOT NULL DEFAULT 0,
+      source_question_id TEXT DEFAULT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -364,6 +366,52 @@ function initializeSchema(db: any): void {
     created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`); } catch (_) {}
+  // v2.14.4: Strategische Staffelplanung
+  try { db.exec('ALTER TABLE seasons ADD COLUMN target_episode_count INTEGER DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE seasons ADD COLUMN planning_notes TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE episodes ADD COLUMN season_plan_item_id TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec(`CREATE TABLE IF NOT EXISTS season_plan_items (
+    id TEXT PRIMARY KEY,
+    season_id TEXT NOT NULL,
+    position INTEGER,
+    lane TEXT NOT NULL DEFAULT 'lineup',
+    title TEXT NOT NULL,
+    summary TEXT,
+    topics TEXT NOT NULL DEFAULT '[]',
+    episode_format TEXT DEFAULT 'offen',
+    focus_points TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'kandidat',
+    priority TEXT NOT NULL DEFAULT 'mittel',
+    planned_date TEXT,
+    idea_id TEXT,
+    episode_id TEXT,
+    notes TEXT,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
+  try { db.exec(`CREATE TABLE IF NOT EXISTS season_plan_item_partners (
+    id TEXT PRIMARY KEY,
+    plan_item_id TEXT NOT NULL,
+    partner_id TEXT,
+    display_name TEXT NOT NULL,
+    role_label TEXT,
+    confirmation_status TEXT NOT NULL DEFAULT 'offen',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_season_plan_items_season_lane_position ON season_plan_items(season_id, lane, position)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_season_plan_items_idea ON season_plan_items(idea_id)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_season_plan_items_episode ON season_plan_items(episode_id)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_season_plan_partners_item ON season_plan_item_partners(plan_item_id, sort_order)'); } catch (_) {}
+  try { db.exec(`CREATE TABLE IF NOT EXISTS idea_interview_partners (
+    idea_id TEXT NOT NULL,
+    partner_id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (idea_id, partner_id)
+  )`); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_idea_interview_partners_partner ON idea_interview_partners(partner_id)'); } catch (_) {}
   try { db.exec(`CREATE TABLE IF NOT EXISTS podcast_stats (
     id TEXT PRIMARY KEY, episode_id TEXT, date TEXT NOT NULL,
     downloads INTEGER DEFAULT 0, plays INTEGER DEFAULT 0, unique_listeners INTEGER DEFAULT 0,
@@ -1097,6 +1145,11 @@ function initializeSchema(db: any): void {
   // Zeitstempel-Zuordnung für Interviewfragen.
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN timestamp_seconds INTEGER DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN timestamp_source TEXT DEFAULT NULL'); } catch (_) {}
+  // Allgemeiner Fragen-Pool und nachvollziehbare Wiederverwendung bei Interviewpartnern.
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN is_pool INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN source_question_id TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_interview_questions_pool ON interview_questions(is_pool, category, sort_order)'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_interview_questions_source_partner ON interview_questions(source_question_id, partner_id)'); } catch (_) {}
 
   // Zusätzliche, optionale Targeting-Felder für nachvollziehbares Sponsor-Matching.
   try { db.exec("ALTER TABLE sponsors ADD COLUMN target_tags TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}
@@ -1169,6 +1222,7 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
     canViewEditorialPlan: false, canEditEditorialPlan: false,
     canViewInterviews: false, canEditInterviews: false,
     canViewNotes: false, canEditNotes: false,
+    canViewSeasonPlanning: false, canEditSeasonPlanning: false, canExportSeasonPlanning: false, canTransitionSeasonPlanningToEpisode: false,
     canViewEpisodes: false, canCreateEpisodes: false, canEditEpisodes: false, canDeleteEpisodes: false,
     canEditScript: false,
     canViewMedia: false, canUploadMedia: false, canDeleteMedia: false, canCommentMedia: false,
@@ -1214,6 +1268,7 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canViewEditorialPlan: true, canEditEditorialPlan: true,
         canViewInterviews: true, canEditInterviews: true,
         canViewNotes: true, canEditNotes: true,
+        canViewSeasonPlanning: true, canEditSeasonPlanning: true, canExportSeasonPlanning: true, canTransitionSeasonPlanningToEpisode: true,
         canViewEpisodes: true, canCreateEpisodes: true, canEditEpisodes: true,
         canEditScript: true,
         canViewMedia: true, canUploadMedia: true, canCommentMedia: true,
@@ -1242,7 +1297,8 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
     case 'moderator':
       return {
         ...base,
-        canViewIdeas: true, canViewEditorialPlan: true, canViewInterviews: true, canViewNotes: true,
+        canViewIdeas: true, canViewEditorialPlan: true, canViewInterviews: true, canViewNotes: true, canEditNotes: true,
+        canViewSeasonPlanning: true, canExportSeasonPlanning: true,
         canViewEpisodes: true, canEditEpisodes: true, canEditScript: true,
         canViewMedia: true, canCommentMedia: true,
         canViewSponsors: true, canEditSponsors: true, canViewSponsorReports: true,
@@ -1275,6 +1331,7 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
       return {
         ...base,
         canViewEpisodes: true, canCreateEpisodes: true, canEditEpisodes: true,
+        canViewSeasonPlanning: false, canEditSeasonPlanning: false, canExportSeasonPlanning: false, canTransitionSeasonPlanningToEpisode: false,
         canEditScript: true,
         canViewMedia: true, canUploadMedia: true, canDeleteMedia: true, canCommentMedia: true,
         canViewSponsors: true, canEditSponsors: true, canViewSponsorReports: true,

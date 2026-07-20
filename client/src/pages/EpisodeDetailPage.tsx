@@ -196,6 +196,7 @@ export default function EpisodeDetailPage() {
   const [workflowEnabled, setWorkflowEnabled] = useState(false);
   const [isImportingHub, setIsImportingHub] = useState(false);
   const [linkedIdeaId, setLinkedIdeaId] = useState<string | null>(null);
+  const [linkedPlanItemId, setLinkedPlanItemId] = useState<string | null>(null);
   const [hubSyncState, setHubSyncState] = useState<{ at: string; scope: string; changedBy?: string } | null>(null);
 
   // PDF Layout & Dateiname
@@ -587,6 +588,10 @@ export default function EpisodeDetailPage() {
 
   useEffect(() => {
     if (!id) return;
+    const params = new URLSearchParams(window.location.search);
+    const planItemId = params.get('planItemId');
+    if (planItemId) setLinkedPlanItemId(planItemId);
+
     Promise.all([
       episodesApi.get(id),
       adminApi.getSettings().catch(() => null),
@@ -1006,7 +1011,21 @@ export default function EpisodeDetailPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/episodes')} className="p-2 hover:bg-obsidian-800 rounded-lg text-text-muted transition-colors"><ArrowLeft size={20} /></button>
+          <button
+            onClick={() => {
+              if (linkedPlanItemId) {
+                const params = new URLSearchParams();
+                params.set('tab', 'season-planning');
+                if (episode?.seasonId) params.set('seasonId', episode.seasonId);
+                navigate(`/editorial?${params.toString()}`);
+              } else {
+                navigate('/episodes');
+              }
+            }}
+            className="p-2 hover:bg-obsidian-800 rounded-lg text-text-muted transition-colors"
+          >
+            <ArrowLeft size={20} />
+          </button>
           <div>
             <h1 className="text-2xl font-bold text-text-primary flex items-center gap-3">
               {episode.number ? `#${episode.number}` : 'Neu'} — {form.title || 'Unbenannte Episode'}
@@ -1072,6 +1091,30 @@ export default function EpisodeDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Planung-Banner */}
+      {linkedPlanItemId && (
+        <div className="flex items-center justify-between p-3 bg-accent-purple/10 border border-accent-purple/30 rounded-lg">
+          <div className="flex items-center gap-3">
+            <Target className="text-accent-purple" size={18} />
+            <div>
+              <p className="text-sm font-bold text-accent-purple">Strategische Staffelplanung</p>
+              <p className="text-[10px] text-text-muted">Diese Episode wurde aus der strategischen Planung erstellt und ist mit ihr verknüpft.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              const params = new URLSearchParams();
+              params.set('tab', 'season-planning');
+              if (episode?.seasonId) params.set('seasonId', episode.seasonId);
+              navigate(`/editorial?${params.toString()}`);
+            }}
+            className="text-xs px-3 py-1.5 bg-accent-purple/20 text-accent-purple hover:bg-accent-purple/30 rounded-md transition-colors flex items-center gap-1.5"
+          >
+            <ArrowLeft size={12} /> Zurück zur Planung
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-obsidian-800 p-1 rounded-lg w-fit flex-wrap">

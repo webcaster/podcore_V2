@@ -20,25 +20,33 @@ const SESSION_QUERY = `
 
 /**
  * Berechtigungen auflösen:
- * 1. Wenn user.permissions nicht leer → diese verwenden
- * 2. Sonst: Berechtigungen aus der roles-Tabelle laden (nach role-Name)
- * Admin bekommt immer leeres Objekt – wird in requirePermission gesondert behandelt
+ * 1. Die Rollenrechte liefern die sichere Basis.
+ * 2. Gespeicherte Benutzerrechte überschreiben nur explizit gesetzte Werte.
+ *
+ * Dadurch erhalten bestehende Konten neue Rechte eines Updates automatisch,
+ * ohne absichtlich konfigurierte Einzelabweichungen zu verlieren.
+ * Admin wird weiterhin in requirePermission gesondert behandelt.
  */
 function resolvePermissions(userPermissionsJson: string, role: string): Record<string, boolean> {
   if (role === 'admin') return {};
-  try {
-    const userPerms = JSON.parse(userPermissionsJson || '{}');
-    if (userPerms && Object.keys(userPerms).length > 0) return userPerms;
-  } catch { /* ignore */ }
+
+  let rolePerms: Record<string, boolean> = {};
   try {
     const db = getDb();
     const roleRow = db.get('SELECT permissions FROM roles WHERE name = ?', [role]) as any;
     if (roleRow?.permissions) {
-      const rolePerms = JSON.parse(roleRow.permissions);
-      if (rolePerms && Object.keys(rolePerms).length > 0) return rolePerms;
+      const parsed = JSON.parse(roleRow.permissions);
+      if (parsed && typeof parsed === 'object') rolePerms = parsed;
     }
-  } catch { /* ignore */ }
-  return {};
+  } catch { /* keep empty role defaults */ }
+
+  let userPerms: Record<string, boolean> = {};
+  try {
+    const parsed = JSON.parse(userPermissionsJson || '{}');
+    if (parsed && typeof parsed === 'object') userPerms = parsed;
+  } catch { /* keep empty user overrides */ }
+
+  return { ...rolePerms, ...userPerms };
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {

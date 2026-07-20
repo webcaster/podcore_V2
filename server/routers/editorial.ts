@@ -68,6 +68,27 @@ function normalizeTextBlock(row: any): any {
   };
 }
 
+function normalizeInterviewQuestion(row: any): any {
+  return {
+    ...row,
+    answered: row.answered === 1,
+    approved: row.approved === 1,
+    approvedBy: row.approved_by,
+    approvedAt: row.approved_at,
+    partnerId: row.partner_id,
+    episodeId: row.episode_id,
+    ideaId: row.idea_id,
+    isPool: row.is_pool === 1,
+    sourceQuestionId: row.source_question_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function cleanQuestionPoolText(value: unknown, maxLength: number): string {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
 // ============================================================
 // IDEAS
 // ============================================================
@@ -725,69 +746,372 @@ router.delete('/interviews/partners/:id', requirePermission('canEditInterviews')
   return res.json({ success: true, message: 'Partner gelöscht' });
 });
 
+// Allgemeiner Fragen-Pool
+router.get('/interviews/question-pool', requirePermission('canViewInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const category = cleanQuestionPoolText(req.query.category, 120);
+  const search = cleanQuestionPoolText(req.query.search, 300);
+  let query = 'SELECT * FROM interview_questions WHERE is_pool = 1';
+  const params: any[] = [];
+
+  if (category) {
+    query += ' AND COALESCE(category, ?) = ?';
+    params.push('Allgemein', category);
+  }
+  if (search) {
+    query += ' AND (question LIKE ? OR COALESCE(notes, ?) LIKE ? OR COALESCE(category, ?) LIKE ?)';
+    const term = `%${search}%`;
+    params.push(term, '', term, '', term);
+  }
+  query += " ORDER BY LOWER(COALESCE(NULLIF(TRIM(category), ''), 'Allgemein')) ASC, sort_order ASC, created_at ASC, question ASC";
+
+  const questions = db.all(query, params).map(normalizeInterviewQuestion);
+  return res.json({ success: true, data: questions });
+});
+
+router.get('/interviews/question-pool/export-pdf', requirePermission('canViewInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const category = cleanQuestionPoolText(req.query.category, 120);
+  const search = cleanQuestionPoolText(req.query.search, 300);
+  const requestedIds = cleanQuestionPoolText(req.query.questionIds, 20000)
+    .split(',')
+    .map((id: string) => id.trim())
+    .filter(Boolean)
+    .slice(0, 500);
+
+  let query = 'SELECT * FROM interview_questions WHERE is_pool = 1';
+  const params: any[] = [];
+  if (category) {
+    query += ' AND COALESCE(NULLIF(TRIM(category), ?), ?) = ?';
+    params.push('', 'Allgemein', category);
+  }
+  if (search) {
+    query += ' AND (question LIKE ? OR COALESCE(notes, ?) LIKE ? OR COALESCE(category, ?) LIKE ?)';
+    const term = `%${search}%`;
+    params.push(term, '', term, '', term);
+  }
+  if (requestedIds.length > 0) {
+    query += ` AND id IN (${requestedIds.map(() => '?').join(', ')})`;
+    params.push(...requestedIds);
+  }
+  query += " ORDER BY LOWER(COALESCE(NULLIF(TRIM(category), ''), 'Allgemein')) ASC, sort_order ASC, created_at ASC, question ASC";
+
+  const questions = db.all(query, params) as any[];
+  if (!questions.length) {
+    return res.status(404).json({ success: false, error: 'Keine Pool-Fragen für den PDF-Export gefunden' });
+  }
+
+  try {
+    const PDFDocument = require('pdfkit');
+    const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark } = require('../pdfLayouts');
+    const layoutId = typeof req.query.layoutId === 'string' ? req.query.layoutId : undefined;
+    const layout = layoutId ? (getLayoutById(layoutId) || getDefaultLayoutForType('question_pool')) : getDefaultLayoutForType('question_pool');
+    const margin = layout.pageMargin;
+    const documentTitle = cleanQuestionPoolText(req.query.documentTitle, 160) || 'Allgemeiner Fragen-Pool';
+    const showNotes = layout.sections.showQuestionPoolNotes !== false;
+
+    const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+    let appSettings: any = {};
+    try { appSettings = settingsRow ? JSON.parse(settingsRow.value) : {}; } catch (_) { appSettings = {}; }
+    const podcastName = appSettings?.branding?.podcastName || appSettings?.general?.podcastName || 'PodCore';
+    const brandingDir = path.join(DATA_DIR, 'branding');
+    let logoPath: string | null = null;
+    if (fs.existsSync(brandingDir)) {
+      const logoFile = fs.readdirSync(brandingDir).find((file: string) => file.startsWith('logo.'));
+      if (logoFile) logoPath = path.join(brandingDir, logoFile);
+    }
+
+    const doc = new PDFDocument({
+      margin,
+      size: layout.pageSize,
+      layout: layout.pageOrientation === 'landscape' ? 'landscape' : 'portrait',
+      autoFirstPage: true,
+      bufferPages: true,
+    });
+    const safeTitle = documentTitle
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'Fragen-Pool';
+    const filename = `${safeTitle}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    doc.pipe(res);
+
+    let drawingHeader = false;
+    const drawHeader = () => {
+      drawingHeader = true;
+      renderPdfHeader(doc, layout, { podcastName, documentTitle, logoPath });
+      drawingHeader = false;
+    };
+    doc.on('pageAdded', () => {
+      if (!drawingHeader) drawHeader();
+    });
+    drawHeader();
+
+    const contentWidth = doc.page.width - margin * 2;
+    const contentBottom = () => doc.page.height - margin - 34;
+    const ensureSpace = (height: number) => {
+      if (doc.y + height > contentBottom()) doc.addPage();
+    };
+
+    const categories = new Map<string, any[]>();
+    for (const question of questions) {
+      const topic = String(question.category || '').trim() || 'Allgemein';
+      if (!categories.has(topic)) categories.set(topic, []);
+      categories.get(topic)!.push(question);
+    }
+
+    doc.font(`${layout.typography.fontFamily}-Bold`)
+      .fontSize(layout.typography.subtitleSize + 2)
+      .fillColor(layout.colors.primary)
+      .text(documentTitle, { align: 'center' });
+    doc.moveDown(0.35);
+    doc.font(layout.typography.fontFamily)
+      .fontSize(layout.typography.smallSize)
+      .fillColor(layout.colors.muted)
+      .text(`${questions.length} ${questions.length === 1 ? 'Frage' : 'Fragen'} · ${categories.size} ${categories.size === 1 ? 'Thema' : 'Themen'} · Export vom ${new Date().toLocaleDateString('de-DE')}`, { align: 'center' });
+    doc.moveDown(1.1);
+
+    for (const [topic, topicQuestions] of categories.entries()) {
+      ensureSpace(52);
+      const headingY = doc.y;
+      doc.roundedRect(margin, headingY, contentWidth, 28, 5).fill(layout.colors.primary);
+      doc.font(`${layout.typography.fontFamily}-Bold`)
+        .fontSize(layout.typography.headingSize)
+        .fillColor(layout.colors.headerText)
+        .text(topic, margin + 10, headingY + 7, { width: contentWidth - 54, lineBreak: false, ellipsis: true });
+      doc.font(layout.typography.fontFamily)
+        .fontSize(layout.typography.smallSize)
+        .fillColor(layout.colors.headerText)
+        .text(String(topicQuestions.length), margin + contentWidth - 36, headingY + 8, { width: 26, align: 'right', lineBreak: false });
+      doc.y = headingY + 38;
+
+      topicQuestions.forEach((question: any, index: number) => {
+        const questionText = String(question.question || '').trim();
+        const notesText = showNotes ? String(question.notes || '').trim() : '';
+        doc.font(`${layout.typography.fontFamily}-Bold`).fontSize(layout.typography.bodySize);
+        const questionHeight = doc.heightOfString(questionText, { width: contentWidth - 30, lineGap: 1 });
+        let notesHeight = 0;
+        if (notesText) {
+          doc.font(layout.typography.fontFamily).fontSize(layout.typography.smallSize);
+          notesHeight = doc.heightOfString(notesText, { width: contentWidth - 30, lineGap: 1 }) + 8;
+        }
+        ensureSpace(Math.min(questionHeight + notesHeight + 22, contentBottom() - doc.y));
+
+        const itemY = doc.y;
+        doc.circle(margin + 10, itemY + 8, 8).fill(layout.colors.secondary);
+        doc.font(`${layout.typography.fontFamily}-Bold`)
+          .fontSize(layout.typography.smallSize)
+          .fillColor('#ffffff')
+          .text(String(index + 1), margin + 2, itemY + 4.5, { width: 16, align: 'center', lineBreak: false });
+        doc.font(`${layout.typography.fontFamily}-Bold`)
+          .fontSize(layout.typography.bodySize)
+          .fillColor(layout.colors.text)
+          .text(questionText, margin + 28, itemY, { width: contentWidth - 28, lineGap: 1 });
+        if (notesText) {
+          doc.moveDown(0.3);
+          doc.font(layout.typography.fontFamily)
+            .fontSize(layout.typography.smallSize)
+            .fillColor(layout.colors.muted)
+            .text(`Hinweis: ${notesText}`, margin + 28, doc.y, { width: contentWidth - 28, lineGap: 1 });
+        }
+        doc.moveDown(0.65);
+        const dividerY = doc.y;
+        if (dividerY < contentBottom()) {
+          doc.moveTo(margin + 28, dividerY).lineTo(margin + contentWidth, dividerY).lineWidth(0.35).strokeColor(layout.colors.muted).opacity(0.25).stroke().opacity(1);
+          doc.y = dividerY + 8;
+        }
+      });
+      doc.moveDown(0.35);
+    }
+
+    const range = doc.bufferedPageRange();
+    for (let pageIndex = range.start; pageIndex < range.start + range.count; pageIndex += 1) {
+      doc.switchToPage(pageIndex);
+      renderWatermark(doc, layout);
+      renderPdfFooter(doc, layout, { podcastName, pageNum: pageIndex + 1, totalPages: range.count });
+    }
+    doc.end();
+  } catch (error) {
+    console.error('[ERROR] Question pool PDF export failed:', error);
+    if (!res.headersSent) return res.status(500).json({ success: false, error: 'Fragen-Pool konnte nicht als PDF exportiert werden' });
+    return res.end();
+  }
+});
+
+router.post('/interviews/question-pool', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const id = uuidv4();
+  const question = cleanQuestionPoolText(req.body.question, 2000);
+  const category = cleanQuestionPoolText(req.body.category, 120) || 'Allgemein';
+  const notes = cleanQuestionPoolText(req.body.notes, 5000);
+  const order = Number.isFinite(Number(req.body.order)) ? Math.max(0, Math.trunc(Number(req.body.order))) : 0;
+
+  if (!question) return res.status(400).json({ success: false, error: 'Frage erforderlich' });
+
+  db.run(
+    'INSERT INTO interview_questions (id, partner_id, episode_id, question, category, sort_order, notes, is_pool, source_question_id) VALUES (?, NULL, NULL, ?, ?, ?, ?, 1, NULL)',
+    [id, question, category, order, notes || null]
+  );
+  const created = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 1', [id]) as any;
+  return res.status(201).json({ success: true, data: normalizeInterviewQuestion(created), message: 'Frage zum allgemeinen Pool hinzugefügt' });
+});
+
+router.put('/interviews/question-pool/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const existing = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 1', [req.params.id]) as any;
+  if (!existing) return res.status(404).json({ success: false, error: 'Pool-Frage nicht gefunden' });
+
+  const question = req.body.question === undefined ? existing.question : cleanQuestionPoolText(req.body.question, 2000);
+  const category = req.body.category === undefined ? (existing.category || 'Allgemein') : (cleanQuestionPoolText(req.body.category, 120) || 'Allgemein');
+  const notes = req.body.notes === undefined ? existing.notes : (cleanQuestionPoolText(req.body.notes, 5000) || null);
+  const order = req.body.order === undefined || !Number.isFinite(Number(req.body.order))
+    ? existing.sort_order
+    : Math.max(0, Math.trunc(Number(req.body.order)));
+
+  if (!question) return res.status(400).json({ success: false, error: 'Frage erforderlich' });
+
+  db.run(
+    "UPDATE interview_questions SET question = ?, category = ?, sort_order = ?, notes = ?, updated_at = datetime('now') WHERE id = ? AND is_pool = 1",
+    [question, category, order, notes, req.params.id]
+  );
+  const updated = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
+  return res.json({ success: true, data: normalizeInterviewQuestion(updated), message: 'Pool-Frage aktualisiert' });
+});
+
+router.post('/interviews/question-pool/assign', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const partnerId = cleanQuestionPoolText(req.body.partnerId, 100);
+  const questionIds = Array.isArray(req.body.questionIds)
+    ? Array.from(new Set(req.body.questionIds.filter((id: unknown) => typeof id === 'string' && id.trim()).map((id: string) => id.trim()))).slice(0, 500)
+    : [];
+
+  if (!partnerId) return res.status(400).json({ success: false, error: 'Interview-Partner erforderlich' });
+  if (!questionIds.length) return res.status(400).json({ success: false, error: 'Mindestens eine Pool-Frage auswählen' });
+
+  const partner = db.get('SELECT id, name FROM interview_partners WHERE id = ?', [partnerId]) as any;
+  if (!partner) return res.status(404).json({ success: false, error: 'Interview-Partner nicht gefunden' });
+
+  let assigned = 0;
+  let skipped = 0;
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    for (const questionId of questionIds) {
+      const source = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 1', [questionId]) as any;
+      if (!source) {
+        skipped += 1;
+        continue;
+      }
+      const duplicate = db.get(
+        'SELECT id FROM interview_questions WHERE partner_id = ? AND source_question_id = ? LIMIT 1',
+        [partnerId, questionId]
+      ) as any;
+      if (duplicate) {
+        skipped += 1;
+        continue;
+      }
+      db.run(
+        'INSERT INTO interview_questions (id, partner_id, episode_id, question, category, sort_order, notes, is_pool, source_question_id) VALUES (?, ?, NULL, ?, ?, ?, ?, 0, ?)',
+        [uuidv4(), partnerId, source.question, source.category || 'Allgemein', source.sort_order || 0, source.notes || null, source.id]
+      );
+      assigned += 1;
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    console.error('[ERROR] Question pool assignment failed:', error);
+    return res.status(500).json({ success: false, error: 'Fragen konnten nicht zugeordnet werden' });
+  }
+
+  return res.json({
+    success: true,
+    data: { assigned, skipped, partnerId, partnerName: partner.name },
+    message: assigned > 0 ? `${assigned} Frage${assigned === 1 ? '' : 'n'} zugeordnet` : 'Alle ausgewählten Fragen waren bereits zugeordnet',
+  });
+});
+
+router.delete('/interviews/question-pool/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const existing = db.get('SELECT id FROM interview_questions WHERE id = ? AND is_pool = 1', [req.params.id]) as any;
+  if (!existing) return res.status(404).json({ success: false, error: 'Pool-Frage nicht gefunden' });
+
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    db.run('UPDATE interview_questions SET source_question_id = NULL WHERE source_question_id = ?', [req.params.id]);
+    db.run('DELETE FROM interview_questions WHERE id = ? AND is_pool = 1', [req.params.id]);
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    console.error('[ERROR] Question pool deletion failed:', error);
+    return res.status(500).json({ success: false, error: 'Pool-Frage konnte nicht gelöscht werden' });
+  }
+  return res.json({ success: true, message: 'Pool-Frage gelöscht; bestehende Partnerzuordnungen bleiben erhalten' });
+});
+
 // Interview Questions
 router.get('/interviews/questions', requirePermission('canViewInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { partnerId, episodeId } = req.query;
-  let query = 'SELECT * FROM interview_questions WHERE 1=1';
+  const { partnerId, episodeId, ideaId } = req.query;
+  let query = 'SELECT * FROM interview_questions WHERE is_pool = 0';
   const params: any[] = [];
 
   if (partnerId) { query += ' AND partner_id = ?'; params.push(partnerId); }
   if (episodeId) { query += ' AND episode_id = ?'; params.push(episodeId); }
+  if (ideaId) { query += ' AND idea_id = ?'; params.push(ideaId); }
   query += ' ORDER BY sort_order ASC';
 
-  const questions = db.all(query, params).map((r: any) => ({
-    ...r, approved: r.approved === 1,
-    approvedBy: r.approved_by, approvedAt: r.approved_at,
-    partnerId: r.partner_id, episodeId: r.episode_id,
-    createdAt: r.created_at, updatedAt: r.updated_at,
-  }));
+  const questions = db.all(query, params).map(normalizeInterviewQuestion);
   return res.json({ success: true, data: questions });
 });
 
 router.post('/interviews/questions', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const id = uuidv4();
-  const { partnerId, episodeId, question, category, order = 0, notes } = req.body;
+  const { partnerId, episodeId, ideaId, question, category, order = 0, notes } = req.body;
 
   if (!question) return res.status(400).json({ success: false, error: 'Frage erforderlich' });
 
-  db.run('INSERT INTO interview_questions (id, partner_id, episode_id, question, category, sort_order, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [id, partnerId || null, episodeId || null, question, category || null, order, notes || null]);
+  db.run('INSERT INTO interview_questions (id, partner_id, episode_id, idea_id, question, category, sort_order, notes, is_pool) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)',
+    [id, partnerId || null, episodeId || null, ideaId || null, question, category || null, order, notes || null]);
 
-  const q = db.get('SELECT * FROM interview_questions WHERE id = ?', [id]) as any;
+  const q = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 0', [id]) as any;
   broadcastEditorialResourceUpdated(db, q, req, 'interview-questions');
-  return res.status(201).json({ success: true, data: { ...q, answered: q.answered === 1, partnerId: q.partner_id, episodeId: q.episode_id, createdAt: q.created_at } });
+  return res.status(201).json({ success: true, data: normalizeInterviewQuestion(q) });
 });
 
 router.put('/interviews/questions/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const existing = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
+  if (!existing) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
+
   const { question, category, order, notes } = req.body;
+  const partnerId = req.body.partnerId === undefined ? existing.partner_id : (req.body.partnerId || null);
+  const episodeId = req.body.episodeId === undefined ? existing.episode_id : (req.body.episodeId || null);
+  const ideaId = req.body.ideaId === undefined ? existing.idea_id : (req.body.ideaId || null);
 
   db.run(
-    `UPDATE interview_questions SET question = COALESCE(?, question), category = ?, sort_order = COALESCE(?, sort_order), notes = ?, updated_at = datetime('now') WHERE id = ?`,
-    [question ?? null, category ?? null, order ?? null, notes ?? null, req.params.id]
+    `UPDATE interview_questions
+     SET question = COALESCE(?, question), category = ?, sort_order = COALESCE(?, sort_order), notes = ?,
+         partner_id = ?, episode_id = ?, idea_id = ?, updated_at = datetime('now')
+     WHERE id = ? AND is_pool = 0`,
+    [question ?? null, category ?? null, order ?? null, notes ?? null, partnerId, episodeId, ideaId, req.params.id]
   );
 
-  const q = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
-  if (!q) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
+  const q = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
   broadcastEditorialResourceUpdated(db, q, req, 'interview-questions');
-  return res.json({ success: true, data: {
-    ...q, approved: q.approved === 1,
-    approvedBy: q.approved_by, approvedAt: q.approved_at,
-    partnerId: q.partner_id, episodeId: q.episode_id,
-    createdAt: q.created_at, updatedAt: q.updated_at,
-  }});
+  return res.json({ success: true, data: normalizeInterviewQuestion(q) });
 });
 
 // POST /api/editorial/interviews/questions/:id/approve — Moderator gibt Frage frei
 router.post('/interviews/questions/:id/approve', requirePermission('canApproveInterviewQuestions') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const q = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
+  const q = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
   if (!q) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
 
   db.run(
-    `UPDATE interview_questions SET approved = 1, approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+    `UPDATE interview_questions SET approved = 1, approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND is_pool = 0`,
     [req.user!.id, req.params.id]
   );
 
@@ -804,11 +1128,11 @@ router.post('/interviews/questions/:id/approve', requirePermission('canApproveIn
 // POST /api/editorial/interviews/questions/:id/revoke — Freigabe zurückziehen
 router.post('/interviews/questions/:id/revoke', requirePermission('canApproveInterviewQuestions') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const q = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
+  const q = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
   if (!q) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
 
   db.run(
-    `UPDATE interview_questions SET approved = 0, approved_by = NULL, approved_at = NULL, updated_at = datetime('now') WHERE id = ?`,
+    `UPDATE interview_questions SET approved = 0, approved_by = NULL, approved_at = NULL, updated_at = datetime('now') WHERE id = ? AND is_pool = 0`,
     [req.params.id]
   );
 
@@ -824,7 +1148,9 @@ router.post('/interviews/questions/:id/revoke', requirePermission('canApproveInt
 
 router.delete('/interviews/questions/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  db.run('DELETE FROM interview_questions WHERE id = ?', [req.params.id]);
+  const existing = db.get('SELECT id FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
+  if (!existing) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
+  db.run('DELETE FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]);
   return res.json({ success: true, message: 'Frage gelöscht' });
 });
 
@@ -1150,7 +1476,13 @@ router.get('/ideas/:id/full', requirePermission('canViewIdeas') as any, (req: Au
   if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
   const notes = db.all('SELECT * FROM idea_notes WHERE idea_id = ? ORDER BY created_at ASC', [idea.id]) as any[];
   const checklists = db.all('SELECT * FROM idea_checklists WHERE idea_id = ? ORDER BY sort_order ASC', [idea.id]) as any[];
-  const partners = db.all('SELECT * FROM interview_partners WHERE idea_id = ? ORDER BY created_at ASC', [idea.id]) as any[];
+  const partners = db.all(`
+    SELECT DISTINCT p.*
+    FROM interview_partners p
+    LEFT JOIN idea_interview_partners ip ON ip.partner_id = p.id AND ip.idea_id = ?
+    WHERE p.idea_id = ? OR ip.idea_id = ?
+    ORDER BY p.created_at ASC
+  `, [idea.id, idea.id, idea.id]) as any[];
   const questions = db.all(
     'SELECT q.*, p.name as partner_name FROM interview_questions q LEFT JOIN interview_partners p ON q.partner_id = p.id WHERE q.idea_id = ? ORDER BY q.sort_order ASC',
     [idea.id]

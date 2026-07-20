@@ -39,7 +39,9 @@ export default function SettingsPage() {
   const { user, can, showSuccess, showError, refreshUser, refreshPodcastProfile } = useApp();
 
   type TabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'app' | 'update';
-  const [activeTab, setActiveTab] = useState<TabKey>('profile');
+  const [activeTab, setActiveTab] = useState<TabKey>(() =>
+    new URLSearchParams(window.location.search).get('tab') === 'update' ? 'update' : 'profile'
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
@@ -54,6 +56,7 @@ export default function SettingsPage() {
   const [isApplying, setIsApplying] = useState(false);
   const [applyLog, setApplyLog] = useState<string[]>([]);
   const [applyDone, setApplyDone] = useState(false);
+  const [verifiedUpdateVersion, setVerifiedUpdateVersion] = useState<string | null>(null);
   // GitHub Update Check
   const [githubCheck, setGithubCheck] = useState<any>(null);
   const [isCheckingGithub, setIsCheckingGithub] = useState(false);
@@ -98,15 +101,41 @@ export default function SettingsPage() {
     finally { setIsUploading(false); }
   };
 
+  const waitForUpdatedServer = async (targetVersion: string, timeoutMs = 90000) => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      await new Promise(resolve => window.setTimeout(resolve, 1500));
+      try {
+        const status = await updateApi.getStatus();
+        if (status.currentVersion === targetVersion && status.updateState?.state === 'completed') return status;
+      } catch {
+        // Während des Neustarts ist die API kurzzeitig nicht erreichbar.
+      }
+    }
+    throw new Error(`Der Neustart wurde nicht innerhalb von ${Math.round(timeoutMs / 1000)} Sekunden mit Version ${targetVersion} bestätigt.`);
+  };
+
   const handleApplyUpdate = async () => {
     if (!uploadResult?.updateId) return;
     setIsApplying(true);
-    setApplyLog(['Update wird angewendet...']);
+    setApplyDone(false);
+    setVerifiedUpdateVersion(null);
+    setApplyLog(['Update wird im Staging geprüft und anschließend angewendet...']);
     try {
       const result = await updateApi.applyUpdate(uploadResult.updateId);
-      setApplyLog(result.log || ['Update abgeschlossen']);
+      const targetVersion = String(result.targetVersion || uploadResult.updateVersion || '');
+      setApplyLog(result.log || ['Update-Dateien wurden übernommen.']);
+      if (!result.restartScheduled) {
+        throw new Error(result.message || `Version ${targetVersion} wurde übernommen, der Dienst muss jedoch manuell neu gestartet werden.`);
+      }
+      setApplyLog(prev => [...prev, `Neustart läuft; Version ${targetVersion} wird überprüft...`]);
+      const verifiedStatus = await waitForUpdatedServer(targetVersion);
+      setUpdateStatus(verifiedStatus);
+      setVerifiedUpdateVersion(targetVersion);
       setApplyDone(true);
-      showSuccess('Update erfolgreich! Server wird neu gestartet...');
+      setApplyLog(prev => [...prev, `Version ${targetVersion} läuft und wurde vom Server bestätigt.`]);
+      showSuccess(`Update auf Version ${targetVersion} erfolgreich verifiziert.`);
+      window.setTimeout(() => window.location.reload(), 2500);
     } catch (err: any) {
       showError(err.message);
       setApplyLog(prev => [...prev, `Fehler: ${err.message}`]);
@@ -1329,7 +1358,7 @@ export default function SettingsPage() {
                   {applyDone && (
                     <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 flex items-center gap-2">
                       <CheckCircle size={15} className="text-green-400" />
-                      <p className="text-green-400 text-sm font-semibold">Update erfolgreich! Seite in 5 Sekunden neu laden...</p>
+                      <p className="text-green-400 text-sm font-semibold">Version {verifiedUpdateVersion} läuft und wurde bestätigt. Seite wird neu geladen...</p>
                     </div>
                   )}
                 </div>
@@ -1344,9 +1373,9 @@ export default function SettingsPage() {
               <div>
                 <p className="text-accent-blue font-semibold text-sm">Hinweis zum Update-Prozess</p>
                 <p className="text-text-muted text-xs mt-1">
-                  Updates werden als ZIP-Dateien bereitgestellt und enthalten nur die geänderten Programmdateien.
+                  Updates werden zunächst in einem isolierten Staging-Verzeichnis geprüft und erst danach rollbackfähig übernommen.
                   Datenbank, Uploads, Branding und alle persönlichen Einstellungen bleiben vollständig erhalten.
-                  Nach dem Update startet der Server automatisch neu.
+                  Erfolg wird erst gemeldet, nachdem der Server neu gestartet wurde und die Zielversion bestätigt hat.
                 </p>
               </div>
             </div>

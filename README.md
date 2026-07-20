@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.14.2**
+**Aktuelle Version: 2.14.4**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,12 +13,16 @@
 ### 📝 Redaktions-Hub & Ideenpool
 - Sammeln von Themenideen, Recherchen und Links
 - Verwaltung von Interview-Gästen inkl. Fragenkatalog
+- Allgemeiner, thematisch gruppierter Fragen-Pool mit Suche, Auswahl, Zuweisung, Kopieren und PDF-Export
 - Checklisten und Notizen pro Idee
 - Nahtlose Übernahme von Ideen in fertige Episoden
 - Übernahme verknüpfter Themenentwürfe in Beschreibung, Show Notes, Notizen oder Script-Blöcke
 - Durchsuchbare globale und ideenbezogene Textbausteine direkt im Episoden-Editor
 - Freie Texte als eigenständiger Recherchetyp ohne erforderliche URL
 - Vollständiger Themenwerkstatt-Abschnitt im Ideenmappen-PDF mit allen befüllten Entwurfsfeldern
+- Strategische Staffelplanung mit Reihenfolge, Alternativen, Themen, Formaten, Partnern, Rollen, Status und Staffelziel
+- Direkter Übergang bestätigter Planpositionen in Ideenmappe und Episoden-Editor ohne doppelte Datenpflege
+- Staffelplan-PDF mit vorhandenem CI-Layout, Dokumenttitel, Reihenfolge und Alternativen
 
 ### 🎙️ Episoden-Editor
 - Rich-Text-Editor für Show-Notes und Skripte
@@ -27,6 +31,7 @@
 - Erfassung technischer Daten (Mikrofone, Interface, DAW, Lizenzen)
 - Integrierte Medien-Bibliothek für Audio-Assets
 - **PDF-Export**: Professionelle Tabellen-Skripte für die Aufnahme
+- Verknüpfte Staffelplan-Episoden mit Herkunftshinweis und Rücksprung zur strategischen Planung
 
 ### 💰 Sponsoren & Monetarisierung (v2)
 - CRM für Sponsoren und Werbepartner
@@ -39,6 +44,7 @@
 - Automatische Abrechnung mit Preisanpassungen und variabler Hörerbeteiligung
 - Vollständige Preislisten-PDFs mit Beschreibung, Präsentationstext, allen Preismodellen, Währung, Farbe, Exklusivität und Status
 - Konfigurierbare Sponsor-Dossiers mit Stammdaten, Verträgen, Buchungen, Abrechnung und optionalen Notizen
+- Layouttreue, mehrseitige Einzel- und Sammelbestätigungen für Sponsor-Buchungen mit robustem Text- und Seitenumbruch
 - Leistungsübersichten und Rechnungs-Export
 
 ### 📅 Kalender & Planung
@@ -54,7 +60,7 @@
 
 ### 👥 Team & Berechtigungen
 - Rollen-basiertes Zugriffssystem (Admin, Redakteur, Moderator, Gast)
-- Granulare Rechte für jeden Bereich der App
+- Granulare Rechte für jeden Bereich der App, einschließlich getrenntem Lesen, Bearbeiten, PDF-Export und Editorübergang in der Staffelplanung
 - Freigabe-Workflows für Episoden (Approval-System)
 - Integrierter Team-Chat
 
@@ -137,9 +143,11 @@ Die Startskripte starten ausschließlich den vorhandenen Produktions-Build. Sie 
 
 ## 🔄 Updates
 
-PodCore verfügt über ein integriertes Update-System. Neue Versionen können direkt über die Einstellungen in der App als ZIP-Datei hochgeladen werden. Die App entpackt das Update, führt notwendige Datenbank-Migrationen durch und startet sich selbst neu.
+> **Wichtig für Version 2.14.2 und älter:** Der dort enthaltene ZIP-Updatehandler ist selbst von dem in 2.14.3 behobenen Fehler betroffen und kann Erfolg melden, ohne die laufende Anwendung zu ersetzen. Installieren Sie **2.14.3 einmalig manuell** gemäß [`docs/UPDATE-2.14.3.md`](docs/UPDATE-2.14.3.md). Aktualisieren Sie anschließend auf 2.14.4. Den integrierten ZIP-Weg verwenden Sie erst, wenn PodCore mindestens Version 2.14.3 meldet.
 
-Aktuelle Release-ZIPs finden Sie unter [Releases](https://github.com/webcaster/podcore_V2/releases). Vor jedem Update sollte das persistente PodCore-Datenverzeichnis gesichert werden.
+Ab Version **2.14.3** verfügt PodCore unter **Einstellungen → App-Update** über ein integriertes, verifiziertes Update-System. Neue Versionen können dort als ZIP-Datei hochgeladen und zunächst geprüft werden. PodCore entpackt und baut das Paket in einem getrennten Staging-Bereich, installiert Abhängigkeiten nicht interaktiv, sichert den bisherigen Programmstand und übernimmt nur das vorbereitete Ergebnis. Der Vorgang gilt erst als erfolgreich, wenn der neu gestartete Server die erwartete Zielversion bestätigt; bei Fehlern wird der vorherige Programmstand wiederhergestellt.
+
+Aktuelle Release-ZIPs finden Sie unter [Releases](https://github.com/webcaster/podcore_V2/releases). Vor jedem Update muss das persistente PodCore-Datenverzeichnis extern gesichert werden.
 
 Für ein manuelles Update installieren Sie nach `git pull` die Abhängigkeiten in **allen drei Paketverzeichnissen** erneut und erstellen anschließend den Produktions-Build:
 
@@ -152,7 +160,7 @@ pnpm run build
 pnpm start
 ```
 
-Alternativ können Sie für die drei Installationsschritte `pnpm run install:all` verwenden. Für **2.14.2** sind keine manuellen SQL-Schritte erforderlich. Die ausführliche Bedien- und Update-Anleitung steht unter [`docs/UPDATE-2.14.2.md`](docs/UPDATE-2.14.2.md); die produktive Ubuntu-Installation und der laufende IT-Betrieb sind unter [`docs/INSTALL-UBUNTU.md`](docs/INSTALL-UBUNTU.md) dokumentiert.
+Alternativ können Sie für die drei Installationsschritte `pnpm run install:all` verwenden. Die Datenbankerweiterungen für **2.14.4** werden beim Start automatisch und idempotent angelegt; manuelle SQL-Schritte sind nicht erforderlich. Die vollständige Bedien-, Rollen-, PDF-, Update-, Prüf- und Rückfallanleitung steht unter [`docs/UPDATE-2.14.4.md`](docs/UPDATE-2.14.4.md); die produktive Ubuntu-Installation und der laufende IT-Betrieb sind unter [`docs/INSTALL-UBUNTU.md`](docs/INSTALL-UBUNTU.md) dokumentiert.
 
 ---
 

@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Lightbulb, Calendar, Users, FileText, Plus, Search, Trash2,
   Edit2, Check, X, ArrowRight, Tag, Star, Clock, ChevronDown,
   Mic2, BookOpen, StickyNote, MessageSquare, Filter, Pin, PinOff, Loader2,
-  Globe, BookMarked, Video, FileImage, Newspaper, ExternalLink, Link2, Save, Eye
+  Globe, BookMarked, Video, FileImage, Newspaper, ExternalLink, Link2, Save, Eye,
+  ListChecks, UserPlus, Download, ListOrdered
 } from 'lucide-react';
 import { editorialApi, episodesApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
+import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
+import SeasonPlanningTab from '../components/editorial/SeasonPlanningTab';
 
-type HubTab = 'ideas' | 'plan' | 'interviews' | 'notes' | 'research';
+type HubTab = 'ideas' | 'season-planning' | 'plan' | 'interviews' | 'notes' | 'research';
 
 const IDEA_STATUS = [
   { value: 'neu', label: 'Neu', color: 'bg-accent-cyan/20 text-accent-cyan' },
@@ -29,15 +32,38 @@ const IDEA_PRIORITY = [
 
 export default function EditorialHubPage() {
   const { can, showSuccess, showError } = useApp();
-  const [activeTab, setActiveTab] = useState<HubTab>('ideas');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab') as HubTab | null;
+  const [activeTab, setActiveTab] = useState<HubTab>(requestedTab || 'ideas');
 
   const tabs = [
     { key: 'ideas' as HubTab, label: 'Ideenpool', icon: <Lightbulb size={16} />, permission: 'canViewIdeas' },
+    { key: 'season-planning' as HubTab, label: 'Staffelplanung', icon: <ListOrdered size={16} />, permission: 'canViewSeasonPlanning' },
     { key: 'research' as HubTab, label: 'Recherche', icon: <Globe size={16} />, permission: 'canViewIdeas' },
     { key: 'plan' as HubTab, label: 'Redaktionsplan', icon: <Calendar size={16} />, permission: 'canViewEditorialPlan' },
     { key: 'interviews' as HubTab, label: 'Interviews', icon: <Users size={16} />, permission: 'canViewInterviews' },
     { key: 'notes' as HubTab, label: 'Notizen', icon: <StickyNote size={16} />, permission: 'canViewNotes' },
   ].filter(t => can(t.permission));
+
+  useEffect(() => {
+    if (requestedTab && tabs.some(tab => tab.key === requestedTab)) setActiveTab(requestedTab);
+    else if (!tabs.some(tab => tab.key === activeTab) && tabs[0]) setActiveTab(tabs[0].key);
+  }, [requestedTab, can]);
+
+  const selectTab = (tab: HubTab) => {
+    setActiveTab(tab);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tab);
+    if (tab !== 'season-planning') next.delete('seasonId');
+    setSearchParams(next, { replace: true });
+  };
+
+  const updateSeasonContext = (seasonId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'season-planning');
+    next.set('seasonId', seasonId);
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -57,7 +83,7 @@ export default function EditorialHubPage() {
         {tabs.map(tab => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => selectTab(tab.key)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === tab.key
                 ? 'bg-accent-purple text-white shadow-glow-purple'
@@ -72,6 +98,7 @@ export default function EditorialHubPage() {
 
       {/* Tab Content */}
       {activeTab === 'ideas' && <IdeasTab />}
+      {activeTab === 'season-planning' && <SeasonPlanningTab initialSeasonId={searchParams.get('seasonId')} onSeasonChange={updateSeasonContext} />}
       {activeTab === 'research' && <ResearchTab />}
       {activeTab === 'plan' && <PlanTab />}
       {activeTab === 'interviews' && <InterviewsTab />}
@@ -586,6 +613,7 @@ function InterviewsTab() {
   const [partners, setPartners] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
   const [selectedPartner, setSelectedPartner] = useState<any>(null);
+  const [interviewMode, setInterviewMode] = useState<'partners' | 'pool'>('partners');
   const [isLoading, setIsLoading] = useState(true);
   const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
@@ -705,7 +733,32 @@ function InterviewsTab() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="space-y-4">
+      <div className="flex items-center gap-1 bg-obsidian-800 p-1 rounded-xl w-fit">
+        <button
+          type="button"
+          onClick={() => setInterviewMode('partners')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            interviewMode === 'partners' ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary hover:bg-surface-raised'
+          }`}
+        >
+          <Users size={15} /> Partner & Fragen
+        </button>
+        <button
+          type="button"
+          onClick={() => setInterviewMode('pool')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            interviewMode === 'pool' ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary hover:bg-surface-raised'
+          }`}
+        >
+          <ListChecks size={15} /> Allgemeiner Fragen-Pool
+        </button>
+      </div>
+
+      {interviewMode === 'pool' ? (
+        <QuestionPoolPanel partners={partners} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Partners List */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -847,6 +900,8 @@ function InterviewsTab() {
           </>
         )}
       </div>
+        </div>
+      )}
 
       {/* Partner Modal */}
       <Modal isOpen={showPartnerModal} onClose={() => setShowPartnerModal(false)} title={editingPartner ? 'Partner bearbeiten' : 'Neuer Interview-Partner'}>
@@ -959,6 +1014,331 @@ function InterviewsTab() {
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => { setShowQuestionModal(false); setEditingQuestion(null); setQuestionForm({ question: '', category: '', notes: '' }); }} className="btn-secondary">Abbrechen</button>
             <button type="submit" disabled={!questionForm.question} className="btn-primary">{editingQuestion ? 'Speichern' : 'Frage hinzufügen'}</button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+function QuestionPoolPanel({ partners }: { partners: any[] }) {
+  const { can, showSuccess, showError } = useApp();
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showQuestionModal, setShowQuestionModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [pdfLayoutId, setPdfLayoutId] = useState('');
+  const [documentTitle, setDocumentTitle] = useState('Allgemeiner Fragen-Pool');
+  const [editingQuestion, setEditingQuestion] = useState<any>(null);
+  const [partnerId, setPartnerId] = useState('');
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [form, setForm] = useState({ question: '', category: 'Allgemein', notes: '', order: 0 });
+
+  const loadPool = async () => {
+    setIsLoading(true);
+    try {
+      const data = await editorialApi.listQuestionPool({ search: search || undefined });
+      setQuestions(data);
+      setSelectedIds(current => current.filter(id => data.some((question: any) => question.id === id)));
+    } catch (err: any) {
+      showError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(loadPool, search ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  const categories = Array.from(new Set(questions.map(question => question.category || 'Allgemein')))
+    .sort((a, b) => String(a).localeCompare(String(b), 'de'));
+  const visibleQuestions = category
+    ? questions.filter(question => (question.category || 'Allgemein') === category)
+    : questions;
+  const groupedQuestions = visibleQuestions.reduce<Record<string, any[]>>((groups, question) => {
+    const key = question.category || 'Allgemein';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(question);
+    return groups;
+  }, {});
+
+  const resetQuestionForm = () => {
+    setEditingQuestion(null);
+    setForm({ question: '', category: category || 'Allgemein', notes: '', order: 0 });
+  };
+
+  const handleSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      if (editingQuestion) {
+        await editorialApi.updatePoolQuestion(editingQuestion.id, form);
+        showSuccess('Pool-Frage aktualisiert');
+      } else {
+        await editorialApi.createPoolQuestion(form);
+        showSuccess('Frage zum allgemeinen Pool hinzugefügt');
+      }
+      setShowQuestionModal(false);
+      resetQuestionForm();
+      await loadPool();
+    } catch (err: any) {
+      showError(err.message);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Pool-Frage löschen? Bereits zugeordnete Kopien bei Interview-Partnern bleiben erhalten.')) return;
+    try {
+      await editorialApi.deletePoolQuestion(id);
+      setSelectedIds(current => current.filter(selectedId => selectedId !== id));
+      showSuccess('Pool-Frage gelöscht');
+      await loadPool();
+    } catch (err: any) {
+      showError(err.message);
+    }
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(current => current.includes(id) ? current.filter(selectedId => selectedId !== id) : [...current, id]);
+  };
+
+  const toggleVisible = () => {
+    const visibleIds = visibleQuestions.map(question => question.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.includes(id));
+    setSelectedIds(current => allSelected
+      ? current.filter(id => !visibleIds.includes(id))
+      : Array.from(new Set([...current, ...visibleIds])));
+  };
+
+  const handleAssign = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!partnerId || selectedIds.length === 0) return;
+    setIsAssigning(true);
+    try {
+      const result = await editorialApi.assignPoolQuestions(partnerId, selectedIds);
+      showSuccess(result.message || 'Fragen zugeordnet');
+      setShowAssignModal(false);
+      setPartnerId('');
+      if (result.data?.assigned > 0) setSelectedIds([]);
+    } catch (err: any) {
+      showError(err.message);
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  const handleExport = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!documentTitle.trim()) return;
+    setIsExporting(true);
+    try {
+      const exportSelection = selectedIds.length > 0;
+      const blob = await editorialApi.downloadQuestionPoolPdf({
+        category: exportSelection ? undefined : category || undefined,
+        search: exportSelection ? undefined : search || undefined,
+        questionIds: exportSelection ? selectedIds : undefined,
+        layoutId: pdfLayoutId || undefined,
+        documentTitle: documentTitle.trim(),
+      });
+      const safeTitle = documentTitle.trim()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'Fragen-Pool';
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeTitle}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setShowExportModal(false);
+      showSuccess(`${exportSelection ? selectedIds.length : visibleQuestions.length} ${exportSelection ? 'ausgewählte' : 'gefilterte'} Fragen als PDF exportiert`);
+    } catch (err: any) {
+      showError(err.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="card">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-text-primary flex items-center gap-2"><ListChecks size={18} className="text-accent-purple" /> Allgemeiner Fragen-Pool</h3>
+            <p className="text-text-muted text-sm mt-1">Fragen ohne feste Person sammeln, nach Thema ordnen und später einem Interview-Partner zuweisen.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {visibleQuestions.length > 0 && (
+              <button type="button" onClick={() => setShowExportModal(true)} className="btn-secondary text-sm">
+                <Download size={15} /> {selectedIds.length > 0 ? `${selectedIds.length} ausgewählte als PDF` : 'PDF exportieren'}
+              </button>
+            )}
+            {can('canEditInterviews') && selectedIds.length > 0 && (
+              <button type="button" onClick={() => setShowAssignModal(true)} className="btn-secondary text-sm">
+                <UserPlus size={15} /> {selectedIds.length} {selectedIds.length === 1 ? 'Frage' : 'Fragen'} zuordnen
+              </button>
+            )}
+            {can('canEditInterviews') && (
+              <button type="button" onClick={() => { resetQuestionForm(); setShowQuestionModal(true); }} className="btn-primary text-sm">
+                <Plus size={15} /> Frage erstellen
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input value={search} onChange={event => setSearch(event.target.value)} className="input pl-9" placeholder="Fragen, Themen oder Notizen durchsuchen..." />
+        </div>
+        <select value={category} onChange={event => setCategory(event.target.value)} className="input lg:w-64">
+          <option value="">Alle Themen ({questions.length})</option>
+          {categories.map(item => <option key={String(item)} value={String(item)}>{String(item)}</option>)}
+        </select>
+        {can('canEditInterviews') && visibleQuestions.length > 0 && (
+          <button type="button" onClick={toggleVisible} className="btn-ghost text-sm whitespace-nowrap">
+            <Check size={15} /> {visibleQuestions.every(question => selectedIds.includes(question.id)) ? 'Auswahl aufheben' : 'Sichtbare auswählen'}
+          </button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12"><Loader2 size={28} className="animate-spin text-accent-purple" /></div>
+      ) : visibleQuestions.length === 0 ? (
+        <div className="card text-center py-14">
+          <MessageSquare size={38} className="text-text-muted mx-auto mb-3" />
+          <p className="text-text-secondary font-medium">Keine Pool-Fragen gefunden</p>
+          <p className="text-text-muted text-sm mt-1">Erstelle eine Frage ohne Interview-Partner oder passe den Filter an.</p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {Object.entries(groupedQuestions).map(([topic, topicQuestions]) => (
+            <section key={topic} className="space-y-2">
+              <div className="flex items-center gap-2 px-1">
+                <Tag size={14} className="text-accent-purple" />
+                <h4 className="font-semibold text-text-primary">{topic}</h4>
+                <span className="badge bg-surface-overlay text-text-muted">{topicQuestions.length}</span>
+              </div>
+              <div className="space-y-2">
+                {topicQuestions.map(question => (
+                  <div key={question.id} className={`card flex items-start gap-3 group transition-colors ${selectedIds.includes(question.id) ? 'border-accent-purple bg-accent-purple/5' : ''}`}>
+                    {can('canEditInterviews') && (
+                      <button
+                        type="button"
+                        onClick={() => toggleSelection(question.id)}
+                        aria-label={selectedIds.includes(question.id) ? 'Frage abwählen' : 'Frage auswählen'}
+                        className={`mt-0.5 w-5 h-5 rounded border flex-shrink-0 flex items-center justify-center ${selectedIds.includes(question.id) ? 'bg-accent-purple border-accent-purple' : 'border-surface-border-light hover:border-accent-purple'}`}
+                      >
+                        {selectedIds.includes(question.id) && <Check size={12} className="text-white" />}
+                      </button>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-text-primary whitespace-pre-wrap">{question.question}</p>
+                      {question.notes && <p className="text-text-muted text-xs mt-2 whitespace-pre-wrap">{question.notes}</p>}
+                    </div>
+                    {can('canEditInterviews') && (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingQuestion(question);
+                            setForm({ question: question.question, category: question.category || 'Allgemein', notes: question.notes || '', order: question.sort_order || 0 });
+                            setShowQuestionModal(true);
+                          }}
+                          className="p-1 text-text-muted hover:text-accent-blue"
+                          title="Pool-Frage bearbeiten"
+                        ><Edit2 size={13} /></button>
+                        <button type="button" onClick={() => handleDelete(question.id)} className="p-1 text-text-muted hover:text-accent-red" title="Pool-Frage löschen"><Trash2 size={13} /></button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+
+      <Modal
+        isOpen={showQuestionModal}
+        onClose={() => { setShowQuestionModal(false); resetQuestionForm(); }}
+        title={editingQuestion ? 'Pool-Frage bearbeiten' : 'Frage für den allgemeinen Pool'}
+      >
+        <form onSubmit={handleSave} className="space-y-4">
+          <div>
+            <label className="label">Frage *</label>
+            <textarea value={form.question} onChange={event => setForm(current => ({ ...current, question: event.target.value }))} className="textarea" rows={4} required autoFocus placeholder="Interview-Frage..." />
+          </div>
+          <div>
+            <label className="label">Thema *</label>
+            <input value={form.category} onChange={event => setForm(current => ({ ...current, category: event.target.value }))} className="input" required placeholder="z. B. Biografie, Fachthema, Ausblick" list="question-pool-topics" />
+            <datalist id="question-pool-topics">{categories.map(item => <option key={String(item)} value={String(item)} />)}</datalist>
+          </div>
+          <div>
+            <label className="label">Interne Notizen</label>
+            <textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} className="textarea" rows={3} placeholder="Recherchehinweise, gewünschte Vertiefung..." />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => { setShowQuestionModal(false); resetQuestionForm(); }} className="btn-secondary">Abbrechen</button>
+            <button type="submit" disabled={!form.question.trim() || !form.category.trim()} className="btn-primary">{editingQuestion ? 'Speichern' : 'Zum Pool hinzufügen'}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={showExportModal} onClose={() => !isExporting && setShowExportModal(false)} title="Fragen-Pool als PDF exportieren">
+        <form onSubmit={handleExport} className="space-y-4">
+          <div className="bg-accent-purple/10 border border-accent-purple/30 rounded-lg p-3 text-sm text-text-secondary">
+            {selectedIds.length > 0
+              ? `${selectedIds.length} ausgewählte ${selectedIds.length === 1 ? 'Frage wird' : 'Fragen werden'} thematisch sortiert exportiert.`
+              : `${visibleQuestions.length} aktuell gefilterte ${visibleQuestions.length === 1 ? 'Frage wird' : 'Fragen werden'} thematisch sortiert exportiert.`}
+          </div>
+          <div>
+            <label className="label">Dokumenttitel *</label>
+            <input value={documentTitle} onChange={event => setDocumentTitle(event.target.value)} className="input" required maxLength={160} autoFocus placeholder="Allgemeiner Fragen-Pool" />
+          </div>
+          <div>
+            <label className="label">PDF-Layout</label>
+            <PdfLayoutPicker exportType="question_pool" value={pdfLayoutId} onChange={setPdfLayoutId} className="w-full" />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setShowExportModal(false)} disabled={isExporting} className="btn-secondary">Abbrechen</button>
+            <button type="submit" disabled={isExporting || !documentTitle.trim()} className="btn-primary">
+              {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              {isExporting ? 'PDF wird erstellt...' : 'PDF herunterladen'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={showAssignModal} onClose={() => { setShowAssignModal(false); setPartnerId(''); }} title="Pool-Fragen zuordnen">
+        <form onSubmit={handleAssign} className="space-y-4">
+          <div className="bg-accent-purple/10 border border-accent-purple/30 rounded-lg p-3 text-sm text-text-secondary">
+            <strong>{selectedIds.length}</strong> {selectedIds.length === 1 ? 'ausgewählte Frage wird' : 'ausgewählte Fragen werden'} als bearbeitbare Kopie dem Interview-Partner zugeordnet. Der allgemeine Pool bleibt unverändert.
+          </div>
+          <div>
+            <label className="label">Interview-Partner *</label>
+            <select value={partnerId} onChange={event => setPartnerId(event.target.value)} className="input" required autoFocus>
+              <option value="">Partner auswählen...</option>
+              {partners.map(partner => <option key={partner.id} value={partner.id}>{partner.name}{partner.company ? ` · ${partner.company}` : ''}</option>)}
+            </select>
+            {partners.length === 0 && <p className="text-xs text-accent-orange mt-2">Lege zuerst unter „Partner & Fragen“ einen Interview-Partner an.</p>}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => { setShowAssignModal(false); setPartnerId(''); }} className="btn-secondary">Abbrechen</button>
+            <button type="submit" disabled={!partnerId || isAssigning || selectedIds.length === 0} className="btn-primary">
+              {isAssigning ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+              {isAssigning ? 'Zuordnung läuft...' : 'Fragen zuordnen'}
+            </button>
           </div>
         </form>
       </Modal>

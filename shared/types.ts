@@ -31,6 +31,10 @@ export interface UserPermissions {
   canEditInterviews: boolean;
   canViewNotes: boolean;
   canEditNotes: boolean;
+  canViewSeasonPlanning: boolean;
+  canEditSeasonPlanning: boolean;
+  canExportSeasonPlanning: boolean;
+  canTransitionSeasonPlanningToEpisode: boolean;
   // Episoden
   canViewEpisodes: boolean;
   canCreateEpisodes: boolean;

@@ -19,6 +19,7 @@ const EXPORT_TYPES = [
   { value: 'performance_report', label: 'Leistungsübersicht (Sponsor)' },
   { value: 'sponsor_dossier', label: 'Sponsor-Dossier' },
   { value: 'sponsor_offer', label: 'Sponsor-Angebot' },
+  { value: 'question_pool', label: 'Allgemeiner Fragen-Pool' },
   { value: 'price_list', label: 'Preisliste (Werbung)' },
   { value: 'episode_table', label: 'Episoden-Skript (Tabelle)' },
 ];
@@ -91,6 +92,10 @@ const SECTION_GROUPS: Record<string, { label: string; keys: string[] }> = {
     label: 'Leistungsbericht',
     keys: ['showReportStats', 'showReportChart', 'showReportBookings'],
   },
+  question_pool: {
+    label: 'Allgemeiner Fragen-Pool',
+    keys: ['showQuestionPoolNotes'],
+  },
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -125,6 +130,7 @@ const SECTION_LABELS: Record<string, string> = {
   showTableDuration: 'Dauer-Spalte anzeigen',
   showTableRegie: 'Regieanweisungen-Spalte anzeigen',
   showTableNotesPage: 'Zusätzliche Notizseite anhängen',
+  showQuestionPoolNotes: 'Interne Notizen zu Fragen anzeigen',
 };
 
 const LINE_SPACING_OPTIONS = [
@@ -405,7 +411,7 @@ export default function PdfLayoutManagerPage() {
               if (!a.isSystem && b.isSystem) return 1;
               return a.name.localeCompare(b.name, 'de');
             }
-            const typeOrder = ['all','episode','idea','calendar','invoice','confirmation','booking_calendar','performance_report','sponsor_dossier','sponsor_offer'];
+            const typeOrder = ['all','episode','idea','calendar','invoice','confirmation','booking_calendar','performance_report','sponsor_dossier','sponsor_offer','question_pool'];
             const ta = typeOrder.indexOf(a.exportType);
             const tb = typeOrder.indexOf(b.exportType);
             if (ta !== tb) return ta - tb;

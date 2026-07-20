@@ -269,6 +269,28 @@ const wikiData: WikiCategory[] = [
         ],
       },
       {
+        id: 'staffelplanung',
+        title: 'Strategische Staffelplanung',
+        summary: 'Staffelziele, Folgenreihenfolge, Alternativen und Partner planen und Positionen ohne Doppelpflege in den Episoden-Editor überführen.',
+        icon: <Calendar size={18} />,
+        tags: ['staffelplanung', 'staffel', 'dramaturgie', 'alternativen', 'pdf', 'editor'],
+        content: [
+          {
+            heading: 'Planung öffnen',
+            text: 'Öffnen Sie im RedaktionsHub den Tab Staffelplanung und wählen Sie eine vorhandene Staffel. Aus der Staffelverwaltung führt Planung öffnen direkt in den passenden Staffelkontext. Legen Sie dort Zielzahl und Leitgedanken fest, damit Themenmix und Dramaturgie nachvollziehbar bleiben.',
+          },
+          {
+            heading: 'Positionen und Alternativen pflegen',
+            text: 'Mit Folge planen erfassen Sie Arbeitstitel, Kurzbeschreibung, Themen, Format, Priorität, Status, Termin, Schwerpunkte, Notizen sowie vorgemerkte Partner und Rollen. Geplante Reihenfolge enthält verbindliche Positionen; Alternativen und Überhang sammelt Reserveideen. Positionen können umsortiert, bearbeitet oder als Alternative abgelegt werden.',
+          },
+          {
+            heading: 'PDF und Übergang in den Editor',
+            text: 'Der PDF-Dialog exportiert Staffelziel, Reihenfolge und Alternativen mit einem wählbaren Episoden-CI-Layout und einem eigenen Dokumenttitel. Im Episoden-Editor weiterarbeiten erzeugt oder verwendet einmalig die verknüpfte Idee und Episode; ein erneuter Aufruf öffnet dieselbe Episode. Dort führt Zurück zur Planung wieder in die passende Staffelplanung.',
+            tip: 'Für Ansicht, Bearbeitung, PDF-Export und den Übergang in den Episoden-Editor gelten getrennte Rechte. Fehlt eine Aktion, prüfen Sie Ihre Rolle oder wenden Sie sich an die Administration.',
+          },
+        ],
+      },
+      {
         id: 'themenwerkstatt',
         title: 'Themenwerkstatt',
         summary: 'Ein Thema redaktionell schärfen und als vollständigen Entwurf für Script und Veröffentlichung vorbereiten.',
@@ -630,7 +652,7 @@ const wikiData: WikiCategory[] = [
         content: [
           {
             heading: 'Redaktion und Episoden',
-            list: ['Episoden-Dokument', 'Episoden-Skript als Tabelle', 'Ideenmappe', 'Redaktionskalender', 'Episodenplanung als PDF oder CSV'],
+            list: ['Episoden-Dokument', 'Episoden-Skript als Tabelle', 'Ideenmappe', 'Redaktionskalender', 'Episodenplanung als PDF oder CSV', 'Strategische Staffelplanung als PDF'],
           },
           {
             heading: 'Sponsoring',
@@ -725,20 +747,24 @@ const wikiData: WikiCategory[] = [
         adminOnly: true,
         content: [
           {
+            heading: 'Einmaliger Übergang aus 2.14.2 oder älter',
+            text: 'Installieren Sie 2.14.3 einmalig manuell nach der mitgelieferten Update- beziehungsweise Ubuntu-Anleitung. Der alte ZIP-Handler kann Erfolg melden, obwohl die laufende Anwendung nicht ersetzt wurde. Verwenden Sie den integrierten ZIP-Weg erst, wenn PodCore bereits Version 2.14.3 oder neuer meldet.',
+          },
+          {
             heading: 'Vor dem Update',
             text: 'Erstellen und laden Sie ein aktuelles Vollbackup herunter. Prüfen Sie freien Speicherplatz, Versionshinweise und die zum Paket gehörende Prüfsumme.',
           },
           {
-            heading: 'ZIP-Update',
-            text: 'Öffnen Sie Einstellungen > App-Update, laden Sie das offizielle PodCore-ZIP hoch und starten Sie zunächst die Prüfung. Wenden Sie das Update erst an, wenn Paketstruktur und Version akzeptiert wurden.',
+            heading: 'ZIP-Update ab Version 2.14.3',
+            text: 'Wenn PodCore bereits 2.14.3 oder neuer ausführt, öffnen Sie Einstellungen > App-Update, laden das offizielle PodCore-ZIP hoch und starten zunächst die Prüfung. PodCore entpackt und baut das Paket vor der Übernahme in einem Staging-Bereich. Wenden Sie das Update erst an, wenn Paketstruktur, Zielversion und Vorabprüfung akzeptiert wurden.',
           },
           {
             heading: 'GitHub-Prüfung',
             text: 'Falls konfiguriert, kann PodCore nach einem verfügbaren GitHub-Release suchen und den offiziellen Download anzeigen.',
           },
           {
-            heading: 'Nach dem Update',
-            text: 'Kontrollieren Sie die angezeigte Version, Anmeldung, Dashboard, einen Datensatz pro Hauptbereich und mindestens einen PDF-Export. Bewahren Sie das Vorher-Backup auf, bis der Betrieb bestätigt ist.',
+            heading: 'Übernahme, Neustart und Kontrolle',
+            text: 'Beim Anwenden erstellt PodCore eine Sicherung des bisherigen Programmstands, übernimmt die geprüften Dateien rollbackfähig und startet den Server neu. Der Vorgang gilt erst als erfolgreich, wenn der neu gestartete Prozess die Zielversion bestätigt. Kontrollieren Sie anschließend Anmeldung, Dashboard, einen Datensatz pro Hauptbereich und mindestens einen PDF-Export. Bewahren Sie das Vorher-Backup auf, bis der Betrieb bestätigt ist.',
           },
         ],
       },
@@ -766,6 +792,17 @@ const wikiData: WikiCategory[] = [
           {
             heading: 'Rollen und Rechte',
             text: 'Rollen bündeln Berechtigungen für Funktionsgruppen. Vergeben Sie nur die für die jeweilige Aufgabe notwendigen Rechte und testen Sie neue Rollen mit einem eigenen Testkonto.',
+          },
+          {
+            heading: 'Staffelplanung steuern',
+            text: 'Für die strategische Staffelplanung stehen vier getrennte Rechte zur Verfügung. Damit kann beispielsweise die Moderation Planungen lesen und exportieren, ohne Positionen zu verändern oder eine Episode anzulegen.',
+            list: [
+              'Staffelplanung ansehen: Staffelziele und Planpositionen lesen',
+              'Staffelplanung bearbeiten: Ziele und Positionen anlegen, ändern, umsortieren oder löschen',
+              'Staffelplanung exportieren: den Staffelplan als PDF ausgeben',
+              'Staffelplanung in Episode überführen: eine Position in Idee und Episode übergeben',
+            ],
+            tip: 'Neue Staffelplan-Rechte werden bei bestehenden Konten anhand der Rolle ergänzt. Individuell ausdrücklich deaktivierte Rechte bleiben weiterhin deaktiviert.',
           },
         ],
       },
@@ -801,11 +838,37 @@ const wikiData: WikiCategory[] = [
     color: 'text-text-secondary',
     articles: [
       {
+        id: 'v2-14-4',
+        title: 'v2.14.4 · Strategische Staffelplanung',
+        summary: 'Neue strategische Planungsebene pro Staffel mit PDF-Export, atomarem Übergang in den Episoden-Editor und granularen Rollenrechten.',
+        icon: <CheckCircle size={16} />,
+        tags: ['aktuell', 'v2.14.4', 'staffelplanung', 'pdf', 'rollen'],
+        compact: true,
+        content: [
+          {
+            text: 'Der RedaktionsHub enthält jetzt den Tab Staffelplanung für Staffelziele, dramaturgische Reihenfolge, Alternativen, Themen, Formate, Partner und Notizen. Die Staffelverwaltung bietet Planung öffnen als Direkteinstieg. Staffelpläne lassen sich mit frei wählbarem Dokumenttitel und CI-Layout als PDF exportieren. Geeignete Positionen werden atomar in Idee und Episode überführt, im Editor als strategisch verknüpft gekennzeichnet und führen über Zurück zur Planung wieder in den passenden Staffelkontext. Lesen, Bearbeiten, PDF-Export und Editorübergang sind getrennt berechtigbar; bestehende Konten erhalten neue Rollenrechte automatisch, ohne bewusste individuelle Sperren zu überschreiben.',
+          },
+        ],
+      },
+      {
+        id: 'v2-14-3',
+        title: 'v2.14.3 · Update- und Redaktionsupdate',
+        summary: 'ZIP-Updates werden verifiziert übernommen; allgemeiner Fragen-Pool und Buchungs-PDFs wurden erweitert und stabilisiert.',
+        icon: <CheckCircle size={16} />,
+        tags: ['v2.14.3', 'update', 'fragen-pool'],
+        compact: true,
+        content: [
+          {
+            text: '2.14.3 wird von 2.14.2 oder älter einmalig manuell installiert, weil der alte ZIP-Handler sich nicht zuverlässig selbst ersetzen kann. Ab laufender Version 2.14.3 baut der reparierte ZIP-Ablauf Folgereleases im Staging, installiert Abhängigkeiten nicht interaktiv, sichert den bisherigen Programmstand, rollt bei Fehlern zurück und bestätigt Erfolg erst nach dem Neustart mit der Zielversion. Der RedaktionsHub erhält außerdem einen allgemeinen, thematisch gruppierten Fragen-Pool mit Suche, Auswahl, Zuweisung, Kopieren und PDF-Export. Buchungsbestätigungen verwenden das gewählte Layout und umbrechen lange Einzel- und Sammeldokumente zuverlässig.',
+          },
+        ],
+      },
+      {
         id: 'v2-14-2',
         title: 'v2.14.2 · Bugfix-Update',
         summary: 'Recherche, Textbausteine, Sponsor-Buchungen und PDF-Exporte stabilisiert; Wiki zum Endnutzer-Handbuch ausgebaut.',
         icon: <CheckCircle size={16} />,
-        tags: ['aktuell', 'v2.14.2'],
+        tags: ['v2.14.2'],
         compact: true,
         content: [
           {
@@ -905,7 +968,7 @@ export default function WikiPage() {
               PodCore Handbuch
             </h1>
             <p className="text-text-secondary mt-1">
-              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.2
+              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.4
             </p>
           </div>
           <div className="relative w-full lg:w-[28rem]">

@@ -2,7 +2,7 @@
 
 Willkommen im PodCore Wiki! Dieses Wiki dient als zentrale Informationsquelle für alle Funktionen und Arbeitsabläufe innerhalb der PodCore-Anwendung. Egal, ob Sie ein neuer Benutzer sind, der die Grundlagen erlernen möchte, oder ein erfahrener Redakteur, der tiefergehende Informationen zu spezifischen Features sucht – hier finden Sie alle notwendigen Details.
 
-PodCore ist eine umfassende Podcast-Management-Anwendung, die darauf ausgelegt ist, den gesamten Produktionsprozess von der Ideenfindung bis zur Veröffentlichung zu optimieren. Mit Version 2.14.0 wurden zahlreiche Verbesserungen in den Bereichen Workflow, Zusammenarbeit und datenbasierte Automatisierung eingeführt, um Ihre tägliche Arbeit noch effizienter zu gestalten.
+PodCore ist eine umfassende Podcast-Management-Anwendung, die darauf ausgelegt ist, den gesamten Produktionsprozess von der Ideenfindung bis zur Veröffentlichung zu optimieren. Die aktuelle Version **2.14.3** ergänzt einen allgemeinen Fragen-Pool, verbessert Sponsor-Buchungsbestätigungen und führt ZIP-Updates erst nach Staging-Build, Sicherung und bestätigtem Neustart als erfolgreich. Die mit Version 2.14.0 eingeführten Workflow-, Zusammenarbeits- und Automatisierungsfunktionen bleiben vollständig erhalten.
 
 ## Inhaltsverzeichnis
 
@@ -18,6 +18,7 @@ PodCore ist eine umfassende Podcast-Management-Anwendung, die darauf ausgelegt i
 3.  [RedaktionsHub](#redaktionshub)
     *   [Ideenmanagement](#ideenmanagement)
     *   [Interviewfragen und Zeitstempel](#interviewfragen-und-zeitstempel)
+    *   [Allgemeiner Fragen-Pool](#allgemeiner-fragen-pool)
     *   [Recherche und Notizen](#recherche-und-notizen)
 4.  [Zusammenarbeit und Feedback](#zusammenarbeit-und-feedback)
     *   [Kommentarsystem](#kommentarsystem)
@@ -95,7 +96,11 @@ Verwalten Sie Ihre Podcast-Ideen, deren Status und zugehörige Informationen.
 
 ### Interviewfragen und Zeitstempel
 
-Erstellen und organisieren Sie Interviewfragen. Mit der neuen **automatischen Zeitstempel-Funktion** können Sie Interviewfragen automatisch mit Zeitstempeln versehen, indem das System eingebettete Audiomarker aus hochgeladenen MP3/WAV-Dateien ausliest oder Audiometadaten analysiert.
+Erstellen und organisieren Sie Interviewfragen. Mit der **automatischen Zeitstempel-Funktion** können Sie Interviewfragen mit Zeitstempeln versehen, indem das System eingebettete Audiomarker aus hochgeladenen MP3/WAV-Dateien ausliest oder Audiometadaten analysiert.
+
+### Allgemeiner Fragen-Pool
+
+Unter **RedaktionsHub → Interview → Allgemeiner Fragen-Pool** verwalten Sie wiederverwendbare Fragen unabhängig von einer bestimmten Idee, Episode oder Person. Fragen lassen sich thematisch gruppieren, suchen, filtern, bearbeiten, kopieren, auswählen und einem Interviewkontext zuweisen. Der PDF-Dialog exportiert den gesamten Pool, gefilterte Themen oder eine Auswahl mit individuellem Dokumenttitel und vorhandenem PDF-Layout.
 
 ### Recherche und Notizen
 
@@ -141,7 +146,7 @@ PodCore bietet umfangreiche Exportmöglichkeiten für verschiedene Dokumente.
 
 ### Buchungsbestätigungen
 
-Sie können nun **einzelne Buchungsbestätigungen** oder **alle Buchungen eines Sponsors** als PDF exportieren. Diese Funktion wurde in Version 2.14.0 erweitert und korrigiert.
+Sie können **einzelne Buchungsbestätigungen** oder **alle Buchungen eines Sponsors** als PDF exportieren. Version 2.14.3 verwendet dabei das gewählte PDF-Layout und bricht auch sehr lange Einzel- und Sammeldokumente vollständig über mehrere A4-Seiten um.
 
 ### Angebote, Rechnungen, Preislisten
 
@@ -166,6 +171,10 @@ Eine zentrale Bibliothek für alle Ihre Mediendateien, die Sie in Episoden verwe
 ### PDF-Layout-Manager
 
 Passen Sie die Layouts Ihrer PDF-Exporte an Ihre Corporate Identity an.
+
+### App-Update
+
+Öffnen Sie **Einstellungen → App-Update**, laden Sie das offizielle Release-ZIP hoch und prüfen Sie es vor der Anwendung. PodCore baut das Paket zunächst in einem Staging-Bereich, sichert den bisherigen Programmstand, übernimmt das vorbereitete Ergebnis rollbackfähig und meldet den Erfolg erst nach einem Neustart, bei dem der neue Prozess die Zielversion bestätigt. Eine vollständige externe Datensicherung vor dem Wartungsfenster bleibt erforderlich.
 
 ---
 

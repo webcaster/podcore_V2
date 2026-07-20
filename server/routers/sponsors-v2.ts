@@ -567,7 +567,7 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsorOffers') as 
 
   // ── FOOTER ───────────────────────────────────────────────────
   if (footerCfg.showPageNumbers !== false || footerCfg.showDate !== false || footerCfg.showPodcastName !== false) {
-    const fy = doc.page.height - 30;
+    const fy = doc.page.height - m - 20;
     doc.rect(m, fy - 6, contentW, 0.5).fill('#ddd');
     const footerParts: string[] = [];
     if (footerCfg.showPodcastName !== false) footerParts.push(podcastName);
@@ -575,7 +575,7 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsorOffers') as 
     if (offer.offer_number) footerParts.push(`Nr. ${offer.offer_number}`);
     if (footerCfg.customText) footerParts.push(footerCfg.customText);
     doc.fontSize(7).font('Helvetica').fillColor('#aaa')
-      .text(footerParts.join(' · '), m, fy, { align: 'center', width: contentW });
+      .text(footerParts.join(' · '), m, fy, { align: 'center', width: contentW, lineBreak: false });
   }
 
   doc.end();
@@ -793,241 +793,434 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
 });
 
 // ============================================================
+// BOOKING CONFIRMATION PDF HELPERS
+// ============================================================
+function confirmationLayout(layoutId?: string): any {
+  const selected = layoutId ? getLayoutById(layoutId) : null;
+  return selected || getDefaultLayoutForType('confirmation');
+}
+
+function confirmationDate(value: unknown): string {
+  if (!value) return '–';
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('de-DE');
+}
+
+function confirmationMoney(value: unknown, currency = 'EUR'): string {
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) return '–';
+  return `${amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
+function confirmationText(value: unknown): string {
+  if (value === null || value === undefined || String(value).trim() === '') return '–';
+  return String(value).trim();
+}
+
+function confirmationFilename(value: unknown): string {
+  return String(value || 'Sponsor')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'Sponsor';
+}
+
+function confirmationStatus(value: unknown): string {
+  const raw = confirmationText(value);
+  if (raw === '–') return raw;
+  return raw.charAt(0).toUpperCase() + raw.slice(1).replace(/_/g, ' ');
+}
+
+function confirmationEpisodes(booking: any): string {
+  const labels: string[] = [];
+  if (booking.episode_refs) {
+    try {
+      const refs = JSON.parse(booking.episode_refs);
+      if (Array.isArray(refs)) {
+        refs.forEach((ref: any) => {
+          const title = confirmationText(ref.episodeTitle || ref.title || ref.episodeId);
+          const count = Number(ref.count || 1);
+          if (title !== '–') labels.push(count > 1 ? `${title} (${count} Platzierungen)` : title);
+        });
+      }
+    } catch (_) {}
+  }
+  if (labels.length === 0 && booking.episode_title) {
+    const number = booking.episode_number !== null && booking.episode_number !== undefined
+      ? `#${booking.episode_number} `
+      : '';
+    labels.push(`${number}${booking.episode_title}`);
+  }
+  return labels.length > 0 ? labels.join('\n') : 'Keine konkrete Folge zugeordnet';
+}
+
+function confirmationSponsorLines(sponsor: any): { left: string[]; right: string[] } {
+  const left: string[] = [];
+  const right: string[] = [];
+  if (sponsor.company) left.push(String(sponsor.company));
+  if (sponsor.name && sponsor.name !== sponsor.company) left.push(String(sponsor.name));
+  if (sponsor.address) left.push(String(sponsor.address));
+  if (sponsor.customer_number) left.push(`Kundennummer: ${sponsor.customer_number}`);
+
+  if (sponsor.contact_name) right.push(`Ansprechpartner: ${sponsor.contact_name}`);
+  if (sponsor.contact_email) right.push(`E-Mail: ${sponsor.contact_email}`);
+  if (sponsor.contact_phone) right.push(`Telefon: ${sponsor.contact_phone}`);
+  if (sponsor.website) right.push(`Website: ${sponsor.website}`);
+  if (sponsor.contact_hint) right.push(`Kontakt-Hinweis: ${sponsor.contact_hint}`);
+
+  if (left.length === 0) left.push('Keine Stammdaten hinterlegt');
+  if (right.length === 0) right.push('Keine Kontaktdaten hinterlegt');
+  return { left, right };
+}
+
+function renderConfirmationPdf(
+  res: Response,
+  db: any,
+  sponsor: any,
+  bookings: any[],
+  layout: any,
+  documentTitle: string,
+  filename: string,
+): void {
+  const PDFDocument = require('pdfkit');
+  const m = Math.max(30, Number(layout.pageMargin) || 50);
+  const typography = layout.typography;
+  const colors = layout.colors;
+  const bodySize = Math.max(8, Number(typography.bodySize) || 10);
+  const smallSize = Math.max(7, Number(typography.smallSize) || 8);
+  const headingSize = Math.max(10, Number(typography.headingSize) || 11);
+  const sections = layout.sections || {};
+  const { podcastName, companyName, logoPath } = loadBranding(db);
+  const currency = String(sponsor.currency || 'EUR');
+
+  const doc = new PDFDocument({
+    margin: m,
+    size: layout.pageSize || 'A4',
+    layout: layout.pageOrientation === 'landscape' ? 'landscape' : 'portrait',
+    autoFirstPage: false,
+    bufferPages: true,
+  });
+  const chunks: Buffer[] = [];
+  doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+  doc.on('end', () => {
+    const buffer = Buffer.concat(chunks);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  });
+
+  let pageNum = 0;
+  let contentW = 0;
+  let y = 0;
+  const bottomY = () => doc.page.height - 55;
+  const addPage = () => {
+    doc.addPage();
+    pageNum += 1;
+    contentW = doc.page.width - m * 2;
+    renderWatermark(doc, layout);
+    renderPdfHeader(doc, layout, { podcastName, documentTitle, logoPath });
+    y = Math.max(doc.y, m);
+  };
+  const ensureSpace = (requiredHeight: number) => {
+    if (y + requiredHeight > bottomY()) addPage();
+  };
+
+  const wrappedLines = (text: string, width: number): string[] => {
+    const output: string[] = [];
+    String(text || '–').split(/\r?\n/).forEach((paragraph: string) => {
+      const words = paragraph.trim().split(/\s+/).filter(Boolean);
+      if (words.length === 0) {
+        output.push('');
+        return;
+      }
+      let line = '';
+      words.forEach((word: string) => {
+        if (doc.widthOfString(word) > width) {
+          if (line) {
+            output.push(line);
+            line = '';
+          }
+          let part = '';
+          for (const character of word) {
+            const candidate = part + character;
+            if (part && doc.widthOfString(candidate) > width) {
+              output.push(part);
+              part = character;
+            } else {
+              part = candidate;
+            }
+          }
+          line = part;
+          return;
+        }
+        const candidate = line ? `${line} ${word}` : word;
+        if (line && doc.widthOfString(candidate) > width) {
+          output.push(line);
+          line = word;
+        } else {
+          line = candidate;
+        }
+      });
+      if (line) output.push(line);
+    });
+    return output.length > 0 ? output : ['–'];
+  };
+
+  const sectionTitle = (title: string) => {
+    ensureSpace(28);
+    doc.font(`${typography.fontFamily}-Bold`).fontSize(headingSize).fillColor(colors.primary)
+      .text(title, m, y, { width: contentW });
+    y += 18;
+    doc.moveTo(m, y).lineTo(m + contentW, y).strokeColor(colors.accent).lineWidth(0.7).stroke();
+    y += 7;
+  };
+
+  const detailRows = (rows: Array<[string, string]>) => {
+    const labelW = Math.min(145, contentW * 0.32);
+    const valueW = contentW - labelW - 18;
+    rows.forEach(([label, value], index) => {
+      doc.font(typography.fontFamily).fontSize(bodySize);
+      const valueLines = wrappedLines(value, valueW);
+      const lineHeight = bodySize + 3;
+      const rowHeight = Math.max(22, valueLines.length * lineHeight + 8);
+      if (rowHeight <= bottomY() - Math.max(doc.y, m)) {
+        ensureSpace(rowHeight);
+        if (index % 2 === 1) doc.rect(m, y, contentW, rowHeight).fill('#f8fafc');
+        doc.font(`${typography.fontFamily}-Bold`).fontSize(smallSize + 1).fillColor(colors.muted)
+          .text(label, m + 6, y + 6, { width: labelW - 8 });
+        doc.font(typography.fontFamily).fontSize(bodySize).fillColor(colors.text);
+        valueLines.forEach((line: string, lineIndex: number) => {
+          doc.text(line || ' ', m + labelW + 8, y + 6 + lineIndex * lineHeight, { width: valueW, lineBreak: false });
+        });
+        y += rowHeight;
+      } else {
+        ensureSpace(24);
+        doc.font(`${typography.fontFamily}-Bold`).fontSize(smallSize + 1).fillColor(colors.muted)
+          .text(label, m + 6, y + 5, { width: contentW - 12 });
+        y += 18;
+        doc.font(typography.fontFamily).fontSize(bodySize).fillColor(colors.text);
+        valueLines.forEach((line: string) => {
+          ensureSpace(lineHeight + 2);
+          doc.text(line || ' ', m + 12, y, { width: contentW - 24, lineBreak: false });
+          y += lineHeight;
+        });
+        y += 4;
+      }
+    });
+    y += 7;
+  };
+
+  const longText = (title: string, value: string) => {
+    if (!value || value === '–') return;
+    doc.font(typography.fontFamily).fontSize(bodySize).fillColor(colors.text);
+    const lines = wrappedLines(value, contentW - 16);
+    const lineHeight = bodySize + 3;
+    ensureSpace(headingSize + 18 + Math.min(lines.length, 2) * lineHeight);
+    sectionTitle(title);
+    lines.forEach((line: string) => {
+      ensureSpace(lineHeight + 2);
+      doc.text(line || ' ', m + 8, y, { width: contentW - 16, lineBreak: false });
+      y += lineHeight;
+    });
+    y += 8;
+  };
+
+  const sponsorCard = () => {
+    const { left, right } = confirmationSponsorLines(sponsor);
+    const gap = 18;
+    const colW = (contentW - gap - 24) / 2;
+    doc.font(typography.fontFamily).fontSize(bodySize);
+    const leftLines = left.flatMap((line: string) => wrappedLines(line, colW));
+    const rightLines = right.flatMap((line: string) => wrappedLines(line, colW));
+    const lineHeight = bodySize + 4;
+    const cardHeight = 34 + Math.max(leftLines.length, rightLines.length) * lineHeight;
+    ensureSpace(cardHeight + 10);
+    const top = y;
+    doc.roundedRect(m, top, contentW, cardHeight, 5).fillAndStroke('#f8fafc', colors.accent);
+    doc.font(`${typography.fontFamily}-Bold`).fontSize(headingSize).fillColor(colors.primary)
+      .text('Sponsor', m + 12, top + 10, { width: colW });
+    doc.text('Kontakt', m + 12 + colW + gap, top + 10, { width: colW });
+    doc.font(typography.fontFamily).fontSize(bodySize).fillColor(colors.text);
+    leftLines.forEach((line: string, index: number) => {
+      doc.text(line || ' ', m + 12, top + 29 + index * lineHeight, { width: colW, lineBreak: false });
+    });
+    rightLines.forEach((line: string, index: number) => {
+      doc.text(line || ' ', m + 12 + colW + gap, top + 29 + index * lineHeight, { width: colW, lineBreak: false });
+    });
+    y = top + cardHeight + 12;
+  };
+
+  const bookingBlock = (booking: any, index: number) => {
+    const title = bookings.length === 1
+      ? `Buchung ${confirmationText(booking.slot_name || booking.category_name)}`
+      : `Buchung ${index + 1}: ${confirmationText(booking.slot_name || booking.category_name)}`;
+    sectionTitle(title);
+
+    const period = booking.booking_end_date
+      ? `${confirmationDate(booking.booking_date)} bis ${confirmationDate(booking.booking_end_date)}`
+      : confirmationDate(booking.booking_date);
+    const placementCount = Number(booking.placement_count || booking.total_episodes || 1);
+    const invoice = [
+      confirmationStatus(booking.invoice_status),
+      booking.invoice_number ? `Nr. ${booking.invoice_number}` : '',
+      booking.invoice_date ? `vom ${confirmationDate(booking.invoice_date)}` : '',
+    ].filter(Boolean).join(' · ');
+    const contract = booking.contract_start || booking.contract_end
+      ? `${confirmationDate(booking.contract_start)} bis ${confirmationDate(booking.contract_end)}`
+      : 'Kein Vertrag zugeordnet';
+
+    detailRows([
+      ['Buchungs-ID', confirmationText(booking.id)],
+      ['Werbeplatz / Kategorie', confirmationText(booking.slot_name || booking.category_name)],
+      ['Buchungszeitraum', period],
+      ['Status', confirmationStatus(booking.status)],
+      ['Auslieferung bestätigt', booking.delivery_confirmed ? 'Ja' : 'Nein'],
+      ['Rechnung', invoice || '–'],
+      ['Vertrag', contract],
+      ['Platzierungen / Folgen', String(Number.isFinite(placementCount) ? placementCount : 1)],
+      ['Zugeordnete Folgen', confirmationEpisodes(booking)],
+      ['Hörerzahl', booking.listener_count !== null && booking.listener_count !== undefined
+        ? Number(booking.listener_count).toLocaleString('de-DE')
+        : 'Nicht hinterlegt'],
+    ]);
+
+    if (sections.showConfirmationPricing !== false) {
+      ensureSpace(headingSize + 18 + 5 * (bodySize + 12));
+      sectionTitle('Preisdetails');
+      const discountValue = Number(booking.discount || 0);
+      const discount = booking.discount_type === 'percent'
+        ? `${discountValue.toLocaleString('de-DE')} %`
+        : confirmationMoney(discountValue, currency);
+      detailRows([
+        ['Basispreis', confirmationMoney(booking.price, currency)],
+        ['Preisanpassung', confirmationMoney(booking.price_adjustment, currency)],
+        ['Rabatt', discount],
+        ['Hörerbeteiligung', confirmationMoney(booking.listener_fee, currency)],
+        ['Gesamtpreis', confirmationMoney(booking.final_price, currency)],
+      ]);
+    }
+
+    longText('Buchungsnotizen', confirmationText(booking.notes));
+    longText('Leistungsnotizen', confirmationText(booking.performance_notes));
+    y += 6;
+  };
+
+  addPage();
+  sponsorCard();
+
+  if (bookings.length === 0) {
+    sectionTitle('Buchungen');
+    doc.font(typography.fontFamily).fontSize(bodySize).fillColor(colors.muted)
+      .text('Für diesen Sponsor sind keine Buchungen vorhanden.', m, y, { width: contentW });
+  } else {
+    const total = bookings.reduce((sum: number, booking: any) => sum + Number(booking.final_price || 0), 0);
+    detailRows([
+      ['Bestätigungsdatum', new Date().toLocaleDateString('de-DE')],
+      ['Anzahl Buchungen', String(bookings.length)],
+      ['Gesamtwert', confirmationMoney(total, currency)],
+    ]);
+    bookings.forEach(bookingBlock);
+  }
+
+  const range = doc.bufferedPageRange();
+  const footerName = companyName ? `${podcastName} · ${companyName}` : podcastName;
+  for (let pageIndex = range.start; pageIndex < range.start + range.count; pageIndex += 1) {
+    doc.switchToPage(pageIndex);
+    renderPdfFooter(doc, layout, { podcastName: footerName, pageNum: pageIndex + 1 });
+  }
+  doc.end();
+}
+
+// ============================================================
 // BOOKING CONFIRMATION PDF EXPORT (einzelne Buchung)
 // ============================================================
 router.get('/bookings/:bookingId/confirmation-pdf', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { bookingId } = req.params;
   const booking = db.get(
-    `SELECT ab.*, s.name as slot_name, c.name as category_name, sp.name as sponsor_name, sp.contact_person, sp.email, sp.phone
+    `SELECT ab.*, s.name as slot_name, c.name as category_name,
+            e.title as episode_title, e.number as episode_number,
+            sc.contract_start, sc.contract_end,
+            sp.name as sponsor_name, sp.company, sp.address, sp.contact_name,
+            sp.contact_email, sp.contact_phone, sp.website, sp.customer_number,
+            sp.contact_hint, sp.currency
      FROM ad_bookings ab
      LEFT JOIN ad_slots s ON ab.slot_id = s.id
      LEFT JOIN ad_categories c ON ab.slot_id = c.id
+     LEFT JOIN episodes e ON ab.episode_id = e.id
+     LEFT JOIN sponsor_contracts sc ON ab.contract_id = sc.id
      JOIN sponsors sp ON ab.sponsor_id = sp.id
      WHERE ab.id = ?`,
-    [bookingId]
+    [req.params.bookingId],
   ) as any;
 
-  if (!booking) {
-    return res.status(404).json({ success: false, error: 'Buchung nicht gefunden' });
-  }
+  if (!booking) return res.status(404).json({ success: false, error: 'Buchung nicht gefunden' });
 
-  const layoutId = req.query.layoutId as string;
-  let layout: any;
   try {
-    layout = layoutId ? getLayoutById(layoutId) : null;
-    if (!layout) layout = getDefaultLayoutForType('booking_confirmation' as any);
-  } catch (_) {
-    layout = { colors: {}, sections: {}, footer: {}, header: {}, typography: {}, pageMargin: 50 };
+    const layout = confirmationLayout(req.query.layoutId as string | undefined);
+    const sponsor = {
+      name: booking.sponsor_name,
+      company: booking.company,
+      address: booking.address,
+      contact_name: booking.contact_name,
+      contact_email: booking.contact_email,
+      contact_phone: booking.contact_phone,
+      website: booking.website,
+      customer_number: booking.customer_number,
+      contact_hint: booking.contact_hint,
+      currency: booking.currency,
+    };
+    renderConfirmationPdf(
+      res,
+      db,
+      sponsor,
+      [booking],
+      layout,
+      'Buchungsbestätigung',
+      `Buchungsbestaetigung-${confirmationFilename(booking.sponsor_name)}-${confirmationFilename(booking.id)}.pdf`,
+    );
+  } catch (error) {
+    console.error('[Sponsoring] Buchungsbestätigung konnte nicht erstellt werden:', error);
+    if (!res.headersSent) res.status(500).json({ success: false, error: 'Buchungsbestätigung konnte nicht erstellt werden' });
   }
-
-  const cfg = layout || {};
-  const colors = cfg.colors || {};
-  const footerCfg = cfg.footer || {};
-  const m = cfg.pageMargin || 50;
-  const primaryColor: string = colors.primary || '#7c3aed';
-  const headerBgColor: string = colors.background || colors.primary || '#7c3aed';
-  const headerTextColor: string = colors.headerText || '#ffffff';
-
-  const { podcastName, companyName, logoPath } = loadBranding(db);
-
-  const PDFDocument = require('pdfkit');
-  const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true });
-  const chunks: Buffer[] = [];
-  doc.on('data', (c: Buffer) => chunks.push(c));
-  doc.on('end', () => {
-    const buf = Buffer.concat(chunks);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Buchungsbestaetigung_${booking.id}.pdf"`);
-    res.send(buf);
-  });
-
-  const contentW = doc.page.width - m * 2;
-  const nowStr = new Date().toLocaleDateString('de-DE');
-
-  // Header
-  doc.rect(0, 0, doc.page.width, 90).fill(headerBgColor);
-  if (logoPath && fs.existsSync(logoPath)) {
-    try { doc.image(logoPath, m, 15, { height: 40 }); } catch (_) {}
-  }
-  doc.fontSize(22).font('Helvetica-Bold').fillColor(headerTextColor)
-    .text('Buchungsbestätigung', m, 18, { align: 'right', width: contentW });
-  const subLine = [podcastName, companyName].filter(Boolean).join(' · ') + ` · ${nowStr}`;
-  doc.fontSize(9).font('Helvetica').fillColor(headerTextColor).opacity(0.8)
-    .text(subLine, m, 55, { align: 'right', width: contentW });
-  doc.opacity(1);
-  let y = 105;
-
-  // Sponsor-Informationen
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text('Sponsor:', m, y);
-  y += 16;
-  doc.fontSize(9).font('Helvetica').fillColor('#333')
-    .text(booking.sponsor_name || '—', m, y);
-  if (booking.contact_person) doc.text(`Kontaktperson: ${booking.contact_person}`, m, y + 14);
-  if (booking.email) doc.text(`E-Mail: ${booking.email}`, m, y + 28);
-  if (booking.phone) doc.text(`Telefon: ${booking.phone}`, m, y + 42);
-  y += 70;
-
-  // Buchungsdetails
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text('Buchungsdetails:', m, y);
-  y += 16;
-  const details = [
-    { label: 'Buchungs-ID:', value: booking.id },
-    { label: 'Werbeplatz:', value: booking.slot_name || booking.category_name || '—' },
-    { label: 'Buchungsdatum:', value: booking.booking_date ? new Date(booking.booking_date).toLocaleDateString('de-DE') : '—' },
-    { label: 'Buchungsende:', value: booking.booking_end_date ? new Date(booking.booking_end_date).toLocaleDateString('de-DE') : '—' },
-    { label: 'Status:', value: booking.status || '—' },
-    { label: 'Rechnungsstatus:', value: booking.invoice_status || '—' },
-  ];
-
-  doc.fontSize(9).font('Helvetica').fillColor('#333');
-  details.forEach(detail => {
-    doc.text(`${detail.label} ${detail.value}`, m, y);
-    y += 14;
-  });
-
-  y += 10;
-
-  // Preisdetails
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text('Preisdetails:', m, y);
-  y += 16;
-  const prices = [
-    { label: 'Basispreis:', value: `${Number(booking.price || 0).toFixed(2)} €` },
-    { label: 'Preisanpassung:', value: `${Number(booking.price_adjustment || 0).toFixed(2)} €` },
-    { label: 'Rabatt:', value: `${Number(booking.discount || 0).toFixed(2)} €` },
-    { label: 'Listener-Gebühr:', value: `${Number(booking.listener_fee || 0).toFixed(2)} €` },
-    { label: 'Gesamtpreis:', value: `${Number(booking.final_price || 0).toFixed(2)} €`, bold: true },
-  ];
-
-  doc.fontSize(9).font('Helvetica').fillColor('#333');
-  prices.forEach(price => {
-    if (price.bold) doc.font('Helvetica-Bold');
-    doc.text(`${price.label} ${price.value}`, m, y);
-    if (price.bold) doc.font('Helvetica');
-    y += 14;
-  });
-
-  // Footer
-  if (footerCfg.showPodcastName !== false || footerCfg.showDate !== false) {
-    const fy = doc.page.height - 30;
-    doc.fontSize(7).font('Helvetica').fillColor('#aaa')
-      .text(`${podcastName} · Buchungsbestätigung · ${nowStr}`, m, fy, { align: 'center', width: contentW });
-  }
-
-  doc.end();
 });
 
 // ============================================================
 // ALL BOOKINGS CONFIRMATION PDF EXPORT (alle Buchungen eines Sponsors)
 // ============================================================
-router.get('/:sponsorId/bookings/confirmation-pdf-all', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
+router.get(['/:sponsorId/bookings/confirmation-pdf', '/:sponsorId/bookings/confirmation-pdf-all'], requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { sponsorId } = req.params;
-  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [sponsorId]) as any;
-
-  if (!sponsor) {
-    return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
-  }
+  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ?', [req.params.sponsorId]) as any;
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
 
   const bookings = db.all(
-    `SELECT ab.*, s.name as slot_name, c.name as category_name
+    `SELECT ab.*, s.name as slot_name, c.name as category_name,
+            e.title as episode_title, e.number as episode_number,
+            sc.contract_start, sc.contract_end
      FROM ad_bookings ab
      LEFT JOIN ad_slots s ON ab.slot_id = s.id
      LEFT JOIN ad_categories c ON ab.slot_id = c.id
+     LEFT JOIN episodes e ON ab.episode_id = e.id
+     LEFT JOIN sponsor_contracts sc ON ab.contract_id = sc.id
      WHERE ab.sponsor_id = ?
-     ORDER BY ab.booking_date DESC`,
-    [sponsorId]
+     ORDER BY ab.booking_date ASC, ab.created_at ASC`,
+    [req.params.sponsorId],
   ) as any[];
 
-  const layoutId = req.query.layoutId as string;
-  let layout: any;
   try {
-    layout = layoutId ? getLayoutById(layoutId) : null;
-    if (!layout) layout = getDefaultLayoutForType('booking_confirmation' as any);
-  } catch (_) {
-    layout = { colors: {}, sections: {}, footer: {}, header: {}, typography: {}, pageMargin: 50 };
+    const layout = confirmationLayout(req.query.layoutId as string | undefined);
+    renderConfirmationPdf(
+      res,
+      db,
+      sponsor,
+      bookings,
+      layout,
+      'Buchungsbestätigung – alle Buchungen',
+      `Buchungsbestaetigung-alle-${confirmationFilename(sponsor.name)}-${new Date().toISOString().slice(0, 10)}.pdf`,
+    );
+  } catch (error) {
+    console.error('[Sponsoring] Sammelbestätigung konnte nicht erstellt werden:', error);
+    if (!res.headersSent) res.status(500).json({ success: false, error: 'Sammelbestätigung konnte nicht erstellt werden' });
   }
-
-  const cfg = layout || {};
-  const colors = cfg.colors || {};
-  const footerCfg = cfg.footer || {};
-  const m = cfg.pageMargin || 50;
-  const primaryColor: string = colors.primary || '#7c3aed';
-  const headerBgColor: string = colors.background || colors.primary || '#7c3aed';
-  const headerTextColor: string = colors.headerText || '#ffffff';
-
-  const { podcastName, companyName, logoPath } = loadBranding(db);
-
-  const PDFDocument = require('pdfkit');
-  const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true });
-  const chunks: Buffer[] = [];
-  doc.on('data', (c: Buffer) => chunks.push(c));
-  doc.on('end', () => {
-    const buf = Buffer.concat(chunks);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Buchungsbestaetigung_${sponsor.name}_alle.pdf"`);
-    res.send(buf);
-  });
-
-  const contentW = doc.page.width - m * 2;
-  const nowStr = new Date().toLocaleDateString('de-DE');
-
-  // Header
-  doc.rect(0, 0, doc.page.width, 90).fill(headerBgColor);
-  if (logoPath && fs.existsSync(logoPath)) {
-    try { doc.image(logoPath, m, 15, { height: 40 }); } catch (_) {}
-  }
-  doc.fontSize(22).font('Helvetica-Bold').fillColor(headerTextColor)
-    .text('Alle Buchungen', m, 18, { align: 'right', width: contentW });
-  const subLine = [podcastName, companyName].filter(Boolean).join(' · ') + ` · ${nowStr}`;
-  doc.fontSize(9).font('Helvetica').fillColor(headerTextColor).opacity(0.8)
-    .text(subLine, m, 55, { align: 'right', width: contentW });
-  doc.opacity(1);
-  let y = 105;
-
-  // Sponsor-Informationen
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text('Sponsor:', m, y);
-  y += 16;
-  doc.fontSize(9).font('Helvetica').fillColor('#333')
-    .text(sponsor.name || '—', m, y);
-  y += 30;
-
-  // Tabellen-Header
-  const col1 = contentW * 0.25;
-  const col2 = contentW * 0.2;
-  const col3 = contentW * 0.2;
-  const col4 = contentW * 0.15;
-  const col5 = contentW * 0.2;
-  doc.rect(m, y, contentW, 22).fill(primaryColor);
-  doc.fontSize(8).font('Helvetica-Bold').fillColor('#fff');
-  doc.text('Werbeplatz', m + 5, y + 7, { width: col1 });
-  doc.text('Buchungsdatum', m + col1 + 5, y + 7, { width: col2 });
-  doc.text('Buchungsende', m + col1 + col2 + 5, y + 7, { width: col3 });
-  doc.text('Status', m + col1 + col2 + col3 + 5, y + 7, { width: col4 });
-  doc.text('Gesamtpreis', m + col1 + col2 + col3 + col4 + 5, y + 7, { width: col5, align: 'right' });
-  y += 22;
-
-  // Buchungen
-  bookings.forEach((booking: any, idx: number) => {
-    if (y + 20 > doc.page.height - 60) { doc.addPage(); y = m; }
-    doc.rect(m, y, contentW, 18).fill(idx % 2 === 0 ? '#ffffff' : '#f7f7f7');
-    doc.fontSize(8).font('Helvetica').fillColor('#222');
-    doc.text(booking.slot_name || booking.category_name || '—', m + 5, y + 4, { width: col1 });
-    doc.text(booking.booking_date ? new Date(booking.booking_date).toLocaleDateString('de-DE') : '—', m + col1 + 5, y + 4, { width: col2 });
-    doc.text(booking.booking_end_date ? new Date(booking.booking_end_date).toLocaleDateString('de-DE') : '—', m + col1 + col2 + 5, y + 4, { width: col3 });
-    doc.text(booking.status || '—', m + col1 + col2 + col3 + 5, y + 4, { width: col4 });
-    doc.text(`${Number(booking.final_price || 0).toFixed(2)} €`, m + col1 + col2 + col3 + col4 + 5, y + 4, { width: col5, align: 'right' });
-    y += 18;
-  });
-
-  // Footer
-  if (footerCfg.showPodcastName !== false || footerCfg.showDate !== false) {
-    const fy = doc.page.height - 30;
-    doc.fontSize(7).font('Helvetica').fillColor('#aaa')
-      .text(`${podcastName} · Alle Buchungen · ${nowStr}`, m, fy, { align: 'center', width: contentW });
-  }
-
-    doc.end();
 });
 
 // ============================================================

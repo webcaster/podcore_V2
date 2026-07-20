@@ -1,5 +1,52 @@
 # PodCore – Release Notes
 
+## v2.14.4 – Strategische Staffelplanung, Editorübergang und Rollenrechte
+
+Version **2.14.4** führt eine strategische Planungsebene für ganze Podcast-Staffeln ein. Redaktionsteams können Reihenfolge, Alternativen, Themen, Formate, Schwerpunkte und Partner vor der operativen Produktion festlegen. Bestätigte Planpositionen werden ohne doppelte Datenerfassung in eine Ideenmappe und anschließend in den Episoden-Editor überführt. Der neue Ablauf ist berechtigt, idempotent, PDF-exportierbar und über Rücknavigation mit der strategischen Quelle verbunden.
+
+| Bereich | Änderung |
+|---|---|
+| Strategische Staffelplanung | Neuer Tab **RedaktionsHub → Staffelplanung** mit Staffelziel, geordneter Folgenliste, Alternativen, Themen, Formaten, Priorität, Status, Zielterminen, Schwerpunkten, Partnern und internen Notizen. |
+| Staffeleinstieg | Die bestehende Staffelverwaltung erhält **Planung öffnen**. Der Link öffnet den passenden Staffelkontext im RedaktionsHub, ohne eine weitere Hauptnavigation einzuführen. |
+| Reihenfolge und Alternativen | Planpositionen werden getrennt als verbindliche Reihenfolge oder Reserve verwaltet und können fortlaufend aktualisiert sowie umsortiert werden. |
+| Partnerübernahme | Mehrere vorgemerkte Gesprächspartner können inklusive Rolle und Bestätigungsstatus einer Planposition zugeordnet werden. Eine additive Zuordnungstabelle vermeidet, dass bestehende Ideen-Partnerbeziehungen überschrieben oder verschoben werden. |
+| Übergang in den Episoden-Editor | **Im Episoden-Editor weiterarbeiten** legt atomar eine Ideenmappe und eine Staffel-Episode an oder verwendet vorhandene Verknüpfungen wieder. Titel, Beschreibung, Themen, Priorität, Schwerpunkte, Notizen und Partner stehen anschließend über den bestehenden Ideenpfad im Editor zur Verfügung. |
+| Duplikatschutz | Der Editorübergang ist idempotent: Wiederholtes Ausführen öffnet dieselbe verknüpfte Episode statt weitere Ideen oder Episoden zu erzeugen. |
+| Editor-Rücknavigation | Verknüpfte Episoden zeigen ein Hinweisfeld zur strategischen Staffelplanung und führen über **Zurück zur Planung** oder den Zurück-Pfeil in den passenden RedaktionsHub-Kontext. |
+| Staffelplan-PDF | Strategische Planung kann mit individuellem Dokumenttitel und vorhandenem Episoden-CI-Layout als mehrseitige PDF inklusive Reihenfolge, Alternativen, Metadaten, Partnern und Notizen exportiert werden. |
+| Neue Rechte | `canViewSeasonPlanning`, `canEditSeasonPlanning`, `canExportSeasonPlanning` und `canTransitionSeasonPlanningToEpisode` steuern Lesen, Bearbeiten, Export und Übergabe getrennt auf Client und Server. |
+| Rollenmatrix | Administration und Redaktion erhalten alle Staffelplan-Rechte; Moderation darf lesen und exportieren; Produktion erhält keinen Zugang zur strategischen Planung. Einzelne Benutzerrechte bleiben gezielte Überschreibungen. |
+| Rechtevererbung | Bestehende individuelle Benutzerkonfigurationen erben neue Rollenrechte, ohne ausdrücklich gesetzte Sperren zu verlieren. Dadurch bleiben eingeschränkte Konten auch nach der Migration kontrolliert. |
+| Datenbank | Die Tabellen für Planpositionen, Planpartner, Staffelziel und Rückverknüpfungen zu Idee und Episode werden beim Start automatisch und idempotent ergänzt. |
+| Qualitätssicherung | Server- und Client-Build, isolierter End-to-End-Test mit Planposition, Aktualisierung, PDF, atomarem Editorübergang, Duplikatschutz, Moderations- und Produktionsrechten, Rechtevererbung sowie individueller Sperre wurden erfolgreich durchgeführt. |
+
+### Aktualisierung
+
+Sichern Sie vor dem Update das persistente PodCore-Datenverzeichnis. Ab laufender Version **2.14.3** kann **PodCore-v2.14.4.zip** über **Einstellungen → App-Update** verifiziert eingespielt werden. Bei einer manuellen Aktualisierung installieren Sie Root-, Client- und Server-Abhängigkeiten mit den jeweiligen Lockdateien und erstellen anschließend den Produktions-Build. Die Datenbankmigration für die strategische Staffelplanung erfolgt beim Serverstart automatisch. Die vollständige Bedien-, Rollen-, PDF-, Prüf- und Rückfallanleitung steht unter [`docs/UPDATE-2.14.4.md`](docs/UPDATE-2.14.4.md).
+
+## v2.14.3 – Verifiziertes App-Update, allgemeiner Fragen-Pool und robuste Buchungs-PDFs
+
+Version **2.14.3** behebt den Fehler, bei dem ein eingespieltes ZIP als erfolgreich gemeldet wurde, obwohl die laufende Anwendung nicht auf die neue Version wechselte. Der Updatepfad prüft und baut Pakete nun vorab im Staging, installiert Laufzeitabhängigkeiten nicht interaktiv, sichert den vorherigen Programmstand, übernimmt Dateien rollbackfähig und bestätigt den Erfolg erst nach einem echten Prozessneustart mit der erwarteten Zielversion. Zusätzlich erhält der RedaktionsHub einen allgemeinen Fragen-Pool; Sponsor-Buchungsbestätigungen werden layouttreu und zuverlässig über mehrere Seiten ausgegeben.
+
+| Bereich | Änderung |
+|---|---|
+| ZIP-Update | Der in 2.14.2 und älteren Versionen enthaltene Handler kann sich wegen der fehlerhaften Anwendungswurzel nicht zuverlässig selbst ersetzen; 2.14.3 wird deshalb einmalig manuell installiert. Ab laufender Version 2.14.3 bleiben Upload und Prüfung getrennt, bevor Archivstruktur, Paketversionen und Buildfähigkeit im Staging verifiziert werden. |
+| Installation im Updateprozess | Root-, Client- und Server-Abhängigkeiten werden mit `CI=true` nicht interaktiv installiert. Der Server verwendet einen eigenen pnpm-Workspace und eine synchronisierte Lockdatei einschließlich `ws` und `@types/ws`. |
+| Sicherung und Rollback | Vor dem Dateiaustausch wird der bisherige Programmstand gesichert. Fehler bei Übernahme, Installation oder Verifikation lösen den Rückfall auf diesen Stand aus; temporäre ZIP- und Staging-Dateien werden bereinigt. |
+| Neustart und Abschlusskontrolle | Der Serverprozess wird nach erfolgreicher Übernahme wirklich ersetzt. PodCore fragt den Status nach dem Verbindungswechsel erneut ab und bestätigt den Abschluss erst, wenn der neue Prozess erreichbar ist und die Zielversion meldet. |
+| Update-Oberfläche | Die alte Admin-Installation mit verfrühter Erfolgsmeldung wurde aus der Oberfläche entfernt. Die Administrationskarte führt direkt zu **Einstellungen → App-Update**, sodass nur noch der verifizierte ZIP-Pfad angeboten wird. |
+| Allgemeiner Fragen-Pool | Wiederverwendbare Interviewfragen können thematisch gruppiert erstellt, gesucht, gefiltert, bearbeitet, kopiert, ausgewählt, zugewiesen und gelöscht werden. Reguläre Interviewrouten sind serverseitig strikt von Pool-Einträgen getrennt. |
+| Fragen-Pool-PDF | Alle, gefilterte oder ausgewählte Fragen lassen sich mit individuellem Dokumenttitel und vorhandenem PDF-Layout als A4-Dokument exportieren. |
+| Ideenfragen | Die bestehende `idea_id`-Zuordnung wird beim Filtern, Erstellen und Bearbeiten vollständig berücksichtigt. Fragen bleiben dadurch zuverlässig mit der richtigen Idee verbunden. |
+| Sponsor-Buchungsbestätigung | Einzel- und Sammelbestätigungen verwenden das gewählte PDF-Layout. Höhenberechnung, Textumbruch, Seitennummerierung und Seitenwechsel behandeln auch sehr lange Sponsor-, Buchungs- und Notizdaten vollständig. |
+| Datenbank | Die Migration für Pool-Herkunft und Zuweisungen ist idempotent und mit passenden Indizes versehen. Es sind keine manuellen SQL-Schritte erforderlich. |
+| Qualitätssicherung | Produktions-Builds, Neuinstallation über `install.sh`, authentifizierter ZIP-Update-Test mit echtem Neustart, Zielversionsprüfung, Datenerhalt und Backup-Nachweis, Fragen-Pool-Integration, Ideenfragen-Regression, mehrseitiger Buchungs-PDF-Stresstest, Diff-Hygiene und produktive Abhängigkeitsaudits wurden erfolgreich durchgeführt. |
+| Technik | Root, Client, Server, Browser-Titel und In-App-Handbuch melden einheitlich Version 2.14.3. |
+
+### Aktualisierung
+
+Erstellen Sie vor dem Update ein aktuelles Vollbackup und bewahren Sie es außerhalb des Servers auf. Installieren Sie **PodCore-v2.14.3.zip aus Version 2.14.2 oder älter einmalig manuell**, da der alte ZIP-Handler selbst von dem behobenen Fehler betroffen ist und Erfolg melden kann, ohne die aktive Anwendung zu ersetzen. Erst wenn PodCore bereits Version **2.14.3 oder neuer** meldet, ist für Folgereleases **Einstellungen → App-Update** der empfohlene verifizierte ZIP-Weg. Die vollständige Bedien-, Update-, Prüf- und Rückfallanleitung steht unter [`docs/UPDATE-2.14.3.md`](docs/UPDATE-2.14.3.md).
+
 ## v2.14.2 – Stabilitätsupdate für Redaktion, Sponsoring und PDF-Exporte
 
 Version **2.14.2** verbessert die Lesbarkeit und Vollständigkeit zentraler Redaktionsfunktionen, stabilisiert Sponsor-Buchungen und korrigiert mehrere geschäftsrelevante PDF-Exporte. Das In-App-Wiki wurde zugleich zu einem durchsuchbaren Endnutzer-Handbuch für alle PodCore-Bereiche ausgebaut.

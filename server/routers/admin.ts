@@ -3,11 +3,21 @@ import multer from 'multer';
 import AdmZip from 'adm-zip';
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawn } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { getDb, getDefaultPermissions } from '../database';
+import { DATA_DIR as DATABASE_DATA_DIR, getDb, getDefaultPermissions } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
+import {
+  UpdateBackupManifest,
+  applyStagedApplication,
+  extractUpdateArchive,
+  findPodCoreRoot,
+  inspectUpdateArchive,
+  readPackageVersion,
+  restoreUpdateBackup,
+  validateStagedApplication,
+} from '../services/updateService';
 
 const router: import("express").Router = Router();
 
@@ -502,8 +512,17 @@ router.put('/settings', requirePermission('canManageSettings') as any, (req: Aut
 // SYSTEM INFO
 // ============================================================
 
+function getApplicationRoot(): string {
+  return findPodCoreRoot(__dirname);
+}
+
+// Beim Prozessstart erfassen: Paketdateien werden während eines Updates bereits vor
+// dem Neustart ersetzt und dürfen daher nicht als Nachweis der laufenden Version dienen.
+const RUNNING_SERVER_VERSION = readPackageVersion(path.join(getApplicationRoot(), 'server', 'package.json'));
+
 router.get('/system', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const appRoot = getApplicationRoot();
   const stats = {
     episodes: (db.get('SELECT COUNT(*) as count FROM episodes', []) as any)?.count || 0,
     ideas: (db.get('SELECT COUNT(*) as count FROM ideas', []) as any)?.count || 0,
@@ -511,7 +530,7 @@ router.get('/system', requirePermission('canManageSettings') as any, (req: AuthR
     sponsors: (db.get('SELECT COUNT(*) as count FROM sponsors', []) as any)?.count || 0,
     users: (db.get('SELECT COUNT(*) as count FROM users', []) as any)?.count || 0,
     errorLogs: (db.get('SELECT COUNT(*) as count FROM error_logs', []) as any)?.count || 0,
-    version: (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')).version || '?'; } catch { return '?'; } })(),
+    version: RUNNING_SERVER_VERSION,
     nodeVersion: process.version,
     uptime: process.uptime(),
     platform: process.platform,
@@ -523,202 +542,369 @@ router.get('/system', requirePermission('canManageSettings') as any, (req: AuthR
 // IN-APP UPDATE SYSTEM
 // ============================================================
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.env.HOME || '/tmp', '.podcore');
-const UPDATE_DIR = path.join(DATA_DIR, 'updates');
+const UPDATE_DIR = path.join(DATABASE_DATA_DIR, 'updates');
+const UPDATE_STATUS_FILE = path.join(UPDATE_DIR, 'status.json');
+const UPDATE_LOG_FILE = path.join(DATABASE_DATA_DIR, 'update.log');
 if (!fs.existsSync(UPDATE_DIR)) fs.mkdirSync(UPDATE_DIR, { recursive: true });
+
+type PersistedUpdateStatus = {
+  state: 'idle' | 'uploaded' | 'staging' | 'applying' | 'restart-pending' | 'completed' | 'failed';
+  updateId?: string;
+  previousVersion?: string;
+  targetVersion?: string;
+  message?: string;
+  updatedAt: string;
+};
+
+function readUpdateStatus(): PersistedUpdateStatus {
+  try {
+    return JSON.parse(fs.readFileSync(UPDATE_STATUS_FILE, 'utf8')) as PersistedUpdateStatus;
+  } catch {
+    return { state: 'idle', updatedAt: new Date().toISOString() };
+  }
+}
+
+function writeUpdateStatus(status: Omit<PersistedUpdateStatus, 'updatedAt'> & { updatedAt?: string }): PersistedUpdateStatus {
+  const persisted = { ...status, updatedAt: status.updatedAt || new Date().toISOString() } as PersistedUpdateStatus;
+  fs.mkdirSync(UPDATE_DIR, { recursive: true });
+  fs.writeFileSync(UPDATE_STATUS_FILE, JSON.stringify(persisted, null, 2) + '\n');
+  return persisted;
+}
+
+function appendUpdateLog(lines: string[]): void {
+  try {
+    fs.appendFileSync(UPDATE_LOG_FILE, lines.map(line => `[${new Date().toISOString()}] ${line}`).join('\n') + '\n');
+  } catch {}
+}
+
+function commandExists(command: string): boolean {
+  try {
+    execFileSync(command, ['--version'], { stdio: 'ignore', timeout: 10000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runUpdateCommand(command: string, args: string[], cwd: string, log: string[]): void {
+  log.push(`Ausführung: ${command} ${args.join(' ')}`);
+  try {
+    const output = execFileSync(command, args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 15 * 60 * 1000,
+      env: {
+        ...process.env,
+        CI: 'true',
+        NODE_ENV: 'development',
+        PNPM_CONFIG_CONFIRM_MODULES_PURGE: 'false',
+      },
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    if (output?.trim()) log.push(output.trim().split('\n').slice(-8).join('\n'));
+  } catch (error: any) {
+    const details = [error?.stdout, error?.stderr, error?.message].filter(Boolean).join('\n').trim();
+    throw new Error(`${command} ${args.join(' ')} fehlgeschlagen${details ? `: ${details.slice(-3000)}` : ''}`);
+  }
+}
+
+function prepareStagedApplication(stagingRoot: string, isSourceZip: boolean, expectedVersion: string, log: string[]): void {
+  if (isSourceZip) {
+    log.push('Quellcode-Update erkannt; Abhängigkeiten und Build werden im Staging geprüft.');
+    if (commandExists('pnpm')) {
+      runUpdateCommand('pnpm', ['install', '--frozen-lockfile', '--prefer-offline'], stagingRoot, log);
+      runUpdateCommand('pnpm', ['--dir', 'client', 'install', '--frozen-lockfile', '--prefer-offline'], stagingRoot, log);
+      runUpdateCommand('pnpm', ['--dir', 'server', 'install', '--frozen-lockfile', '--prefer-offline'], stagingRoot, log);
+      runUpdateCommand('pnpm', ['run', 'build'], stagingRoot, log);
+    } else if (commandExists('npm')) {
+      runUpdateCommand('npm', ['install', '--include=dev'], stagingRoot, log);
+      runUpdateCommand('npm', ['install', '--include=dev'], path.join(stagingRoot, 'client'), log);
+      runUpdateCommand('npm', ['install', '--include=dev'], path.join(stagingRoot, 'server'), log);
+      runUpdateCommand('npm', ['run', 'build'], stagingRoot, log);
+    } else {
+      throw new Error('Für ein Quellcode-Update wird pnpm oder npm benötigt');
+    }
+  }
+  validateStagedApplication(stagingRoot, expectedVersion);
+  log.push(`Staging-Anwendung v${expectedVersion} einschließlich Server- und Frontend-Build verifiziert.`);
+}
+
+function dependenciesChanged(stagingRoot: string, appRoot: string): boolean {
+  const relevant = [
+    'package.json', 'pnpm-lock.yaml',
+    'server/package.json', 'server/pnpm-lock.yaml',
+  ];
+  return relevant.some(relative => {
+    const staged = path.join(stagingRoot, relative);
+    const current = path.join(appRoot, relative);
+    if (!fs.existsSync(staged)) return false;
+    if (!fs.existsSync(current)) return true;
+    return !fs.readFileSync(staged).equals(fs.readFileSync(current));
+  });
+}
+
+function installRuntimeDependencies(appRoot: string, log: string[]): void {
+  if (commandExists('pnpm')) {
+    runUpdateCommand('pnpm', ['install', '--frozen-lockfile', '--prod', '--prefer-offline'], appRoot, log);
+    runUpdateCommand('pnpm', ['--dir', 'server', 'install', '--frozen-lockfile', '--prod', '--prefer-offline'], appRoot, log);
+    return;
+  }
+  if (commandExists('npm')) {
+    runUpdateCommand('npm', ['install', '--omit=dev'], appRoot, log);
+    runUpdateCommand('npm', ['install', '--omit=dev'], path.join(appRoot, 'server'), log);
+    return;
+  }
+  throw new Error('Geänderte Laufzeitabhängigkeiten können ohne pnpm oder npm nicht installiert werden');
+}
+
+function scheduleApplicationRestart(appRoot: string, log: string[]): { mode: string; scheduled: boolean } {
+  const customRestart = process.env.PODCORE_RESTART_COMMAND?.trim();
+  if (customRestart) {
+    log.push('Neustart über PODCORE_RESTART_COMMAND geplant.');
+    setTimeout(() => {
+      try {
+        const child = spawn('/bin/sh', ['-c', customRestart], {
+          detached: true,
+          stdio: 'ignore',
+          cwd: appRoot,
+          env: { ...process.env },
+        });
+        child.unref();
+      } finally {
+        setTimeout(() => process.exit(0), 500);
+      }
+    }, 1500);
+    return { mode: 'custom', scheduled: true };
+  }
+
+  if (process.env.INVOCATION_ID || process.env.JOURNAL_STREAM) {
+    log.push('systemd-Umgebung erkannt; der Dienst wird durch die konfigurierte Restart-Richtlinie neu gestartet.');
+    setTimeout(() => process.exit(0), 1500);
+    return { mode: 'systemd', scheduled: true };
+  }
+
+  const serverScript = path.join(appRoot, 'server', 'dist', 'index.js');
+  if (!fs.existsSync(serverScript)) {
+    log.push('Automatischer Neustart nicht möglich: server/dist/index.js fehlt.');
+    return { mode: 'manual', scheduled: false };
+  }
+
+  log.push('Direkter Node.js-Neustart geplant.');
+  setTimeout(() => {
+    // Der entkoppelte Starter wartet, bis dieser Prozess den Port freigegeben hat.
+    // Ein sofortiger Node-Spawn würde sonst mit EADDRINUSE abbrechen.
+    const child = spawn('/bin/sh', [
+      '-c',
+      'sleep 1; exec "$1" "$2"',
+      'podcore-restart',
+      process.execPath,
+      serverScript,
+    ], {
+      detached: true,
+      stdio: 'ignore',
+      cwd: appRoot,
+      env: { ...process.env },
+    });
+    child.unref();
+    setTimeout(() => process.exit(0), 100);
+  }, 1500);
+  return { mode: 'node', scheduled: true };
+}
 
 const updateStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPDATE_DIR),
   filename: (_req, _file, cb) => cb(null, `update-${Date.now()}.zip`),
 });
-const uploadUpdate = multer({ storage: updateStorage, limits: { fileSize: 500 * 1024 * 1024 } });
+const uploadUpdate = multer({
+  storage: updateStorage,
+  limits: { fileSize: 500 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, file.originalname.toLowerCase().endsWith('.zip')),
+});
 
 // GET /api/admin/update/status
 router.get('/update/status', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
-  const pkgPath = path.join(__dirname, '..', '..', 'package.json');
-  let currentVersion = '?';
-  try { currentVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || '?'; } catch {}
-  const nodeVersion = process.version;
-  const platform = process.platform;
-  const arch = process.arch;
-  // Prüfe ob pending update vorhanden
-  const pendingFiles = fs.existsSync(UPDATE_DIR) ? fs.readdirSync(UPDATE_DIR).filter(f => f.endsWith('.zip')) : [];
+  const appRoot = getApplicationRoot();
+  const currentVersion = RUNNING_SERVER_VERSION;
+  let updateState = readUpdateStatus();
+  if (updateState.state === 'restart-pending' && updateState.targetVersion === currentVersion) {
+    updateState = writeUpdateStatus({
+      ...updateState,
+      state: 'completed',
+      message: `Version ${currentVersion} läuft und wurde verifiziert.`,
+    });
+  }
+  const pendingFiles = fs.readdirSync(UPDATE_DIR).filter(file => /^update-\d+\.zip$/.test(file));
   return res.json({
     success: true,
-    data: { currentVersion, nodeVersion, platform, arch, pendingUpdates: pendingFiles.length },
+    data: {
+      currentVersion,
+      nodeVersion: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      pendingUpdates: pendingFiles.length,
+      appRoot,
+      updateState,
+    },
   });
 });
 
-// POST /api/admin/update/upload — ZIP hochladen und prüfen
+// POST /api/admin/update/upload — ZIP hochladen, normalisieren und prüfen
 router.post('/update/upload', requirePermission('canManageSettings') as any, uploadUpdate.single('update'), (req: AuthRequest, res: Response) => {
-  if (!req.file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
+  if (!req.file) return res.status(400).json({ success: false, error: 'Keine ZIP-Datei hochgeladen' });
   try {
-    const zip = new AdmZip(req.file.path);
-    const entries = zip.getEntries().map(e => e.entryName);
-    // Prüfe ob es eine gültige PodCore-Update-ZIP ist
-    // Unterstützt: Build-ZIPs (server/dist/) UND Quellcode-ZIPs (client/src/ + server/)
-    const hasServerDist = entries.some(e => e.includes('server/dist/index.js') || e.includes('dist/index.js'));
-    const hasServerSrc = entries.some(e => e.includes('server/routers/') || e.includes('server/index.ts'));
-    const hasClientSrc = entries.some(e => e.includes('client/src/') || e.includes('client/index.html'));
-    const hasServer = hasServerDist || hasServerSrc;
-    const hasPublic = entries.some(e => e.includes('server/public/') || e.includes('dist/public/') || e.includes('client/dist/'));
-    const hasPkg = entries.some(e => e.endsWith('package.json'));
-    const isSourceZip = !hasServerDist && hasServerSrc;
-    // Versuche Version aus package.json zu lesen
-    let updateVersion = '?';
-    try {
-      const pkgEntry = zip.getEntries().find(e => e.entryName.match(/^[^/]*\/package\.json$/) || e.entryName === 'package.json');
-      if (pkgEntry) {
-        const pkgData = JSON.parse(pkgEntry.getData().toString('utf8'));
-        updateVersion = pkgData.version || '?';
-      }
-    } catch {}
-    // Prüfe Node.js Kompatibilität
-    const nodeOk = parseInt(process.version.slice(1)) >= 18;
-    const checks = [
-      { name: 'Server-Dateien', ok: hasServer, required: true },
-      { name: isSourceZip ? 'Client-Quellcode' : 'Frontend-Assets', ok: hasPublic || hasClientSrc, required: false },
-      { name: 'package.json', ok: hasPkg, required: false },
-      { name: `Node.js >= 18 (aktuell: ${process.version})`, ok: nodeOk, required: true },
-      ...(isSourceZip ? [{ name: 'Quellcode-ZIP (Build erforderlich)', ok: true, required: false }] : []),
-    ];
-    const allRequired = checks.filter(c => c.required).every(c => c.ok);
+    const info = inspectUpdateArchive(req.file.path);
     const updateId = path.basename(req.file.path, '.zip').replace('update-', '');
+    const nodeOk = parseInt(process.version.slice(1), 10) >= 18;
+    const checks = [
+      { name: 'PodCore-Anwendungswurzel', ok: true, required: true },
+      { name: `Konsistente Zielversion ${info.version}`, ok: true, required: true },
+      { name: info.isSourceZip ? 'Server-Quellcode' : 'Gebauter Server', ok: info.hasServerSource || info.hasServerDist, required: true },
+      { name: info.isSourceZip ? 'Client-Quellcode' : 'Gebautes Frontend', ok: info.hasClientSource || info.hasFrontendBuild, required: true },
+      { name: `Node.js >= 18 (aktuell: ${process.version})`, ok: nodeOk, required: true },
+      ...(info.isSourceZip ? [{ name: 'Quellcode-ZIP: Build im Staging erforderlich', ok: true, required: false }] : []),
+    ];
+    const allRequired = checks.filter(check => check.required).every(check => check.ok);
+    writeUpdateStatus({
+      state: 'uploaded',
+      updateId,
+      targetVersion: info.version,
+      message: `Update-ZIP für Version ${info.version} geprüft.`,
+    });
     return res.json({
       success: true,
       data: {
         updateId,
         filename: req.file.filename,
         size: req.file.size,
-        updateVersion,
-        fileCount: entries.length,
+        updateVersion: info.version,
+        fileCount: info.fileCount,
+        packageType: info.isSourceZip ? 'source' : 'build',
         checks,
         canApply: allRequired,
       },
     });
-  } catch (err: any) {
+  } catch (error: any) {
     try { fs.unlinkSync(req.file.path); } catch {}
-    return res.status(400).json({ success: false, error: `Ungültige ZIP-Datei: ${err.message}` });
+    writeUpdateStatus({ state: 'failed', message: `Upload-Prüfung fehlgeschlagen: ${error.message || error}` });
+    return res.status(400).json({ success: false, error: `Ungültige PodCore-Update-ZIP: ${error.message || error}` });
   }
 });
 
-// POST /api/admin/update/apply — Update anwenden
+// POST /api/admin/update/apply — Update im Staging prüfen, rollbackfähig übernehmen und Neustart planen
 router.post('/update/apply', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
-  const { updateId } = req.body;
-  if (!updateId) return res.status(400).json({ success: false, error: 'updateId fehlt' });
+  const updateId = String(req.body?.updateId || '');
+  if (!/^\d+$/.test(updateId)) return res.status(400).json({ success: false, error: 'Ungültige updateId' });
   const zipPath = path.join(UPDATE_DIR, `update-${updateId}.zip`);
   if (!fs.existsSync(zipPath)) return res.status(404).json({ success: false, error: 'Update-Datei nicht gefunden' });
+
+  const log: string[] = [`Update ${updateId} gestartet.`];
+  let manifest: UpdateBackupManifest | null = null;
+  let stagingBase = '';
   try {
-    const zip = new AdmZip(zipPath);
-    const entries = zip.getEntries();
-    // Bestimme das Zielverzeichnis (wo der Server läuft)
-    // __dirname = .../server/dist/routers → serverDir = .../server (2 levels up)
-    // Bei ZIP-Struktur podcore-release/server/... → nach Strip: server/...
-    // serverDir muss das übergeordnete Verzeichnis von server/ sein
-    const serverBinDir = path.join(__dirname, '..'); // .../server/dist → .../server
-    const serverRootDir = path.join(__dirname, '..', '..'); // .../server → .../podcore-release
-    const log: string[] = [`Update gestartet: ${new Date().toISOString()}`];
-    // Extrahiere nur server/dist und server/public (keine node_modules, keine DB)
-    // Prüfe ob es eine Quellcode-ZIP oder Build-ZIP ist
-    const entryNames = entries.map((e: any) => e.entryName);
-    const isSourceZip = !entryNames.some((e: string) => e.includes('server/dist/index.js') || e.includes('dist/index.js'))
-      && entryNames.some((e: string) => e.includes('server/routers/') || e.includes('server/index.ts') || e.includes('client/src/'));
-    let extracted = 0;
-    if (isSourceZip) {
-      // Quellcode-ZIP: Alle Quelldateien extrahieren (außer node_modules, DB, Uploads)
-      entries.forEach((entry: any) => {
-        const name = entry.entryName;
-        if (entry.isDirectory) return;
-        if (name.includes('node_modules/') || name.endsWith('.db') || name.includes('/uploads/') || name.includes('/branding/')) return;
-        if (name.includes('/.git/') || name.endsWith('.log')) return;
-        // Normalisiere: führendes Verzeichnis entfernen (z.B. 'podcore_v2/')
-        const stripped = name.replace(/^[^/]+\//, '');
-        if (!stripped || stripped.startsWith('.')) return;
-        const targetPath = path.join(serverRootDir, stripped);
-        try {
-          fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-          fs.writeFileSync(targetPath, entry.getData());
-          extracted++;
-        } catch (_) {}
-      });
-      log.push(`${extracted} Quelldateien extrahiert`);
-      // Build ausführen
-      log.push('Build wird gestartet (npm run build)...');
-      try {
-        const { execSync } = require('child_process');
-        execSync('npm run build', { cwd: serverRootDir, stdio: 'pipe', timeout: 300000 });
-        log.push('Build erfolgreich abgeschlossen');
-      } catch (buildErr: any) {
-        log.push(`Build-Fehler: ${buildErr.message || buildErr}`);
-        return res.status(500).json({ success: false, error: 'Build fehlgeschlagen: ' + (buildErr.message || buildErr) });
-      }
-    } else {
-      // Build-ZIP: Nur dist/public extrahieren
-      entries.forEach((entry: any) => {
-        const name = entry.entryName;
-        if (entry.isDirectory) return;
-        if (name.includes('node_modules/') || name.endsWith('.db') || name.includes('/uploads/') || name.includes('/branding/')) return;
-        const stripped = name.replace(/^[^/]+\//, '');
-        let targetRelPath: string | null = null;
-        if (stripped.startsWith('server/dist/') || stripped.startsWith('server/public/')) {
-          targetRelPath = stripped;
-        } else if (stripped === 'server/package.json') {
-          targetRelPath = stripped;
-        } else if (stripped.startsWith('dist/') || stripped.startsWith('public/')) {
-          targetRelPath = 'server/' + stripped;
-        } else if (stripped === 'package.json') {
-          targetRelPath = 'server/package.json';
-        }
-        if (targetRelPath) {
-          const targetPath = path.join(serverRootDir, targetRelPath);
-          fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-          fs.writeFileSync(targetPath, entry.getData());
-          extracted++;
-        }
-      });
-      log.push(`${extracted} Dateien extrahiert`);
+    const appRoot = getApplicationRoot();
+    const currentVersion = RUNNING_SERVER_VERSION;
+    const info = inspectUpdateArchive(zipPath);
+    stagingBase = path.join(UPDATE_DIR, `staging-${updateId}`);
+    const stagingRoot = path.join(stagingBase, 'app');
+    const backupDir = path.join(UPDATE_DIR, 'backups', `${Date.now()}-${currentVersion}-to-${info.version}`);
+
+    writeUpdateStatus({
+      state: 'staging',
+      updateId,
+      previousVersion: currentVersion,
+      targetVersion: info.version,
+      message: 'Update wird in einem isolierten Staging-Verzeichnis geprüft.',
+    });
+    log.push(`Anwendungswurzel: ${appRoot}`);
+    log.push(`Versionswechsel: ${currentVersion} → ${info.version}`);
+
+    const extracted = extractUpdateArchive(zipPath, stagingRoot, info);
+    log.push(`${extracted} sichere Update-Dateien in das Staging extrahiert.`);
+    prepareStagedApplication(stagingRoot, info.isSourceZip, info.version, log);
+    const installDependencies = dependenciesChanged(stagingRoot, appRoot);
+
+    writeUpdateStatus({
+      state: 'applying',
+      updateId,
+      previousVersion: currentVersion,
+      targetVersion: info.version,
+      message: 'Geprüfte Dateien werden rollbackfähig übernommen.',
+    });
+    manifest = applyStagedApplication(stagingRoot, appRoot, backupDir, currentVersion, info.version);
+    log.push(`${manifest.overwrittenFiles.length} Dateien gesichert und überschrieben; ${manifest.createdFiles.length} Dateien neu angelegt.`);
+
+    if (installDependencies) {
+      log.push('Paketdefinitionen haben sich geändert; Laufzeitabhängigkeiten werden aktualisiert.');
+      installRuntimeDependencies(appRoot, log);
     }
-    // Aufräumen
+
+    const installedRootVersion = readPackageVersion(path.join(appRoot, 'package.json'));
+    const installedServerVersion = readPackageVersion(path.join(appRoot, 'server', 'package.json'));
+    if (installedRootVersion !== info.version || installedServerVersion !== info.version) {
+      throw new Error(`Versionsprüfung nach Übernahme fehlgeschlagen: Root ${installedRootVersion}, Server ${installedServerVersion}, erwartet ${info.version}`);
+    }
+    validateStagedApplication(appRoot, info.version);
+    log.push(`Installierte Dateien und Version ${info.version} erfolgreich verifiziert.`);
+
     try { fs.unlinkSync(zipPath); } catch {}
-    log.push('Update erfolgreich abgeschlossen');
-    // Log-Datei schreiben
-    const logFile = path.join(DATA_DIR, 'update.log');
-    try { fs.appendFileSync(logFile, log.join('\n') + '\n'); } catch {}
-    // Server-Neustart: Neuen Prozess spawnen, dann aktuellen beenden
-    // Funktioniert ohne PM2/systemd durch self-restart
-    const serverScript = path.join(serverBinDir, 'index.js');
-    const isWindows = process.platform === 'win32';
-    const needsRestart = fs.existsSync(serverScript);
-    if (needsRestart) {
-      log.push('Server wird neu gestartet...');
-      setTimeout(() => {
-        try {
-          // Spawn neuen Server-Prozess (detached, unabhängig vom aktuellen)
-          const child = spawn(process.execPath, [serverScript], {
-            detached: true,
-            stdio: 'ignore',
-            env: { ...process.env },
-            cwd: serverBinDir,
-          });
-          child.unref();
-        } catch {}
-        // Aktuellen Prozess beenden
-        setTimeout(() => process.exit(0), 500);
-      }, 2000);
-    } else {
-      log.push('Manueller Neustart erforderlich: Server stoppen und neu starten.');
+    try { fs.rmSync(stagingBase, { recursive: true, force: true }); } catch {}
+
+    const restart = scheduleApplicationRestart(appRoot, log);
+    const status = writeUpdateStatus({
+      state: restart.scheduled ? 'restart-pending' : 'applying',
+      updateId,
+      previousVersion: currentVersion,
+      targetVersion: info.version,
+      message: restart.scheduled
+        ? `Update übernommen; Neustart auf Version ${info.version} wurde geplant.`
+        : `Update übernommen; manueller Neustart auf Version ${info.version} ist erforderlich.`,
+    });
+    appendUpdateLog(log);
+
+    return res.json({
+      success: true,
+      data: {
+        log,
+        previousVersion: currentVersion,
+        targetVersion: info.version,
+        installedVersion: installedServerVersion,
+        verifiedBeforeRestart: true,
+        restartScheduled: restart.scheduled,
+        restartMode: restart.mode,
+        updateState: status,
+        message: restart.scheduled
+          ? `Update auf Version ${info.version} übernommen. Der Neustart läuft; die neue Version wird anschließend verifiziert.`
+          : `Update auf Version ${info.version} übernommen. Bitte den Dienst manuell neu starten.`,
+      },
+    });
+  } catch (error: any) {
+    let rollbackMessage = '';
+    if (manifest) {
+      try {
+        restoreUpdateBackup(manifest);
+        rollbackMessage = ' Änderungen wurden aus der Sicherung zurückgerollt.';
+        log.push('Rollback erfolgreich abgeschlossen.');
+      } catch (rollbackError: any) {
+        rollbackMessage = ` Rollback fehlgeschlagen: ${rollbackError.message || rollbackError}.`;
+        log.push(rollbackMessage.trim());
+      }
     }
-    return res.json({ success: true, data: { log, message: needsRestart ? 'Update erfolgreich. Server startet automatisch neu.' : 'Update erfolgreich. Bitte Server manuell neu starten.', needsRestart } });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: `Update fehlgeschlagen: ${err.message}` });
+    if (stagingBase) {
+      try { fs.rmSync(stagingBase, { recursive: true, force: true }); } catch {}
+    }
+    const message = `Update fehlgeschlagen: ${error.message || error}.${rollbackMessage}`;
+    log.push(message);
+    appendUpdateLog(log);
+    writeUpdateStatus({ state: 'failed', updateId, message });
+    return res.status(500).json({ success: false, error: message, data: { log } });
   }
 });
 
 // GET /api/admin/update/logs
 router.get('/update/logs', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
-  const logFile = path.join(DATA_DIR, 'update.log');
   let logs: string[] = [];
-  try { logs = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').split('\n').filter(Boolean) : []; } catch {}
+  try { logs = fs.existsSync(UPDATE_LOG_FILE) ? fs.readFileSync(UPDATE_LOG_FILE, 'utf8').split('\n').filter(Boolean) : []; } catch {}
   return res.json({ success: true, data: logs });
 });
 
@@ -863,7 +1049,7 @@ router.post('/db/migrate-to-mysql', requirePermission('canManageSettings') as an
     }
     await conn.end();
     addLog(`Abgeschlossen: ${totalRows} Datensätze in ${tables.length} Tabellen`);
-    const logPath = path.join(DATA_DIR, 'migration.log');
+    const logPath = path.join(DATABASE_DATA_DIR, 'migration.log');
     fs.writeFileSync(logPath, log.join('\n'), 'utf8');
     // MySQL-Konfiguration in Settings speichern
     const settingsRow = sqliteDb.get("SELECT value FROM settings WHERE key = 'app'") as any;
@@ -879,7 +1065,7 @@ router.post('/db/migrate-to-mysql', requirePermission('canManageSettings') as an
 
 // GET /api/admin/db/migration-log
 router.get('/db/migration-log', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
-  const logPath = path.join(DATA_DIR, 'migration.log');
+  const logPath = path.join(DATABASE_DATA_DIR, 'migration.log');
   let logs: string[] = [];
   try { logs = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean) : []; } catch {}
   return res.json({ success: true, data: logs });

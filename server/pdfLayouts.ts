@@ -19,7 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
-export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report' | 'sponsor_dossier' | 'sponsor_offer';
+export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report' | 'sponsor_dossier' | 'sponsor_offer' | 'question_pool';
 
 export interface PdfLayoutColors {
   primary: string;       // Hauptfarbe (Überschriften, Akzente)
@@ -100,6 +100,8 @@ export interface PdfLayoutSections {
   showOfferNotes: boolean;              // Hinweise im Angebot
   showOfferOptions: boolean;            // Optionen/Positionen im Angebot
   showSponsorAddress: boolean;          // Sponsor-Adresse im Angebot
+  // Allgemeiner Fragen-Pool – v2.14.3
+  showQuestionPoolNotes?: boolean;       // Interne Hinweise je Pool-Frage ausgeben
 }
 
 export interface PdfLayoutWatermark {
@@ -210,6 +212,7 @@ export const DEFAULT_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> =
     showOfferNotes: true,
     showOfferOptions: true,
     showSponsorAddress: true,
+    showQuestionPoolNotes: true,
   },
   pageMargin: 50,
   pageSize: 'A4',
@@ -587,6 +590,7 @@ function parseLayout(row: any): PdfLayout {
       showOfferNotes: true,
       showOfferOptions: true,
       showSponsorAddress: true,
+      showQuestionPoolNotes: true,
       ...sections,
     },
     isDefault: row.is_default === 1,
@@ -665,6 +669,30 @@ export function ensureDefaultLayouts(): void {
         JSON.stringify(layout.header), JSON.stringify(layout.footer),
         JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
         (layout as any).pageOrientation || 'landscape',
+      ]);
+  }
+
+  // v2.14.3: Eigenes konfigurierbares Layout für den allgemeinen Fragen-Pool
+  const hasQuestionPool = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'question_pool' LIMIT 1");
+  if (!hasQuestionPool) {
+    const layout = {
+      ...DEFAULT_LAYOUT,
+      name: 'Fragen-Pool Standard',
+      description: 'Themenweise sortierter Fragenkatalog aus dem allgemeinen Fragen-Pool',
+      exportType: 'question_pool',
+      isDefault: true,
+      isSystem: false,
+      sections: { ...DEFAULT_LAYOUT.sections, showQuestionPoolNotes: true },
+    };
+    db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuidv4(), layout.name, layout.description, layout.exportType,
+        layout.isDefault ? 1 : 0, layout.isSystem ? 1 : 0,
+        JSON.stringify(layout.colors), JSON.stringify(layout.typography),
+        JSON.stringify(layout.header), JSON.stringify(layout.footer),
+        JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
+        layout.pageOrientation || 'portrait',
       ]);
   }
 

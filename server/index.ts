@@ -21,7 +21,7 @@ import adminRouter from './routers/admin';
 import podigeeRouter from './routers/podigee';
 import backupRouter from './routers/backup';
 import storageRouter from './routers/storage';
-import seasonsRouter from './routers/seasons';
+import { seasonsRouter } from './routers/seasons';
 import statsRouter from './routers/stats';
 import chatRouter from './routers/chat';
 import pdfLayoutsRouter from './routers/pdfLayouts';

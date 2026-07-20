@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Layers, Plus, Edit2, Trash2, ChevronRight, Calendar, Mic,
   CheckCircle, Clock, Archive, X, Save, Loader2, PlayCircle,
-  List, ArrowRight
+  List, ArrowRight, ListOrdered
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
@@ -163,7 +163,7 @@ export default function SeasonsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card text-center">
           <p className="text-2xl font-bold text-accent-purple">{seasons.length}</p>
           <p className="text-text-muted text-sm mt-1">Staffeln</p>
@@ -171,6 +171,10 @@ export default function SeasonsPage() {
         <div className="card text-center">
           <p className="text-2xl font-bold text-accent-blue">{seasons.reduce((a, s) => a + (s.episode_count || 0), 0)}</p>
           <p className="text-text-muted text-sm mt-1">Zugeordnete Folgen</p>
+        </div>
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-accent-purple">{seasons.reduce((a, s) => a + (s.planned_episode_count || 0), 0)}</p>
+          <p className="text-text-muted text-sm mt-1">Strategisch geplant</p>
         </div>
         <div className="card text-center">
           <p className="text-2xl font-bold text-accent-green">{episodes.filter((e: any) => !e.season_id).length}</p>
@@ -221,6 +225,13 @@ export default function SeasonsPage() {
                         <Mic size={13} className="text-accent-purple" />
                         <strong className="text-text-primary">{season.episode_count || 0}</strong> Folgen
                       </span>
+                      {(season.planned_episode_count > 0 || season.alternative_count > 0) && (
+                        <span className="flex items-center gap-1.5 text-text-secondary text-sm">
+                          <ListOrdered size={13} className="text-accent-blue" />
+                          <strong className="text-text-primary">{season.planned_episode_count || 0}</strong> geplant
+                          {season.alternative_count > 0 ? ` · ${season.alternative_count} Alternativen` : ''}
+                        </span>
+                      )}
                       {season.start_date && (
                         <span className="flex items-center gap-1.5 text-text-muted text-sm">
                           <Calendar size={13} />
@@ -233,6 +244,15 @@ export default function SeasonsPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {can('canViewSeasonPlanning') && (
+                      <Link
+                        to={`/editorial?tab=season-planning&seasonId=${season.id}`}
+                        className="btn-secondary text-sm flex items-center gap-1.5"
+                        title="Strategische Staffelplanung öffnen"
+                      >
+                        <ListOrdered size={14} /> Planung öffnen
+                      </Link>
+                    )}
                     <button
                       onClick={() => openAssign(season)}
                       className="btn-ghost text-sm flex items-center gap-1.5"

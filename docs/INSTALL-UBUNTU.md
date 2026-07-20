@@ -1,14 +1,14 @@
-# PodCore v2.14.2 unter Ubuntu installieren und betreiben
+# PodCore v2.14.4 unter Ubuntu installieren und betreiben
 
 **Autor:** Manus AI  
 **Zielgruppe:** interne IT-Abteilung, Systemadministration und technischer Betrieb  
-**Gültig für:** PodCore v2.14.2  
+**Gültig für:** PodCore v2.14.4
 **Betriebssystem:** Ubuntu Server 22.04 LTS oder 24.04 LTS  
 **Anwendungsport:** TCP 3001  
 **Datenverzeichnis:** `/var/lib/podcore`  
 **Anwendungsverzeichnis:** `/opt/podcore`
 
-Diese Anleitung beschreibt eine produktionsnahe Einzelserver-Installation von **PodCore v2.14.2**. Die Anwendung wird unter einem dedizierten, nicht interaktiv anmeldbaren Systemkonto ausgeführt, durch `systemd` überwacht und wahlweise über Caddy mit HTTPS veröffentlicht. Die SQLite-Datenbank und alle persistenten Anwendungsdaten liegen getrennt vom Programmcode unter `/var/lib/podcore`.
+Diese Anleitung beschreibt eine produktionsnahe Einzelserver-Installation von **PodCore v2.14.4**. Die Anwendung wird unter einem dedizierten, nicht interaktiv anmeldbaren Systemkonto ausgeführt, durch `systemd` überwacht und wahlweise über Caddy mit HTTPS veröffentlicht. Die SQLite-Datenbank und alle persistenten Anwendungsdaten liegen getrennt vom Programmcode unter `/var/lib/podcore`.
 
 > **Wichtiger Sicherheitshinweis:** Bei einem leeren Datenverzeichnis erzeugt PodCore den Initialbenutzer `admin` mit dem Kennwort `admin123`. Dieses Kennwort muss unmittelbar nach dem ersten erfolgreichen Login geändert werden. Der Initialbenutzer wird nur angelegt, wenn die Benutzertabelle leer ist.[9]
 
@@ -114,23 +114,23 @@ Für eine kontrollierte Installation ist das veröffentlichte Release-ZIP zu ver
 
 ```bash
 cd /tmp
-rm -rf PodCore-2.14.2 PodCore-2.14.2.zip
+rm -rf PodCore-v2.14.4 PodCore-v2.14.4.zip PodCore-v2.14.4.zip.sha256
 
-curl -fL \
-  -o PodCore-2.14.2.zip \
-  https://github.com/webcaster/podcore_V2/releases/download/v2.14.2/PodCore-2.14.2.zip
+curl -fLO \
+  https://github.com/webcaster/podcore_V2/releases/download/v2.14.4/PodCore-v2.14.4.zip
+curl -fLO \
+  https://github.com/webcaster/podcore_V2/releases/download/v2.14.4/PodCore-v2.14.4.zip.sha256
 
-echo "239ce0cadb81608118a1d474a1a523cd8428c1f00dc9b02e7b924315c8f2ba54  PodCore-2.14.2.zip" \
-  | sha256sum --check --strict
+sha256sum --check --strict PodCore-v2.14.4.zip.sha256
 ```
 
-Die Prüfung muss `PodCore-2.14.2.zip: OK` ausgeben. Bei einer Abweichung darf die Datei nicht installiert werden. Laden Sie sie erneut aus der freigegebenen Quelle und prüfen Sie die Ursache.
+Die Prüfung muss `PodCore-v2.14.4.zip: OK` ausgeben. Bei einer Abweichung darf die Datei nicht installiert werden. Laden Sie sie erneut aus der freigegebenen Quelle und prüfen Sie die Ursache.
 
 Entpacken Sie das Archiv und übernehmen Sie den Inhalt in das Anwendungsverzeichnis:
 
 ```bash
-unzip -q PodCore-2.14.2.zip
-sudo cp -a PodCore-2.14.2/. /opt/podcore/
+unzip -q PodCore-v2.14.4.zip
+sudo cp -a PodCore-v2.14.4/. /opt/podcore/
 sudo chown -R podcore:podcore /opt/podcore
 sudo chmod +x /opt/podcore/install.sh /opt/podcore/start-unix.sh
 ```
@@ -139,7 +139,7 @@ Alternativ kann eine freigegebene Git-Revision ausgecheckt werden. Für einen au
 
 ```bash
 sudo -u podcore git clone \
-  --branch v2.14.2 \
+  --branch v2.14.4 \
   --depth 1 \
   https://github.com/webcaster/podcore_V2.git \
   /opt/podcore
@@ -237,7 +237,7 @@ Prüfen Sie den lokalen Health-Endpunkt:
 curl -fsS http://127.0.0.1:3001/api/health | python3 -m json.tool
 ```
 
-Eine erfolgreiche Antwort enthält unter anderem `"status": "ok"`, die Version `2.14.2`, den Port und das konfigurierte Datenverzeichnis.[8]
+Eine erfolgreiche Antwort enthält unter anderem `"status": "ok"`, die Version `2.14.4`, den Port und das konfigurierte Datenverzeichnis.[8]
 
 ## 9. Netzwerk und UFW-Firewall
 
@@ -327,7 +327,7 @@ Für die technische Abnahme sind mindestens folgende Punkte zu dokumentieren:
 | --- | --- |
 | `systemctl is-active podcore` | `active` |
 | Health-Endpunkt | HTTP 200 und `status: ok` |
-| Versionsanzeige | `2.14.2` |
+| Versionsanzeige | `2.14.4` |
 | Datenpfad | `/var/lib/podcore` |
 | HTTPS-Prüfung | Gültiges Zertifikat und keine Browserwarnung |
 | Anmeldung | Erfolgreich nach Kennwortwechsel |
@@ -381,13 +381,15 @@ curl -fsS http://127.0.0.1:3001/api/health | python3 -m json.tool
 
 Prüfen Sie danach Benutzeranmeldung, ausgewählte Datensätze und Mediendateien. Entfernen Sie das umbenannte Vorher-Verzeichnis erst nach dokumentierter fachlicher Abnahme.
 
-## 13. Update auf PodCore v2.14.2 und spätere Releases
+## 13. Update auf PodCore v2.14.4 und spätere Releases
 
 Vor jedem Update sind ein fachliches Wartungsfenster, ein aktueller JSON-Export und eine vollständige Dateisystem-Sicherung erforderlich. Prüfen Sie Release-Notes und Prüfsumme, bevor ein Paket auf den Produktivserver übertragen wird.
 
-### 13.1 In-App-Update über ZIP-Upload
+> **Verpflichtender Übergang für 2.14.2 und älter:** Der alte ZIP-Updatehandler ist selbst von dem in 2.14.3 behobenen Pfadfehler betroffen. Er kann Erfolg melden, obwohl die aktive Anwendung unverändert bleibt. Verwenden Sie für dieses erste Reparaturupdate ausschließlich das kontrollierte manuelle Verfahren aus Abschnitt **13.2**. Der In-App-Weg aus Abschnitt 13.1 gilt erst, wenn der Health-Endpunkt bereits Version 2.14.3 oder neuer meldet.
 
-Ein Konto mit der Berechtigung zur Systemeinstellungsverwaltung kann im Administrationsbereich ein PodCore-ZIP hochladen. Die Anwendung prüft unter anderem Serverdateien, Paketstruktur und Node.js-Kompatibilität. Quellcode-ZIPs werden in das Anwendungsverzeichnis übernommen und anschließend gebaut; der Update-Status wird unter `/var/lib/podcore/update.log` protokolliert.[11]
+### 13.1 In-App-Update ab bereits installierter Version 2.14.3
+
+Wenn PodCore bereits **2.14.3 oder neuer** ausführt, öffnet ein Konto mit der Berechtigung zur Systemeinstellungsverwaltung **Einstellungen → App-Update** oder folgt der entsprechenden Karte aus der Administration. Die Anwendung prüft Serverdateien, Paketstruktur, Zielversion und Node.js-Kompatibilität. Das Quellcode-ZIP wird zunächst in einem getrennten Staging-Bereich installiert und gebaut. Erst nach erfolgreicher Vorabprüfung sichert PodCore den bisherigen Programmstand und übernimmt das vorbereitete Ergebnis rollbackfähig; der Update-Status wird unter `/var/lib/podcore/update.log` protokolliert.[11]
 
 Der empfohlene Ablauf lautet:
 
@@ -395,32 +397,38 @@ Der empfohlene Ablauf lautet:
 2. Integrierten JSON-Export sowie vollständige Offline-Dateisicherung erstellen.
 3. Das unveränderte Release-ZIP mit verifizierter SHA-256-Prüfsumme hochladen.
 4. Die angezeigten Prüfungen vollständig kontrollieren und erst danach das Update anwenden.
-5. Den Neustart abwarten und Health-Endpunkt, Version, Login sowie zentrale Funktionen prüfen.
-6. `/var/lib/podcore/update.log` und `journalctl -u podcore` auf Fehler kontrollieren.
+5. Den vom Dienstmanager ausgeführten Prozessneustart abwarten. Der Update-Dialog meldet den Abschluss erst, wenn der neue Prozess erreichbar ist und die Zielversion bestätigt.
+6. Health-Endpunkt, Version, Login sowie zentrale Funktionen prüfen.
+7. `/var/lib/podcore/update.log` und `journalctl -u podcore` auf Fehler kontrollieren.
 
-> **Betriebshinweis:** Das integrierte Quellcode-Update arbeitet im vorhandenen Anwendungsverzeichnis. Ein Build-Fehler kann auftreten, nachdem bereits Dateien geschrieben wurden. Die vorgelagerte Sicherung und ein getestetes Rollback-Verfahren sind deshalb verpflichtend.[11]
+> **Betriebshinweis:** Build und Abhängigkeitsinstallation erfolgen vor dem Dateiaustausch im Staging. Falls Übernahme oder Versionsverifikation dennoch fehlschlagen, stellt PodCore den gesicherten vorherigen Programmstand wieder her. Eine externe Sicherung des persistenten Datenverzeichnisses und ein getestetes manuelles Rollback-Verfahren bleiben trotzdem verpflichtend.[11]
 
 ### 13.2 Kontrolliertes manuelles Update
 
-Für besonders kontrollierte Umgebungen kann die IT den aktuellen Code vollständig beiseitelegen und das neue Release frisch aufbauen. Das persistente Datenverzeichnis bleibt davon unberührt:
+Dieses Verfahren ist für den Übergang von **2.14.2 oder älter auf 2.14.3 verpflichtend**; anschließend kann 2.14.4 über den verifizierten In-App-Weg oder ebenfalls manuell eingespielt werden. In besonders kontrollierten Umgebungen eignet sich dieses Verfahren auch unmittelbar für 2.14.4 und spätere Releases. Der bisherige Programmcode wird vollständig beiseitegelegt und das Release frisch aufgebaut. Das getrennte persistente Datenverzeichnis `/var/lib/podcore` bleibt unverändert.
+
+Laden Sie ZIP und Prüfsummendatei gemäß Abschnitt 5 nach `/tmp`. Führen Sie anschließend für 2.14.4 folgende Befehle aus:
 
 ```bash
+cd /tmp
+sha256sum --check --strict PodCore-v2.14.4.zip.sha256
+rm -rf PodCore-v2.14.4
+unzip -q PodCore-v2.14.4.zip
+
 sudo systemctl stop podcore
 sudo mv /opt/podcore "/opt/podcore.rollback-$(date +%Y%m%d-%H%M%S)"
 sudo install -d -o podcore -g podcore -m 0750 /opt/podcore
-
-cd /tmp
-unzip -q NEUES-PODCORE-RELEASE.zip
-sudo cp -a NEUES-RELEASE-VERZEICHNIS/. /opt/podcore/
+sudo cp -a PodCore-v2.14.4/. /opt/podcore/
 sudo chown -R podcore:podcore /opt/podcore
-sudo chmod +x /opt/podcore/install.sh
+sudo chmod +x /opt/podcore/install.sh /opt/podcore/start-unix.sh
 sudo -u podcore -H bash -c 'cd /opt/podcore && ./install.sh'
 
 sudo systemctl start podcore
+sudo systemctl status podcore --no-pager
 curl -fsS http://127.0.0.1:3001/api/health | python3 -m json.tool
 ```
 
-Ersetzen Sie Dateiname und Verzeichnisname durch das konkret freigegebene Release. Entfernen Sie die Rollback-Kopie erst nach technischer und fachlicher Abnahme.
+Der Health-Endpunkt muss nach dem Start Version **2.14.4** melden. Kontrollieren Sie anschließend Anmeldung, zentrale Datensätze und Mediendateien. Entfernen Sie die Rollback-Kopie erst nach technischer und fachlicher Abnahme. Für spätere manuelle Releases ersetzen Sie Dateiname, Verzeichnisname und Sollversion durch die konkret freigegebenen Werte.
 
 ## 14. Rollback
 
@@ -505,21 +513,21 @@ sudo caddy validate --config /etc/caddy/Caddyfile
 3. [Ubuntu Server Documentation – Firewall und UFW][3]
 4. [Caddy – offizielle Installation für Debian/Ubuntu][4]
 5. [Caddy – Reverse Proxy Quick Start und automatisches HTTPS][5]
-6. [PodCore v2.14.2 – Root-Paket und Startskript][6]
-7. [PodCore v2.14.2 – Installationsskript][7]
-8. [PodCore v2.14.2 – Server, Port und Health-Endpunkt][8]
-9. [PodCore v2.14.2 – Datenpfad und Initialbenutzer][9]
-10. [PodCore v2.14.2 – Backup, Importvorschau und Wiederherstellung][10]
-11. [PodCore v2.14.2 – ZIP-Update im Administrationsbereich][11]
+6. [PodCore v2.14.4 – Root-Paket und Startskript][6]
+7. [PodCore v2.14.4 – Installationsskript][7]
+8. [PodCore v2.14.4 – Server, Port und Health-Endpunkt][8]
+9. [PodCore v2.14.4 – Datenpfad und Initialbenutzer][9]
+10. [PodCore v2.14.4 – Backup, Importvorschau und Wiederherstellung][10]
+11. [PodCore v2.14.4 – verifiziertes ZIP-Update][11]
 
 [1]: https://nodejs.org/en/about/previous-releases
 [2]: https://github.com/nodesource/distributions
 [3]: https://documentation.ubuntu.com/server/how-to/security/firewalls/
 [4]: https://caddyserver.com/docs/install#debian-ubuntu-raspbian
 [5]: https://caddyserver.com/docs/quick-starts/reverse-proxy
-[6]: https://github.com/webcaster/podcore_V2/blob/v2.14.2/package.json
-[7]: https://github.com/webcaster/podcore_V2/blob/v2.14.2/install.sh
-[8]: https://github.com/webcaster/podcore_V2/blob/v2.14.2/server/index.ts
-[9]: https://github.com/webcaster/podcore_V2/blob/v2.14.2/server/database.ts
-[10]: https://github.com/webcaster/podcore_V2/blob/v2.14.2/server/routers/backup.ts
-[11]: https://github.com/webcaster/podcore_V2/blob/v2.14.2/server/routers/admin.ts
+[6]: https://github.com/webcaster/podcore_V2/blob/v2.14.4/package.json
+[7]: https://github.com/webcaster/podcore_V2/blob/v2.14.4/install.sh
+[8]: https://github.com/webcaster/podcore_V2/blob/v2.14.4/server/index.ts
+[9]: https://github.com/webcaster/podcore_V2/blob/v2.14.4/server/database.ts
+[10]: https://github.com/webcaster/podcore_V2/blob/v2.14.4/server/routers/backup.ts
+[11]: https://github.com/webcaster/podcore_V2/blob/v2.14.4/server/routers/admin.ts

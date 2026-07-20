@@ -229,6 +229,32 @@ export const editorialApi = {
   deleteQuestion: (id: string) => api.delete(`/editorial/interviews/questions/${id}`),
   approveQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/approve`, {}),
   revokeQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/revoke`, {}),
+  listQuestionPool: (params?: { category?: string; search?: string }) =>
+    api.get<any[]>(`/editorial/interviews/question-pool${buildQs(params)}`),
+  createPoolQuestion: (data: any) => api.post<any>('/editorial/interviews/question-pool', data),
+  updatePoolQuestion: (id: string, data: any) => api.put<any>(`/editorial/interviews/question-pool/${id}`, data),
+  deletePoolQuestion: (id: string) => api.delete(`/editorial/interviews/question-pool/${id}`),
+  assignPoolQuestions: (partnerId: string, questionIds: string[]) =>
+    api.post<any>('/editorial/interviews/question-pool/assign', { partnerId, questionIds }),
+  downloadQuestionPoolPdf: async (params?: { category?: string; search?: string; questionIds?: string[]; layoutId?: string; documentTitle?: string }): Promise<Blob> => {
+    const query = buildQs({
+      category: params?.category,
+      search: params?.search,
+      questionIds: params?.questionIds?.length ? params.questionIds.join(',') : undefined,
+      layoutId: params?.layoutId,
+      documentTitle: params?.documentTitle,
+    });
+    const response = await fetch(`/api/editorial/interviews/question-pool/export-pdf${query}`, { credentials: 'include' });
+    if (!response.ok) {
+      let message = 'Fragen-Pool konnte nicht als PDF exportiert werden';
+      try {
+        const body = await response.json();
+        if (body?.error) message = body.error;
+      } catch (_) {}
+      throw new Error(message);
+    }
+    return response.blob();
+  },
   sendSummaryUrl: (partnerId: string, episodeId?: string) => {
     const qs = episodeId ? `?episodeId=${episodeId}` : '';
     return `/api/editorial/interviews/partners/${partnerId}/send-summary${qs}`;
@@ -618,4 +644,44 @@ export const updateApi = {
   },
   applyUpdate: (updateId: string) => api.post<any>('/admin/update/apply', { updateId }),
   getLogs: () => api.get<any[]>('/admin/update/logs'),
+};
+
+// ============================================================
+// Seasons API
+// ============================================================
+export const seasonsApi = {
+  list: () => api.get<any[]>('/seasons'),
+  get: (id: string) => api.get<any>(`/seasons/${id}`),
+  create: (data: any) => api.post<any>('/seasons', data),
+  update: (id: string, data: any) => api.put<any>(`/seasons/${id}`, data),
+  delete: (id: string) => api.delete(`/seasons/${id}`),
+  listEpisodes: (id: string) => api.get<any[]>(`/seasons/${id}/episodes`),
+};
+
+// ============================================================
+// Season Planning API (v2.14.4)
+// ============================================================
+export const seasonPlanningApi = {
+  listItems: (seasonId: string) =>
+    api.get<{ season: any; items: any[] }>(`/seasons/${seasonId}/plan-items`),
+  createItem: (seasonId: string, data: any) =>
+    api.post<any>(`/seasons/${seasonId}/plan-items`, data),
+  updateItem: (itemId: string, data: any) =>
+    api.put<any>(`/seasons/plan-items/${itemId}`, data),
+  deleteItem: (itemId: string) =>
+    api.delete(`/seasons/plan-items/${itemId}`),
+  reorderItems: (seasonId: string, items: Array<{ id: string; lane: 'lineup' | 'alternative' }>) =>
+    api.post<any>(`/seasons/${seasonId}/plan-items/reorder`, { items }),
+  continueToEpisode: (itemId: string) =>
+    api.post<any>(`/seasons/plan-items/${itemId}/continue`, {}),
+  exportPdf: async (seasonId: string, data: { documentTitle: string; layoutId?: string; selectedItems?: string[] }): Promise<Blob> => {
+    const response = await fetch(`${API_BASE}/seasons/${seasonId}/plan-items/pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('PDF-Export fehlgeschlagen');
+    return response.blob();
+  },
 };
