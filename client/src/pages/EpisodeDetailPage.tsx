@@ -8,7 +8,7 @@ import {
   AlertTriangle, Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle,
   Search, Star, CheckSquare, Square, BookOpen, UserCheck, Layers, ExternalLink, X,
   MessageSquare, HelpCircle, FileEdit, StickyNote, Target, Timer, Timer as TimerIcon,
-  RotateCcw, FolderOpen, RefreshCw, Eye
+  RotateCcw, FolderOpen, RefreshCw, Eye, MessageCircle, History
 } from 'lucide-react';
 import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi, episodeWorkflowApi, type EditorialTextBlock, type TopicWorkshopDraft } from '../lib/api';
 import { sponsorsV2Api, episodeTemplatesApi } from '../lib/api-v2';
@@ -160,8 +160,9 @@ export default function EpisodeDetailPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [workflowUpdatedAt, setWorkflowUpdatedAt] = useState<string | undefined>();
-  const [activeTab, setActiveTab] = useState<'script' | 'shownotes' | 'meta' | 'production' | 'technical' | 'ads' | 'hub' | 'preview'>('script');
-  const [expandedMediaSections, setExpandedMediaSections] = useState<{ [key: string]: boolean }>({ media: true, audio: true });
+  const [activeTab, setActiveTab] = useState<'script' | 'shownotes' | 'meta' | 'production' | 'technical' | 'ads' | 'hub' | 'preview' | 'feedback' | 'history'>('script');
+  const [expandedSideMenus, setExpandedSideMenus] = useState<{ [key: string]: boolean }>({ feedback: false, history: false });
+  const [expandedMediaSections, setExpandedMediaSections] = useState<{ [key: string]: boolean }>({ media: false, audio: false });
 
   // Redaktionshub-Tab States
   const [hubIdeas, setHubIdeas] = useState<any[]>([]);
@@ -181,6 +182,11 @@ export default function EpisodeDetailPage() {
   // Toggle Media/Audio Sections
   const toggleMediaSection = (section: string) => {
     setExpandedMediaSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+  
+  // Toggle Side Menu Sections
+  const toggleSideMenu = (section: string) => {
+    setExpandedSideMenus(prev => ({ ...prev, [section]: !prev[section] }));
   };
   const [showNewInterviewModal, setShowNewInterviewModal] = useState(false);
   const [newInterviewForm, setNewInterviewForm] = useState({ name: '', company: '', role: '', email: '', bio: '', guestIntro: '' });
@@ -1127,6 +1133,8 @@ export default function EpisodeDetailPage() {
           { key: 'ads', label: 'Werbung', icon: <Megaphone size={16} /> },
           { key: 'preview', label: 'Vorschau', icon: <Eye size={16} /> },
           { key: 'hub', label: 'Redaktionshub', icon: <BookOpen size={16} /> },
+          { key: 'feedback', label: 'Feedback & Kommentare', icon: <MessageCircle size={16} /> },
+          { key: 'history', label: 'Versionsverlauf', icon: <History size={16} /> },
         ].map(tab => (
           <button
             key={tab.key}
@@ -1887,6 +1895,17 @@ export default function EpisodeDetailPage() {
                   </div>
                 )}
               </div>
+
+              {/* Hinweis auf verknüpfte Ideenmappe */}
+              {linkedIdeaId && (
+                <div className="card bg-accent-purple/10 border border-accent-purple/30 mb-4">
+                  <div className="flex items-center gap-2 text-accent-purple">
+                    <Lightbulb size={16} />
+                    <span className="text-sm font-medium">Diese Episode hat eine verknüpfte Ideenmappe</span>
+                  </div>
+                  <p className="text-xs text-text-secondary mt-1">Alle Inhalte aus der Ideenmappe sind unten verfügbar und können in die Episode übernommen werden.</p>
+                </div>
+              )}
 
               {/* Themenentwurf der verknüpften Ideenmappe */}
               <div className="card">

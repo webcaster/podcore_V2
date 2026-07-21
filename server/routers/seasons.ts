@@ -210,11 +210,11 @@ seasonsRouter.post('/', (req: AuthRequest, res: Response) => {
     const db = getDb();
     const number = Number(req.body?.number);
     const title = cleanText(req.body?.title, 240);
-    if (!title || !Number.isInteger(number) || number < 1) {
-      return res.status(400).json({ success: false, error: 'Nummer und Titel sind erforderlich' });
+    if (!title || !Number.isInteger(number) || number < 0) {
+      return res.status(400).json({ success: false, error: 'Nummer und Titel sind erforderlich. Die Nummer muss >= 0 sein.' });
     }
     const existing = db.get('SELECT id FROM seasons WHERE number = ?', [number]) as any;
-    if (existing) return res.status(400).json({ success: false, error: `Staffel ${number} existiert bereits` });
+    if (existing) return res.status(400).json({ success: false, error: `Staffel ${number === 0 ? 'Spezial' : number} existiert bereits` });
     const id = uuidv4();
     const now = new Date().toISOString();
     db.run(
@@ -534,7 +534,7 @@ seasonsRouter.post('/plan-items/:itemId/continue', requirePermission('canTransit
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         episodeId,
-        Number(nextNumber?.next_number || 1),
+        Number(nextNumber?.next_number || 0),
         item.season_id,
         item.id,
         ideaId,

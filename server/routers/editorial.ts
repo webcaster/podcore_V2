@@ -1146,6 +1146,22 @@ router.post('/interviews/questions/:id/revoke', requirePermission('canApproveInt
   }, message: 'Freigabe zurückgezogen' });
 });
 
+// POST /api/editorial/interviews/questions/reorder — Fragen neu sortieren
+router.post('/interviews/questions/reorder', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { questionIds } = req.body;
+  
+  if (!Array.isArray(questionIds) || questionIds.length === 0) {
+    return res.status(400).json({ success: false, error: 'Frage-IDs erforderlich' });
+  }
+  
+  for (let i = 0; i < questionIds.length; i++) {
+    db.run('UPDATE interview_questions SET sort_order = ? WHERE id = ?', [i, questionIds[i]]);
+  }
+  
+  return res.json({ success: true, message: 'Reihenfolge aktualisiert' });
+});
+
 router.delete('/interviews/questions/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const existing = db.get('SELECT id FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
