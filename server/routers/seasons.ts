@@ -7,6 +7,8 @@ import {
   getLayoutById,
   renderPdfFooter,
   renderPdfHeader,
+  normalizePdfText,
+  preparePdfDocument,
   renderSectionHeading,
   renderWatermark,
 } from '../pdfLayouts';
@@ -581,7 +583,7 @@ seasonsRouter.post('/:id/plan-items/pdf', requirePermission('canExportSeasonPlan
     const requestedLayoutId = cleanText(req.body?.layoutId, 80);
     const layout = requestedLayoutId ? getLayoutById(requestedLayoutId) : getDefaultLayoutForType('season_planning');
     if (!layout) return res.status(400).json({ success: false, error: 'PDF-Layout nicht gefunden' });
-    const documentTitle = cleanText(req.body?.documentTitle, 200) || `Strategische Staffelplanung – Staffel ${season.number}`;
+    const documentTitle = normalizePdfText(cleanText(req.body?.documentTitle, 200) || `Strategische Staffelplanung – Staffel ${season.number}`);
     const selectedItems = cleanStringArray(req.body?.selectedItems, 500, 80);
     const params: any[] = [req.params.id];
     let itemFilter = '';
@@ -605,15 +607,31 @@ seasonsRouter.post('/:id/plan-items/pdf', requirePermission('canExportSeasonPlan
       bufferPages: true,
       autoFirstPage: true,
     });
+    preparePdfDocument(doc);
+    // Erst nach erfolgreichem Rendering antworten: Ein Layoutfehler kann dadurch
+    // keinen zweiten Schreibvorgang auf eine bereits geschlossene Response auslösen.
+    const pdfChunks: Buffer[] = [];
+    let exportFailed = false;
+    doc.on('data', (chunk: Buffer) => pdfChunks.push(Buffer.from(chunk)));
+    doc.on('error', (error: Error) => {
+      exportFailed = true;
+      console.error('Fehler im PDF-Dokument der Staffelplanung:', error);
+      if (!res.headersSent) res.status(500).json({ success: false, error: 'PDF-Export fehlgeschlagen' });
+    });
     const safeName = documentTitle.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '-').replace(/^-+|-+$/g, '') || 'Strategische-Staffelplanung';
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
-    doc.pipe(res);
+    doc.on('end', () => {
+      if (exportFailed || res.headersSent) return;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
+      res.send(Buffer.concat(pdfChunks));
+    });
 
     const contentWidth = doc.page.width - margin * 2;
     const fontFamily = layout.typography.fontFamily || 'Helvetica';
     const bodySize = layout.typography.bodySize || 10;
     const headingSize = layout.typography.headingSize || 11;
+    const bodyAlignment = layout.typography.bodyAlignment === 'justify' ? 'justify' : 'left';
+    const headingStyle = layout.typography.headingStyle || 'accent';
     const titleColor = layout.colors.primary || '#18233f';
     const accentColor = layout.colors.accent || '#0ea5a6';
     const secondaryColor = layout.colors.secondary || '#2563eb';
@@ -621,9 +639,11 @@ seasonsRouter.post('/:id/plan-items/pdf', requirePermission('canExportSeasonPlan
     const mutedColor = layout.colors.muted || '#64748b';
     const cardFill = '#f7fafc';
     const cardBorder = '#dbe5ef';
-    const displayValue = (value: unknown) => String(value || '–')
+    const displayValue = (value: unknown) => normalizePdfText(value || '–')
       .replace(/_/g, ' ')
-      .replace(/\b\p{L}/gu, char => char.toLocaleUpperCase('de-DE'));
+      // JavaScripts \b kennt keine vollständigen Unicode-Wörter. Das führte bei
+      // „gespräch“ fälschlich zu „GesprÄch“. Nur echte Wortanfänge werden formatiert.
+      .replace(/(^|[\s/])([\p{L}])/gu, (_match, prefix, char) => `${prefix}${char.toLocaleUpperCase('de-DE')}`);
 
     const renderHeader = () => {
       renderPdfHeader(doc, layout, { podcastName, documentTitle, logoPath });
@@ -639,7 +659,7 @@ seasonsRouter.post('/:id/plan-items/pdf', requirePermission('canExportSeasonPlan
       doc.font(`${fontFamily}-Bold`).fontSize(layout.typography.smallSize || 8).fillColor(secondaryColor)
         .text('STAFFEL-ÜBERSICHT', margin + 17, cardY + 9);
       doc.font(fontFamily).fontSize(layout.typography.smallSize || 8).fillColor(mutedColor)
-        .text(`Staffel ${season.number}: ${season.title}`, margin + 17, cardY + 23, { width: contentWidth - 34 });
+        .text(`Staffel ${season.number}: ${normalizePdfText(season.title)}`, margin + 17, cardY + 23, { width: contentWidth - 34, align: bodyAlignment });
       doc.font(`${fontFamily}-Bold`).fontSize(10).fillColor(titleColor)
         .text(`${plannedCount} geplant`, margin + contentWidth - 185, cardY + 12, { width: 70, align: 'right' })
         .text(`${alternativeCount} alternativ`, margin + contentWidth - 100, cardY + 12, { width: 86, align: 'right' });
@@ -648,22 +668,34 @@ seasonsRouter.post('/:id/plan-items/pdf', requirePermission('canExportSeasonPlan
     };
     const renderLaneHeading = (label: string) => {
       const headingY = doc.y;
-      doc.font(`${fontFamily}-Bold`).fontSize(headingSize).fillColor(titleColor).text(label, margin, headingY, { width: contentWidth });
-      doc.moveTo(margin, headingY + 18).lineTo(margin + contentWidth, headingY + 18).strokeColor(accentColor).lineWidth(1).stroke();
-      doc.y = headingY + 29;
+      const safeLabel = normalizePdfText(label);
+      if (headingStyle === 'boxed') {
+        const headingHeight = Math.max(24, headingSize + 12);
+        doc.roundedRect(margin, headingY, contentWidth, headingHeight, 4).fillColor(titleColor).fill();
+        doc.font(`${fontFamily}-Bold`).fontSize(headingSize).fillColor(layout.colors.headerText || '#ffffff')
+          .text(safeLabel, margin + 9, headingY + 6, { width: contentWidth - 18 });
+        doc.y = headingY + headingHeight + 8;
+        return;
+      }
+      doc.font(`${fontFamily}-Bold`).fontSize(headingSize).fillColor(titleColor).text(safeLabel, margin, headingY, { width: contentWidth });
+      if (headingStyle !== 'minimal') {
+        doc.moveTo(margin, headingY + 18).lineTo(margin + contentWidth, headingY + 18).strokeColor(accentColor).lineWidth(1).stroke();
+      }
+      doc.y = headingY + (headingStyle === 'minimal' ? 23 : 29);
     };
 
     renderHeader();
     renderSeasonSummary();
     if (season.planning_notes) {
-      const noteHeight = Math.max(54, doc.heightOfString(season.planning_notes, { width: contentWidth - 32 }) + 32);
+      const safePlanningNotes = normalizePdfText(season.planning_notes);
+      const noteHeight = Math.max(54, doc.heightOfString(safePlanningNotes, { width: contentWidth - 32, align: bodyAlignment }) + 32);
       const noteY = doc.y;
       doc.roundedRect(margin, noteY, contentWidth, noteHeight, 8).fillColor('#ffffff').fill();
       doc.roundedRect(margin, noteY, contentWidth, noteHeight, 8).strokeColor(cardBorder).lineWidth(0.7).stroke();
       doc.font(`${fontFamily}-Bold`).fontSize(layout.typography.smallSize || 8).fillColor(secondaryColor)
         .text('STAFFELZIEL & LEITGEDANKEN', margin + 16, noteY + 11);
       doc.font(fontFamily).fontSize(bodySize).fillColor(textColor)
-        .text(season.planning_notes, margin + 16, noteY + 25, { width: contentWidth - 32 });
+        .text(safePlanningNotes, margin + 16, noteY + 25, { width: contentWidth - 32, align: bodyAlignment });
       doc.y = noteY + noteHeight + 14;
     }
 
@@ -677,18 +709,18 @@ seasonsRouter.post('/:id/plan-items/pdf', requirePermission('canExportSeasonPlan
     };
     for (const item of items) {
       const laneLabel = item.lane === 'lineup' ? 'Geplante Reihenfolge' : 'Alternativen und Überhang';
-      const headline = `${item.lane === 'lineup' ? `${item.position || '–'}.` : 'Alternative'}${item.episodeNumber != null ? `  ·  Folge ${item.episodeNumber}` : ''}  ${item.title}`;
+      const headline = `${item.lane === 'lineup' ? `${item.position || '–'}.` : 'Alternative'}${item.episodeNumber != null ? `  ·  Folge ${item.episodeNumber}` : ''}  ${normalizePdfText(item.title)}`;
       const detailLines = [
         `Status: ${displayValue(item.status)}  ·  Priorität: ${displayValue(item.priority)}  ·  Format: ${displayValue(item.episodeFormat)}`,
         item.plannedDate ? `Geplant: ${item.plannedDate}` : '',
-        item.summary ? `Zusammenfassung: ${item.summary}` : '',
-        item.topics.length ? `Themen: ${item.topics.join(', ')}` : '',
-        item.focusPoints.length ? `Schwerpunkte: ${item.focusPoints.join(', ')}` : '',
-        item.partners.length ? `Interview-Partner: ${item.partners.map((partner: any) => `${partner.displayName}${partner.roleLabel ? ` (${partner.roleLabel})` : ''}`).join(', ')}` : '',
-        item.notes ? `Notizen: ${item.notes}` : '',
+        item.summary ? `Zusammenfassung: ${normalizePdfText(item.summary)}` : '',
+        item.topics.length ? `Themen: ${item.topics.map(normalizePdfText).join(', ')}` : '',
+        item.focusPoints.length ? `Schwerpunkte: ${item.focusPoints.map(normalizePdfText).join(', ')}` : '',
+        item.partners.length ? `Interview-Partner: ${item.partners.map((partner: any) => `${normalizePdfText(partner.displayName)}${partner.roleLabel ? ` (${normalizePdfText(partner.roleLabel)})` : ''}`).join(', ')}` : '',
+        item.notes ? `Notizen: ${normalizePdfText(item.notes)}` : '',
       ].filter(Boolean).join('\n');
       const titleHeight = doc.font(`${fontFamily}-Bold`).fontSize(headingSize + 1).heightOfString(headline, { width: contentWidth - 42 });
-      const bodyHeight = doc.font(fontFamily).fontSize(bodySize).heightOfString(detailLines || ' ', { width: contentWidth - 42 });
+      const bodyHeight = doc.font(fontFamily).fontSize(bodySize).heightOfString(detailLines || ' ', { width: contentWidth - 42, align: bodyAlignment });
       const cardHeight = Math.max(78, 31 + titleHeight + bodyHeight + 13);
       const laneHeight = laneLabel !== activeLane ? 35 : 0;
       ensureSpace(cardHeight + laneHeight + 9);
@@ -704,7 +736,7 @@ seasonsRouter.post('/:id/plan-items/pdf', requirePermission('canExportSeasonPlan
       doc.font(`${fontFamily}-Bold`).fontSize(headingSize + 1).fillColor(titleColor)
         .text(headline, margin + 18, cardY + 12, { width: contentWidth - 36 });
       doc.font(fontFamily).fontSize(bodySize).fillColor(textColor)
-        .text(detailLines, margin + 18, cardY + 14 + titleHeight, { width: contentWidth - 36 });
+        .text(detailLines, margin + 18, cardY + 14 + titleHeight, { width: contentWidth - 36, align: bodyAlignment });
       doc.y = cardY + cardHeight + 11;
     }
 

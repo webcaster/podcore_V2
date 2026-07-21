@@ -701,7 +701,7 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
   const fs = require('fs');
   const path = require('path');
   const { DATA_DIR } = require('../database');
-  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark } = require('../pdfLayouts');
+  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark, preparePdfDocument } = require('../pdfLayouts');
 
   const layoutId = req.query.layoutId as string | undefined;
   const layout = layoutId ? (getLayoutById(layoutId) || getDefaultLayoutForType('invoice')) : getDefaultLayoutForType('invoice');
@@ -725,6 +725,7 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
 
   // Werbekategorien-Preisliste immer im Querformat (viele Spalten)
   const doc = new PDFDocument({ margin: m, size: layout.pageSize, layout: 'landscape', autoFirstPage: true });
+  preparePdfDocument(doc);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename="preisliste-werbung.pdf"');
   doc.pipe(res);
@@ -1915,7 +1916,7 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
   const fs = require('fs');
   const path = require('path');
   const { DATA_DIR } = require('../database');
-  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark } = require('../pdfLayouts');
+  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark, preparePdfDocument } = require('../pdfLayouts');
 
   const layoutId = req.query.layoutId as string | undefined;
   const layout = layoutId ? (getLayoutById(layoutId) || getDefaultLayoutForType('invoice')) : getDefaultLayoutForType('invoice');
@@ -1938,6 +1939,7 @@ router.get('/:id/invoice-pdf', requirePermission('canViewSponsors') as any, (req
   }
 
   const doc = new PDFDocument({ margin: m, size: layout.pageSize, layout: layout.pageOrientation === 'landscape' ? 'landscape' : 'portrait', autoFirstPage: true });
+  preparePdfDocument(doc);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="Abrechnung_${sponsor.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`);
   doc.pipe(res);
@@ -2256,7 +2258,7 @@ router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any,
   const fs = require('fs');
   const path = require('path');
   const { DATA_DIR } = require('../database');
-  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark } = require('../pdfLayouts');
+  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark, preparePdfDocument } = require('../pdfLayouts');
 
   const layoutId = req.query.layoutId as string | undefined;
   const layout = layoutId ? (getLayoutById(layoutId) || getDefaultLayoutForType('invoice')) : getDefaultLayoutForType('invoice');
@@ -2277,6 +2279,7 @@ router.get('/:id/confirmation-pdf', requirePermission('canViewSponsors') as any,
   }
 
   const doc = new PDFDocument({ margin: m, size: layout.pageSize, autoFirstPage: true });
+  preparePdfDocument(doc);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="Buchungsbestaetigung_${sponsor.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`);
   doc.pipe(res);

@@ -812,7 +812,7 @@ function InterviewsTab() {
   const handleArchiveQuestionToPool = async (question: any) => {
     try {
       await editorialApi.archiveQuestionToPool(question.id);
-      showSuccess('Frage in den allgemeinen Fragen-Pool übernommen');
+      showSuccess('Frage in die Fragenbibliothek übernommen');
     } catch (err: any) { showError(err.message); }
   };
 
@@ -860,7 +860,7 @@ function InterviewsTab() {
             interviewMode === 'pool' ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary hover:bg-surface-raised'
           }`}
         >
-          <ListChecks size={15} /> Allgemeiner Fragen-Pool
+          <ListChecks size={15} /> Fragenbibliothek
         </button>
       </div>
 
@@ -1028,7 +1028,7 @@ function InterviewsTab() {
                       {can('canEditInterviews') && <>
                         <button onClick={() => handleMoveQuestion(q.id, -1)} disabled={index === 0} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach oben"><ArrowUp size={12} /></button>
                         <button onClick={() => handleMoveQuestion(q.id, 1)} disabled={index === questions.length - 1} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach unten"><ArrowDown size={12} /></button>
-                        <button onClick={() => handleArchiveQuestionToPool(q)} className="p-1 text-text-muted hover:text-accent-cyan" title="In allgemeinen Fragen-Pool übernehmen"><BookMarked size={12} /></button>
+                        <button onClick={() => handleArchiveQuestionToPool(q)} className="p-1 text-text-muted hover:text-accent-cyan" title="In Fragenbibliothek übernehmen"><BookMarked size={12} /></button>
                         <button
                           onClick={() => {
                             setEditingQuestion(q);
@@ -1224,6 +1224,9 @@ function InterviewsTab() {
   );
 }
 
+const QUESTION_POOL_COLLATOR = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+type QuestionPoolSortMode = 'manual' | 'alphabetical' | 'newest' | 'oldest';
+
 function QuestionPoolPanel({ partners }: { partners: any[] }) {
   const { can, showSuccess, showError } = useApp();
   const [questions, setQuestions] = useState<any[]>([]);
@@ -1236,8 +1239,11 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
   const [showExportModal, setShowExportModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [pdfLayoutId, setPdfLayoutId] = useState('');
-  const [documentTitle, setDocumentTitle] = useState('Allgemeiner Fragen-Pool');
+  const [documentTitle, setDocumentTitle] = useState('Fragenbibliothek');
   const [editingQuestion, setEditingQuestion] = useState<any>(null);
+  const [editingTopic, setEditingTopic] = useState<string | null>(null);
+  const [topicName, setTopicName] = useState('');
+  const [sortMode, setSortMode] = useState<QuestionPoolSortMode>('manual');
   const [partnerId, setPartnerId] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
   const [collapsedTopics, setCollapsedTopics] = useState<string[]>([]);
@@ -1261,13 +1267,27 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  const categories = Array.from(new Set(questions.map(question => question.category || 'Allgemein')))
-    .sort((a, b) => String(a).localeCompare(String(b), 'de'));
+  const getTopic = (question: any) => String(question.category || '').trim() || 'Allgemein';
+  const compareManualOrder = (left: any, right: any) => {
+    const orderDifference = Number(left.sort_order || 0) - Number(right.sort_order || 0);
+    if (orderDifference !== 0) return orderDifference;
+    const createdDifference = String(left.created_at || left.createdAt || '').localeCompare(String(right.created_at || right.createdAt || ''));
+    if (createdDifference !== 0) return createdDifference;
+    return QUESTION_POOL_COLLATOR.compare(String(left.question || ''), String(right.question || ''));
+  };
+  const sortTopicQuestions = (topicQuestions: any[]) => [...topicQuestions].sort((left, right) => {
+    if (sortMode === 'alphabetical') return QUESTION_POOL_COLLATOR.compare(String(left.question || ''), String(right.question || ''));
+    if (sortMode === 'newest') return String(right.created_at || right.createdAt || '').localeCompare(String(left.created_at || left.createdAt || ''));
+    if (sortMode === 'oldest') return String(left.created_at || left.createdAt || '').localeCompare(String(right.created_at || right.createdAt || ''));
+    return compareManualOrder(left, right);
+  });
+  const categories = Array.from(new Set(questions.map(getTopic)))
+    .sort((left, right) => QUESTION_POOL_COLLATOR.compare(String(left), String(right)));
   const visibleQuestions = category
-    ? questions.filter(question => (question.category || 'Allgemein') === category)
+    ? questions.filter(question => getTopic(question) === category)
     : questions;
   const groupedQuestions = visibleQuestions.reduce<Record<string, any[]>>((groups, question) => {
-    const key = question.category || 'Allgemein';
+    const key = getTopic(question);
     if (!groups[key]) groups[key] = [];
     groups[key].push(question);
     return groups;
@@ -1287,12 +1307,13 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
     try {
+      const payload = { question: form.question, category: form.category, notes: form.notes };
       if (editingQuestion) {
-        await editorialApi.updatePoolQuestion(editingQuestion.id, form);
-        showSuccess('Pool-Frage aktualisiert');
+        await editorialApi.updatePoolQuestion(editingQuestion.id, payload);
+        showSuccess('Bibliotheksfrage aktualisiert');
       } else {
-        await editorialApi.createPoolQuestion(form);
-        showSuccess('Frage zum allgemeinen Pool hinzugefügt');
+        await editorialApi.createPoolQuestion(payload);
+        showSuccess('Frage zur Fragenbibliothek hinzugefügt');
       }
       setShowQuestionModal(false);
       resetQuestionForm();
@@ -1303,14 +1324,57 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Pool-Frage löschen? Bereits zugeordnete Kopien bei Interview-Partnern bleiben erhalten.')) return;
+    if (!confirm('Frage aus der Bibliothek löschen? Bereits zugeordnete Kopien bei Interview-Partnern bleiben erhalten.')) return;
     try {
       await editorialApi.deletePoolQuestion(id);
       setSelectedIds(current => current.filter(selectedId => selectedId !== id));
-      showSuccess('Pool-Frage gelöscht');
+      showSuccess('Frage aus der Bibliothek gelöscht');
       await loadPool();
     } catch (err: any) {
       showError(err.message);
+    }
+  };
+
+  const handleRenameTopic = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const oldTopic = editingTopic;
+    const newTopic = topicName.trim();
+    if (!oldTopic || !newTopic || oldTopic === newTopic) {
+      setEditingTopic(null);
+      return;
+    }
+    try {
+      await editorialApi.renameQuestionPoolTopic(oldTopic, newTopic);
+      if (category === oldTopic) setCategory(newTopic);
+      setCollapsedTopics(current => current.map(topic => topic === oldTopic ? newTopic : topic));
+      setEditingTopic(null);
+      setTopicName('');
+      showSuccess('Thema umbenannt');
+      await loadPool();
+    } catch (err: any) {
+      showError(err.message);
+    }
+  };
+
+  const handleMovePoolQuestion = async (topic: string, questionId: string, direction: -1 | 1) => {
+    const orderedTopicQuestions = sortTopicQuestions(questions.filter(question => getTopic(question) === topic));
+    const currentIndex = orderedTopicQuestions.findIndex(question => question.id === questionId);
+    const targetIndex = currentIndex + direction;
+    if (sortMode !== 'manual' || currentIndex < 0 || targetIndex < 0 || targetIndex >= orderedTopicQuestions.length) return;
+
+    const reordered = [...orderedTopicQuestions];
+    [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
+    const newOrder = new Map(reordered.map((question, index) => [question.id, index]));
+    setQuestions(current => current.map(question => newOrder.has(question.id)
+      ? { ...question, sort_order: newOrder.get(question.id) }
+      : question
+    ));
+    try {
+      await editorialApi.reorderPoolQuestions(reordered.map(question => question.id));
+      showSuccess('Fragenreihenfolge gespeichert');
+    } catch (err: any) {
+      showError(err.message);
+      await loadPool();
     }
   };
 
@@ -1383,8 +1447,8 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
       <div className="card">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
-            <h3 className="font-semibold text-text-primary flex items-center gap-2"><ListChecks size={18} className="text-accent-purple" /> Allgemeiner Fragen-Pool</h3>
-            <p className="text-text-muted text-sm mt-1">Fragen ohne feste Person sammeln, nach Thema ordnen und später einem Interview-Partner zuweisen.</p>
+            <h3 className="font-semibold text-text-primary flex items-center gap-2"><ListChecks size={18} className="text-accent-purple" /> Fragenbibliothek</h3>
+            <p className="text-text-muted text-sm mt-1">Wiederverwendbare Fragen nach Themen strukturieren, sortieren und später einem Interview-Partner zuweisen.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {visibleQuestions.length > 0 && (
@@ -1415,6 +1479,12 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
           <option value="">Alle Themen ({questions.length})</option>
           {categories.map(item => <option key={String(item)} value={String(item)}>{String(item)}</option>)}
         </select>
+        <select value={sortMode} onChange={event => setSortMode(event.target.value as QuestionPoolSortMode)} className="input lg:w-56" aria-label="Fragen sortieren">
+          <option value="manual">Reihenfolge: Manuell</option>
+          <option value="alphabetical">Reihenfolge: Frage A–Z</option>
+          <option value="newest">Reihenfolge: Neueste zuerst</option>
+          <option value="oldest">Reihenfolge: Älteste zuerst</option>
+        </select>
         {can('canEditInterviews') && visibleQuestions.length > 0 && (
           <button type="button" onClick={toggleVisible} className="btn-ghost text-sm whitespace-nowrap">
             <Check size={15} /> {visibleQuestions.every(question => selectedIds.includes(question.id)) ? 'Auswahl aufheben' : 'Sichtbare auswählen'}
@@ -1427,24 +1497,36 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
       ) : visibleQuestions.length === 0 ? (
         <div className="card text-center py-14">
           <MessageSquare size={38} className="text-text-muted mx-auto mb-3" />
-          <p className="text-text-secondary font-medium">Keine Pool-Fragen gefunden</p>
-          <p className="text-text-muted text-sm mt-1">Erstelle eine Frage ohne Interview-Partner oder passe den Filter an.</p>
+          <p className="text-text-secondary font-medium">Keine Bibliotheksfragen gefunden</p>
+          <p className="text-text-muted text-sm mt-1">Erstelle eine wiederverwendbare Frage oder passe den Filter an.</p>
         </div>
       ) : (
         <div className="space-y-5">
-          {Object.entries(groupedQuestions).sort(([topicA], [topicB]) => topicA.localeCompare(topicB, 'de')).map(([topic, topicQuestions]) => {
+          {Object.entries(groupedQuestions).sort(([topicA], [topicB]) => QUESTION_POOL_COLLATOR.compare(topicA, topicB)).map(([topic, topicQuestions]) => {
             const isCollapsed = collapsedTopics.includes(topic);
+            const sortedTopicQuestions = sortTopicQuestions(topicQuestions);
             return (
             <section key={topic} className="space-y-2">
-              <button type="button" onClick={() => toggleTopic(topic)} className="w-full flex items-center gap-2 px-1 py-1 text-left rounded hover:bg-surface-raised/60 transition-colors" aria-expanded={!isCollapsed}>
-                <ChevronDown size={15} className={`text-accent-purple transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
-                <Tag size={14} className="text-accent-purple" />
-                <h4 className="font-semibold text-text-primary">{topic}</h4>
-                <span className="badge bg-surface-overlay text-text-muted">{topicQuestions.length}</span>
-                <span className="ml-auto text-[11px] text-text-muted">{isCollapsed ? 'Ausklappen' : 'Einklappen'}</span>
-              </button>
+              <div className="flex items-center gap-2 px-1 py-1 rounded hover:bg-surface-raised/60 transition-colors">
+                <button type="button" onClick={() => toggleTopic(topic)} className="min-w-0 flex flex-1 items-center gap-2 text-left" aria-expanded={!isCollapsed}>
+                  <ChevronDown size={15} className={`text-accent-purple transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                  <Tag size={14} className="text-accent-purple" />
+                  <h4 className="truncate font-semibold text-text-primary">{topic}</h4>
+                  <span className="badge bg-surface-overlay text-text-muted">{sortedTopicQuestions.length}</span>
+                </button>
+                {can('canEditInterviews') && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingTopic(topic); setTopicName(topic); }}
+                    className="p-1 text-text-muted hover:text-accent-blue"
+                    title="Thema umbenennen"
+                    aria-label={`Thema ${topic} umbenennen`}
+                  ><Edit2 size={13} /></button>
+                )}
+                <span className="text-[11px] text-text-muted">{isCollapsed ? 'Ausklappen' : 'Einklappen'}</span>
+              </div>
               {!isCollapsed && <div className="space-y-2">
-                {topicQuestions.map(question => (
+                {sortedTopicQuestions.map((question, index) => (
                   <div key={question.id} className={`card flex items-start gap-3 group transition-colors ${selectedIds.includes(question.id) ? 'border-accent-purple bg-accent-purple/5' : ''}`}>
                     {can('canEditInterviews') && (
                       <button
@@ -1462,6 +1544,10 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
                     </div>
                     {can('canEditInterviews') && (
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        {sortMode === 'manual' && sortedTopicQuestions.length > 1 && <>
+                          <button type="button" onClick={() => handleMovePoolQuestion(topic, question.id, -1)} disabled={index === 0} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach oben"><ArrowUp size={13} /></button>
+                          <button type="button" onClick={() => handleMovePoolQuestion(topic, question.id, 1)} disabled={index === sortedTopicQuestions.length - 1} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach unten"><ArrowDown size={13} /></button>
+                        </>}
                         <button
                           type="button"
                           onClick={() => {
@@ -1470,9 +1556,9 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
                             setShowQuestionModal(true);
                           }}
                           className="p-1 text-text-muted hover:text-accent-blue"
-                          title="Pool-Frage bearbeiten"
+                          title="Bibliotheksfrage bearbeiten"
                         ><Edit2 size={13} /></button>
-                        <button type="button" onClick={() => handleDelete(question.id)} className="p-1 text-text-muted hover:text-accent-red" title="Pool-Frage löschen"><Trash2 size={13} /></button>
+                        <button type="button" onClick={() => handleDelete(question.id)} className="p-1 text-text-muted hover:text-accent-red" title="Bibliotheksfrage löschen"><Trash2 size={13} /></button>
                       </div>
                     )}
                   </div>
@@ -1487,7 +1573,7 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
       <Modal
         isOpen={showQuestionModal}
         onClose={() => { setShowQuestionModal(false); resetQuestionForm(); }}
-        title={editingQuestion ? 'Pool-Frage bearbeiten' : 'Frage für den allgemeinen Pool'}
+        title={editingQuestion ? 'Bibliotheksfrage bearbeiten' : 'Frage für die Fragenbibliothek'}
       >
         <form onSubmit={handleSave} className="space-y-4">
           <div>
@@ -1505,21 +1591,47 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => { setShowQuestionModal(false); resetQuestionForm(); }} className="btn-secondary">Abbrechen</button>
-            <button type="submit" disabled={!form.question.trim() || !form.category.trim()} className="btn-primary">{editingQuestion ? 'Speichern' : 'Zum Pool hinzufügen'}</button>
+            <button type="submit" disabled={!form.question.trim() || !form.category.trim()} className="btn-primary">{editingQuestion ? 'Speichern' : 'Zur Bibliothek hinzufügen'}</button>
           </div>
         </form>
       </Modal>
 
-      <Modal isOpen={showExportModal} onClose={() => !isExporting && setShowExportModal(false)} title="Fragen-Pool als PDF exportieren">
+      <Modal
+        isOpen={editingTopic !== null}
+        onClose={() => { setEditingTopic(null); setTopicName(''); }}
+        title="Thema umbenennen"
+      >
+        <form onSubmit={handleRenameTopic} className="space-y-4">
+          <p className="text-sm text-text-secondary">Die Umbenennung wird für alle Fragen dieses Themas übernommen.</p>
+          <div>
+            <label className="label">Themenname *</label>
+            <input
+              value={topicName}
+              onChange={event => setTopicName(event.target.value)}
+              className="input"
+              required
+              maxLength={120}
+              autoFocus
+              placeholder="z. B. 2. Der Mensch hinter dem Amt"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => { setEditingTopic(null); setTopicName(''); }} className="btn-secondary">Abbrechen</button>
+            <button type="submit" disabled={!topicName.trim()} className="btn-primary">Thema speichern</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={showExportModal} onClose={() => !isExporting && setShowExportModal(false)} title="Fragenbibliothek als PDF exportieren">
         <form onSubmit={handleExport} className="space-y-4">
           <div className="bg-accent-purple/10 border border-accent-purple/30 rounded-lg p-3 text-sm text-text-secondary">
             {selectedIds.length > 0
-              ? `${selectedIds.length} ausgewählte ${selectedIds.length === 1 ? 'Frage wird' : 'Fragen werden'} thematisch sortiert exportiert.`
-              : `${visibleQuestions.length} aktuell gefilterte ${visibleQuestions.length === 1 ? 'Frage wird' : 'Fragen werden'} thematisch sortiert exportiert.`}
+              ? `${selectedIds.length} ausgewählte ${selectedIds.length === 1 ? 'Frage wird' : 'Fragen werden'} in der festgelegten Reihenfolge exportiert.`
+              : `${visibleQuestions.length} aktuell gefilterte ${visibleQuestions.length === 1 ? 'Frage wird' : 'Fragen werden'} in der festgelegten Reihenfolge exportiert.`}
           </div>
           <div>
             <label className="label">Dokumenttitel *</label>
-            <input value={documentTitle} onChange={event => setDocumentTitle(event.target.value)} className="input" required maxLength={160} autoFocus placeholder="Allgemeiner Fragen-Pool" />
+            <input value={documentTitle} onChange={event => setDocumentTitle(event.target.value)} className="input" required maxLength={160} autoFocus placeholder="Fragenbibliothek" />
           </div>
           <div>
             <label className="label">PDF-Layout</label>
@@ -1535,10 +1647,10 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
         </form>
       </Modal>
 
-      <Modal isOpen={showAssignModal} onClose={() => { setShowAssignModal(false); setPartnerId(''); }} title="Pool-Fragen zuordnen">
+      <Modal isOpen={showAssignModal} onClose={() => { setShowAssignModal(false); setPartnerId(''); }} title="Bibliotheksfragen zuordnen">
         <form onSubmit={handleAssign} className="space-y-4">
           <div className="bg-accent-purple/10 border border-accent-purple/30 rounded-lg p-3 text-sm text-text-secondary">
-            <strong>{selectedIds.length}</strong> {selectedIds.length === 1 ? 'ausgewählte Frage wird' : 'ausgewählte Fragen werden'} als bearbeitbare Kopie dem Interview-Partner zugeordnet. Der allgemeine Pool bleibt unverändert.
+            <strong>{selectedIds.length}</strong> {selectedIds.length === 1 ? 'ausgewählte Frage wird' : 'ausgewählte Fragen werden'} als bearbeitbare Kopie dem Interview-Partner zugeordnet. Die Fragenbibliothek bleibt unverändert.
           </div>
           <div>
             <label className="label">Interview-Partner *</label>

@@ -16,6 +16,8 @@
 
 import { getDb } from './database';
 import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
@@ -37,7 +39,11 @@ export interface PdfLayoutTypography {
   headingSize: number;
   bodySize: number;
   smallSize: number;
-  fontFamily: 'Helvetica' | 'Times-Roman' | 'Courier';
+  fontFamily: PdfFontFamily;
+  /** Ausrichtung für Fließtext. */
+  bodyAlignment?: 'left' | 'justify';
+  /** Gestaltung der Abschnittsüberschriften. */
+  headingStyle?: 'accent' | 'boxed' | 'minimal';
 }
 
 export interface PdfLayoutHeader {
@@ -100,7 +106,7 @@ export interface PdfLayoutSections {
   showOfferNotes: boolean;              // Hinweise im Angebot
   showOfferOptions: boolean;            // Optionen/Positionen im Angebot
   showSponsorAddress: boolean;          // Sponsor-Adresse im Angebot
-  // Allgemeiner Fragen-Pool – v2.14.3
+  // Fragenbibliothek – eingeführt in v2.14.3
   showQuestionPoolNotes?: boolean;       // Interne Hinweise je Pool-Frage ausgeben
 }
 
@@ -137,6 +143,160 @@ export interface PdfLayout {
   updatedAt: string;
 }
 
+export const PDF_FONT_FAMILIES = [
+  'Helvetica',
+  'Times-Roman',
+  'Courier',
+  'DejaVu Sans',
+  'DejaVu Serif',
+  'DejaVu Sans Mono',
+] as const;
+
+export type PdfFontFamily = (typeof PDF_FONT_FAMILIES)[number];
+type PdfFontVariant = 'regular' | 'bold' | 'italic' | 'boldItalic';
+
+const DEFAULT_TYPOGRAPHY: PdfLayoutTypography = {
+  titleSize: 20,
+  subtitleSize: 14,
+  headingSize: 12,
+  bodySize: 10,
+  smallSize: 8,
+  fontFamily: 'Helvetica',
+  bodyAlignment: 'left',
+  headingStyle: 'accent',
+};
+
+const BUNDLED_FONT_DIRECTORY = path.resolve(__dirname, '..', 'assets', 'fonts');
+const FONT_VARIANTS: Record<PdfFontFamily, Record<PdfFontVariant, string>> = {
+  Helvetica: {
+    regular: 'Helvetica', bold: 'Helvetica-Bold', italic: 'Helvetica-Oblique', boldItalic: 'Helvetica-BoldOblique',
+  },
+  'Times-Roman': {
+    regular: 'Times-Roman', bold: 'Times-Bold', italic: 'Times-Italic', boldItalic: 'Times-BoldItalic',
+  },
+  Courier: {
+    regular: 'Courier', bold: 'Courier-Bold', italic: 'Courier-Oblique', boldItalic: 'Courier-BoldOblique',
+  },
+  'DejaVu Sans': {
+    regular: 'PodCore-DejaVuSans', bold: 'PodCore-DejaVuSans-Bold', italic: 'PodCore-DejaVuSans', boldItalic: 'PodCore-DejaVuSans-Bold',
+  },
+  'DejaVu Serif': {
+    regular: 'PodCore-DejaVuSerif', bold: 'PodCore-DejaVuSerif-Bold', italic: 'PodCore-DejaVuSerif', boldItalic: 'PodCore-DejaVuSerif-Bold',
+  },
+  'DejaVu Sans Mono': {
+    regular: 'PodCore-DejaVuSansMono', bold: 'PodCore-DejaVuSansMono-Bold', italic: 'PodCore-DejaVuSansMono-Oblique', boldItalic: 'PodCore-DejaVuSansMono-BoldOblique',
+  },
+};
+
+const BUNDLED_FONT_FILES: Array<{ key: string; file: string }> = [
+  { key: 'PodCore-DejaVuSans', file: 'DejaVuSans.ttf' },
+  { key: 'PodCore-DejaVuSans-Bold', file: 'DejaVuSans-Bold.ttf' },
+  { key: 'PodCore-DejaVuSerif', file: 'DejaVuSerif.ttf' },
+  { key: 'PodCore-DejaVuSerif-Bold', file: 'DejaVuSerif-Bold.ttf' },
+  { key: 'PodCore-DejaVuSansMono', file: 'DejaVuSansMono.ttf' },
+  { key: 'PodCore-DejaVuSansMono-Bold', file: 'DejaVuSansMono-Bold.ttf' },
+  { key: 'PodCore-DejaVuSansMono-Oblique', file: 'DejaVuSansMono-Oblique.ttf' },
+  { key: 'PodCore-DejaVuSansMono-BoldOblique', file: 'DejaVuSansMono-BoldOblique.ttf' },
+];
+
+/**
+ * Repariert häufige doppelt kodierte UTF-8-Texte und normalisiert Unicode vor
+ * der Übergabe an PDFKit. Bereits korrektes UTF-8 bleibt unverändert.
+ */
+export function normalizePdfText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  let text = String(value).replace(/\u0000/g, '').normalize('NFC');
+  // Ältere Daten können mehrfach über falsch interpretierte UTF-8/Latin-1-
+  // Schnittstellen gelaufen sein. Die Reparatur erfolgt fragmentweise, damit
+  // bereits korrekte Zeichen im selben Text (z. B. „Überprüfung … Gespräch“)
+  // unverändert bleiben.
+  const mojibakeFragment = /(?:Ã[\u0080-\u00BF]|Â[\u0080-\u00BF]|â[\u0080-\u00BF]{2})/g;
+  for (let pass = 0; pass < 3; pass += 1) {
+    let changed = false;
+    text = text.replace(mojibakeFragment, (fragment: string) => {
+      try {
+        const repaired = Buffer.from(fragment, 'latin1').toString('utf8').normalize('NFC');
+        if (!repaired || repaired.includes('\uFFFD') || repaired === fragment) return fragment;
+        changed = true;
+        return repaired;
+      } catch (_) {
+        return fragment;
+      }
+    });
+    if (!changed) break;
+  }
+  return text;
+}
+
+function normalizePdfTypography(value: unknown): PdfLayoutTypography {
+  const input = value && typeof value === 'object' ? value as Partial<PdfLayoutTypography> : {};
+  const fontFamily = PDF_FONT_FAMILIES.includes(input.fontFamily as PdfFontFamily)
+    ? input.fontFamily as PdfFontFamily
+    : DEFAULT_TYPOGRAPHY.fontFamily;
+  const bodyAlignment = input.bodyAlignment === 'justify' ? 'justify' : 'left';
+  const headingStyle = input.headingStyle === 'boxed' || input.headingStyle === 'minimal' ? input.headingStyle : 'accent';
+  return { ...DEFAULT_TYPOGRAPHY, ...input, fontFamily, bodyAlignment, headingStyle };
+}
+
+/** Übersetzt Layoutfamilien und historische Namen in gültige PDFKit-Fontnamen. */
+export function resolvePdfFontName(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) return FONT_VARIANTS.Helvetica.regular;
+  const source = value.trim();
+  if (BUNDLED_FONT_FILES.some(font => font.key === source)) return source;
+  const compactSource = source.replace(/[ _-]/g, '').toLocaleLowerCase('en-US');
+  let variant: PdfFontVariant = 'regular';
+  let compactFamily = compactSource;
+  const suffixes: Array<[string, PdfFontVariant]> = [
+    ['boldoblique', 'boldItalic'], ['bolditalic', 'boldItalic'], ['oblique', 'italic'], ['italic', 'italic'], ['bold', 'bold'],
+  ];
+  for (const [suffix, candidate] of suffixes) {
+    if (compactSource.endsWith(suffix) && compactSource.length > suffix.length) {
+      compactFamily = compactSource.slice(0, -suffix.length);
+      variant = candidate;
+      break;
+    }
+  }
+  const family = PDF_FONT_FAMILIES.find(candidate => candidate.replace(/[ _-]/g, '').toLocaleLowerCase('en-US') === compactFamily);
+  return family ? FONT_VARIANTS[family][variant] : FONT_VARIANTS.Helvetica.regular;
+}
+
+/**
+ * Registriert mitgelieferte Unicode-Schriften und fängt nicht auflösbare
+ * Schriftwünsche transparent mit Helvetica ab. So führt ein Layout niemals
+ * zu einem PDFKit-`ENOENT`-Abbruch.
+ */
+export function preparePdfDocument(doc: any): void {
+  if (!doc || doc.__podcorePdfPrepared) return;
+  for (const font of BUNDLED_FONT_FILES) {
+    const fontPath = path.join(BUNDLED_FONT_DIRECTORY, font.file);
+    if (fs.existsSync(fontPath)) doc.registerFont(font.key, fontPath);
+  }
+  const originalFont = typeof doc.font === 'function' ? doc.font.bind(doc) : null;
+  if (originalFont) {
+    doc.font = (requestedFont: unknown, ...args: any[]) => {
+      const resolvedFont = resolvePdfFontName(requestedFont);
+      try {
+        return originalFont(resolvedFont, ...args);
+      } catch (error) {
+        console.warn(`PDF-Schrift "${String(requestedFont)}" nicht verfügbar; Helvetica wird verwendet.`, error);
+        return originalFont(FONT_VARIANTS.Helvetica.regular, ...args);
+      }
+    };
+  }
+
+  // Alle bestehenden Exportpfade verwenden PDFKit direkt. Durch diese zentralen
+  // Wrapper werden Sonderzeichen und ältere doppelt kodierte Texte auch dann
+  // bereinigt, wenn ein Export keine eigene Text-Hilfsfunktion aufruft.
+  const originalText = typeof doc.text === 'function' ? doc.text.bind(doc) : null;
+  if (originalText) doc.text = (value: unknown, ...args: any[]) => originalText(normalizePdfText(value), ...args);
+  const originalWidthOfString = typeof doc.widthOfString === 'function' ? doc.widthOfString.bind(doc) : null;
+  if (originalWidthOfString) doc.widthOfString = (value: unknown, ...args: any[]) => originalWidthOfString(normalizePdfText(value), ...args);
+  const originalHeightOfString = typeof doc.heightOfString === 'function' ? doc.heightOfString.bind(doc) : null;
+  if (originalHeightOfString) doc.heightOfString = (value: unknown, ...args: any[]) => originalHeightOfString(normalizePdfText(value), ...args);
+
+  doc.__podcorePdfPrepared = true;
+}
+
 // ─── Standard-Layout ──────────────────────────────────────────────────────────
 
 export const DEFAULT_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -154,14 +314,7 @@ export const DEFAULT_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> =
     background: '#1a1a2e',
     headerText: '#ffffff',
   },
-  typography: {
-    titleSize: 20,
-    subtitleSize: 14,
-    headingSize: 12,
-    bodySize: 10,
-    smallSize: 8,
-    fontFamily: 'Helvetica',
-  },
+  typography: { ...DEFAULT_TYPOGRAPHY },
   header: {
     showLogo: true,
     showPodcastName: true,
@@ -570,7 +723,7 @@ function parseLayout(row: any): PdfLayout {
   return {
     ...row,
     colors: JSON.parse(row.colors || '{}'),
-    typography: JSON.parse(row.typography || '{}'),
+    typography: normalizePdfTypography(JSON.parse(row.typography || '{}')),
     header: JSON.parse(row.header_config || '{}'),
     footer: JSON.parse(row.footer_config || '{}'),
     sections: {
@@ -672,13 +825,13 @@ export function ensureDefaultLayouts(): void {
       ]);
   }
 
-  // v2.14.3: Eigenes konfigurierbares Layout für den allgemeinen Fragen-Pool
+  // Eigenes konfigurierbares Layout für die Fragenbibliothek
   const hasQuestionPool = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'question_pool' LIMIT 1");
   if (!hasQuestionPool) {
     const layout = {
       ...DEFAULT_LAYOUT,
-      name: 'Fragen-Pool Standard',
-      description: 'Themenweise sortierter Fragenkatalog aus dem allgemeinen Fragen-Pool',
+      name: 'Fragenbibliothek Standard',
+      description: 'Themenweise sortierter Fragenkatalog aus der Fragenbibliothek',
       exportType: 'question_pool',
       isDefault: true,
       isSystem: false,
@@ -695,6 +848,11 @@ export function ensureDefaultLayouts(): void {
         layout.pageOrientation || 'portrait',
       ]);
   }
+  // Standardlayout aus älteren Versionen nur dann umbenennen, wenn es nicht individuell angepasst wurde.
+  db.run(`UPDATE pdf_layouts
+          SET name = ?, description = ?, updated_at = datetime('now')
+          WHERE export_type = 'question_pool' AND is_default = 1 AND name = ?`,
+    ['Fragenbibliothek Standard', 'Themenweise sortierter Fragenkatalog aus der Fragenbibliothek', 'Fragen-Pool Standard']);
 
   // v2.14.7: Eigenes modernes Layout für die strategische Staffelplanung
   const hasSeasonPlanning = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'season_planning' LIMIT 1");
@@ -908,7 +1066,7 @@ export function createLayout(data: Partial<PdfLayout>): PdfLayout {
       id, data.name || 'Neues Layout', data.description || '', data.exportType || 'all',
       data.isDefault ? 1 : 0,
       JSON.stringify(data.colors || DEFAULT_LAYOUT.colors),
-      JSON.stringify(data.typography || DEFAULT_LAYOUT.typography),
+      JSON.stringify(normalizePdfTypography(data.typography || DEFAULT_LAYOUT.typography)),
       JSON.stringify(data.header || DEFAULT_LAYOUT.header),
       JSON.stringify(data.footer || DEFAULT_LAYOUT.footer),
       JSON.stringify(data.sections || DEFAULT_LAYOUT.sections),
@@ -953,7 +1111,7 @@ export function updateLayout(id: string, data: Partial<PdfLayout>): PdfLayout | 
       data.isDefault != null ? (data.isDefault ? 1 : 0) : null,
       data.isEnabled != null ? (data.isEnabled ? 1 : 0) : null,
       data.colors ? JSON.stringify(data.colors) : null,
-      data.typography ? JSON.stringify(data.typography) : null,
+      data.typography ? JSON.stringify(normalizePdfTypography(data.typography)) : null,
       data.header ? JSON.stringify(data.header) : null,
       data.footer ? JSON.stringify(data.footer) : null,
       data.sections ? JSON.stringify(data.sections) : null,
@@ -990,6 +1148,7 @@ export function duplicateLayout(id: string, newName: string): PdfLayout {
 // ─── PDF-Render-Helfer ────────────────────────────────────────────────────────
 
 export function renderWatermark(doc: any, layout: PdfLayout): void {
+  preparePdfDocument(doc);
   const wm = layout.watermark;
   if (!wm || !wm.enabled || !wm.text) return;
   const pageWidth = doc.page.width;
@@ -998,16 +1157,16 @@ export function renderWatermark(doc: any, layout: PdfLayout): void {
   // Farbe mit Deckkraft simulieren (PDFKit unterstützt kein echtes opacity für Text direkt)
   doc.save();
   doc.opacity(opacity);
-  doc.fontSize(60).font('Helvetica-Bold').fillColor(wm.color || '#888888');
+  doc.fontSize(60).font(`${layout.typography.fontFamily}-Bold`).fillColor(wm.color || '#888888');
   if (wm.position === 'diagonal') {
     doc.rotate(-45, { origin: [pageWidth / 2, pageHeight / 2] });
-    doc.text(wm.text, 0, pageHeight / 2 - 30, { width: pageWidth, align: 'center' });
+    doc.text(normalizePdfText(wm.text), 0, pageHeight / 2 - 30, { width: pageWidth, align: 'center' });
   } else if (wm.position === 'bottom-right') {
     doc.fontSize(30);
-    doc.text(wm.text, pageWidth / 2, pageHeight - 80, { width: pageWidth / 2, align: 'right' });
+    doc.text(normalizePdfText(wm.text), pageWidth / 2, pageHeight - 80, { width: pageWidth / 2, align: 'right' });
   } else {
     // center
-    doc.text(wm.text, 0, pageHeight / 2 - 30, { width: pageWidth, align: 'center' });
+    doc.text(normalizePdfText(wm.text), 0, pageHeight / 2 - 30, { width: pageWidth, align: 'center' });
   }
   doc.restore();
 }
@@ -1017,7 +1176,10 @@ export function renderPdfHeader(
   layout: PdfLayout,
   opts: { podcastName: string; documentTitle: string; logoPath?: string | null }
 ): void {
+  preparePdfDocument(doc);
   const { colors, typography, header, pageMargin } = layout;
+  const podcastName = normalizePdfText(opts.podcastName);
+  const documentTitle = normalizePdfText(opts.documentTitle);
   const pageWidth = doc.page.width;
   const contentWidth = pageWidth - pageMargin * 2;
 
@@ -1037,11 +1199,11 @@ export function renderPdfHeader(
     const textWidth = pageWidth - textX - pageMargin;
     if (header.showPodcastName) {
       doc.fontSize(typography.smallSize).font(`${typography.fontFamily}`).fillColor(colors.headerText)
-        .text(opts.podcastName, textX, 15, { width: textWidth, align: header.logoPosition === 'left' ? 'right' : 'left' });
+        .text(podcastName, textX, 15, { width: textWidth, align: header.logoPosition === 'left' ? 'right' : 'left' });
     }
     if (header.showDocumentTitle) {
       doc.fontSize(typography.titleSize).font(`${typography.fontFamily}-Bold`).fillColor(colors.headerText)
-        .text(opts.documentTitle, textX, 32, { width: textWidth, align: header.logoPosition === 'left' ? 'right' : 'left' });
+        .text(documentTitle, textX, 32, { width: textWidth, align: header.logoPosition === 'left' ? 'right' : 'left' });
     }
 
     doc.y = (layout.headerHeight || 70) + 15;
@@ -1066,12 +1228,12 @@ export function renderPdfHeader(
     }
     if (header.showPodcastName) {
       doc.fontSize(typography.smallSize).font(typography.fontFamily).fillColor(colors.muted)
-        .text(opts.podcastName, textX, podcastY, { width: textWidth, lineBreak: false, ellipsis: true });
+        .text(podcastName, textX, podcastY, { width: textWidth, lineBreak: false, ellipsis: true });
     }
     if (header.showDocumentTitle) {
       doc.fontSize(typography.titleSize).font(`${typography.fontFamily}-Bold`).fillColor(colors.primary);
-      titleHeight = doc.heightOfString(opts.documentTitle, { width: textWidth, lineGap: 1 });
-      doc.text(opts.documentTitle, textX, titleY, { width: textWidth, lineGap: 1 });
+      titleHeight = doc.heightOfString(documentTitle, { width: textWidth, lineGap: 1 });
+      doc.text(documentTitle, textX, titleY, { width: textWidth, lineGap: 1 });
     }
     const dividerY = Math.max(
       hasLogo ? pageMargin + logoHeight : pageMargin,
@@ -1093,11 +1255,11 @@ export function renderPdfHeader(
 
     if (header.showPodcastName) {
       doc.fontSize(typography.smallSize).font(typography.fontFamily).fillColor(colors.muted)
-        .text(opts.podcastName, hasLogo ? pageMargin + 60 : pageMargin, pageMargin + 5, { align: 'left' });
+        .text(podcastName, hasLogo ? pageMargin + 60 : pageMargin, pageMargin + 5, { align: 'left' });
     }
     if (header.showDocumentTitle) {
       doc.fontSize(typography.titleSize).font(`${typography.fontFamily}-Bold`).fillColor(colors.primary)
-        .text(opts.documentTitle, hasLogo ? pageMargin + 60 : pageMargin, pageMargin + 18);
+        .text(documentTitle, hasLogo ? pageMargin + 60 : pageMargin, pageMargin + 18);
     }
     doc.moveDown(0.3);
     doc.moveTo(pageMargin, doc.y).lineTo(pageWidth - pageMargin, doc.y).strokeColor(colors.accent).lineWidth(0.5).stroke();
@@ -1106,13 +1268,14 @@ export function renderPdfHeader(
 }
 
 export function renderPdfFooter(doc: any, layout: PdfLayout, opts: { podcastName: string; pageNum?: number }): void {
+  preparePdfDocument(doc);
   const { colors, typography, footer, pageMargin } = layout;
   const pageWidth = doc.page.width;
   const footerY = doc.page.height - 30;
 
   const parts: string[] = [];
-  if (footer.showPodcastName && opts.podcastName) parts.push(opts.podcastName);
-  if (footer.customText) parts.push(footer.customText);
+  if (footer.showPodcastName && opts.podcastName) parts.push(normalizePdfText(opts.podcastName));
+  if (footer.customText) parts.push(normalizePdfText(footer.customText));
   if (footer.showDate) parts.push(new Date().toLocaleDateString('de-DE'));
   if (footer.showPageNumbers && opts.pageNum != null) parts.push(`Seite ${opts.pageNum}`);
 
@@ -1141,10 +1304,23 @@ export function getLineSpacingFactor(layout: PdfLayout): number {
 }
 
 export function renderSectionHeading(doc: any, layout: PdfLayout, title: string): void {
+  preparePdfDocument(doc);
   const { colors, typography, pageMargin } = layout;
+  const safeTitle = normalizePdfText(title);
   const ls = getLineSpacingFactor(layout);
+  const headingStyle = typography.headingStyle || 'accent';
   doc.moveDown(0.3 * ls);
-  const divStyle = layout.dividerStyle || 'line';
+  if (headingStyle === 'boxed') {
+    const boxY = doc.y;
+    const height = Math.max(22, typography.headingSize + 12);
+    doc.roundedRect(pageMargin, boxY, doc.page.width - pageMargin * 2, height, 4).fillColor(colors.primary).fill();
+    doc.fontSize(typography.headingSize).font(`${typography.fontFamily}-Bold`).fillColor(colors.headerText)
+      .text(safeTitle, pageMargin + 8, boxY + 6, { width: doc.page.width - pageMargin * 2 - 16 });
+    doc.fillColor(colors.text);
+    doc.y = boxY + height + 5 * ls;
+    return;
+  }
+  const divStyle = headingStyle === 'minimal' ? 'none' : (layout.dividerStyle || 'line');
   if (divStyle === 'line') {
     doc.moveTo(pageMargin, doc.y).lineTo(doc.page.width - pageMargin, doc.y).strokeColor(colors.accent).lineWidth(0.5).stroke();
   } else if (divStyle === 'dotted') {
@@ -1156,7 +1332,7 @@ export function renderSectionHeading(doc: any, layout: PdfLayout, title: string)
   }
   // divStyle === 'none': keine Linie
   doc.moveDown(0.3 * ls);
-  doc.fontSize(typography.headingSize).font(`${typography.fontFamily}-Bold`).fillColor(colors.secondary).text(title);
+  doc.fontSize(typography.headingSize).font(`${typography.fontFamily}-Bold`).fillColor(colors.secondary).text(safeTitle);
   doc.fillColor(colors.text);
   doc.moveDown(0.2 * ls);
 }

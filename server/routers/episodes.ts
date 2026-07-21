@@ -174,7 +174,7 @@ router.get('/:id/export-archive', requirePermission('canViewEpisodes') as any, (
 
   const archiveInfo = {
     format: 'PodCore Archivmappe',
-    version: '2.14.9',
+    version: '2.14.10',
     generatedAt: new Date().toISOString(),
     episodeId: row.id,
     archivedAt: row.archive_date || null,
@@ -558,7 +558,7 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
   const fs = require('fs');
   const path = require('path');
   const { DATA_DIR } = require('../database');
-  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderSectionHeading, renderWatermark, getLineSpacingFactor } = require('../pdfLayouts');
+  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderSectionHeading, renderWatermark, getLineSpacingFactor, preparePdfDocument } = require('../pdfLayouts');
 
   // Layout auswählen
   const layoutId = req.query.layoutId as string | undefined;
@@ -645,6 +645,7 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
     autoFirstPage: true,
     bufferPages: true,
   });
+  preparePdfDocument(doc);
 
   res.setHeader('Content-Type', 'application/pdf');
   const safeTitle = (ep.title || 'episode').replace(/[^a-zA-Z0-9äöüÄÖÜß\-_]/g, '_').substring(0, 40);
@@ -1121,6 +1122,7 @@ router.post('/:id/reset-approval', requirePermission('canEditEpisodes') as any, 
 // POST /api/episodes/schedule-pdf — Episodenplanung als PDF exportieren
 router.post('/schedule-pdf', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
   const PDFDocument = require('pdfkit');
+  const { preparePdfDocument } = require('../pdfLayouts');
   const { episodes: eps, title = 'Episodenplanung', month } = req.body;
 
   const STATUS_LABELS: Record<string, string> = {
@@ -1130,6 +1132,7 @@ router.post('/schedule-pdf', requirePermission('canViewEpisodes') as any, (req: 
   };
 
   const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  preparePdfDocument(doc);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="episodenplanung.pdf"`);
   doc.pipe(res);

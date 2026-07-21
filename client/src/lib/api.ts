@@ -244,6 +244,8 @@ export const editorialApi = {
     api.post<any>('/editorial/interviews/question-pool/assign', { partnerId, questionIds }),
   renameQuestionPoolTopic: (oldTopic: string, newTopic: string) =>
     api.put<any>('/editorial/interviews/question-pool/rename-topic', { oldTopic, newTopic }),
+  reorderPoolQuestions: (questionIds: string[]) =>
+    api.put<any>('/editorial/interviews/question-pool/reorder', { questionIds }),
   downloadQuestionPoolPdf: async (params?: { category?: string; search?: string; questionIds?: string[]; layoutId?: string; documentTitle?: string }): Promise<Blob> => {
     const query = buildQs({
       category: params?.category,

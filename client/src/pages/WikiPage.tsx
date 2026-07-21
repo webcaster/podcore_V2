@@ -363,9 +363,20 @@ const wikiData: WikiCategory[] = [
             text: 'Hinterlegen Sie Interview-Partner und erstellen Sie dazu passende Fragen. In einer Ideenmappe zeigt die Partnerauswahl nur die dieser Idee zugeordneten Gesprächspartner. Im Episoden-Editor kann derselbe Partner mit seinen Fragen übernommen werden; bei manuell angelegten Folgen steht der reguläre Partnerbestand zur Auswahl. Für die individuelle Vorbereitung kann pro Partner ein persönliches PDF mit Anschreiben und den zugeordneten Fragen erstellt werden.',
           },
           {
-            heading: 'Fragen sortieren und freigeben',
-            text: 'Partnerfragen lassen sich im Episoden-Editor in die gewünschte Reihenfolge bringen. Gespeicherte Fragen können im RedaktionsHub oder direkt aus dem Interview-Block zur Freigabe angefordert werden. Der Status unterscheidet offen, angefragt, freigegeben und abgelehnt.',
+            heading: 'Fragenbibliothek, Sortierung und Freigabe',
+            text: 'Die zentrale Sammlung heißt Fragenbibliothek. Themen werden natürlich deutsch sortiert, sodass „2. Thema“ vor „10. Thema“ erscheint. Im Modus „Manuell“ können Fragen innerhalb eines Themas mit den Auf- und Ab-Aktionen dauerhaft neu angeordnet werden. Themen lassen sich direkt in der Bibliothek umbenennen; neue oder verschobene Fragen stehen am Ende des passenden Themas.',
+            list: [
+              'Sortiermodus wählen: manuell, alphabetisch, neueste oder älteste Fragen zuerst',
+              'Fragen im manuellen Modus mit den Auf- und Ab-Aktionen verschieben und anschließend speichern',
+              'Themen direkt in der Fragenbibliothek umbenennen',
+              'Gespeicherte Fragen im RedaktionsHub oder im Interview-Block zur Freigabe anfordern',
+            ],
             tip: 'Ist eine Fragenfreigabe in den App-Einstellungen verpflichtend, muss der Interview-Block vor der Episodenfreigabe einen Partner, verwendbare Fragen und die erforderlichen Freigaben enthalten.',
+          },
+          {
+            heading: 'PDF-Exporte mit Sonderzeichen',
+            text: 'PodCore liefert DejaVu-Schriften mit dem Release aus. PDF-Exporte funktionieren damit unabhängig von lokal installierten Schriften auf macOS, Windows und Linux. Wählen Sie unter Einstellungen → PDF-Layouts bei Bedarf DejaVu Sans, DejaVu Serif oder DejaVu Sans Mono sowie Textausrichtung und Überschriftenstil. Deutsche Sonderzeichen wie ä, ö, ü und ß werden korrekt ausgegeben.',
+            tip: 'Erstellen Sie nach einer Layoutänderung zunächst eine Vorschau. Bei selbst importierten Layouts werden ungültige historische Schriftnamen sicher auf verfügbare Schriften zurückgeführt.',
           },
           {
             heading: 'Notizen und Aufgaben',
@@ -862,11 +873,24 @@ const wikiData: WikiCategory[] = [
     color: 'text-text-secondary',
     articles: [
       {
+        id: 'v2-14-10',
+        title: 'v2.14.10 · PDF-Schriften und Fragenbibliothek',
+        summary: 'Mitgelieferte Unicode-Schriften, stabiler PDF-Export, neue Layoutoptionen sowie natürlich sortierte und dauerhaft umsortierbare Fragenbibliothek.',
+        icon: <CheckCircle size={16} />,
+        tags: ['aktuell', 'v2.14.10', 'pdf', 'unicode', 'sonderzeichen', 'fragenbibliothek', 'sortierung'],
+        compact: true,
+        content: [
+          {
+            text: 'Alle PDF-Exportwege registrieren mitgelieferte DejaVu-Schriften und vermeiden damit Abhängigkeiten von Betriebssystemschriften. Ungültige ältere Schriftnamen werden sicher aufgelöst; deutsche Sonderzeichen und doppelt kodierte Texte wie „GesprÄch“ werden korrekt dargestellt. Der PDF-Layout-Manager bietet zusätzliche Unicode-Schriftfamilien, Textausrichtung und Überschriftenstile. Die Fragenbibliothek sortiert Themen natürlich; Fragen lassen sich im manuellen Modus dauerhaft verschieben und Themen direkt umbenennen.',
+          },
+        ],
+      },
+      {
         id: 'v2-14-9',
         title: 'v2.14.9 · Interview-Fertigstellung und Speichertransparenz',
         summary: 'Einheitliche Interview-Blöcke, Fragenfreigabe und -sortierung, klarer Episodenabschluss sowie sichtbare Datenbank- und Speicherorte.',
         icon: <CheckCircle size={16} />,
-        tags: ['aktuell', 'v2.14.9', 'interview', 'fragen', 'freigabe', 'speicher', 'datenbank', 'staffelplanung'],
+        tags: ['v2.14.9', 'interview', 'fragen', 'freigabe', 'speicher', 'datenbank', 'staffelplanung'],
         compact: true,
         content: [
           {
@@ -896,7 +920,7 @@ const wikiData: WikiCategory[] = [
         compact: true,
         content: [
           {
-            text: 'Eine Planposition der strategischen Staffelplanung erzeugt jetzt zuerst eine Ideenmappe als redaktionelle Sammelstelle. Erst aus dieser Ideenmappe wird die Episode erstellt. Folgennummern sind frei wählbar und erlauben auch Folge 0. Der Staffelplan exportiert mit dem Layout „Staffelplanung Modern“ als Übersicht mit klaren Informationskarten. Im Episoden-Editor sind Medien-Upload, Kommentare & Feedback sowie Versionsverlauf übersichtlich einklappbar; verknüpfte Interview-Partner werden im Ideenmappen-Kontext gefiltert. Partnerfragen lassen sich sortieren und in den allgemeinen Fragen-Pool übernehmen. Ein Sponsor mit vollständiger Vertragslaufzeit erhält automatisch einen verwaltbaren Erstvertrag.',
+            text: 'Eine Planposition der strategischen Staffelplanung erzeugt jetzt zuerst eine Ideenmappe als redaktionelle Sammelstelle. Erst aus dieser Ideenmappe wird die Episode erstellt. Folgennummern sind frei wählbar und erlauben auch Folge 0. Der Staffelplan exportiert mit dem Layout „Staffelplanung Modern“ als Übersicht mit klaren Informationskarten. Im Episoden-Editor sind Medien-Upload, Kommentare & Feedback sowie Versionsverlauf übersichtlich einklappbar; verknüpfte Interview-Partner werden im Ideenmappen-Kontext gefiltert. Partnerfragen lassen sich sortieren und in die Fragenbibliothek übernehmen. Ein Sponsor mit vollständiger Vertragslaufzeit erhält automatisch einen verwaltbaren Erstvertrag.',
           },
         ],
       },
@@ -1031,7 +1055,7 @@ export default function WikiPage() {
               PodCore Handbuch
             </h1>
             <p className="text-text-secondary mt-1">
-              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.9
+              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.10
             </p>
           </div>
           <div className="relative w-full lg:w-[28rem]">

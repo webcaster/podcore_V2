@@ -93,6 +93,26 @@ function cleanQuestionPoolText(value: unknown, maxLength: number): string {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 }
 
+// Deutsche natürliche Sortierung: „2. Thema“ steht vor „10. Thema“.
+const QUESTION_POOL_COLLATOR = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+
+function getQuestionPoolTopic(question: any): string {
+  return String(question?.category || '').trim() || 'Allgemein';
+}
+
+function compareQuestionPoolQuestions(a: any, b: any): number {
+  const topicComparison = QUESTION_POOL_COLLATOR.compare(getQuestionPoolTopic(a), getQuestionPoolTopic(b));
+  if (topicComparison !== 0) return topicComparison;
+
+  const orderComparison = Number(a?.sort_order || 0) - Number(b?.sort_order || 0);
+  if (orderComparison !== 0) return orderComparison;
+
+  const createdComparison = String(a?.created_at || '').localeCompare(String(b?.created_at || ''));
+  if (createdComparison !== 0) return createdComparison;
+
+  return QUESTION_POOL_COLLATOR.compare(String(a?.question || ''), String(b?.question || ''));
+}
+
 // ============================================================
 // IDEAS
 // ============================================================
@@ -381,7 +401,7 @@ router.get('/ideas/:id/export-pdf', requirePermission('canViewIdeas') as any, (r
     const path = require('path');
     const fs = require('fs');
     const { DATA_DIR } = require('../database');
-    const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderSectionHeading, renderWatermark } = require('../pdfLayouts');
+    const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderSectionHeading, renderWatermark, preparePdfDocument } = require('../pdfLayouts');
 
     const layoutId = req.query.layoutId as string | undefined;
     const layout = layoutId ? (getLayoutById(layoutId) || getDefaultLayoutForType('idea')) : getDefaultLayoutForType('idea');
@@ -392,6 +412,7 @@ router.get('/ideas/:id/export-pdf', requirePermission('canViewIdeas') as any, (r
     const documentTitle = customDocTitle ? decodeURIComponent(customDocTitle) : 'Ideenmappe';
 
     const doc = new PDFDocument({ margin: m, size: layout.pageSize, layout: layout.pageOrientation === 'landscape' ? 'landscape' : 'portrait', autoFirstPage: true });
+    preparePdfDocument(doc);
     const filename = `Ideenmappe_${idea.title.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -767,7 +788,9 @@ router.get('/calendar/:year/:month/export-pdf', requirePermission('canViewEditor
 
   try {
     const PDFDocument = require('pdfkit');
+    const { preparePdfDocument } = require('../pdfLayouts');
     const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+    preparePdfDocument(doc);
     const filename = `Redaktionsplan_${year}_${String(month).padStart(2, '0')}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -900,7 +923,7 @@ router.delete('/interviews/partners/:id', requirePermission('canEditInterviews')
   return res.json({ success: true, message: 'Partner gelöscht' });
 });
 
-// Allgemeiner Fragen-Pool
+// Fragenbibliothek
 router.get('/interviews/question-pool', requirePermission('canViewInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const category = cleanQuestionPoolText(req.query.category, 120);
@@ -917,9 +940,11 @@ router.get('/interviews/question-pool', requirePermission('canViewInterviews') a
     const term = `%${search}%`;
     params.push(term, '', term, '', term);
   }
-  query += " ORDER BY LOWER(COALESCE(NULLIF(TRIM(category), ''), 'Allgemein')) ASC, sort_order ASC, created_at ASC, question ASC";
+  query += " ORDER BY sort_order ASC, created_at ASC, question ASC";
 
-  const questions = db.all(query, params).map(normalizeInterviewQuestion);
+  const questions = db.all(query, params)
+    .sort(compareQuestionPoolQuestions)
+    .map(normalizeInterviewQuestion);
   return res.json({ success: true, data: questions });
 });
 
@@ -948,26 +973,26 @@ router.get('/interviews/question-pool/export-pdf', requirePermission('canViewInt
     query += ` AND id IN (${requestedIds.map(() => '?').join(', ')})`;
     params.push(...requestedIds);
   }
-  query += " ORDER BY LOWER(COALESCE(NULLIF(TRIM(category), ''), 'Allgemein')) ASC, sort_order ASC, created_at ASC, question ASC";
+  query += " ORDER BY sort_order ASC, created_at ASC, question ASC";
 
-  const questions = db.all(query, params) as any[];
+  const questions = (db.all(query, params) as any[]).sort(compareQuestionPoolQuestions);
   if (!questions.length) {
     return res.status(404).json({ success: false, error: 'Keine Pool-Fragen für den PDF-Export gefunden' });
   }
 
   try {
     const PDFDocument = require('pdfkit');
-    const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark } = require('../pdfLayouts');
+    const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark, preparePdfDocument, normalizePdfText } = require('../pdfLayouts');
     const layoutId = typeof req.query.layoutId === 'string' ? req.query.layoutId : undefined;
     const layout = layoutId ? (getLayoutById(layoutId) || getDefaultLayoutForType('question_pool')) : getDefaultLayoutForType('question_pool');
     const margin = layout.pageMargin;
-    const documentTitle = cleanQuestionPoolText(req.query.documentTitle, 160) || 'Allgemeiner Fragen-Pool';
+    const documentTitle = normalizePdfText(cleanQuestionPoolText(req.query.documentTitle, 160)) || 'Fragenbibliothek';
     const showNotes = layout.sections.showQuestionPoolNotes !== false;
 
     const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
     let appSettings: any = {};
     try { appSettings = settingsRow ? JSON.parse(settingsRow.value) : {}; } catch (_) { appSettings = {}; }
-    const podcastName = appSettings?.branding?.podcastName || appSettings?.general?.podcastName || 'PodCore';
+    const podcastName = normalizePdfText(appSettings?.branding?.podcastName || appSettings?.general?.podcastName || 'PodCore');
     const brandingDir = path.join(DATA_DIR, 'branding');
     let logoPath: string | null = null;
     if (fs.existsSync(brandingDir)) {
@@ -982,12 +1007,13 @@ router.get('/interviews/question-pool/export-pdf', requirePermission('canViewInt
       autoFirstPage: true,
       bufferPages: true,
     });
+    preparePdfDocument(doc);
     const safeTitle = documentTitle
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-zA-Z0-9_-]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, 80) || 'Fragen-Pool';
+      .slice(0, 80) || 'Fragenbibliothek';
     const filename = `${safeTitle}-${new Date().toISOString().slice(0, 10)}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -1017,7 +1043,7 @@ router.get('/interviews/question-pool/export-pdf', requirePermission('canViewInt
 
     const categories = new Map<string, any[]>();
     for (const question of questions) {
-      const topic = String(question.category || '').trim() || 'Allgemein';
+      const topic = normalizePdfText(String(question.category || '').trim()) || 'Allgemein';
       if (!categories.has(topic)) categories.set(topic, []);
       categories.get(topic)!.push(question);
     }
@@ -1048,8 +1074,8 @@ router.get('/interviews/question-pool/export-pdf', requirePermission('canViewInt
       doc.y = headingY + 38;
 
       topicQuestions.forEach((question: any, index: number) => {
-        const questionText = String(question.question || '').trim();
-        const notesText = showNotes ? String(question.notes || '').trim() : '';
+        const questionText = normalizePdfText(String(question.question || '').trim());
+        const notesText = showNotes ? normalizePdfText(String(question.notes || '').trim()) : '';
         doc.font(`${layout.typography.fontFamily}-Bold`).fontSize(layout.typography.bodySize);
         const questionHeight = doc.heightOfString(questionText, { width: contentWidth - 30, lineGap: 1 });
         let notesHeight = 0;
@@ -1113,7 +1139,14 @@ router.post('/interviews/question-pool', requirePermission('canEditInterviews') 
   const question = cleanQuestionPoolText(req.body.question, 2000);
   const category = cleanQuestionPoolText(req.body.category, 120) || 'Allgemein';
   const notes = cleanQuestionPoolText(req.body.notes, 5000);
-  const order = Number.isFinite(Number(req.body.order)) ? Math.max(0, Math.trunc(Number(req.body.order))) : 0;
+  const hasExplicitOrder = req.body.order !== undefined && Number.isFinite(Number(req.body.order));
+  const lastQuestion = db.get(
+    "SELECT MAX(sort_order) AS maxOrder FROM interview_questions WHERE is_pool = 1 AND COALESCE(NULLIF(TRIM(category), ''), 'Allgemein') = ?",
+    [category]
+  ) as any;
+  const order = hasExplicitOrder
+    ? Math.max(0, Math.trunc(Number(req.body.order)))
+    : (Number.isFinite(Number(lastQuestion?.maxOrder)) ? Math.trunc(Number(lastQuestion.maxOrder)) + 1 : 0);
 
   if (!question) return res.status(400).json({ success: false, error: 'Frage erforderlich' });
 
@@ -1122,7 +1155,7 @@ router.post('/interviews/question-pool', requirePermission('canEditInterviews') 
     [id, question, category, order, notes || null]
   );
   const created = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 1', [id]) as any;
-  return res.status(201).json({ success: true, data: normalizeInterviewQuestion(created), message: 'Frage zum allgemeinen Pool hinzugefügt' });
+  return res.status(201).json({ success: true, data: normalizeInterviewQuestion(created), message: 'Frage zur Fragenbibliothek hinzugefügt' });
 });
 
 router.put('/interviews/question-pool/rename-topic', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
@@ -1139,17 +1172,65 @@ router.put('/interviews/question-pool/rename-topic', requirePermission('canEditI
   return res.json({ success: true, message: 'Thema erfolgreich umbenannt' });
 });
 
+router.put('/interviews/question-pool/reorder', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const rawQuestionIds: unknown[] = Array.isArray(req.body.questionIds) ? req.body.questionIds : [];
+  const questionIds = Array.from(new Set(
+    rawQuestionIds
+      .filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+      .map(id => id.trim())
+  ));
+
+  if (questionIds.length < 2) return res.status(400).json({ success: false, error: 'Mindestens zwei Pool-Fragen für eine Sortierung auswählen' });
+
+  const rows = db.all(
+    `SELECT id, category FROM interview_questions WHERE is_pool = 1 AND id IN (${questionIds.map(() => '?').join(', ')})`,
+    questionIds
+  ) as any[];
+  if (rows.length !== questionIds.length) return res.status(404).json({ success: false, error: 'Mindestens eine Pool-Frage wurde nicht gefunden' });
+
+  const topic = getQuestionPoolTopic(rows[0]);
+  if (rows.some(question => getQuestionPoolTopic(question) !== topic)) {
+    return res.status(400).json({ success: false, error: 'Fragen können nur innerhalb desselben Themas sortiert werden' });
+  }
+
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    questionIds.forEach((id, index) => {
+      db.run("UPDATE interview_questions SET sort_order = ?, updated_at = datetime('now') WHERE id = ? AND is_pool = 1", [index, id]);
+    });
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    console.error('[ERROR] Question pool reorder failed:', error);
+    return res.status(500).json({ success: false, error: 'Fragenreihenfolge konnte nicht gespeichert werden' });
+  }
+
+  return res.json({ success: true, data: { topic, questionIds }, message: 'Fragenreihenfolge aktualisiert' });
+});
+
 router.put('/interviews/question-pool/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const existing = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 1', [req.params.id]) as any;
   if (!existing) return res.status(404).json({ success: false, error: 'Pool-Frage nicht gefunden' });
 
   const question = req.body.question === undefined ? existing.question : cleanQuestionPoolText(req.body.question, 2000);
-  const category = req.body.category === undefined ? (existing.category || 'Allgemein') : (cleanQuestionPoolText(req.body.category, 120) || 'Allgemein');
+  const existingCategory = getQuestionPoolTopic(existing);
+  const category = req.body.category === undefined ? existingCategory : (cleanQuestionPoolText(req.body.category, 120) || 'Allgemein');
   const notes = req.body.notes === undefined ? existing.notes : (cleanQuestionPoolText(req.body.notes, 5000) || null);
-  const order = req.body.order === undefined || !Number.isFinite(Number(req.body.order))
-    ? existing.sort_order
-    : Math.max(0, Math.trunc(Number(req.body.order)));
+  const hasExplicitOrder = req.body.order !== undefined && Number.isFinite(Number(req.body.order));
+  const categoryChanged = category !== existingCategory;
+  const lastQuestion = categoryChanged
+    ? db.get(
+      "SELECT MAX(sort_order) AS maxOrder FROM interview_questions WHERE is_pool = 1 AND id <> ? AND COALESCE(NULLIF(TRIM(category), ''), 'Allgemein') = ?",
+      [req.params.id, category]
+    ) as any
+    : null;
+  const order = hasExplicitOrder
+    ? Math.max(0, Math.trunc(Number(req.body.order)))
+    : categoryChanged
+      ? (Number.isFinite(Number(lastQuestion?.maxOrder)) ? Math.trunc(Number(lastQuestion.maxOrder)) + 1 : 0)
+      : existing.sort_order;
 
   if (!question) return res.status(400).json({ success: false, error: 'Frage erforderlich' });
 
@@ -1402,13 +1483,13 @@ router.post('/interviews/questions/:id/archive-to-pool', requirePermission('canE
   if (source.source_question_id) {
     const originalPoolQuestion = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 1', [source.source_question_id]) as any;
     if (originalPoolQuestion) {
-      return res.json({ success: true, data: normalizeInterviewQuestion(originalPoolQuestion), existing: true, message: 'Die Frage ist bereits im allgemeinen Fragen-Pool vorhanden' });
+      return res.json({ success: true, data: normalizeInterviewQuestion(originalPoolQuestion), existing: true, message: 'Die Frage ist bereits in der Fragenbibliothek vorhanden' });
     }
   }
 
   const existingArchive = db.get('SELECT * FROM interview_questions WHERE is_pool = 1 AND source_question_id = ? LIMIT 1', [source.id]) as any;
   if (existingArchive) {
-    return res.json({ success: true, data: normalizeInterviewQuestion(existingArchive), existing: true, message: 'Die Frage ist bereits im allgemeinen Fragen-Pool vorhanden' });
+    return res.json({ success: true, data: normalizeInterviewQuestion(existingArchive), existing: true, message: 'Die Frage ist bereits in der Fragenbibliothek vorhanden' });
   }
 
   const nextOrder = db.get('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM interview_questions WHERE is_pool = 1') as any;
@@ -1419,7 +1500,7 @@ router.post('/interviews/questions/:id/archive-to-pool', requirePermission('canE
     [poolQuestionId, source.question, source.category || 'Allgemein', Number(nextOrder?.next_order || 0), source.notes || null, source.id]
   );
   const created = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 1', [poolQuestionId]) as any;
-  return res.status(201).json({ success: true, data: normalizeInterviewQuestion(created), existing: false, message: 'Frage in den allgemeinen Fragen-Pool übernommen' });
+  return res.status(201).json({ success: true, data: normalizeInterviewQuestion(created), existing: false, message: 'Frage in die Fragenbibliothek übernommen' });
 });
 
 router.delete('/interviews/questions/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
@@ -1603,7 +1684,7 @@ router.get('/interviews/partners/:partnerId/export-pdf', requirePermission('canV
   const podcastName = appSettings?.branding?.podcastName || appSettings?.general?.podcastName || 'PodCore';
 
   const PDFDocument = require('pdfkit');
-  const { getDefaultLayoutForType, renderPdfHeader, renderPdfFooter } = require('../pdfLayouts');
+  const { getDefaultLayoutForType, renderPdfHeader, renderPdfFooter, preparePdfDocument } = require('../pdfLayouts');
   const layout = getDefaultLayoutForType('episode');
   const m = layout.pageMargin;
   const typography = layout.typography;
@@ -1614,6 +1695,7 @@ router.get('/interviews/partners/:partnerId/export-pdf', requirePermission('canV
     margins: { top: m + 86, bottom: m + 30, left: m, right: m },
     bufferPages: true,
   });
+  preparePdfDocument(doc);
 
   const buffers: Buffer[] = [];
   doc.on('data', buffers.push.bind(buffers));

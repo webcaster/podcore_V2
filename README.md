@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.14.9**
+**Aktuelle Version: 2.14.10**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,7 +13,7 @@
 ### 📝 Redaktions-Hub & Ideenpool
 - Sammeln von Themenideen, Recherchen und Links
 - Verwaltung von Interview-Gästen inkl. Fragenkatalog
-- Allgemeiner, thematisch gruppierter Fragen-Pool mit Suche, Auswahl, Zuweisung, Kopieren und PDF-Export
+- Fragenbibliothek mit thematischer Gruppierung, natürlicher deutscher Sortierung, Suche, Auswahl, Zuweisung, Kopieren, dauerhafter manueller Reihenfolge und PDF-Export
 - Checklisten und Notizen pro Idee
 - Nahtlose Übernahme von Ideen in fertige Episoden
 - Übernahme verknüpfter Themenentwürfe in Beschreibung, Show Notes, Notizen oder Script-Blöcke
@@ -60,10 +60,10 @@
 - PDF-Export des Redaktionsplans für Besprechungen
 
 ### 🎨 CI & PDF-Layout-Manager
-- Vollständig anpassbare PDF-Exporte (Farben, Typografie, Logos)
+- Vollständig anpassbare PDF-Exporte (Farben, Typografie, Logos) mit gebündelten Unicode-Schriften für plattformunabhängige Sonderzeichendarstellung
 - Verschiedene Layout-Typen für Skripte, Angebote, Rechnungen und Kalender
 - Wasserzeichen-Unterstützung (z.B. "Entwurf", "Vertraulich")
-- Visueller Layout-Manager mit Kartenansicht und Vorschau
+- Visueller Layout-Manager mit Kartenansicht, Vorschau, DejaVu-Schriftfamilien, Textausrichtung und Überschriftenstilen
 
 ### 👥 Team & Berechtigungen
 - Rollen-basiertes Zugriffssystem (Admin, Redakteur, Moderator, Gast)
@@ -154,7 +154,7 @@ Die Startskripte starten ausschließlich den vorhandenen Produktions-Build. Sie 
 
 Ab Version **2.14.3** verfügt PodCore unter **Einstellungen → App-Update** über ein integriertes, verifiziertes Update-System. Neue Versionen können dort als ZIP-Datei hochgeladen und zunächst geprüft werden. PodCore entpackt und baut das Paket in einem getrennten Staging-Bereich, installiert Abhängigkeiten nicht interaktiv, sichert den bisherigen Programmstand und übernimmt nur das vorbereitete Ergebnis. Der Vorgang gilt erst als erfolgreich, wenn der neu gestartete Server die erwartete Zielversion bestätigt; bei Fehlern wird der vorherige Programmstand wiederhergestellt.
 
-Aktuelle Release-ZIPs finden Sie unter [Releases](https://github.com/webcaster/podcore_V2/releases). Vor jedem Update muss das persistente PodCore-Datenverzeichnis extern gesichert werden. Die vollständige Bedien-, Speicher-, Prüf- und Rückfallanleitung für den aktuellen Stand befindet sich unter [`docs/UPDATE-2.14.9.md`](docs/UPDATE-2.14.9.md).
+Aktuelle Release-ZIPs finden Sie unter [Releases](https://github.com/webcaster/podcore_V2/releases). Vor jedem Update muss das persistente PodCore-Datenverzeichnis extern gesichert werden. Die vollständige Bedien-, Speicher-, Prüf- und Rückfallanleitung für den aktuellen Stand befindet sich unter [`docs/UPDATE-2.14.10.md`](docs/UPDATE-2.14.10.md).
 
 Für ein manuelles Update installieren Sie nach `git pull` die Abhängigkeiten in **allen drei Paketverzeichnissen** erneut und erstellen anschließend den Produktions-Build:
 

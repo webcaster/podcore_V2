@@ -1,5 +1,24 @@
 # PodCore – Release Notes
 
+## v2.14.10 – Plattformunabhängige PDF-Schriften und Fragenbibliothek
+
+Version **2.14.10** stabilisiert alle PDF-Exporte durch mitgelieferte DejaVu-Schriften. Dadurch hängt die Ausgabe nicht mehr von installierten Systemschriften auf macOS, Windows oder Linux ab. Historische, ungültige Schriftbezeichnungen werden sicher auf gültige PDF-Schriften abgebildet; eine defensive Fallback-Logik verhindert zudem, dass ein einzelnes Layout einen Export wegen einer fehlenden Schrift abbricht. Die PDF-Texte bereinigen fehlerhaft doppelt kodierte UTF-8-Zeichen, damit insbesondere **ä, ö, ü, Ä, Ö, Ü und ß** korrekt dargestellt werden.
+
+| Bereich | Änderung |
+|---|---|
+| PDF-Schriften | Alle PDF-Erzeugungspfade registrieren vor dem ersten Rendern die gebündelten DejaVu-Schriften. Dadurch funktionieren Layout-Schriften ohne externe Betriebssystem-Abhängigkeit. |
+| Fehlertoleranz | Historische Namen wie `Times-Roman-Bold` sowie ungültige Varianten werden auf gültige PDFKit-Schriften aufgelöst. Ein sicherer Fallback verhindert Exportabbrüche bei nicht verfügbaren Layoutschriftarten. |
+| Sonderzeichen | Der PDF-Textdurchlauf normalisiert typische doppelt kodierte UTF-8-Eingaben. Texte wie **„GesprÄch“** werden als **„Gespräch“** ausgegeben; deutsche Sonderzeichen bleiben lesbar. |
+| Layout-Manager | DejaVu Sans, DejaVu Serif und DejaVu Sans Mono stehen als mitgelieferte Unicode-Schriften bereit. Zusätzlich sind Blocksatz beziehungsweise linksbündiger Text sowie Akzent-, Flächen- und Minimalüberschriften konfigurierbar. |
+| Fragenbibliothek | Der bisherige **„Allgemeine Fragen-Pool“** heißt jetzt **„Fragenbibliothek“**. Die Bezeichnung ist in RedaktionsHub, PDF-Export und Layoutverwaltung vereinheitlicht. |
+| Sortierung und Reihenfolge | Themen nutzen eine natürliche deutsche Sortierung, sodass beispielsweise **„2. Thema“** vor **„10. Thema“** steht. Innerhalb eines Themas können Fragen im manuellen Modus per Auf-/Ab-Aktion dauerhaft umsortiert werden. |
+| Themenpflege | Themen lassen sich direkt in der Fragenbibliothek umbenennen. Neue Fragen werden am Ende ihres Themas eingefügt; beim Themenwechsel stehen sie am Ende des neuen Themas. |
+| Qualitätssicherung | Der vollständige Produktions-Build und ein isolierter Ende-zu-Ende-Test prüfen zusätzlich PDF-Antworten, Sonderzeichen sowie die persistente Umordnung der Fragenbibliothek. |
+
+### Aktualisierung
+
+Ab einer bestehenden Installation von PodCore **2.14.3 oder neuer** kann das Release-ZIP über **Einstellungen → App-Update** verifiziert eingespielt werden. Erstellen Sie vorher ein Vollbackup des persistenten Datenverzeichnisses. Für v2.14.10 sind keine manuellen SQL-Schritte erforderlich; die Schriften werden mit dem Release-Paket ausgeliefert. Die vollständige Installations-, Bedien-, Prüf- und Rückfallanleitung befindet sich unter [`docs/UPDATE-2.14.10.md`](docs/UPDATE-2.14.10.md).
+
 ## v2.14.9 – Verlässliche Interview-Fertigstellung, transparente Speicherung und bereinigte Staffelplanung
 
 Version **2.14.9** vereinheitlicht den Abschluss einer Episode rund um Interview-Blöcke. Unabhängig davon, ob eine Episode aus einer Ideenmappe entsteht oder manuell angelegt wird, stehen jetzt dieselbe Partnerauswahl, die Übernahme zugehöriger Fragen, direkte manuelle Fragen und nachvollziehbare Freigaben bereit. Die Anwendung macht zudem Datenbank, Datenordner, Medienablage und Sicherungen transparent sichtbar. Verwaiste Staffelplan-Positionen lassen sich nach dem Löschen einer Episode wieder zuverlässig entfernen.

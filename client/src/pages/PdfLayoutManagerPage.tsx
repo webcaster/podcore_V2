@@ -19,7 +19,7 @@ const EXPORT_TYPES = [
   { value: 'performance_report', label: 'Leistungsübersicht (Sponsor)' },
   { value: 'sponsor_dossier', label: 'Sponsor-Dossier' },
   { value: 'sponsor_offer', label: 'Sponsor-Angebot' },
-  { value: 'question_pool', label: 'Allgemeiner Fragen-Pool' },
+  { value: 'question_pool', label: 'Fragenbibliothek' },
   { value: 'season_planning', label: 'Strategische Staffelplanung' },
   { value: 'price_list', label: 'Preisliste (Werbung)' },
   { value: 'episode_table', label: 'Episoden-Skript (Tabelle)' },
@@ -32,9 +32,23 @@ const HEADER_STYLES = [
 ];
 
 const FONT_FAMILIES = [
-  { value: 'Helvetica', label: 'Helvetica (Sans-Serif)' },
-  { value: 'Times-Roman', label: 'Times Roman (Serif)' },
-  { value: 'Courier', label: 'Courier (Monospace)' },
+  { value: 'Helvetica', label: 'Helvetica (Sans-Serif, PDF-Standard)' },
+  { value: 'Times-Roman', label: 'Times Roman (Serif, PDF-Standard)' },
+  { value: 'Courier', label: 'Courier (Monospace, PDF-Standard)' },
+  { value: 'DejaVu Sans', label: 'DejaVu Sans (Unicode, mitgeliefert)' },
+  { value: 'DejaVu Serif', label: 'DejaVu Serif (Unicode-Serif, mitgeliefert)' },
+  { value: 'DejaVu Sans Mono', label: 'DejaVu Sans Mono (Unicode-Monospace, mitgeliefert)' },
+];
+
+const BODY_ALIGNMENT_OPTIONS = [
+  { value: 'left', label: 'Linksbündig' },
+  { value: 'justify', label: 'Blocksatz' },
+];
+
+const HEADING_STYLE_OPTIONS = [
+  { value: 'accent', label: 'Akzentlinie' },
+  { value: 'boxed', label: 'Farbige Fläche' },
+  { value: 'minimal', label: 'Minimal ohne Linie' },
 ];
 
 const PAGE_SIZES = [
@@ -94,7 +108,7 @@ const SECTION_GROUPS: Record<string, { label: string; keys: string[] }> = {
     keys: ['showReportStats', 'showReportChart', 'showReportBookings'],
   },
   question_pool: {
-    label: 'Allgemeiner Fragen-Pool',
+    label: 'Fragenbibliothek',
     keys: ['showQuestionPoolNotes'],
   },
 };
@@ -778,9 +792,33 @@ export default function PdfLayoutManagerPage() {
                       >
                         {FONT_FAMILIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                       </select>
-                    </div>
-                    {[
-                      { key: 'titleSize', label: 'Titel-Größe' },
+                                         </div>
+                     <div className="flex items-center gap-3">
+                       <label className="text-xs text-text-muted w-36 shrink-0">Fließtext</label>
+                       <select
+                         value={editForm.typography?.bodyAlignment || 'left'}
+                         onChange={e => update('typography.bodyAlignment', e.target.value)}
+                         className="bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary"
+                       >
+                         {BODY_ALIGNMENT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                       </select>
+                     </div>
+                     <div className="flex items-center gap-3">
+                       <label className="text-xs text-text-muted w-36 shrink-0">Überschriften</label>
+                       <select
+                         value={editForm.typography?.headingStyle || 'accent'}
+                         onChange={e => update('typography.headingStyle', e.target.value)}
+                         className="bg-obsidian-800 border border-surface-border rounded px-2 py-1 text-xs text-text-primary"
+                       >
+                         {HEADING_STYLE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                       </select>
+                     </div>
+                     <p className="text-xs text-text-muted leading-relaxed">
+                       Die DejaVu-Schriften sind im PodCore-Update enthalten und unterstützen deutsche Umlaute sowie weitere Unicode-Zeichen unabhängig vom Betriebssystem.
+                     </p>
+                     {[
+                       { key: 'titleSize', label: 'Titel-Größe' },
+
                       { key: 'subtitleSize', label: 'Untertitel-Größe' },
                       { key: 'headingSize', label: 'Überschrift-Größe' },
                       { key: 'bodySize', label: 'Fließtext-Größe' },

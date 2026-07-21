@@ -4,6 +4,7 @@ import {
   getAllLayouts, getLayoutById, createLayout, updateLayout,
   deleteLayout, duplicateLayout, DEFAULT_LAYOUT,
   renderPdfHeader, renderPdfFooter, renderSectionHeading,
+  preparePdfDocument, normalizePdfText,
   PdfLayout,
 } from '../pdfLayouts';
 import PDFDocument from 'pdfkit';
@@ -29,6 +30,8 @@ function generatePreviewPdf(layout: PdfLayout): Promise<Buffer> {
       bufferPages: true,
     });
 
+    preparePdfDocument(doc);
+
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -51,7 +54,7 @@ function generatePreviewPdf(layout: PdfLayout): Promise<Buffer> {
 
     renderPdfHeader(doc, layout, {
       podcastName,
-      documentTitle: `Vorschau — ${layout.name || 'Layout'}`,
+      documentTitle: normalizePdfText(`Vorschau — ${layout.name || 'Layout'}`),
       logoPath,
     });
 
@@ -60,7 +63,7 @@ function generatePreviewPdf(layout: PdfLayout): Promise<Buffer> {
     if (type === 'sponsor_offer') {
       renderSectionHeading(doc, layout, 'Angebot für: Beispiel Sponsor');
       doc.fontSize(typography.bodySize).font(typography.fontFamily).fillColor(colors.text)
-        .text('Gültig bis: 31.12.2026', { width: contentWidth });
+        .text(normalizePdfText('Gültig bis: 31.12.2026'), { width: contentWidth });
       doc.moveDown();
       
       if (layout.sections.showOfferIntro) {
@@ -100,12 +103,13 @@ function generatePreviewPdf(layout: PdfLayout): Promise<Buffer> {
           .text(`Nummer: 2026-001
 Datum: 01.01.2026`, { width: contentWidth });
        doc.moveDown();
-       doc.text('Hiermit bestätigen wir die folgenden Werbebuchungen für den Zeitraum Q1/2026.');
+               doc.text(normalizePdfText('Hiermit bestätigen wir die folgenden Werbebuchungen für den Zeitraum Q1/2026.'));
+
     } else {
       // Fallback: Episode Preview (wie bisher)
       renderSectionHeading(doc, layout, 'Beispiel-Inhalt');
       doc.fontSize(typography.bodySize).font(typography.fontFamily).fillColor(colors.text)
-        .text('Dies ist eine Vorschau für den Export-Typ: ' + type, { width: contentWidth });
+        .text(normalizePdfText('Dies ist eine Vorschau für den Export-Typ: ' + type), { width: contentWidth });
     }
 
     // Footer

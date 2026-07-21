@@ -5,7 +5,7 @@ import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth'
 import * as fs from 'fs';
 import * as path from 'path';
 import { DATA_DIR } from '../database';
-import { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark } from '../pdfLayouts';
+import { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark, preparePdfDocument } from '../pdfLayouts';
 
 const router: express.Router = express.Router();
 
@@ -399,6 +399,7 @@ router.get('/offers/:offerId/pdf', requirePermission('canViewSponsorOffers') as 
 
   const PDFDocument = require('pdfkit');
   const doc = new PDFDocument({ margin: m, size: 'A4' });
+  preparePdfDocument(doc);
   const chunks: Buffer[] = [];
   doc.on('data', (c: Buffer) => chunks.push(c));
   doc.on('end', () => {
@@ -656,6 +657,7 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
     autoFirstPage: false,
     bufferPages: true,
   });
+  preparePdfDocument(doc);
   const chunks: Buffer[] = [];
   doc.on('data', (c: Buffer) => chunks.push(c));
   doc.on('end', () => {
@@ -900,6 +902,7 @@ function renderConfirmationPdf(
     autoFirstPage: false,
     bufferPages: true,
   });
+  preparePdfDocument(doc);
   const chunks: Buffer[] = [];
   doc.on('data', (chunk: Buffer) => chunks.push(chunk));
   doc.on('end', () => {
@@ -1265,6 +1268,7 @@ router.get('/:sponsorId/dossier-pdf', requirePermission('canViewSponsors') as an
 
   const PDFDocument = require('pdfkit');
   const doc = new PDFDocument({ margin: m, size: 'A4', autoFirstPage: true, bufferPages: true });
+  preparePdfDocument(doc);
   const chunks: Buffer[] = [];
   doc.on('data', (c: Buffer) => chunks.push(c));
   doc.on('end', () => {
