@@ -998,14 +998,49 @@ export default function AdminPage() {
             </div>
             {dbStatus && (
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${
-                    dbStatus.type === 'mysql' ? 'bg-accent-blue/20 text-accent-blue' : 'bg-accent-green/20 text-accent-green'
-                  }`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-accent-green/20 text-accent-green">
                     <Database size={12} />
-                    {dbStatus.type === 'mysql' ? 'MySQL / MariaDB' : 'SQLite (lokal)'}
+                    {dbStatus.runtime?.label || 'SQLite (lokal, aktiv)'}
                   </span>
+                  {dbStatus.mysqlTransfer && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-accent-blue/20 text-accent-blue">
+                      <Server size={12} />
+                      MySQL-Datenkopie vorhanden
+                    </span>
+                  )}
                 </div>
+
+                {dbStatus.runtime && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    <div className="bg-obsidian-800 rounded-lg p-3 border border-surface-border">
+                      <p className="text-text-muted text-xs mb-1">Datenbankdatei</p>
+                      <p className="text-text-primary font-mono text-xs break-all">{dbStatus.runtime.databasePath}</p>
+                    </div>
+                    <div className="bg-obsidian-800 rounded-lg p-3 border border-surface-border">
+                      <p className="text-text-muted text-xs mb-1">Datenordner</p>
+                      <p className="text-text-primary font-mono text-xs break-all">{dbStatus.runtime.dataDirectory}</p>
+                    </div>
+                    <div className="bg-obsidian-800 rounded-lg p-3 border border-surface-border">
+                      <p className="text-text-muted text-xs mb-1">Lokale Medienablage</p>
+                      <p className="text-text-primary font-mono text-xs break-all">{dbStatus.storage?.localMediaPath || 'Wird ermittelt …'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {dbStatus.mysqlTransfer && (
+                  <div className="bg-accent-blue/5 border border-accent-blue/30 rounded-lg p-3 text-sm">
+                    <p className="font-medium text-text-primary">MySQL ist nicht die aktive Betriebsdatenbank.</p>
+                    <p className="text-text-muted mt-1">Eine Datenkopie wurde für <span className="font-mono">{dbStatus.mysqlTransfer.host || 'unbekannter Host'}:{dbStatus.mysqlTransfer.port || 3306}/{dbStatus.mysqlTransfer.database || 'unbekannt'}</span> erstellt. PodCore arbeitet weiterhin mit SQLite, damit ein Browserklick keinen unvollständigen Serverwechsel auslösen kann.</p>
+                  </div>
+                )}
+
+                {dbStatus.storage?.configured && (
+                  <div className="bg-accent-orange/5 border border-accent-orange/30 rounded-lg p-3 text-sm text-text-muted">
+                    Ein externes Speicherziel ist konfiguriert{dbStatus.storage.target ? `: ${dbStatus.storage.target}` : ''}. Neue Medien werden weiterhin zuerst in der oben genannten lokalen Medienablage gesichert.
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {Object.entries(dbStatus.stats || {}).map(([table, count]) => (
                     <div key={table} className="bg-obsidian-800 rounded-lg p-3 border border-surface-border">
@@ -1022,11 +1057,10 @@ export default function AdminPage() {
           <div className="card">
             <h3 className="font-semibold text-text-primary mb-1 flex items-center gap-2">
               <ArrowRight size={16} className="text-accent-orange" />
-              Migration: SQLite → MySQL / MariaDB
+              Datenkopie: SQLite → MySQL / MariaDB
             </h3>
             <p className="text-text-secondary text-sm mb-4">
-              Übertrage alle Daten aus der lokalen SQLite-Datenbank in eine externe MySQL- oder MariaDB-Datenbank.
-              Ideal wenn das Podcast-Projekt wächst und mehrere Nutzer gleichzeitig arbeiten.
+              Erstelle eine vollständige, überprüfte Kopie der lokalen SQLite-Datenbank in einer externen MySQL- oder MariaDB-Datenbank. Die aktive PodCore-Instanz wird dadurch nicht automatisch umgestellt.
             </p>
 
             <div className="bg-accent-orange/5 border border-accent-orange/30 rounded-xl p-4 mb-4">
@@ -1039,7 +1073,7 @@ export default function AdminPage() {
                     <li>Die Ziel-Datenbank muss bereits existieren (leere MySQL-Datenbank)</li>
                     <li>Der MySQL-Benutzer benötigt CREATE, DROP, INSERT, SELECT Rechte</li>
                     <li>Vorhandene Tabellen in der Ziel-DB werden überschrieben</li>
-                    <li>Nach der Migration muss der Server neu konfiguriert werden (mysql2 installieren)</li>
+                    <li>Nach der Datenkopie bleibt PodCore bewusst auf SQLite aktiv; ein späterer Serverwechsel wird separat geplant und geprüft</li>
                   </ul>
                 </div>
               </div>
@@ -1114,7 +1148,7 @@ export default function AdminPage() {
 
               <button
                 onClick={async () => {
-                  if (!window.confirm('Alle Daten von SQLite nach MySQL migrieren? Vorhandene Tabellen in der Ziel-DB werden überschrieben!')) return;
+                  if (!window.confirm('Eine vollständige Datenkopie nach MySQL erstellen? Vorhandene Tabellen in der Ziel-Datenbank werden überschrieben. PodCore bleibt danach weiterhin auf SQLite aktiv.')) return;
                   setIsMigrating(true);
                   setMigrationLog([]);
                   setMigrationDone(false);
@@ -1136,7 +1170,7 @@ export default function AdminPage() {
                 className="btn-primary"
               >
                 {isMigrating ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
-                Migration starten
+                Datenkopie erstellen
               </button>
 
               <button
@@ -1194,8 +1228,8 @@ export default function AdminPage() {
                 </div>
                 {migrationDone && (
                   <div className="mt-3 p-3 bg-accent-green/10 border border-accent-green/30 rounded-lg">
-                    <p className="text-accent-green text-sm font-medium">✓ Migration erfolgreich abgeschlossen</p>
-                    <p className="text-text-muted text-xs mt-1">Nächste Schritte: Installiere mysql2 im Server-Verzeichnis (<code className="bg-obsidian-800 px-1 rounded">npm install mysql2</code>) und konfiguriere die Datenbankverbindung in der Server-Konfiguration.</p>
+                    <p className="text-accent-green text-sm font-medium">Datenkopie erfolgreich abgeschlossen</p>
+                    <p className="text-text-muted text-xs mt-1">Die Kopie ist als separates Ziel dokumentiert. Die laufende PodCore-Instanz bleibt sicher auf der lokalen SQLite-Datenbank; ein produktiver Serverwechsel erfordert eine eigene, geprüfte Umstellung.</p>
                   </div>
                 )}
               </div>

@@ -24,7 +24,9 @@ function resolveUploadDir(): string {
     // to avoid dumping files in the root data directory
     const configured = path.resolve(config.localPath);
     const dataDir = path.resolve(ASSETS_DIR, '..');
-    const dir = configured === dataDir ? ASSETS_DIR : path.join(configured, 'assets');
+    // Der gewählte Pfad ist für Endnutzer der tatsächliche Medienordner. Nur wenn
+    // der Datenordner selbst gewählt wurde, wird sauber im Unterordner "assets" abgelegt.
+    const dir = configured === dataDir ? ASSETS_DIR : configured;
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     return dir;
   }

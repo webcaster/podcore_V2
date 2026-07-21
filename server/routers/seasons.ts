@@ -482,7 +482,12 @@ seasonsRouter.delete('/plan-items/:itemId', requirePermission('canEditSeasonPlan
   const db = getDb();
   const item = db.get('SELECT * FROM season_plan_items WHERE id = ?', [req.params.itemId]) as any;
   if (!item) return res.status(404).json({ success: false, error: 'Planposition nicht gefunden' });
-  if (item.episode_id) return res.status(409).json({ success: false, error: 'Die Position ist bereits mit einer Episode verbunden und kann nur zurückgestellt werden' });
+  if (item.episode_id) {
+    const linkedEpisode = db.get('SELECT id FROM episodes WHERE id = ?', [item.episode_id]) as any;
+    if (linkedEpisode) {
+      return res.status(409).json({ success: false, error: 'Die Position ist bereits mit einer Episode verbunden und kann nur zurückgestellt werden' });
+    }
+  }
   try {
     db.exec('BEGIN IMMEDIATE');
     db.run('DELETE FROM season_plan_item_partners WHERE plan_item_id = ?', [req.params.itemId]);

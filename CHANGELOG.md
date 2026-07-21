@@ -1,5 +1,27 @@
 # PodCore – Release Notes
 
+## v2.14.9 – Verlässliche Interview-Fertigstellung, transparente Speicherung und bereinigte Staffelplanung
+
+Version **2.14.9** vereinheitlicht den Abschluss einer Episode rund um Interview-Blöcke. Unabhängig davon, ob eine Episode aus einer Ideenmappe entsteht oder manuell angelegt wird, stehen jetzt dieselbe Partnerauswahl, die Übernahme zugehöriger Fragen, direkte manuelle Fragen und nachvollziehbare Freigaben bereit. Die Anwendung macht zudem Datenbank, Datenordner, Medienablage und Sicherungen transparent sichtbar. Verwaiste Staffelplan-Positionen lassen sich nach dem Löschen einer Episode wieder zuverlässig entfernen.
+
+| Bereich | Änderung |
+|---|---|
+| Einheitlicher Interview-Block | Die Aktionen **„+ Interview“** und **„Interview-Fragen“** erzeugen denselben strukturierten Block. Beide Wege bieten Partnerauswahl, Fragenübernahme und Bearbeitung. |
+| Partner und Fragen | Ein ausgewählter Interview-Partner übergibt seine Fragen mit Quellenbezug, Freigabestatus und Antwortzeit in die Episode. Dies gilt für Ideenmappen- und manuell erstellte Folgen. |
+| Manuelle Fragen | Manuelle Fragen lassen sich im Block direkt eingeben, bearbeiten, zentral im RedaktionsHub speichern und anschließend erneut verwenden. |
+| Fragen-Sortierung | Fragen eines Interview-Partners können im Editor sichtbar umsortiert werden; die Reihenfolge bleibt nach dem Speichern und Neuladen erhalten. |
+| Fragenfreigabe | Für gespeicherte Interview-Fragen kann im RedaktionsHub und direkt im Episoden-Editor eine Freigabe angefordert werden. Der Status unterscheidet offen, angefragt, freigegeben und abgelehnt. |
+| Fertigstellungscheck | Die Episodenfreigabe weist klar auf fehlende Partner, offene Fragen oder notwendige noch nicht freigegebene Fragen hin und verhindert einen unvollständigen Abschluss. |
+| Staffelplan-Löschung | Beim Löschen einer Episode werden verknüpfte Staffelplan-Positionen und Ideen wieder freigegeben. Bereits mit älteren Versionen entstandene verwaiste Planpositionen können nachträglich gelöscht werden. |
+| Datenbankstatus | Administration zeigt die tatsächlich aktive Datenbank, Datenbankdatei, Datenordner, Medienablage und eine komprimierte Bestandsübersicht an. |
+| SQLite und MySQL/MariaDB | SQLite bleibt der aktive Standardbetrieb. Die Administration bietet eine klar abgegrenzte, testbare und gesicherte **Datenkopie** nach MySQL/MariaDB; eine scheinbare Laufzeitumstellung wird nicht mehr suggeriert. |
+| Datenspeicher | **Branding & Backup → Speicher** zeigt Betriebsdaten, Medien, Sicherungen und das aktive Medienziel getrennt an. Lokale Pfade lassen sich vor dem Speichern testen; nicht verfügbare SFTP/SSH-Speicherung ist sichtbar deaktiviert. |
+| Qualitätssicherung | Produktions-Build, isolierter API-Ende-zu-Ende-Test, visuelle Editorprüfung, Persistenzprüfung, Datenbankstatus, lokaler Speichertest und Staffelplan-Löschung wurden erfolgreich durchgeführt. |
+
+### Aktualisierung
+
+Ab einer bestehenden Installation von PodCore **2.14.3 oder neuer** kann das Release-ZIP über **Einstellungen → App-Update** verifiziert eingespielt werden. Erstellen Sie vorher ein Vollbackup des persistenten Datenverzeichnisses. Für v2.14.9 sind keine manuellen SQL-Schritte erforderlich; die zusätzlichen Freigabemetadaten werden beim Serverstart abwärtskompatibel und idempotent ergänzt. Die vollständige Installations-, Bedien-, Prüf- und Rückfallanleitung befindet sich unter [`docs/UPDATE-2.14.9.md`](docs/UPDATE-2.14.9.md).
+
 ## v2.14.8 – Stabile PDF-Unterlagen, wiederherstellbare Ideenmappen und vollständige Episodenarchive
 
 Version **2.14.8** stabilisiert die PDF- und Archivierungsabläufe des RedaktionsHub. Der allgemeine Fragen-Pool bleibt auch bei langen Fragen vollständig lesbar, Interview-Partner erhalten persönliche Unterlagen mit Anschreiben, und archivierte Episoden können als nachvollziehbare ZIP-Archivmappe abgelegt werden. Ergänzend schützt ein Papierkorb versehentlich gelöschte Ideenmappen und die Fragenverwaltung einer Ideenmappe beschränkt ihre Partnerauswahl auf den jeweils passenden Folgenkontext.

@@ -75,6 +75,10 @@ function normalizeInterviewQuestion(row: any): any {
     approved: row.approved === 1,
     approvedBy: row.approved_by,
     approvedAt: row.approved_at,
+    approvalStatus: row.status || (row.approved === 1 ? 'freigegeben' : 'offen'),
+    approvalRequestedBy: row.approval_requested_by || null,
+    approvalRequestedAt: row.approval_requested_at || null,
+    approvalNotes: row.approval_notes || null,
     partnerId: row.partner_id,
     episodeId: row.episode_id,
     ideaId: row.idea_id,
@@ -1265,19 +1269,58 @@ router.put('/interviews/questions/:id', requirePermission('canEditInterviews') a
   const { question, category, order, notes } = req.body;
   const partnerId = req.body.partnerId === undefined ? existing.partner_id : (req.body.partnerId || null);
   const episodeId = req.body.episodeId === undefined ? existing.episode_id : (req.body.episodeId || null);
-  const ideaId = req.body.ideaId === undefined ? existing.idea_id : (req.body.ideaId || null);
+  const ideaId = req.body.ideaId === undefined ? existing.idea_id : (req.body.idea_id || null);
+  const contentChanged = question !== undefined || category !== undefined || notes !== undefined || partnerId !== existing.partner_id;
 
   db.run(
     `UPDATE interview_questions
      SET question = COALESCE(?, question), category = ?, sort_order = COALESCE(?, sort_order), notes = ?,
-         partner_id = ?, episode_id = ?, idea_id = ?, updated_at = datetime('now')
+         partner_id = ?, episode_id = ?, idea_id = ?,
+         approved = CASE WHEN ? THEN 0 ELSE approved END,
+         approved_by = CASE WHEN ? THEN NULL ELSE approved_by END,
+         approved_at = CASE WHEN ? THEN NULL ELSE approved_at END,
+         status = CASE WHEN ? THEN 'offen' ELSE status END,
+         approval_requested_by = CASE WHEN ? THEN NULL ELSE approval_requested_by END,
+         approval_requested_at = CASE WHEN ? THEN NULL ELSE approval_requested_at END,
+         approval_notes = CASE WHEN ? THEN NULL ELSE approval_notes END,
+         updated_at = datetime('now')
      WHERE id = ? AND is_pool = 0`,
-    [question ?? null, category ?? null, order ?? null, notes ?? null, partnerId, episodeId, ideaId, req.params.id]
+    [
+      question ?? null, category ?? null, order ?? null, notes ?? null, partnerId, episodeId, ideaId,
+      contentChanged, contentChanged, contentChanged, contentChanged, contentChanged, contentChanged, contentChanged,
+      req.params.id,
+    ]
   );
 
   const q = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
   broadcastEditorialResourceUpdated(db, q, req, 'interview-questions');
-  return res.json({ success: true, data: normalizeInterviewQuestion(q) });
+  return res.json({
+    success: true,
+    data: normalizeInterviewQuestion(q),
+    message: contentChanged && existing.approved === 1 ? 'Frage gespeichert; die Freigabe wurde wegen der Änderung zurückgesetzt' : undefined,
+  });
+});
+
+// POST /api/editorial/interviews/questions/:id/request-approval — Freigabe für eine Frage anfordern
+router.post('/interviews/questions/:id/request-approval', requirePermission('canRequestApproval') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const question = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
+  if (!question) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
+  if (!String(question.question || '').trim()) return res.status(400).json({ success: false, error: 'Leere Fragen können nicht zur Freigabe eingereicht werden' });
+  if (question.approved === 1) return res.status(400).json({ success: false, error: 'Diese Frage ist bereits freigegeben' });
+
+  const notes = typeof req.body?.notes === 'string' ? req.body.notes.trim().slice(0, 2000) : null;
+  db.run(
+    `UPDATE interview_questions
+     SET status = 'angefragt', approval_requested_by = ?, approval_requested_at = datetime('now'), approval_notes = ?,
+         approved = 0, approved_by = NULL, approved_at = NULL, updated_at = datetime('now')
+     WHERE id = ? AND is_pool = 0`,
+    [req.user!.id, notes || null, req.params.id]
+  );
+
+  const updated = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
+  broadcastEditorialResourceUpdated(db, updated, req, 'interview-questions');
+  return res.json({ success: true, data: normalizeInterviewQuestion(updated), message: 'Freigabe für die Interview-Frage angefordert' });
 });
 
 // POST /api/editorial/interviews/questions/:id/approve — Moderator gibt Frage frei
@@ -1287,18 +1330,15 @@ router.post('/interviews/questions/:id/approve', requirePermission('canApproveIn
   if (!q) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
 
   db.run(
-    `UPDATE interview_questions SET approved = 1, approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND is_pool = 0`,
+    `UPDATE interview_questions
+     SET approved = 1, approved_by = ?, approved_at = datetime('now'), status = 'freigegeben', updated_at = datetime('now')
+     WHERE id = ? AND is_pool = 0`,
     [req.user!.id, req.params.id]
   );
 
   const updated = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
   broadcastEditorialResourceUpdated(db, updated, req, 'interview-questions');
-  return res.json({ success: true, data: {
-    ...updated, approved: updated.approved === 1,
-    approvedBy: updated.approved_by, approvedAt: updated.approved_at,
-    partnerId: updated.partner_id, episodeId: updated.episode_id,
-    createdAt: updated.created_at, updatedAt: updated.updated_at,
-  }, message: 'Frage freigegeben' });
+  return res.json({ success: true, data: normalizeInterviewQuestion(updated), message: 'Frage freigegeben' });
 });
 
 // POST /api/editorial/interviews/questions/:id/revoke — Freigabe zurückziehen
@@ -1308,34 +1348,49 @@ router.post('/interviews/questions/:id/revoke', requirePermission('canApproveInt
   if (!q) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
 
   db.run(
-    `UPDATE interview_questions SET approved = 0, approved_by = NULL, approved_at = NULL, updated_at = datetime('now') WHERE id = ? AND is_pool = 0`,
+    `UPDATE interview_questions
+     SET approved = 0, approved_by = NULL, approved_at = NULL, status = 'offen',
+         approval_requested_by = NULL, approval_requested_at = NULL, approval_notes = NULL, updated_at = datetime('now')
+     WHERE id = ? AND is_pool = 0`,
     [req.params.id]
   );
 
   const updated = db.get('SELECT * FROM interview_questions WHERE id = ?', [req.params.id]) as any;
   broadcastEditorialResourceUpdated(db, updated, req, 'interview-questions');
-  return res.json({ success: true, data: {
-    ...updated, approved: updated.approved === 1,
-    approvedBy: updated.approved_by, approvedAt: updated.approved_at,
-    partnerId: updated.partner_id, episodeId: updated.episode_id,
-    createdAt: updated.created_at, updatedAt: updated.updated_at,
-  }, message: 'Freigabe zurückgezogen' });
+  return res.json({ success: true, data: normalizeInterviewQuestion(updated), message: 'Freigabe zurückgezogen' });
 });
 
-// POST /api/editorial/interviews/questions/reorder — Fragen neu sortieren
+// POST /api/editorial/interviews/questions/reorder — Fragen eines Interview-Partners neu sortieren
 router.post('/interviews/questions/reorder', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { questionIds } = req.body;
-  
-  if (!Array.isArray(questionIds) || questionIds.length === 0) {
-    return res.status(400).json({ success: false, error: 'Frage-IDs erforderlich' });
+  const questionIds = Array.isArray(req.body?.questionIds) ? [...new Set(req.body.questionIds.filter((id: unknown) => typeof id === 'string' && id.trim()))] : [];
+  if (!questionIds.length) return res.status(400).json({ success: false, error: 'Frage-IDs erforderlich' });
+
+  const placeholders = questionIds.map(() => '?').join(', ');
+  const rows = db.all(
+    `SELECT id, partner_id FROM interview_questions WHERE is_pool = 0 AND id IN (${placeholders})`,
+    questionIds
+  ) as Array<{ id: string; partner_id: string | null }>;
+  if (rows.length !== questionIds.length) return res.status(400).json({ success: false, error: 'Mindestens eine Frage ist nicht verfügbar' });
+
+  const partnerIds = new Set(rows.map((row) => row.partner_id || ''));
+  if (partnerIds.size !== 1 || ![...partnerIds][0]) {
+    return res.status(400).json({ success: false, error: 'Es können nur Fragen desselben Interview-Partners gemeinsam sortiert werden' });
   }
-  
-  for (let i = 0; i < questionIds.length; i++) {
-    db.run('UPDATE interview_questions SET sort_order = ? WHERE id = ?', [i, questionIds[i]]);
+
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    questionIds.forEach((questionId, index) => {
+      db.run('UPDATE interview_questions SET sort_order = ?, updated_at = datetime(\'now\') WHERE id = ? AND is_pool = 0', [index, questionId]);
+    });
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    console.error('[ERROR] Interview question ordering failed:', error);
+    return res.status(500).json({ success: false, error: 'Fragenreihenfolge konnte nicht gespeichert werden' });
   }
-  
-  return res.json({ success: true, message: 'Reihenfolge aktualisiert' });
+
+  return res.json({ success: true, data: { questionIds }, message: 'Fragenreihenfolge aktualisiert' });
 });
 
 router.post('/interviews/questions/:id/archive-to-pool', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
@@ -1838,8 +1893,8 @@ router.get('/interviews/for-episode', requirePermission('canViewInterviews') as 
       ...p,
       guestIntro: p.guest_intro,
       ideaId: p.idea_id,
-        approvedQuestions: approvedQuestions.map((q: any) => ({ ...q, timestampSeconds: q.timestamp_seconds, timestampSource: q.timestamp_source })),
-      allQuestions: allQuestions.map((q: any) => ({ ...q, timestampSeconds: q.timestamp_seconds, timestampSource: q.timestamp_source })),
+      approvedQuestions: approvedQuestions.map((q: any) => ({ ...normalizeInterviewQuestion(q), timestampSeconds: q.timestamp_seconds, timestampSource: q.timestamp_source })),
+      allQuestions: allQuestions.map((q: any) => ({ ...normalizeInterviewQuestion(q), timestampSeconds: q.timestamp_seconds, timestampSource: q.timestamp_source })),
       questionCount: allQuestions.length,
       approvedCount: approvedQuestions.length,
     };

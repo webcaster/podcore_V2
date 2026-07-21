@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, Save, Plus, Trash2, GripVertical, Mic2, Music, Megaphone,
+  ArrowLeft, ArrowUp, ArrowDown, Save, Plus, Trash2, GripVertical, Mic2, Music, Megaphone,
   FileText, ChevronDown, ChevronUp, Calendar, Clock, Tag, Users, Loader2,
   Download, Settings, Wrench, Bold, Italic, Underline, List, ListOrdered,
   AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Quote, Code,
@@ -26,10 +26,10 @@ import ChangeHistory from '../components/episodes/ChangeHistory';
 const BLOCK_TYPES = [
   { value: 'intro', label: 'Intro', color: 'text-accent-cyan', bg: 'bg-accent-cyan/20' },
   { value: 'segment', label: 'Segment', color: 'text-accent-blue', bg: 'bg-accent-blue/20' },
-  { value: 'interview', label: 'Interview', color: 'text-accent-purple', bg: 'bg-accent-purple/20' },
-  // interview_questions: strukturierter Block für Fragen aus dem Redaktionshub
-  // Zeiterfassung: pro Frage konfigurierbare Antwortzeit (Standard 90s) + Sprechzeit der Frage
-  { value: 'interview_questions', label: 'Interview-Fragen', color: 'text-accent-purple', bg: 'bg-accent-purple/10', hubOnly: true },
+  // Bestehende Freitext-Blöcke bleiben lesbar; für neue Blöcke steht bewusst nur der strukturierte Interviewweg bereit.
+  { value: 'interview', label: 'Interview (klassisch)', color: 'text-accent-purple', bg: 'bg-accent-purple/20', legacy: true },
+  // Strukturierter Interviewblock: Partner, Fragen, Reihenfolge und Freigabe gehören zusammen.
+  { value: 'interview_questions', label: 'Interview', color: 'text-accent-purple', bg: 'bg-accent-purple/10' },
   { value: 'highlights', label: 'Highlights', color: 'text-accent-yellow', bg: 'bg-accent-yellow/20' },
   { value: 'ad', label: 'Werbung', color: 'text-accent-orange', bg: 'bg-accent-orange/20' },
   { value: 'jingle', label: 'Jingle', color: 'text-accent-green', bg: 'bg-accent-green/20' },
@@ -200,6 +200,7 @@ export default function EpisodeDetailPage() {
   const [approvalAction, setApprovalAction] = useState<'request' | 'approve' | 'reject' | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [workflowEnabled, setWorkflowEnabled] = useState(false);
+  const [interviewApprovalRequired, setInterviewApprovalRequired] = useState(false);
   const [isImportingHub, setIsImportingHub] = useState(false);
   const [linkedIdeaId, setLinkedIdeaId] = useState<string | null>(null);
   const [linkedPlanItemId, setLinkedPlanItemId] = useState<string | null>(null);
@@ -289,8 +290,10 @@ export default function EpisodeDetailPage() {
   }, [hubTextBlocks, hubTextBlockSearch, hubTextBlockType]);
 
   useEffect(() => {
-    if (activeTab === 'hub') void loadHubData();
-  }, [activeTab, linkedIdeaId]);
+    // Partner und Fragen werden auch im Script-Tab benötigt, damit manuelle
+    // Interview-Blöcke ohne vorherigen Wechsel in den Redaktionshub funktionieren.
+    void loadHubData();
+  }, [linkedIdeaId]);
 
   const loadHubData = async () => {
     setIsLoadingHub(true);
@@ -322,6 +325,21 @@ export default function EpisodeDetailPage() {
     setShowIdeaImportModal(true);
   };
 
+  const toInterviewBlockQuestion = (question: any) => {
+    const approved = question?.approved === true || question?.approved === 1 || question?.approvalStatus === 'freigegeben';
+    return {
+      id: question?.sourceQuestionId || question?.id || `question_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      sourceQuestionId: question?.sourceQuestionId || question?.id || null,
+      question: String(question?.question || question?.text || ''),
+      category: question?.category || '',
+      answerDuration: typeof question?.answerDuration === 'number' ? question.answerDuration : 90,
+      notes: question?.notes || '',
+      approved,
+      approvalStatus: question?.approvalStatus || (approved ? 'freigegeben' : 'offen'),
+      approvalRequestedAt: question?.approvalRequestedAt || null,
+    };
+  };
+
   const handleApplyIdeaToEpisode = (idea: any, options: { title: boolean; description: boolean; tags: boolean; notes: boolean; guests: boolean; blocks: boolean }) => {
     setLinkedIdeaId(idea.id);
     setEpisode((previous: any) => ({ ...previous, ideaId: idea.id }));
@@ -346,17 +364,12 @@ export default function EpisodeDetailPage() {
     if (options.blocks && idea.interviewPartners?.length) {
       const newBlocks = idea.interviewPartners.map((p: any, pIdx: number) => {
         const partnerQuestions = (idea.interviewQuestions || []).filter((q: any) => q.partnerId === p.id);
-        const structuredQuestions = partnerQuestions.map((q: any) => ({
-          id: q.id || Math.random().toString(36).slice(2),
-          question: q.question || '',
-          category: q.category || '',
-          answerDuration: 90,
-          notes: '',
-        }));
+        const structuredQuestions = partnerQuestions.map((q: any) => toInterviewBlockQuestion(q));
         return {
           id: Math.random().toString(36).slice(2),
           type: 'interview_questions',
           title: `Interview-Fragen: ${p.name}`,
+          partnerId: p.id || null,
           partnerName: p.name,
           partnerCompany: p.company || '',
           partnerRole: p.role || '',
@@ -477,26 +490,51 @@ export default function EpisodeDetailPage() {
   };
 
   const handleAddInterviewBlock = (partner: any) => {
-    // Nutze freigegebene Fragen wenn vorhanden, sonst alle Fragen als Fallback
-    // (approvedQuestions kann ein leeres Array [] sein, was als truthy gilt – daher .length prüfen)
-    const rawQuestions = (partner.approvedQuestions?.length > 0 ? partner.approvedQuestions : partner.allQuestions) || [];
-    // Strukturierter interview_questions-Block: jede Frage als Objekt mit Antwortzeit
-    const structuredQuestions = rawQuestions.map((q: any) => ({
-      id: q.id || Math.random().toString(36).slice(2),
-      question: q.question || '',
-      category: q.category || '',
-      answerDuration: 90, // Standard: 90 Sekunden Antwortzeit
-      notes: '',
-    }));
+    // Immer alle Partnerfragen übernehmen. Bei aktiviertem Freigabeworkflow bleibt ihr
+    // Status sichtbar und wird im Abschluss-Check berücksichtigt, statt Fragen zu verlieren.
+    const rawQuestions = partner.allQuestions?.length ? partner.allQuestions : (partner.approvedQuestions || []);
+    const structuredQuestions = rawQuestions.map((question: any) => toInterviewBlockQuestion(question));
+    const existingBlock = blocks.find((block) => block.type === 'interview_questions' && block.partnerId === partner.id);
+
+    if (existingBlock) {
+      setBlocks((previous) => previous.map((block) => {
+        if (block.id !== existingBlock.id) return block;
+        const existingDurations = new Map((block.questions || [])
+          .filter((question: any) => question.sourceQuestionId)
+          .map((question: any) => [question.sourceQuestionId, question.answerDuration]));
+        const localQuestions = (block.questions || []).filter((question: any) => !question.sourceQuestionId);
+        const refreshedQuestions = structuredQuestions.map((question: any) => ({
+          ...question,
+          answerDuration: existingDurations.get(question.sourceQuestionId) ?? question.answerDuration,
+        }));
+        const questions = [...refreshedQuestions, ...localQuestions];
+        return {
+          ...block,
+          title: `Interview-Fragen: ${partner.name}${partner.company ? ` (${partner.company})` : ''}`,
+          partnerId: partner.id,
+          partnerName: partner.name,
+          partnerCompany: partner.company || '',
+          partnerRole: partner.role || '',
+          questions,
+          duration: block.manualDuration ? block.duration : calculateDuration('', 'interview_questions', questions),
+        };
+      }));
+      setActiveTab('script');
+      showSuccess(`Interview-Block für ${partner.name} aktualisiert (${structuredQuestions.length} Partnerfragen übernommen)`);
+      markDirty();
+      return;
+    }
+
     const newBlock = {
       id: Math.random().toString(36).slice(2),
       type: 'interview_questions',
       title: `Interview-Fragen: ${partner.name}${partner.company ? ` (${partner.company})` : ''}`,
+      partnerId: partner.id || null,
       partnerName: partner.name,
       partnerCompany: partner.company || '',
       partnerRole: partner.role || '',
       questions: structuredQuestions,
-      content: '', // Legacy-Feld, wird nicht mehr für interview_questions genutzt
+      content: '',
       duration: calculateDuration('', 'interview_questions', structuredQuestions),
       order: blocks.length,
       assetId: null,
@@ -504,8 +542,122 @@ export default function EpisodeDetailPage() {
     };
     setBlocks(prev => [...prev, newBlock]);
     setActiveTab('script');
-    showSuccess(`Interview-Fragen-Block für ${partner.name} hinzugefügt (${structuredQuestions.length} Fragen)`);
+    showSuccess(`Interview-Block für ${partner.name} hinzugefügt (${structuredQuestions.length} Partnerfragen übernommen)`);
     markDirty();
+  };
+
+  const handleAssignInterviewPartnerToBlock = (blockId: string, partnerId: string) => {
+    const partner = hubInterviews.find((item) => item.id === partnerId);
+    if (!partner) return;
+    const sourceQuestions = (partner.allQuestions?.length ? partner.allQuestions : (partner.approvedQuestions || []))
+      .map((question: any) => toInterviewBlockQuestion(question));
+
+    setBlocks((previous) => previous.map((block) => {
+      if (block.id !== blockId) return block;
+      const existingDurations = new Map((block.questions || [])
+        .filter((question: any) => question.sourceQuestionId)
+        .map((question: any) => [question.sourceQuestionId, question.answerDuration]));
+      const localQuestions = (block.questions || []).filter((question: any) => !question.sourceQuestionId);
+      const questions = [
+        ...sourceQuestions.map((question: any) => ({
+          ...question,
+          answerDuration: existingDurations.get(question.sourceQuestionId) ?? question.answerDuration,
+        })),
+        ...localQuestions,
+      ];
+      return {
+        ...block,
+        title: `Interview-Fragen: ${partner.name}${partner.company ? ` (${partner.company})` : ''}`,
+        partnerId: partner.id,
+        partnerName: partner.name,
+        partnerCompany: partner.company || '',
+        partnerRole: partner.role || '',
+        questions,
+        duration: block.manualDuration ? block.duration : calculateDuration('', 'interview_questions', questions),
+      };
+    }));
+    markDirty();
+    showSuccess(`Partner ${partner.name} ausgewählt; ${sourceQuestions.length} Fragen wurden übernommen`);
+  };
+
+  const updateInterviewBlockQuestion = (block: any, questionIndex: number, changes: Record<string, any>) => {
+    const questions = (block.questions || []).map((question: any, index: number) => {
+      if (index !== questionIndex) return question;
+      const sourceTextChanged = Boolean(question.sourceQuestionId) && changes.question !== undefined && changes.question !== question.question;
+      return {
+        ...question,
+        ...changes,
+        ...(sourceTextChanged ? { sourceQuestionId: null, approved: false, approvalStatus: 'lokal', sourceModified: true } : {}),
+      };
+    });
+    updateBlock(block.id, 'questions', questions);
+  };
+
+  const moveInterviewBlockQuestion = (block: any, questionIndex: number, direction: -1 | 1) => {
+    const targetIndex = questionIndex + direction;
+    const questions = [...(block.questions || [])];
+    if (targetIndex < 0 || targetIndex >= questions.length) return;
+    [questions[questionIndex], questions[targetIndex]] = [questions[targetIndex], questions[questionIndex]];
+    updateBlock(block.id, 'questions', questions);
+  };
+
+  const addManualInterviewQuestion = (block: any) => {
+    const localQuestion = {
+      id: `local_question_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      sourceQuestionId: null,
+      question: '',
+      category: '',
+      answerDuration: 90,
+      notes: '',
+      approved: false,
+      approvalStatus: 'lokal',
+    };
+    updateBlock(block.id, 'questions', [...(block.questions || []), localQuestion]);
+  };
+
+  const saveManualInterviewQuestionToHub = async (block: any, questionIndex: number) => {
+    const question = (block.questions || [])[questionIndex];
+    if (!block.partnerId) {
+      showError('Bitte zuerst einen Interview-Partner auswählen');
+      return;
+    }
+    if (!String(question?.question || '').trim()) {
+      showError('Bitte zuerst eine Frage eingeben');
+      return;
+    }
+    try {
+      const savedQuestion = await editorialApi.createQuestion({
+        partnerId: block.partnerId,
+        ideaId: linkedIdeaId || undefined,
+        question: String(question.question).trim(),
+        category: question.category || undefined,
+        notes: question.notes || undefined,
+        order: (block.questions || []).filter((item: any) => item.sourceQuestionId).length,
+      });
+      const saved = toInterviewBlockQuestion({ ...savedQuestion, answerDuration: question.answerDuration ?? 90 });
+      updateInterviewBlockQuestion(block, questionIndex, saved);
+      await loadHubData();
+      showSuccess('Manuelle Frage im Redaktionshub gespeichert');
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const requestInterviewBlockQuestionApproval = async (block: any, questionIndex: number) => {
+    const question = (block.questions || [])[questionIndex];
+    if (!question?.sourceQuestionId) {
+      showError('Bitte die manuelle Frage zuerst im Redaktionshub speichern');
+      return;
+    }
+    if (question.approved || question.approvalStatus === 'angefragt') return;
+    try {
+      const updated = await editorialApi.requestQuestionApproval(question.sourceQuestionId);
+      updateInterviewBlockQuestion(block, questionIndex, {
+        approved: updated?.approved === true,
+        approvalStatus: updated?.approvalStatus || 'angefragt',
+        approvalRequestedAt: updated?.approvalRequestedAt || new Date().toISOString(),
+      });
+      await loadHubData();
+      showSuccess('Freigabe für die Interview-Frage angefordert');
+    } catch (err: any) { showError(err.message); }
   };
 
   const handleCreateInterviewPartner = async () => {
@@ -605,6 +757,7 @@ export default function EpisodeDetailPage() {
         setEpisode(ep);
         setWorkflowUpdatedAt(ep.updatedAt);
         setWorkflowEnabled(settings?.workflow?.episodeApprovalRequired ?? false);
+        setInterviewApprovalRequired(settings?.workflow?.interviewApprovalRequired ?? false);
         setForm({
           title: ep.title || '',
           subtitle: ep.subtitle || '',
@@ -842,6 +995,7 @@ export default function EpisodeDetailPage() {
   };
 
   const addBlock = (type: string) => {
+    const isStructuredInterview = type === 'interview_questions';
     const newBlock = {
       id: Math.random().toString(36).slice(2),
       type,
@@ -851,6 +1005,13 @@ export default function EpisodeDetailPage() {
       order: blocks.length,
       assetId: null,
       assetName: null,
+      ...(isStructuredInterview ? {
+        partnerId: null,
+        partnerName: '',
+        partnerCompany: '',
+        partnerRole: '',
+        questions: [],
+      } : {}),
     };
     setBlocks(prev => [...prev, newBlock]);
     markDirty();
@@ -1005,6 +1166,15 @@ export default function EpisodeDetailPage() {
 
   const statusInfo = STATUS_OPTIONS.find(s => s.value === form.status) || STATUS_OPTIONS[0];
   const totalDuration = blocks.reduce((sum, b) => sum + (b.duration || 0), 0);
+  const interviewBlocks = blocks.filter((block: any) => block.type === 'interview_questions');
+  const interviewQuestionCount = interviewBlocks.reduce((total: number, block: any) => total + (block.questions || []).length, 0);
+  const interviewBlocksMissingPartner = interviewBlocks.filter((block: any) => !block.partnerId).length;
+  const interviewBlocksWithoutQuestions = interviewBlocks.filter((block: any) => !(block.questions || []).some((question: any) => String(question.question || '').trim())).length;
+  const localInterviewQuestionCount = interviewBlocks.reduce((total: number, block: any) => total + (block.questions || []).filter((question: any) => !question.sourceQuestionId).length, 0);
+  const openInterviewApprovalCount = interviewBlocks.reduce((total: number, block: any) => total + (block.questions || []).filter((question: any) => question.sourceQuestionId && !question.approved).length, 0);
+  const interviewApprovalOutstandingCount = localInterviewQuestionCount + openInterviewApprovalCount;
+  const interviewBasicsComplete = interviewBlocksMissingPartner === 0 && interviewBlocksWithoutQuestions === 0;
+  const episodeApprovalBlockedByInterview = interviewBlocks.length > 0 && (!interviewBasicsComplete || (interviewApprovalRequired && interviewApprovalOutstandingCount > 0));
   const formatTime = (sec: number) => {
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
@@ -1152,7 +1322,7 @@ export default function EpisodeDetailPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-text-primary">Episode-Script (Pro)</h2>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {BLOCK_TYPES.map(bt => (
+                  {BLOCK_TYPES.filter(bt => !bt.legacy).map(bt => (
                     <button key={bt.value} onClick={() => addBlock(bt.value)} className={`text-xs px-2 py-1 rounded-md ${bt.bg} ${bt.color} hover:opacity-80 transition-opacity`}>+ {bt.label}</button>
                   ))}
                   <div className="w-px h-4 bg-surface-border mx-1" />
@@ -1289,18 +1459,47 @@ export default function EpisodeDetailPage() {
                           {/* ── interview_questions: Strukturierter Fragen-Block ── */}
                           {block.type === 'interview_questions' ? (
                             <div className="p-3 space-y-3">
-                              {/* Partner-Info */}
-                              <div className="flex items-center gap-3 px-3 py-2 bg-accent-purple/10 rounded-lg border border-accent-purple/20">
-                                <MessageSquare size={14} className="text-accent-purple shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-text-primary">{block.partnerName || 'Interview-Partner'}</p>
-                                  {(block.partnerCompany || block.partnerRole) && (
-                                    <p className="text-xs text-text-muted">{[block.partnerRole, block.partnerCompany].filter(Boolean).join(' · ')}</p>
+                              {/* Partner-Auswahl und -Status */}
+                              <div className="space-y-2 px-3 py-2 bg-accent-purple/10 rounded-lg border border-accent-purple/20">
+                                <div className="flex items-center gap-3">
+                                  <MessageSquare size={14} className="text-accent-purple shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-text-primary">{block.partnerName || 'Interview-Partner auswählen'}</p>
+                                    {(block.partnerCompany || block.partnerRole) && (
+                                      <p className="text-xs text-text-muted">{[block.partnerRole, block.partnerCompany].filter(Boolean).join(' · ')}</p>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-accent-purple bg-accent-purple/20 px-2 py-0.5 rounded-full">
+                                    {(block.questions || []).length} Fragen
+                                  </span>
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <select
+                                    value={block.partnerId || ''}
+                                    onFocus={() => { if (!hubInterviews.length) void loadHubData(); }}
+                                    onChange={(event) => handleAssignInterviewPartnerToBlock(block.id, event.target.value)}
+                                    className="flex-1 bg-obsidian-900 border border-accent-purple/30 rounded px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-accent-purple"
+                                  >
+                                    <option value="">Interview-Partner auswählen …</option>
+                                    {hubInterviews.map((partner: any) => (
+                                      <option key={partner.id} value={partner.id}>{partner.name}{partner.company ? ` · ${partner.company}` : ''}</option>
+                                    ))}
+                                  </select>
+                                  {block.partnerId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const partner = hubInterviews.find((item: any) => item.id === block.partnerId);
+                                        if (partner) handleAddInterviewBlock(partner);
+                                      }}
+                                      className="btn-ghost text-xs py-1.5 px-2"
+                                      title="Fragen des gewählten Partners erneut aus dem Redaktionshub übernehmen"
+                                    >
+                                      <RefreshCw size={12} /> Fragen aktualisieren
+                                    </button>
                                   )}
                                 </div>
-                                <span className="text-[10px] text-accent-purple bg-accent-purple/20 px-2 py-0.5 rounded-full">
-                                  {(block.questions || []).length} Fragen
-                                </span>
+                                {!block.partnerId && <p className="text-[11px] text-accent-orange">Wähle einen Partner, damit dessen Fragen übernommen und manuelle Fragen im Redaktionshub gespeichert werden können.</p>}
                               </div>
                               {/* Zeiterfassung-Info */}
                               <div className="flex items-center gap-2 px-3 py-1.5 bg-obsidian-800 rounded-lg text-xs text-text-muted">
@@ -1314,7 +1513,7 @@ export default function EpisodeDetailPage() {
                               {(block.questions || []).length === 0 ? (
                                 <div className="text-center py-6 text-text-muted text-sm">
                                   <HelpCircle size={24} className="mx-auto mb-2 opacity-40" />
-                                  <p>Keine Fragen. Fragen aus dem Redaktionshub hinzufügen.</p>
+                                  <p>Es sind noch keine Fragen im Block. Wähle einen Partner oder lege direkt eine eigene Frage an.</p>
                                 </div>
                               ) : (
                                 <div className="space-y-2">
@@ -1322,50 +1521,66 @@ export default function EpisodeDetailPage() {
                                     <div key={q.id || qIdx} className="border border-surface-border rounded-lg overflow-hidden">
                                       <div className="flex items-start gap-3 p-3 bg-obsidian-800">
                                         <span className="text-[10px] font-bold text-accent-purple bg-accent-purple/20 px-1.5 py-0.5 rounded shrink-0 mt-0.5">F{qIdx + 1}</span>
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm text-text-primary">{q.question}</p>
-                                          {q.category && <span className="text-[10px] text-text-muted">{q.category}</span>}
+                                        <div className="flex-1 min-w-0 space-y-2">
+                                          <textarea
+                                            value={q.question || ''}
+                                            onChange={(event) => updateInterviewBlockQuestion(block, qIdx, { question: event.target.value })}
+                                            placeholder="Interview-Frage eingeben …"
+                                            rows={2}
+                                            className="w-full resize-y bg-obsidian-900 border border-surface-border rounded px-2.5 py-2 text-sm text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:border-accent-purple"
+                                          />
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <input
+                                              type="text"
+                                              value={q.category || ''}
+                                              onChange={(event) => updateInterviewBlockQuestion(block, qIdx, { category: event.target.value })}
+                                              placeholder="Kategorie (optional)"
+                                              className="w-40 max-w-full bg-obsidian-900 border border-surface-border rounded px-2 py-1 text-[11px] text-text-secondary placeholder:text-text-muted/60 focus:outline-none focus:border-accent-purple"
+                                            />
+                                            {q.approved ? (
+                                              <span className="badge bg-accent-green/20 text-accent-green text-[10px]">Freigegeben</span>
+                                            ) : q.approvalStatus === 'angefragt' ? (
+                                              <span className="badge bg-accent-orange/20 text-accent-orange text-[10px]">Freigabe angefragt</span>
+                                            ) : q.sourceQuestionId ? (
+                                              <span className="badge bg-surface-overlay text-text-muted text-[10px]">Noch offen</span>
+                                            ) : (
+                                              <span className="badge bg-accent-purple/15 text-accent-purple text-[10px]">Lokale Frage</span>
+                                            )}
+                                            {q.sourceModified && <span className="text-[10px] text-accent-orange">Bearbeitet – erneut im Hub speichern</span>}
+                                          </div>
                                         </div>
-                                        <div className="flex items-center gap-2 shrink-0">
+                                        <div className="flex flex-col items-end gap-2 shrink-0">
                                           <div className="flex items-center gap-1" title="Geschätzte Antwortzeit in Sekunden">
                                             <Clock size={11} className="text-accent-blue" />
                                             <input
                                               type="number"
                                               value={q.answerDuration ?? 90}
-                                              onChange={e => {
-                                                const newQs = (block.questions || []).map((qq: any, i: number) =>
-                                                  i === qIdx ? { ...qq, answerDuration: parseInt(e.target.value) || 0 } : qq
-                                                );
-                                                updateBlock(block.id, 'questions', newQs);
-                                              }}
+                                              onChange={event => updateInterviewBlockQuestion(block, qIdx, { answerDuration: parseInt(event.target.value) || 0 })}
                                               className="w-14 bg-obsidian-900 border border-surface-border rounded px-1.5 py-0.5 text-xs text-center text-text-secondary focus:outline-none focus:border-accent-blue"
                                               min="0"
                                               max="600"
                                             />
                                             <span className="text-[9px] text-text-muted">s</span>
                                           </div>
-                                          <button
-                                            onClick={() => {
-                                              const newQs = (block.questions || []).filter((_: any, i: number) => i !== qIdx);
-                                              updateBlock(block.id, 'questions', newQs);
-                                            }}
-                                            className="p-1 text-text-muted hover:text-accent-red"
-                                            title="Frage entfernen"
-                                          ><Trash2 size={12} /></button>
+                                          <div className="flex items-center gap-1">
+                                            <button onClick={() => moveInterviewBlockQuestion(block, qIdx, -1)} disabled={qIdx === 0} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Frage nach oben"><ArrowUp size={12} /></button>
+                                            <button onClick={() => moveInterviewBlockQuestion(block, qIdx, 1)} disabled={qIdx === (block.questions || []).length - 1} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Frage nach unten"><ArrowDown size={12} /></button>
+                                            {!q.sourceQuestionId && can('canEditInterviews') && <button onClick={() => saveManualInterviewQuestionToHub(block, qIdx)} className="p-1 text-text-muted hover:text-accent-cyan" title="Im Redaktionshub speichern"><Save size={12} /></button>}
+                                            {q.sourceQuestionId && can('canRequestApproval') && !q.approved && q.approvalStatus !== 'angefragt' && <button onClick={() => requestInterviewBlockQuestionApproval(block, qIdx)} className="p-1 text-text-muted hover:text-accent-orange" title="Freigabe anfordern"><UserCheck size={12} /></button>}
+                                            <button
+                                              onClick={() => updateBlock(block.id, 'questions', (block.questions || []).filter((_: any, index: number) => index !== qIdx))}
+                                              className="p-1 text-text-muted hover:text-accent-red"
+                                              title="Frage entfernen"
+                                            ><Trash2 size={12} /></button>
+                                          </div>
                                         </div>
                                       </div>
-                                      {/* Notizfeld für Moderator */}
                                       <div className="px-3 pb-2 pt-1 bg-obsidian-900">
                                         <input
                                           type="text"
                                           value={q.notes || ''}
-                                          onChange={e => {
-                                            const newQs = (block.questions || []).map((qq: any, i: number) =>
-                                              i === qIdx ? { ...qq, notes: e.target.value } : qq
-                                            );
-                                            updateBlock(block.id, 'questions', newQs);
-                                          }}
-                                          placeholder="Moderations-Notiz (intern, nicht im PDF)..."
+                                          onChange={event => updateInterviewBlockQuestion(block, qIdx, { notes: event.target.value })}
+                                          placeholder="Moderations-Notiz (intern, nicht im PDF) …"
                                           className="w-full bg-transparent text-xs text-text-muted focus:outline-none focus:text-text-primary placeholder:text-text-muted/50"
                                         />
                                       </div>
@@ -1373,12 +1588,8 @@ export default function EpisodeDetailPage() {
                                   ))}
                                 </div>
                               )}
-                              {/* Neue Frage manuell hinzufügen */}
                               <button
-                                onClick={() => {
-                                  const newQ = { id: Math.random().toString(36).slice(2), question: '', category: '', answerDuration: 90, notes: '' };
-                                  updateBlock(block.id, 'questions', [...(block.questions || []), newQ]);
-                                }}
+                                onClick={() => addManualInterviewQuestion(block)}
                                 className="w-full py-2 border border-dashed border-accent-purple/30 rounded-lg text-xs text-accent-purple hover:bg-accent-purple/5 transition-colors flex items-center justify-center gap-1"
                               >
                                 <Plus size={12} /> Frage manuell hinzufügen
@@ -2155,7 +2366,12 @@ export default function EpisodeDetailPage() {
             <div className="space-y-2">
               {[
                 { label: 'Titel gesetzt', done: !!form.title },
-                { label: 'Script fertig', done: blocks.length > 0 && blocks.every(b => b.type === 'interview_questions' ? (b.questions || []).length > 0 : !!b.content) },
+                { label: 'Script fertig', done: blocks.length > 0 && blocks.every((block: any) => block.type === 'interview_questions' ? (block.questions || []).some((question: any) => String(question.question || '').trim()) : !!block.content) },
+                ...(interviewBlocks.length > 0 ? [
+                  { label: 'Interview-Partner gewählt', done: interviewBlocksMissingPartner === 0, hint: interviewBlocksMissingPartner ? 'Script-Tab' : undefined },
+                  { label: 'Interview-Fragen vollständig', done: interviewBlocksWithoutQuestions === 0, hint: interviewBlocksWithoutQuestions ? 'Script-Tab' : undefined },
+                  ...(interviewApprovalRequired ? [{ label: 'Interview-Fragen freigegeben', done: interviewApprovalOutstandingCount === 0, hint: interviewApprovalOutstandingCount ? `${interviewApprovalOutstandingCount} offen` : undefined }] : []),
+                ] : []),
                 { label: 'Show-Notes', done: !!showNotes, hint: 'Show-Notes Tab' },
                 { label: 'Beschreibung', done: !!form.description },
                 { label: 'Technik-Daten', done: Object.values(technicalData).some(v => v) },
@@ -2205,6 +2421,20 @@ export default function EpisodeDetailPage() {
                   </span>
                 </div>
 
+                {interviewBlocks.length > 0 && (
+                  <div className={`mb-3 p-2.5 rounded-lg border ${episodeApprovalBlockedByInterview ? 'bg-accent-orange/10 border-accent-orange/30' : 'bg-accent-green/5 border-accent-green/20'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-xs font-semibold ${episodeApprovalBlockedByInterview ? 'text-accent-orange' : 'text-accent-green'}`}>Interview-Check</p>
+                      <button type="button" onClick={() => setActiveTab('script')} className="text-[10px] text-accent-purple hover:underline">Im Script öffnen</button>
+                    </div>
+                    <p className="text-[11px] text-text-muted mt-1">{interviewBlocks.length} Block{interviewBlocks.length === 1 ? '' : 's'}, {interviewQuestionCount} Frage{interviewQuestionCount === 1 ? '' : 'n'}</p>
+                    {interviewBlocksMissingPartner > 0 && <p className="text-[11px] text-accent-orange mt-1">{interviewBlocksMissingPartner} Block{interviewBlocksMissingPartner === 1 ? '' : 's'} ohne Interview-Partner</p>}
+                    {interviewBlocksWithoutQuestions > 0 && <p className="text-[11px] text-accent-orange mt-1">{interviewBlocksWithoutQuestions} Block{interviewBlocksWithoutQuestions === 1 ? '' : 's'} ohne eingegebene Frage</p>}
+                    {interviewApprovalRequired && interviewApprovalOutstandingCount > 0 && <p className="text-[11px] text-accent-orange mt-1">{interviewApprovalOutstandingCount} Frage{interviewApprovalOutstandingCount === 1 ? '' : 'n'} muss bzw. müssen noch gespeichert, angefordert oder freigegeben werden.</p>}
+                    {!episodeApprovalBlockedByInterview && <p className="text-[11px] text-accent-green mt-1">Interview-Bereich bereit für die Episodenfreigabe.</p>}
+                  </div>
+                )}
+
                 {/* Freigabe-Notiz anzeigen */}
                 {episode?.approvalNotes && (
                   <div className="mb-3 p-2 bg-obsidian-900 rounded-lg border border-surface-border">
@@ -2232,8 +2462,10 @@ export default function EpisodeDetailPage() {
                   {/* Freigabe anfordern (Redakteur/Moderator) */}
                   {workflowEnabled && can('canRequestApproval') && approvalStatus === 'ausstehend' && (
                     <button
+                      disabled={episodeApprovalBlockedByInterview}
+                      title={episodeApprovalBlockedByInterview ? 'Bitte zuerst den Interview-Check im Script abschließen' : undefined}
                       onClick={() => { setApprovalAction('request'); setApprovalNotes(''); setShowApprovalModal(true); }}
-                      className="w-full btn-secondary text-xs py-1.5 flex items-center justify-center gap-1.5 border-accent-orange/40 text-accent-orange hover:bg-accent-orange/10"
+                      className={`w-full btn-secondary text-xs py-1.5 flex items-center justify-center gap-1.5 border-accent-orange/40 text-accent-orange hover:bg-accent-orange/10 ${episodeApprovalBlockedByInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <UserCheck size={13} /> Freigabe anfordern
                     </button>
@@ -2242,8 +2474,10 @@ export default function EpisodeDetailPage() {
                   {/* Freigabe erteilen (Admin/Moderator mit Berechtigung) */}
                   {can('canApproveEpisodes') && (approvalStatus === 'angefragt' || approvalStatus === 'ausstehend') && (
                     <button
+                      disabled={episodeApprovalBlockedByInterview}
+                      title={episodeApprovalBlockedByInterview ? 'Bitte zuerst den Interview-Check im Script abschließen' : undefined}
                       onClick={() => { setApprovalAction('approve'); setApprovalNotes(''); setShowApprovalModal(true); }}
-                      className="w-full btn-primary text-xs py-1.5 flex items-center justify-center gap-1.5 bg-accent-green hover:bg-accent-green/80 border-accent-green"
+                      className={`w-full btn-primary text-xs py-1.5 flex items-center justify-center gap-1.5 bg-accent-green hover:bg-accent-green/80 border-accent-green ${episodeApprovalBlockedByInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <CheckCircle size={13} /> Episode freigeben
                     </button>

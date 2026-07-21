@@ -4,7 +4,7 @@ import {
   HardDrive, Cloud, Server, FolderOpen, Key, RefreshCw, Download,
   FileJson, Plus, X, ExternalLink, BarChart3
 } from 'lucide-react';
-import { mediaApi, adminApi, backupApi, podigeeApi } from '../lib/api';
+import { mediaApi, adminApi, backupApi, podigeeApi, storageApi } from '../lib/api';
 import { useApp, useBranding } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
 
@@ -28,6 +28,8 @@ export default function BrandingPage() {
   const [podigeeForm, setPodigeeForm] = useState({ apiToken: '', podcastSubdomain: '', podcastId: '' });
   const [podigeeStatus, setPodigeeStatus] = useState<any>(null);
   const [isTestingPodigee, setIsTestingPodigee] = useState(false);
+  const [storageStatus, setStorageStatus] = useState<any>(null);
+  const [isTestingStorage, setIsTestingStorage] = useState(false);
   const [storageForm, setStorageForm] = useState({
     type: 'local',
     localPath: '',
@@ -52,37 +54,18 @@ export default function BrandingPage() {
   const load = async () => {
     setIsLoading(true);
     try {
-      const [brandingData, settingsData, statusData] = await Promise.allSettled([
+      const [brandingData, settingsData, podigeeStatusData, storageConfigData, storageStatusData] = await Promise.allSettled([
         mediaApi.getBranding(),
         adminApi.getSettings(),
         podigeeApi.getStatus(),
+        storageApi.getConfig(),
+        storageApi.getStatus(),
       ]);
 
       if (brandingData.status === 'fulfilled') setBranding(brandingData.value);
       if (settingsData.status === 'fulfilled') {
         const s = settingsData.value;
         setSettings(s);
-        if (s?.storage) {
-          setStorageForm({
-            type: s.storage.type || 'local',
-            localPath: s.storage.localPath || '',
-            webdavUrl: s.storage.webdavUrl || '',
-            webdavUser: s.storage.webdavUser || '',
-            webdavPassword: '',
-            s3Bucket: s.storage.s3Bucket || '',
-            s3Region: s.storage.s3Region || 'eu-central-1',
-            s3AccessKey: s.storage.s3AccessKey || '',
-            s3SecretKey: '',
-            s3Endpoint: s.storage.s3Endpoint || '',
-            sftpHost: s.storage.sftpHost || '',
-            sftpPort: s.storage.sftpPort || '22',
-            sftpUser: s.storage.sftpUser || '',
-            sftpPassword: '',
-            sftpPrivateKey: '',
-            sftpRemotePath: s.storage.sftpRemotePath || '',
-            sftpPublicUrl: s.storage.sftpPublicUrl || '',
-          });
-        }
         if (s?.podigee) {
           setPodigeeForm({
             apiToken: '',
@@ -91,7 +74,30 @@ export default function BrandingPage() {
           });
         }
       }
-      if (statusData.status === 'fulfilled') setPodigeeStatus(statusData.value);
+      if (storageConfigData.status === 'fulfilled') {
+        const storage = storageConfigData.value || {};
+        setStorageForm({
+          type: storage.type || 'local',
+          localPath: storage.localPath || '',
+          webdavUrl: storage.webdavUrl || '',
+          webdavUser: storage.webdavUser || '',
+          webdavPassword: '',
+          s3Bucket: storage.s3Bucket || '',
+          s3Region: storage.s3Region || 'eu-central-1',
+          s3AccessKey: storage.s3AccessKey || '',
+          s3SecretKey: '',
+          s3Endpoint: storage.s3Endpoint || '',
+          sftpHost: storage.sftpHost || '',
+          sftpPort: storage.sftpPort || '22',
+          sftpUser: storage.sftpUser || '',
+          sftpPassword: '',
+          sftpPrivateKey: '',
+          sftpRemotePath: storage.sftpRemotePath || '',
+          sftpPublicUrl: storage.sftpPublicUrl || '',
+        });
+      }
+      if (podigeeStatusData.status === 'fulfilled') setPodigeeStatus(podigeeStatusData.value);
+      if (storageStatusData.status === 'fulfilled') setStorageStatus(storageStatusData.value);
     } catch (err: any) { showError(err.message); }
     finally { setIsLoading(false); }
   };
@@ -144,14 +150,32 @@ export default function BrandingPage() {
   const handleSaveStorage = async () => {
     setIsSaving(true);
     try {
-      const payload: any = { storage: { ...storageForm } };
-      // Don't save empty passwords (keep existing)
-      if (!storageForm.webdavPassword) delete payload.storage.webdavPassword;
-      if (!storageForm.s3SecretKey) delete payload.storage.s3SecretKey;
-      await adminApi.updateSettings(payload);
+      const payload: any = { ...storageForm };
+      // Leere Geheimnisfelder dürfen eine vorhandene Verbindung nicht überschreiben.
+      if (!payload.webdavPassword) delete payload.webdavPassword;
+      if (!payload.s3SecretKey) delete payload.s3SecretKey;
+      if (!payload.sftpPassword) delete payload.sftpPassword;
+      if (!payload.sftpPrivateKey) delete payload.sftpPrivateKey;
+      await storageApi.updateConfig(payload);
+      const status = await storageApi.getStatus();
+      setStorageStatus(status);
       showSuccess('Speicher-Einstellungen gespeichert');
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
+  };
+
+  const handleTestStorage = async () => {
+    setIsTestingStorage(true);
+    try {
+      const payload: any = { ...storageForm };
+      // Leere Felder stehen beim Test für bereits gespeicherte Zugangsdaten.
+      if (!payload.webdavPassword) payload.webdavPassword = '••••••••';
+      if (!payload.s3SecretKey) payload.s3SecretKey = '••••••••';
+      const result = await storageApi.testConnection(payload);
+      if (!result?.success) throw new Error(result?.message || 'Speicherverbindung konnte nicht geprüft werden');
+      showSuccess(result.message || 'Speicherverbindung erfolgreich geprüft');
+    } catch (err: any) { showError(err.message); }
+    finally { setIsTestingStorage(false); }
   };
 
   const handleTestPodigee = async () => {
@@ -383,17 +407,71 @@ export default function BrandingPage() {
       {/* STORAGE TAB */}
       {activeTab === 'storage' && can('canManageSettings') && (
         <div className="max-w-2xl space-y-6">
+          <div className="card space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-text-primary">Aktiver Datenspeicher</h3>
+                <p className="text-text-muted text-sm mt-1">Hier sehen Sie, wo PodCore seine Betriebsdaten, Medien und Sicherungen tatsächlich ablegt.</p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const status = await storageApi.getStatus();
+                    setStorageStatus(status);
+                    showSuccess('Speicherstatus aktualisiert');
+                  } catch (err: any) { showError(err.message); }
+                }}
+                className="btn-secondary shrink-0"
+                title="Speicherstatus aktualisieren"
+              >
+                <RefreshCw size={15} />
+                Aktualisieren
+              </button>
+            </div>
+
+            {storageStatus ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <div className="bg-obsidian-800 border border-surface-border rounded-lg p-3">
+                    <p className="text-text-muted text-xs mb-1">Betriebsdaten</p>
+                    <p className="text-text-primary font-mono text-xs break-all">{storageStatus.dataDirectory}</p>
+                  </div>
+                  <div className="bg-obsidian-800 border border-surface-border rounded-lg p-3">
+                    <p className="text-text-muted text-xs mb-1">Medienablage</p>
+                    <p className="text-text-primary font-mono text-xs break-all">{storageStatus.localMediaPath}</p>
+                  </div>
+                  <div className="bg-obsidian-800 border border-surface-border rounded-lg p-3">
+                    <p className="text-text-muted text-xs mb-1">Sicherungen</p>
+                    <p className="text-text-primary font-mono text-xs break-all">{storageStatus.backupsPath}</p>
+                  </div>
+                </div>
+                <div className={`rounded-lg p-3 text-sm border ${storageStatus.localMediaDirectoryExists ? 'bg-accent-green/5 border-accent-green/30 text-text-secondary' : 'bg-accent-orange/5 border-accent-orange/30 text-text-secondary'}`}>
+                  <p className="font-medium text-text-primary">Medienziel: {storageStatus.label}</p>
+                  <p className="mt-1">Neue Medien werden zuerst lokal gesichert. {storageStatus.externalConfigured ? `Zusätzlich ist ein externes Ziel konfiguriert${storageStatus.externalTarget ? `: ${storageStatus.externalTarget}` : ''}.` : 'Es ist kein externes Ziel konfiguriert.'}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-text-muted text-sm">Der Speicherstatus wird geladen …</p>
+            )}
+
+            <div className="bg-accent-blue/5 border border-accent-blue/30 rounded-lg p-3 text-sm text-text-secondary">
+              <strong className="text-text-primary">Wichtig:</strong> Diese Einstellung legt das Medienziel fest. Die PodCore-Betriebsdatenbank und Sicherungen verbleiben im angezeigten Datenordner. Erstellen Sie vor einem Ordnerwechsel ein vollständiges Backup.
+            </div>
+          </div>
+
           <div className="card">
-            <h3 className="font-semibold text-text-primary mb-4">Speicher-Backend</h3>
+            <h3 className="font-semibold text-text-primary mb-1">Medien-Speicherziel</h3>
+            <p className="text-text-muted text-sm mb-4">Wählen Sie, wo neu hochgeladene Audio- und Videodateien abgelegt werden sollen.</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               {[
                 { value: 'local', label: 'Lokal', icon: <HardDrive size={20} />, desc: 'Auf diesem Server' },
                 { value: 'webdav', label: 'WebDAV', icon: <Cloud size={20} />, desc: 'Nextcloud, ownCloud...' },
                 { value: 's3', label: 'S3-kompatibel', icon: <Server size={20} />, desc: 'AWS, Backblaze B2, R2...' },
-                { value: 'sftp', label: 'SFTP / SSH', icon: <Server size={20} />, desc: 'Hetzner, eigener Server...' },
+                { value: 'sftp', label: 'SFTP / SSH', icon: <Server size={20} />, desc: 'Derzeit nicht verfügbar', disabled: true },
               ].map(opt => (
-                <button key={opt.value} type="button" onClick={() => setStorageForm(p => ({ ...p, type: opt.value }))}
-                  className={`p-4 rounded-xl border-2 text-center transition-all ${storageForm.type === opt.value ? 'border-accent-purple bg-accent-purple/10' : 'border-surface-border hover:border-surface-border-light'}`}>
+                <button key={opt.value} type="button" disabled={opt.disabled} onClick={() => !opt.disabled && setStorageForm(p => ({ ...p, type: opt.value }))}
+                  className={`p-4 rounded-xl border-2 text-center transition-all ${opt.disabled ? 'opacity-50 cursor-not-allowed' : ''} ${storageForm.type === opt.value ? 'border-accent-purple bg-accent-purple/10' : 'border-surface-border hover:border-surface-border-light'}`}>
                   <div className={`flex justify-center mb-2 ${storageForm.type === opt.value ? 'text-accent-purple' : 'text-text-muted'}`}>{opt.icon}</div>
                   <p className="text-text-primary text-sm font-medium">{opt.label}</p>
                   <p className="text-text-muted text-xs mt-0.5">{opt.desc}</p>
@@ -408,7 +486,7 @@ export default function BrandingPage() {
                 <div className="flex gap-2">
                   <input type="text" value={storageForm.localPath} onChange={e => setStorageForm(p => ({ ...p, localPath: e.target.value }))} className="input flex-1 font-mono text-sm" placeholder="/home/user/.podcore/assets" />
                 </div>
-                <p className="text-text-muted text-xs mt-1">Absoluter Pfad zum Upload-Verzeichnis. Leer lassen für Standard (~/.podcore/assets).</p>
+                <p className="text-text-muted text-xs mt-1">Absoluter Pfad zum tatsächlichen Medienordner. Leer lassen für den PodCore-Standardordner. Bestehende Dateien werden nicht automatisch verschoben.</p>
               </div>
             )}
 
@@ -435,9 +513,12 @@ export default function BrandingPage() {
               </div>
             )}
 
-            {/* SFTP */}
+            {/* SFTP – vorhandene Altkonfigurationen bleiben sichtbar, können aber nicht neu aktiviert werden. */}
             {storageForm.type === 'sftp' && (
               <div className="space-y-4">
+                <div className="bg-accent-orange/10 border border-accent-orange/30 rounded-xl p-3 text-sm text-text-secondary">
+                  <strong className="text-text-primary">SFTP ist in dieser Version nicht als aktiver Medien-Upload angebunden.</strong> Wählen Sie für eine wirksame Speicherumstellung bitte „Lokal“, „WebDAV“ oder „S3-kompatibel“.
+                </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="col-span-2">
                     <label className="label">Hostname / IP *</label>
@@ -507,10 +588,16 @@ export default function BrandingPage() {
             )}
           </div>
 
-          <button onClick={handleSaveStorage} disabled={isSaving} className="btn-primary">
-            {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            <span>Speicher-Einstellungen speichern</span>
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={handleTestStorage} disabled={isTestingStorage || isSaving} className="btn-secondary">
+              {isTestingStorage ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+              <span>Verbindung testen</span>
+            </button>
+            <button onClick={handleSaveStorage} disabled={isSaving} className="btn-primary">
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              <span>Medien-Speicherziel speichern</span>
+            </button>
+          </div>
         </div>
       )}
 

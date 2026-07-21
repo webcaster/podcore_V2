@@ -23,7 +23,7 @@ const ASSETS_DIR = path.join(DATA_DIR, 'assets');
 const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 const LOGS_DIR = path.join(DATA_DIR, 'logs');
 
-export { DATA_DIR, ASSETS_DIR, BACKUPS_DIR, LOGS_DIR };
+export { DATA_DIR, DB_PATH, ASSETS_DIR, BACKUPS_DIR, LOGS_DIR };
 
 // ============================================================
 // node-sqlite3-wasm wrapper (synchronous, no native compilation)
@@ -439,6 +439,9 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN approved_by TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN approved_at TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN status TEXT NOT NULL DEFAULT \'offen\''); } catch (_) {}
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN approval_requested_by TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN approval_requested_at TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE interview_questions ADD COLUMN approval_notes TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime(\'now\'))'); } catch (_) {}
   // Interview partners: add custom guest intro text
   try { db.exec('ALTER TABLE interview_partners ADD COLUMN guest_intro TEXT DEFAULT NULL'); } catch (_) {}

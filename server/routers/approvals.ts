@@ -32,7 +32,9 @@ function parseEpisode(row: any) {
 router.get('/pending', requireAuth as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const user = req.user!;
-  const isApprover = user.role === 'admin' || user.permissions?.canApproveEpisodes;
+  const canApproveEpisodes = user.role === 'admin' || user.permissions?.canApproveEpisodes;
+  const canApproveQuestions = user.role === 'admin' || user.permissions?.canApproveInterviewQuestions;
+  const isApprover = canApproveEpisodes || canApproveQuestions;
   const canRequest = user.role === 'admin' || user.permissions?.canRequestApproval;
 
   // Wenn weder Freigabe-Recht noch Anfrage-Recht → leere Liste zurückgeben (kein Fehler)
@@ -55,18 +57,18 @@ router.get('/pending', requireAuth as any, (req: AuthRequest, res: Response) => 
 
   const episodes = db.all(episodeQuery, episodeParams).map(parseEpisode);
 
-  // 2. Interview-Fragen mit Status 'angefragt'
+  // 2. Interview-Fragen, für die eine Freigabe explizit angefordert wurde
   let questionQuery = `SELECT q.*, p.name as partner_name, e.title as episode_title 
      FROM interview_questions q
      LEFT JOIN interview_partners p ON q.partner_id = p.id
      LEFT JOIN episodes e ON q.episode_id = e.id
-     WHERE q.approved = 0 AND (q.status = 'angefragt' OR q.status IS NULL)`;
+     WHERE q.is_pool = 0 AND q.approved = 0 AND q.status = 'angefragt'`;
   const questionParams: any[] = [];
   if (!isApprover && canRequest) {
-    questionQuery += ` AND q.episode_id IN (SELECT id FROM episodes WHERE approval_requested_by = ?)`;
+    questionQuery += ` AND q.approval_requested_by = ?`;
     questionParams.push(user.id);
   }
-  questionQuery += ` ORDER BY q.created_at ASC`;
+  questionQuery += ` ORDER BY q.approval_requested_at ASC, q.created_at ASC`;
 
   const questions = db.all(questionQuery, questionParams).map((r: any) => ({
     ...r,
@@ -83,6 +85,8 @@ router.get('/pending', requireAuth as any, (req: AuthRequest, res: Response) => 
       questions,
       totalCount: episodes.length + questions.length,
       canApprove: isApprover,
+      canApproveEpisodes,
+      canApproveQuestions,
     }
   });
 });

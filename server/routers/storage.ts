@@ -1,10 +1,53 @@
 import { Router, Response } from 'express';
-import { getDb } from '../database';
+import fs from 'fs';
+import path from 'path';
+import { getDb, DATA_DIR, ASSETS_DIR, BACKUPS_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 import { testStorageConnection, getLocalNetworkIPs } from '../storage';
 
 const router: import("express").Router = Router();
 router.use(requireAuth as any);
+
+// GET /api/storage/status — effektive Speicherorte ohne Zugangsdaten
+router.get('/status', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const row = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+  let settings: any = {};
+  try { settings = row?.value ? JSON.parse(row.value) : {}; } catch (_) { settings = {}; }
+  const storage = settings?.storage || { type: 'local', localPath: DATA_DIR };
+  const configuredPath = storage.localPath ? path.resolve(storage.localPath) : ASSETS_DIR;
+  const localMediaPath = storage.type === 'local'
+    ? (configuredPath === path.resolve(DATA_DIR) ? ASSETS_DIR : configuredPath)
+    : ASSETS_DIR;
+  const labels: Record<string, string> = {
+    local: 'Lokal auf diesem Server',
+    webdav: 'WebDAV',
+    s3: 'S3-kompatibler Speicher',
+    dropbox: 'Dropbox',
+    googledrive: 'Google Drive',
+    onedrive: 'OneDrive',
+  };
+  const externalTarget = storage.type === 's3'
+    ? storage.s3Bucket || null
+    : storage.type === 'webdav'
+      ? storage.webdavUrl || null
+      : null;
+
+  return res.json({
+    success: true,
+    data: {
+      type: storage.type || 'local',
+      label: labels[storage.type] || 'Nicht unterstützter Speicher-Typ',
+      dataDirectory: DATA_DIR,
+      localMediaPath,
+      backupsPath: BACKUPS_DIR,
+      localMediaDirectoryExists: fs.existsSync(localMediaPath),
+      writeMode: 'local-first',
+      externalTarget,
+      externalConfigured: storage.type !== 'local',
+    },
+  });
+});
 
 // GET /api/storage/config — Get current storage configuration
 router.get('/config', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {

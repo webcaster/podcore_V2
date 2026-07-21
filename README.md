@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.14.8**
+**Aktuelle Version: 2.14.9**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -35,6 +35,9 @@
 - Verknüpfte Staffelplan-Episoden mit Herkunftshinweis und Rücksprung zur strategischen Planung
 - Standardmäßig eingeklappter Medien-Upload sowie einklappbare Bereiche für Kommentare & Feedback und Versionsverlauf
 - Sichtbarer Hinweis auf die verknüpfte Ideenmappe und auf diese Ideenmappe gefilterte Interview-Partner
+- Einheitliche Interview-Blöcke für Ideenmappen- und manuelle Folgen mit Partnerauswahl, Fragenübernahme und editierbaren manuellen Fragen
+- Partnerspezifische Fragen-Sortierung, zentrale Speicherung manueller Fragen und direkt anforderbare Fragenfreigabe
+- Abschluss-Check für Interview-Partner, Fragen und verpflichtende Fragenfreigaben vor der Episodenfreigabe
 
 ### 💰 Sponsoren & Monetarisierung (v2)
 - CRM für Sponsoren und Werbepartner
@@ -65,7 +68,7 @@
 ### 👥 Team & Berechtigungen
 - Rollen-basiertes Zugriffssystem (Admin, Redakteur, Moderator, Gast)
 - Granulare Rechte für jeden Bereich der App, einschließlich getrenntem Lesen, Bearbeiten, PDF-Export und Editorübergang in der Staffelplanung
-- Freigabe-Workflows für Episoden (Approval-System)
+- Freigabe-Workflows für Episoden und gespeicherte Interview-Fragen mit nachvollziehbaren Anforderungs- und Statusübergängen
 - Integrierter Team-Chat
 
 ### 📚 In-App-Handbuch
@@ -78,7 +81,7 @@
 
 ## 🚀 Installation & Setup
 
-PodCore ist als Node.js-Anwendung konzipiert und verwendet SQLite als Datenbank, wodurch keine externe Datenbank-Einrichtung erforderlich ist.
+PodCore ist als Node.js-Anwendung konzipiert und verwendet **SQLite als aktive Standarddatenbank**, wodurch keine externe Datenbank-Einrichtung erforderlich ist. Administrativ kann eine überprüfte Datenkopie nach MySQL oder MariaDB vorbereitet werden; diese stellt die laufende Anwendung bewusst nicht automatisch um.
 
 Für die produktive Bereitstellung unter Ubuntu mit dediziertem Dienstkonto, `systemd`, UFW, optionalem Caddy-Reverse-Proxy, Backup, Update, Rollback und Fehlerdiagnose gilt die IT-Anleitung [`docs/INSTALL-UBUNTU.md`](docs/INSTALL-UBUNTU.md).
 
@@ -151,7 +154,7 @@ Die Startskripte starten ausschließlich den vorhandenen Produktions-Build. Sie 
 
 Ab Version **2.14.3** verfügt PodCore unter **Einstellungen → App-Update** über ein integriertes, verifiziertes Update-System. Neue Versionen können dort als ZIP-Datei hochgeladen und zunächst geprüft werden. PodCore entpackt und baut das Paket in einem getrennten Staging-Bereich, installiert Abhängigkeiten nicht interaktiv, sichert den bisherigen Programmstand und übernimmt nur das vorbereitete Ergebnis. Der Vorgang gilt erst als erfolgreich, wenn der neu gestartete Server die erwartete Zielversion bestätigt; bei Fehlern wird der vorherige Programmstand wiederhergestellt.
 
-Aktuelle Release-ZIPs finden Sie unter [Releases](https://github.com/webcaster/podcore_V2/releases). Vor jedem Update muss das persistente PodCore-Datenverzeichnis extern gesichert werden.
+Aktuelle Release-ZIPs finden Sie unter [Releases](https://github.com/webcaster/podcore_V2/releases). Vor jedem Update muss das persistente PodCore-Datenverzeichnis extern gesichert werden. Die vollständige Bedien-, Speicher-, Prüf- und Rückfallanleitung für den aktuellen Stand befindet sich unter [`docs/UPDATE-2.14.9.md`](docs/UPDATE-2.14.9.md).
 
 Für ein manuelles Update installieren Sie nach `git pull` die Abhängigkeiten in **allen drei Paketverzeichnissen** erneut und erstellen anschließend den Produktions-Build:
 
@@ -172,7 +175,7 @@ Alternativ können Sie für die drei Installationsschritte `pnpm run install:all
 
 - **Frontend**: React, TypeScript, TailwindCSS, Vite, Lucide Icons
 - **Backend**: Node.js, Express, TypeScript
-- **Datenbank**: SQLite (via `better-sqlite3`)
+- **Datenbank**: SQLite als aktiver Standardbetrieb (via `better-sqlite3`); optionale vorbereitbare Datenkopie nach MySQL/MariaDB (via `mysql2`)
 - **PDF-Generierung**: PDFKit
 - **Authentifizierung**: JWT (JSON Web Tokens)
 

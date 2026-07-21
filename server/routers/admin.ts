@@ -6,7 +6,7 @@ import * as path from 'path';
 import { execFileSync, spawn } from 'child_process';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { DATA_DIR as DATABASE_DATA_DIR, getDb, getDefaultPermissions } from '../database';
+import { DATA_DIR as DATABASE_DATA_DIR, DB_PATH, getDb, getDefaultPermissions } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 import {
   UpdateBackupManifest,
@@ -912,18 +912,67 @@ router.get('/update/logs', requirePermission('canManageSettings') as any, (req: 
 // DATABASE MIGRATION: SQLite → MySQL
 // ============================================================
 
-// GET /api/admin/db/status — DB-Typ und Statistiken
+// GET /api/admin/db/status — tatsächliche Laufzeit-Datenbank, Speicherorte und Übernahmeziel
 router.get('/db/status', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
-  const appSettings = settingsRow ? JSON.parse(settingsRow.value) : {};
-  const dbType = appSettings?.database?.type || 'sqlite';
+  let appSettings: any = {};
+  try { appSettings = settingsRow?.value ? JSON.parse(settingsRow.value) : {}; } catch (_) { appSettings = {}; }
+
   const tables = ['users', 'episodes', 'ideas', 'sponsors', 'assets', 'pdf_layouts', 'settings', 'roles'];
   const stats: Record<string, number> = {};
   for (const t of tables) {
     try { const row = db.get(`SELECT COUNT(*) as cnt FROM ${t}`) as any; stats[t] = row?.cnt || 0; } catch (_) { stats[t] = 0; }
   }
-  return res.json({ success: true, data: { type: dbType, stats } });
+
+  // PodCore öffnet die Betriebsdatenbank synchron über getDb(). Sie ist in dieser
+  // Version immer die lokale SQLite-Datei; eine MySQL-Datenkopie ist kein stiller Laufzeitwechsel.
+  const storage = appSettings?.storage || { type: 'local', localPath: DATABASE_DATA_DIR };
+  const configuredLocalPath = storage.localPath || DATABASE_DATA_DIR;
+  const localAssetsPath = path.resolve(configuredLocalPath) === path.resolve(DATABASE_DATA_DIR)
+    ? path.join(DATABASE_DATA_DIR, 'assets')
+    : path.join(configuredLocalPath, 'assets');
+  const legacyMysqlConfig = appSettings?.database?.type === 'mysql' ? appSettings.database : null;
+  const migration = appSettings?.databaseMigration || (legacyMysqlConfig ? {
+    target: 'mysql',
+    host: legacyMysqlConfig.host,
+    port: legacyMysqlConfig.port,
+    database: legacyMysqlConfig.database,
+    user: legacyMysqlConfig.user,
+    migratedAt: legacyMysqlConfig.migratedAt,
+    legacyMetadata: true,
+  } : null);
+
+  return res.json({
+    success: true,
+    data: {
+      type: 'sqlite',
+      runtime: {
+        type: 'sqlite',
+        label: 'SQLite (lokal, aktiv)',
+        databasePath: DB_PATH,
+        dataDirectory: DATABASE_DATA_DIR,
+        databaseBytes: fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0,
+      },
+      storage: {
+        type: storage.type || 'local',
+        localMediaPath: localAssetsPath,
+        configured: storage.type !== 'local',
+        target: storage.type === 's3' ? storage.s3Bucket || null : storage.type === 'webdav' ? storage.webdavUrl || null : null,
+      },
+      mysqlTransfer: migration ? {
+        target: 'mysql',
+        host: migration.host || null,
+        port: migration.port || 3306,
+        database: migration.database || null,
+        user: migration.user || null,
+        migratedAt: migration.migratedAt || null,
+        active: false,
+        legacyMetadata: Boolean(migration.legacyMetadata),
+      } : null,
+      stats,
+    },
+  });
 });
 
 // POST /api/admin/db/test-mysql — MySQL-Verbindung testen
@@ -1051,12 +1100,22 @@ router.post('/db/migrate-to-mysql', requirePermission('canManageSettings') as an
     addLog(`Abgeschlossen: ${totalRows} Datensätze in ${tables.length} Tabellen`);
     const logPath = path.join(DATABASE_DATA_DIR, 'migration.log');
     fs.writeFileSync(logPath, log.join('\n'), 'utf8');
-    // MySQL-Konfiguration in Settings speichern
+    // Die Übernahme wird als Ziel dokumentiert. Die aktive PodCore-Laufzeit bleibt
+    // ausdrücklich SQLite, bis eine eigenständige Serverumstellung eingerichtet wurde.
     const settingsRow = sqliteDb.get("SELECT value FROM settings WHERE key = 'app'") as any;
     const appSettings = settingsRow ? JSON.parse(settingsRow.value) : {};
-    appSettings.database = { type: 'mysql', host, port: parseInt(port) || 3306, database, user, migratedAt: new Date().toISOString() };
+    delete appSettings.database;
+    appSettings.databaseMigration = {
+      target: 'mysql',
+      host,
+      port: parseInt(port) || 3306,
+      database,
+      user,
+      migratedAt: new Date().toISOString(),
+      mode: 'data-copy',
+    };
     sqliteDb.run("UPDATE settings SET value = ? WHERE key = 'app'", [JSON.stringify(appSettings)]);
-    return res.json({ success: true, data: { message: `Migration erfolgreich: ${totalRows} Datensätze übertragen`, log } });
+    return res.json({ success: true, data: { message: `Datenkopie erfolgreich: ${totalRows} Datensätze nach MySQL übertragen. PodCore verwendet weiterhin die lokale SQLite-Datenbank.`, log } });
   } catch (err: any) {
     addLog(`Kritischer Fehler: ${err.message}`);
     return res.status(500).json({ success: false, error: err.message, log });

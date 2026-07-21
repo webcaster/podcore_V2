@@ -171,11 +171,22 @@ const wikiData: WikiCategory[] = [
         title: 'Episoden-Editor und Script',
         summary: 'Scriptblöcke, Metadaten, Show Notes, Produktion, Technik, Werbung und Vorschau bearbeiten.',
         icon: <FileEdit size={18} />,
-        tags: ['editor', 'script', 'show notes', 'metadaten', 'technik'],
+        tags: ['editor', 'script', 'interview', 'fragen', 'freigabe', 'show notes', 'metadaten', 'technik'],
         content: [
           {
             heading: 'Script',
-            text: 'Strukturieren Sie die Episode mit verschiebbaren Blöcken. Verfügbare Typen umfassen Intro, Segment, Interview, Interview-Fragen, Highlights, Werbung, Jingle, Outro und benutzerdefinierte Blöcke.',
+            text: 'Strukturieren Sie die Episode mit verschiebbaren Blöcken. Verfügbare Typen umfassen Intro, Segment, Interview, Interview-Fragen, Highlights, Werbung, Jingle, Outro und benutzerdefinierte Blöcke. Die Aktionen „+ Interview“ und „Interview-Fragen“ erzeugen denselben vollständigen Interview-Block mit Partnerauswahl und Frageneditor.',
+          },
+          {
+            heading: 'Interview-Block fertigstellen',
+            text: 'Wählen Sie im Interview-Block zuerst einen Gesprächspartner aus und übernehmen Sie anschließend passende Fragen. Eigene Fragen können direkt im Block eingegeben, zentral gespeichert und zur Freigabe angefordert werden.',
+            list: [
+              'Partner auswählen und passende Fragen übernehmen',
+              'Manuelle Frage direkt im Block erfassen und bei Bedarf zentral speichern',
+              'Fragen mit den Sortieraktionen in die gewünschte Gesprächsreihenfolge bringen',
+              'Erforderliche Fragen direkt im Editor oder im RedaktionsHub zur Freigabe anfordern',
+            ],
+            tip: 'Speichern Sie die Episode nach Änderungen. Die Partnerzuordnung, die Fragenreihenfolge und der Freigabestatus bleiben beim erneuten Öffnen erhalten.',
           },
           {
             heading: 'Text bearbeiten',
@@ -195,7 +206,7 @@ const wikiData: WikiCategory[] = [
           },
           {
             heading: 'Abschlusskontrolle',
-            text: 'Die Zusammenfassung und Checkliste zeigen fehlende Kerndaten wie Titel, Script, Show Notes, Beschreibung, Technikdaten und Veröffentlichungsdatum.',
+            text: 'Die Zusammenfassung und Checkliste zeigen fehlende Kerndaten wie Titel, Script, Show Notes, Beschreibung, Technikdaten und Veröffentlichungsdatum. Für angelegte Interview-Blöcke werden zusätzlich fehlende Partner, fehlende Fragen und verpflichtende noch nicht freigegebene Fragen angezeigt.',
           },
         ],
       },
@@ -292,6 +303,10 @@ const wikiData: WikiCategory[] = [
             text: 'Der PDF-Dialog exportiert Staffelziel, Reihenfolge und Alternativen mit einem wählbaren Episoden-CI-Layout und einem eigenen Dokumenttitel. Im Episoden-Editor weiterarbeiten erzeugt oder verwendet einmalig die verknüpfte Idee und Episode; ein erneuter Aufruf öffnet dieselbe Episode. Dort führt Zurück zur Planung wieder in die passende Staffelplanung.',
             tip: 'Für Ansicht, Bearbeitung, PDF-Export und den Übergang in den Episoden-Editor gelten getrennte Rechte. Fehlt eine Aktion, prüfen Sie Ihre Rolle oder wenden Sie sich an die Administration.',
           },
+          {
+            heading: 'Episode oder verwaiste Position löschen',
+            text: 'Beim Löschen einer Episode gibt PodCore die verknüpfte Staffelplan-Position und Ideenmappe wieder frei. Falls eine Position mit einer älteren Version verwaist ist, kann sie jetzt direkt in der Staffelplanung gelöscht werden.',
+          },
         ],
       },
       {
@@ -345,7 +360,12 @@ const wikiData: WikiCategory[] = [
         content: [
           {
             heading: 'Interview vorbereiten',
-            text: 'Hinterlegen Sie Interview-Partner und erstellen Sie dazu passende Fragen. In einer Ideenmappe zeigt die Partnerauswahl nur die dieser Idee zugeordneten Gesprächspartner. Für die individuelle Vorbereitung kann pro Partner ein persönliches PDF mit Anschreiben und den zugeordneten Fragen erstellt werden.',
+            text: 'Hinterlegen Sie Interview-Partner und erstellen Sie dazu passende Fragen. In einer Ideenmappe zeigt die Partnerauswahl nur die dieser Idee zugeordneten Gesprächspartner. Im Episoden-Editor kann derselbe Partner mit seinen Fragen übernommen werden; bei manuell angelegten Folgen steht der reguläre Partnerbestand zur Auswahl. Für die individuelle Vorbereitung kann pro Partner ein persönliches PDF mit Anschreiben und den zugeordneten Fragen erstellt werden.',
+          },
+          {
+            heading: 'Fragen sortieren und freigeben',
+            text: 'Partnerfragen lassen sich im Episoden-Editor in die gewünschte Reihenfolge bringen. Gespeicherte Fragen können im RedaktionsHub oder direkt aus dem Interview-Block zur Freigabe angefordert werden. Der Status unterscheidet offen, angefragt, freigegeben und abgelehnt.',
+            tip: 'Ist eine Fragenfreigabe in den App-Einstellungen verpflichtend, muss der Interview-Block vor der Episodenfreigabe einen Partner, verwendbare Fragen und die erforderlichen Freigaben enthalten.',
           },
           {
             heading: 'Notizen und Aufgaben',
@@ -712,7 +732,7 @@ const wikiData: WikiCategory[] = [
         content: [
           {
             heading: 'Speicherbackend',
-            text: 'Je nach Installation kann die Medienablage lokal oder über WebDAV, SFTP beziehungsweise S3 erfolgen. Testen Sie neue Zugangsdaten vor dem Speichern und ändern Sie produktive Speicherziele nur mit vorhandenem Backup.',
+            text: 'Die Statuskarte unter Branding & Backup → Speicher trennt Betriebsdaten, Medienablage, Sicherungen und das aktive Medienziel. Medien können lokal, über WebDAV oder S3-kompatibel abgelegt werden. Testen Sie neue Zugangsdaten oder lokale Pfade vor dem Speichern und ändern Sie produktive Speicherziele nur mit vorhandenem Backup. SFTP/SSH ist sichtbar deaktiviert, solange diese Anbindung nicht bereitsteht.',
           },
           {
             heading: 'Datenexport',
@@ -828,7 +848,7 @@ const wikiData: WikiCategory[] = [
           },
           {
             heading: 'Datenbank und Logs',
-            text: 'Die Datenbankwerkzeuge unterstützen vorgesehene Migrationen und Verbindungstests. Logs helfen bei der Fehlersuche. Führen Sie Migrationen ausschließlich mit aktuellem Backup und geplantem Wartungsfenster aus.',
+            text: 'Der Datenbankstatus zeigt die tatsächlich aktive Datenbank, Datenbankdatei, Datenordner und Medienablage. SQLite ist der unterstützte Standardbetrieb. Eine MySQL-/MariaDB-Verbindung kann getestet und für eine vollständige Datenkopie vorbereitet werden; diese Kopie stellt die laufende PodCore-Instanz nicht automatisch um. Logs helfen bei der Fehlersuche. Führen Sie Migrationen ausschließlich mit aktuellem Backup und geplantem Wartungsfenster aus.',
           },
         ],
       },
@@ -842,11 +862,24 @@ const wikiData: WikiCategory[] = [
     color: 'text-text-secondary',
     articles: [
       {
+        id: 'v2-14-9',
+        title: 'v2.14.9 · Interview-Fertigstellung und Speichertransparenz',
+        summary: 'Einheitliche Interview-Blöcke, Fragenfreigabe und -sortierung, klarer Episodenabschluss sowie sichtbare Datenbank- und Speicherorte.',
+        icon: <CheckCircle size={16} />,
+        tags: ['aktuell', 'v2.14.9', 'interview', 'fragen', 'freigabe', 'speicher', 'datenbank', 'staffelplanung'],
+        compact: true,
+        content: [
+          {
+            text: 'Die Aktionen „+ Interview“ und „Interview-Fragen“ führen jetzt in denselben vollständigen Block mit Partnerauswahl, Fragenübernahme, manueller Eingabe und Sortierung. Gespeicherte Fragen können direkt zur Freigabe angefordert werden; der Episodenabschluss berücksichtigt fehlende Partner, Fragen und verpflichtende Freigaben. Administration zeigt die aktive SQLite-Datenbank und die relevanten Speicherorte transparent an. Eine MySQL-/MariaDB-Datenkopie bleibt klar vom aktiven Betrieb getrennt. Nach dem Löschen einer Episode können verknüpfte oder ältere verwaiste Staffelplan-Positionen bereinigt werden.',
+          },
+        ],
+      },
+      {
         id: 'v2-14-8',
         title: 'v2.14.8 · PDF-, Archiv- und Wiederherstellungsupdate',
         summary: 'Vollständige Fragen-Pool- und Interview-PDFs, wiederherstellbare Ideenmappen, partnergenaue Fragenverwaltung und ZIP-Archivmappen für archivierte Episoden.',
         icon: <CheckCircle size={16} />,
-        tags: ['aktuell', 'v2.14.8', 'pdf', 'archiv', 'papierkorb', 'interviews'],
+        tags: ['v2.14.8', 'pdf', 'archiv', 'papierkorb', 'interviews'],
         compact: true,
         content: [
           {
@@ -998,7 +1031,7 @@ export default function WikiPage() {
               PodCore Handbuch
             </h1>
             <p className="text-text-secondary mt-1">
-              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.8
+              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.9
             </p>
           </div>
           <div className="relative w-full lg:w-[28rem]">

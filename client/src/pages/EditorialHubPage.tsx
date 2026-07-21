@@ -777,6 +777,15 @@ function InterviewsTab() {
     } catch (err: any) { showError(err.message); }
   };
 
+  const handleRequestQuestionApproval = async (question: any) => {
+    if (!selectedPartner || question.approved || question.approvalStatus === 'angefragt') return;
+    try {
+      await editorialApi.requestQuestionApproval(question.id);
+      showSuccess('Freigabe für die Interview-Frage angefordert');
+      loadQuestions(selectedPartner.id);
+    } catch (err: any) { showError(err.message); }
+  };
+
   const handleDeleteQuestion = async (id: string) => {
     try {
       await editorialApi.deleteQuestion(id);
@@ -1002,14 +1011,21 @@ function InterviewsTab() {
                       <p className="text-sm text-text-primary">{q.question}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         {q.category && <span className="badge bg-surface-overlay text-text-muted text-xs">{q.category}</span>}
-                        {q.approved && (
+                        {q.approved ? (
                           <span className="badge bg-accent-green/20 text-accent-green text-xs">Freigegeben</span>
+                        ) : q.approvalStatus === 'angefragt' ? (
+                          <span className="badge bg-accent-orange/20 text-accent-orange text-xs">Freigabe angefragt</span>
+                        ) : (
+                          <span className="badge bg-surface-overlay text-text-muted text-xs">Noch offen</span>
                         )}
                       </div>
                       {q.notes && <p className="text-text-muted text-xs mt-1">{q.notes}</p>}
                     </div>
-                    {can('canEditInterviews') && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                      {can('canRequestApproval') && !q.approved && q.approvalStatus !== 'angefragt' && (
+                        <button onClick={() => handleRequestQuestionApproval(q)} className="p-1 text-text-muted hover:text-accent-orange" title="Freigabe anfordern"><Clock size={12} /></button>
+                      )}
+                      {can('canEditInterviews') && <>
                         <button onClick={() => handleMoveQuestion(q.id, -1)} disabled={index === 0} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach oben"><ArrowUp size={12} /></button>
                         <button onClick={() => handleMoveQuestion(q.id, 1)} disabled={index === questions.length - 1} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach unten"><ArrowDown size={12} /></button>
                         <button onClick={() => handleArchiveQuestionToPool(q)} className="p-1 text-text-muted hover:text-accent-cyan" title="In allgemeinen Fragen-Pool übernehmen"><BookMarked size={12} /></button>
@@ -1025,8 +1041,8 @@ function InterviewsTab() {
                           <Edit2 size={12} />
                         </button>
                         <button onClick={() => handleDeleteQuestion(q.id)} className="p-1 text-text-muted hover:text-accent-red" title="Frage löschen"><Trash2 size={12} /></button>
-                      </div>
-                    )}
+                      </>}
+                    </div>
                   </div>
                 ))}
               </div>

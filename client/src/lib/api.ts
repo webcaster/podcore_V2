@@ -111,6 +111,7 @@ export const episodesApi = {
   reject: (id: string, notes?: string) => api.post<any>(`/episodes/${id}/reject`, { notes }),
   resetApproval: (id: string) => api.post<any>(`/episodes/${id}/reset-approval`, {}),
   getPendingApprovals: () => api.get<any[]>('/episodes/pending-approval'),
+  requestQuestionApproval: (id: string, notes?: string) => api.post<any>(`/editorial/interviews/questions/${id}/request-approval`, { notes }),
   approveQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/approve`, {}),
   revokeQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/revoke`, {}),
   list: (params?: { status?: string; search?: string; page?: number; pageSize?: number }) => {
@@ -231,6 +232,7 @@ export const editorialApi = {
   deleteQuestion: (id: string) => api.delete(`/editorial/interviews/questions/${id}`),
   reorderQuestions: (questionIds: string[]) => api.post<any>('/editorial/interviews/questions/reorder', { questionIds }),
   archiveQuestionToPool: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/archive-to-pool`, {}),
+  requestQuestionApproval: (id: string, notes?: string) => api.post<any>(`/editorial/interviews/questions/${id}/request-approval`, { notes }),
   approveQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/approve`, {}),
   revokeQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/revoke`, {}),
   listQuestionPool: (params?: { category?: string; search?: string }) =>
@@ -553,6 +555,16 @@ export const adminApi = {
   testMysql: (data: any) => api.post<any>('/admin/db/test-mysql', data),
   migrateToMysql: (data: any) => api.post<any>('/admin/db/migrate-to-mysql', data),
   getMigrationLog: () => api.get<any>('/admin/db/migration-log'),
+};
+
+// ============================================================
+// Storage API
+// ============================================================
+export const storageApi = {
+  getStatus: () => api.get<any>('/storage/status'),
+  getConfig: () => api.get<any>('/storage/config'),
+  updateConfig: (data: any) => api.put<any>('/storage/config', data),
+  testConnection: (data: any) => api.post<any>('/storage/test', data),
 };
 
 // ============================================================

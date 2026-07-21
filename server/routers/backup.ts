@@ -77,7 +77,7 @@ router.get('/export/full', requirePermission('canManageSettings') as any, (req: 
   const db = getDb();
 
   const exportData = {
-    version: '2.14.8',
+    version: '2.14.9',
     type: 'full',
     exportedAt: new Date().toISOString(),
     exportedBy: req.user!.username,

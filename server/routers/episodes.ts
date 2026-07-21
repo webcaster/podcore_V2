@@ -174,7 +174,7 @@ router.get('/:id/export-archive', requirePermission('canViewEpisodes') as any, (
 
   const archiveInfo = {
     format: 'PodCore Archivmappe',
-    version: '2.14.8',
+    version: '2.14.9',
     generatedAt: new Date().toISOString(),
     episodeId: row.id,
     archivedAt: row.archive_date || null,
@@ -493,8 +493,29 @@ router.delete('/:id', requirePermission('canDeleteEpisodes') as any, (req: AuthR
     return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
   }
 
-  db.run('DELETE FROM episodes WHERE id = ?', [req.params.id]);
-  return res.json({ success: true, message: 'Episode gelöscht' });
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    // Eine Staffelplan-Position bleibt als Planungsgrundlage bestehen, darf nach
+    // dem Löschen der Episode aber nicht mehr durch eine verwaiste Verknüpfung gesperrt sein.
+    db.run(
+      `UPDATE season_plan_items
+       SET episode_id = NULL,
+           status = CASE WHEN status = 'in_produktion' THEN 'kandidat' ELSE status END,
+           updated_at = datetime('now')
+       WHERE episode_id = ?`,
+      [req.params.id]
+    );
+    db.run(
+      "UPDATE ideas SET episode_id = NULL, updated_at = datetime('now') WHERE episode_id = ?",
+      [req.params.id]
+    );
+    db.run('DELETE FROM episodes WHERE id = ?', [req.params.id]);
+    db.exec('COMMIT');
+    return res.json({ success: true, message: 'Episode gelöscht. Verknüpfte Staffelplan-Positionen wurden wieder freigegeben.' });
+  } catch (err: any) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    return res.status(500).json({ success: false, error: err.message || 'Episode konnte nicht vollständig gelöscht werden' });
+  }
 });
 
 // POST /api/episodes/:id/duplicate
