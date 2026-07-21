@@ -98,6 +98,8 @@ function initializeSchema(db: any): void {
       tags TEXT NOT NULL DEFAULT '[]',
       assigned_to TEXT,
       episode_id TEXT,
+      deleted_at TEXT DEFAULT NULL,
+      deleted_by TEXT DEFAULT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       created_by TEXT NOT NULL
@@ -1217,6 +1219,12 @@ function initializeSchema(db: any): void {
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_topic_drafts_idea ON idea_topic_drafts(idea_id)'); } catch (_) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_editorial_text_blocks_idea_type ON editorial_text_blocks(idea_id, block_type, updated_at DESC)'); } catch (_) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_editorial_text_blocks_global ON editorial_text_blocks(block_type, is_favorite, updated_at DESC)'); } catch (_) {}
+
+  // v2.14.8: Papierkorb für Ideenmappen. Ein Löschen bleibt wiederherstellbar,
+  // während verknüpfte Recherche, Dateien, Fragen und Checklisten erhalten bleiben.
+  try { db.exec('ALTER TABLE ideas ADD COLUMN deleted_at TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE ideas ADD COLUMN deleted_by TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_ideas_deleted_at ON ideas(deleted_at, updated_at DESC)'); } catch (_) {}
 
   console.log('[DB] Database initialized at:', DB_PATH);
 }

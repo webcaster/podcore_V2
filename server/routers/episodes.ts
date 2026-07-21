@@ -42,7 +42,7 @@ function parseEpisode(row: any) {
 // GET /api/episodes
 router.get('/', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { status, search, page = '1', pageSize = '20' } = req.query;
+  const { status, search, page = '1', pageSize = '20', archived, limit } = req.query;
 
   let query = 'SELECT * FROM episodes WHERE 1=1';
   let countQuery = 'SELECT COUNT(*) as count FROM episodes WHERE 1=1';
@@ -63,10 +63,18 @@ router.get('/', requirePermission('canViewEpisodes') as any, (req: AuthRequest, 
     countParams.push(`%${search}%`, `%${search}%`);
   }
 
-  query += ' ORDER BY created_at DESC';
+  if (archived === 'true') {
+    query += ' AND is_archived = 1';
+    countQuery += ' AND is_archived = 1';
+  } else if (archived === 'false') {
+    query += ' AND (is_archived = 0 OR is_archived IS NULL)';
+    countQuery += ' AND (is_archived = 0 OR is_archived IS NULL)';
+  }
 
-  const pageNum = parseInt(page as string);
-  const pageSizeNum = parseInt(pageSize as string);
+  query += ' ORDER BY COALESCE(archive_date, created_at) DESC';
+
+  const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+  const pageSizeNum = Math.max(1, Math.min(500, parseInt((limit || pageSize) as string, 10) || 20));
   const offset = (pageNum - 1) * pageSizeNum;
 
   const countRow = db.get(countQuery, countParams) as any;
@@ -97,6 +105,104 @@ router.get('/pending-approval', requirePermission('canViewEpisodes') as any, (re
     []
   ).map(parseEpisode);
   return res.json({ success: true, data: episodes });
+});
+
+// GET /api/episodes/:id/export-archive — vollständige Archivmappe als ZIP
+router.get('/:id/export-archive', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const row = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  if (!row) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
+  if (!(row.is_archived === 1 || row.is_archived === true || row.status === 'archiviert')) {
+    return res.status(409).json({ success: false, error: 'Eine Archivmappe kann erst nach dem Archivieren der Episode erstellt werden.' });
+  }
+
+  const fs = require('fs');
+  const path = require('path');
+  const AdmZip = require('adm-zip');
+  const { DATA_DIR } = require('../database');
+  const zip = new AdmZip();
+  const episode = parseEpisode(row);
+  const cleanName = (value: string, fallback: string) => String(value || fallback)
+    .replace(/[\\\\/:*?"<>|]+/g, '_').replace(/\s+/g, ' ').trim().slice(0, 100) || fallback;
+  const addText = (name: string, value: any) => zip.addFile(name, Buffer.from(typeof value === 'string' ? value : JSON.stringify(value, null, 2), 'utf8'));
+  const tableExists = (name: string) => !!db.get("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", [name]);
+  const rowsIfPresent = (name: string, where: string, params: any[]) => tableExists(name) ? db.all(`SELECT * FROM ${name} ${where}`, params) as any[] : [];
+
+  const idea = row.idea_id
+    ? db.get('SELECT * FROM ideas WHERE id = ?', [row.idea_id]) as any
+    : db.get('SELECT * FROM ideas WHERE episode_id = ?', [row.id]) as any;
+  const ideaId = idea?.id || null;
+  const ideaNotes = ideaId ? rowsIfPresent('idea_notes', 'WHERE idea_id = ? ORDER BY created_at ASC', [ideaId]) : [];
+  const ideaChecklists = ideaId ? rowsIfPresent('idea_checklists', 'WHERE idea_id = ? ORDER BY sort_order ASC', [ideaId]) : [];
+  const ideaUploads = ideaId ? rowsIfPresent('idea_uploads', 'WHERE idea_id = ? ORDER BY created_at ASC', [ideaId]) : [];
+  const interviewPartners = ideaId
+    ? db.all(`SELECT DISTINCT p.* FROM interview_partners p LEFT JOIN idea_interview_partners l ON l.partner_id = p.id WHERE p.idea_id = ? OR l.idea_id = ? ORDER BY p.name COLLATE NOCASE ASC`, [ideaId, ideaId]) as any[]
+    : [];
+  const interviewQuestions = ideaId ? rowsIfPresent('interview_questions', 'WHERE idea_id = ? ORDER BY sort_order ASC', [ideaId]) : [];
+  const research = db.all('SELECT * FROM research_sources WHERE related_episode_id = ? OR related_idea_id = ? ORDER BY created_at ASC', [row.id, ideaId]) as any[];
+  const comments = rowsIfPresent('episode_comments', 'WHERE episode_id = ? ORDER BY created_at ASC', [row.id]);
+  const versions = rowsIfPresent('episode_versions', 'WHERE episode_id = ? ORDER BY created_at ASC', [row.id]);
+
+  const sponsorBookings = rowsIfPresent('episode_ad_bookings', `
+    LEFT JOIN sponsors s ON s.id = episode_ad_bookings.sponsor_id
+    LEFT JOIN ad_slots slot ON slot.id = episode_ad_bookings.ad_slot_id
+    LEFT JOIN ad_categories cat ON cat.id = episode_ad_bookings.ad_category_id
+    WHERE episode_ad_bookings.episode_id = ? ORDER BY episode_ad_bookings.sort_order ASC`, [row.id]);
+  const sponsorContracts = sponsorBookings.length && tableExists('sponsor_contracts')
+    ? db.all(`SELECT * FROM sponsor_contracts WHERE sponsor_id IN (${sponsorBookings.map(() => '?').join(',')}) ORDER BY contract_start ASC`, sponsorBookings.map((b: any) => b.sponsor_id)) as any[]
+    : [];
+  const directSponsorData = Array.isArray(episode.sponsors) ? episode.sponsors : [];
+
+  const mediaAssets = rowsIfPresent('episode_media_links', `
+    JOIN assets ON assets.id = episode_media_links.asset_id
+    WHERE episode_media_links.episode_id = ? ORDER BY episode_media_links.sort_order ASC`, [row.id]);
+  const fileManifest: any[] = [];
+  const addLocalFile = (source: string | null | undefined, folder: string, originalName: string, sourceType: string) => {
+    if (!source) return;
+    const candidatePaths = [source, path.join(DATA_DIR, 'uploads', source), path.join(DATA_DIR, 'assets', source), path.join(DATA_DIR, 'idea-uploads', source)];
+    const existing = candidatePaths.find((candidate: string) => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+    if (!existing) {
+      fileManifest.push({ sourceType, name: originalName, path: source, included: false, reason: 'Datei am lokalen Speicherort nicht verfügbar' });
+      return;
+    }
+    const name = cleanName(path.basename(originalName || existing), 'Datei');
+    zip.addLocalFile(existing, folder, name);
+    fileManifest.push({ sourceType, name, path: source, included: true });
+  };
+  for (const upload of ideaUploads) addLocalFile(upload.filepath, 'Dateien/Ideenmappe', upload.original_name || upload.filename, 'Ideenmappe');
+  for (const asset of mediaAssets) addLocalFile(asset.filepath, 'Dateien/Medien', asset.filename || asset.name, 'Episode');
+
+  const archiveInfo = {
+    format: 'PodCore Archivmappe',
+    version: '2.14.8',
+    generatedAt: new Date().toISOString(),
+    episodeId: row.id,
+    archivedAt: row.archive_date || null,
+    includes: {
+      episode: true,
+      ideaMap: !!idea,
+      interviewPartners: interviewPartners.length,
+      interviewQuestions: interviewQuestions.length,
+      sponsors: sponsorBookings.length,
+      media: mediaAssets.length,
+      attachedFiles: fileManifest.filter(f => f.included).length,
+    },
+  };
+  const summary = `# PodCore Archivmappe\n\n## Episode\n\n- **Titel:** ${row.title}\n- **Folgenummer:** ${row.number ?? '—'}\n- **Archiviert am:** ${row.archive_date || '—'}\n- **Erstellt am:** ${new Date().toLocaleString('de-DE')}\n\n## Enthaltene Unterlagen\n\n| Bereich | Umfang |\n|---|---:|\n| Ideenmappe | ${idea ? 'vorhanden' : 'nicht verknüpft'} |\n| Interview-Partner | ${interviewPartners.length} |\n| Interview-Fragen | ${interviewQuestions.length} |\n| Sponsoring-Buchungen | ${sponsorBookings.length} |\n| Verwendete Mediendateien | ${mediaAssets.length} |\n| Eingebundene Dateien | ${fileManifest.filter(f => f.included).length} |\n\n> Die vollständigen strukturierten Daten liegen im Ordner \`Daten\`. Dateien, die am lokalen Speicherort nicht mehr verfügbar sind, werden im Dateimanifest dokumentiert.\n`;
+
+  addText('ARCHIVMAPPE.md', summary);
+  addText('Daten/manifest.json', archiveInfo);
+  addText('Daten/episode.json', episode);
+  addText('Daten/ideenmappe.json', { idea, notes: ideaNotes, checklists: ideaChecklists, research, uploads: ideaUploads });
+  addText('Daten/interviews.json', { partners: interviewPartners, questions: interviewQuestions });
+  addText('Daten/sponsoring.json', { bookings: sponsorBookings, contracts: sponsorContracts, episodeSponsors: directSponsorData });
+  addText('Daten/medien.json', { linkedAssets: mediaAssets, files: fileManifest });
+  addText('Daten/episode-workflow.json', { comments, versions });
+
+  const filename = `PodCore-Archivmappe-${cleanName(row.number !== null && row.number !== undefined ? `Folge-${row.number}-${row.title}` : row.title, 'Episode')}.zip`;
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+  return res.send(zip.toBuffer());
 });
 
 // ── Episoden-Vorlagen (MUSS vor /:id stehen!) ──────────────────────────────

@@ -1048,23 +1048,38 @@ export function renderPdfHeader(
     doc.x = pageMargin;
 
   } else if (header.style === 'sidebar') {
-    // Linker farbiger Streifen
+    // Linker farbiger Streifen. Logo und Text werden bewusst in getrennten
+    // Spalten platziert, damit lange Dokumenttitel das Logo nie überlagern.
     doc.rect(0, 0, 8, doc.page.height).fill(colors.secondary);
-    doc.x = pageMargin;
-    doc.y = pageMargin;
+    const hasLogo = Boolean(header.showLogo && opts.logoPath);
+    const logoWidth = 60;
+    const logoHeight = 40;
+    const gap = hasLogo ? 14 : 0;
+    const textX = pageMargin + (hasLogo ? logoWidth + gap : 0);
+    const textWidth = Math.max(120, pageWidth - textX - pageMargin);
+    const podcastY = pageMargin + 2;
+    const titleY = header.showPodcastName ? pageMargin + typography.smallSize + 7 : pageMargin + 2;
+    let titleHeight = 0;
 
-    if (header.showLogo && opts.logoPath) {
-      try { doc.image(opts.logoPath, pageMargin, pageMargin, { fit: [60, 40] }); doc.moveDown(0.5); } catch (_) {}
+    if (hasLogo) {
+      try { doc.image(opts.logoPath!, pageMargin, pageMargin, { fit: [logoWidth, logoHeight] }); } catch (_) {}
     }
     if (header.showPodcastName) {
-      doc.fontSize(typography.smallSize).font(typography.fontFamily).fillColor(colors.muted).text(opts.podcastName);
+      doc.fontSize(typography.smallSize).font(typography.fontFamily).fillColor(colors.muted)
+        .text(opts.podcastName, textX, podcastY, { width: textWidth, lineBreak: false, ellipsis: true });
     }
     if (header.showDocumentTitle) {
-      doc.fontSize(typography.titleSize).font(`${typography.fontFamily}-Bold`).fillColor(colors.primary).text(opts.documentTitle);
+      doc.fontSize(typography.titleSize).font(`${typography.fontFamily}-Bold`).fillColor(colors.primary);
+      titleHeight = doc.heightOfString(opts.documentTitle, { width: textWidth, lineGap: 1 });
+      doc.text(opts.documentTitle, textX, titleY, { width: textWidth, lineGap: 1 });
     }
-    doc.moveDown(0.5);
-    doc.moveTo(pageMargin, doc.y).lineTo(pageWidth - pageMargin, doc.y).strokeColor(colors.accent).lineWidth(1).stroke();
-    doc.moveDown(0.5);
+    const dividerY = Math.max(
+      hasLogo ? pageMargin + logoHeight : pageMargin,
+      titleY + titleHeight
+    ) + 13;
+    doc.moveTo(pageMargin, dividerY).lineTo(pageWidth - pageMargin, dividerY).strokeColor(colors.accent).lineWidth(1).stroke();
+    doc.x = pageMargin;
+    doc.y = dividerY + 15;
 
   } else {
     // Minimal

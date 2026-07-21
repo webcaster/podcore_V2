@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Archive, Search, RotateCcw, ExternalLink, Calendar,
-  Clock, Mic, Loader2, Filter, ChevronDown
+  Clock, Mic, Loader2, Filter, ChevronDown, Download
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 
@@ -158,6 +158,29 @@ export default function ArchivePage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const token = localStorage.getItem('podcore_token');
+                        const res = await fetch(`/api/episodes/${ep.id}/export-archive`, {
+                          headers: token ? { Authorization: `Bearer ${token}` } : {}
+                        });
+                        if (!res.ok) throw new Error('Export fehlgeschlagen');
+                        const blob = await res.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `PodCore-Archivmappe-Folge-${ep.number || ''}-${ep.title.replace(/[^a-zA-Z0-9]/g, '_')}.zip`;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                      } catch (e: any) { showError('Fehler beim Archiv-Export'); }
+                    }}
+                    className="p-2 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10 rounded-lg transition-colors"
+                    title="Archivmappe als ZIP herunterladen"
+                  >
+                    <Download size={15} />
+                  </button>
                   <Link
                     to={`/episodes/${ep.id}`}
                     className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors"

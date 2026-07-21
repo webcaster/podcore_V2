@@ -1,5 +1,24 @@
 # PodCore – Release Notes
 
+## v2.14.8 – Stabile PDF-Unterlagen, wiederherstellbare Ideenmappen und vollständige Episodenarchive
+
+Version **2.14.8** stabilisiert die PDF- und Archivierungsabläufe des RedaktionsHub. Der allgemeine Fragen-Pool bleibt auch bei langen Fragen vollständig lesbar, Interview-Partner erhalten persönliche Unterlagen mit Anschreiben, und archivierte Episoden können als nachvollziehbare ZIP-Archivmappe abgelegt werden. Ergänzend schützt ein Papierkorb versehentlich gelöschte Ideenmappen und die Fragenverwaltung einer Ideenmappe beschränkt ihre Partnerauswahl auf den jeweils passenden Folgenkontext.
+
+| Bereich | Änderung |
+|---|---|
+| Fragen-Pool-PDF | Der Export berechnet den Platz für einen vollständigen Fragenblock vor dem Seitenwechsel. Frage, Kategorie und Hintergrundinfo werden nicht mehr abgeschnitten oder unlesbar getrennt. |
+| Fragen-Pool-Themen | Themen im allgemeinen Pool können umbenannt werden. Die Gruppierung bleibt dadurch ohne manuelle Einzelbearbeitung übersichtlich. |
+| Persönliche Interview-PDF | Für einzelne Interview-Partner steht ein persönliches Dokument mit Anschreiben und den zugehörigen Fragen zur Verfügung. |
+| Ideenmappen-Papierkorb | Das Löschen einer Ideenmappe erfolgt als Soft-Delete. Die Idee bleibt im Papierkorb verfügbar und kann wiederhergestellt werden. |
+| Ideenmappen-Partnerfilter | Die Fragenverwaltung lädt nur Partner, die der gerade geöffneten Ideenmappe zugeordnet sind. |
+| Staffelplan-PDF | Das moderne Staffelplan-Layout trennt Logo und Überschrift im Kopfbereich, sodass keine Überlappung mehr entsteht. |
+| ZIP-Archivmappe | Archivierte Episoden können als ZIP mit lesbarer Übersicht, Manifest, Episoden-, Ideen-, Interview-, Sponsoring-, Medien- und Workflow-Daten sowie verfügbaren lokalen Dateien heruntergeladen werden. |
+| Qualitätssicherung | Produktions-Build sowie Ende-zu-Ende-Tests für Papierkorb und Wiederherstellung, Partnerfilter, persönliche Interview-PDF, Fragen-Pool-Themenumbenennung, mehrseitige Fragen-Pool-PDF, Staffelplan-PDF und Archivmappe wurden erfolgreich durchgeführt. |
+
+### Aktualisierung
+
+Ab einer bestehenden Installation von PodCore **2.14.3 oder neuer** kann das Release-ZIP über **Einstellungen → App-Update** verifiziert eingespielt werden. Erstellen Sie vorher ein Vollbackup des persistenten Datenverzeichnisses. Für dieses Wartungsrelease sind keine manuellen Datenbankeingriffe erforderlich; vorhandene Migrationen werden beim Serverstart weiterhin idempotent geprüft. Die vollständige Installations-, Bedien-, Prüf- und Rückfallanleitung befindet sich unter [`docs/UPDATE-2.14.8.md`](docs/UPDATE-2.14.8.md).
+
 ## v2.14.7 – Verifizierter Ideenmappen-Workflow, Redaktions- und Sponsoring-Optimierungen
 
 Version **2.14.7** konsolidiert die angeforderten Hotfixes und erweitert den strategischen Produktionsablauf verbindlich: Aus einer strategischen Planposition wird zuerst eine Ideenmappe als redaktionelle Sammelstelle erzeugt. Eine Episode entsteht erst anschließend aus dieser vorbereiteten Ideenmappe. Der Release enthält zudem eine geprüfte Verbesserung der Staffelplan-PDF, des Episoden-Editors, der Interview-Verwaltung und der Sponsor-Verträge.

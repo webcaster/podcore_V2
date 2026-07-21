@@ -5,7 +5,7 @@ import {
   Edit2, Check, X, ArrowRight, ArrowUp, ArrowDown, Tag, Star, Clock, ChevronDown,
   Mic2, BookOpen, StickyNote, MessageSquare, Filter, Pin, PinOff, Loader2,
   Globe, BookMarked, Video, FileImage, Newspaper, ExternalLink, Link2, Save, Eye,
-  ListChecks, UserPlus, Download, ListOrdered
+  ListChecks, UserPlus, Download, ListOrdered, RotateCcw
 } from 'lucide-react';
 import { editorialApi, episodesApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
@@ -132,6 +132,9 @@ function IdeasTab() {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferIdea, setTransferIdea] = useState<any>(null);
   const [episodes, setEpisodes] = useState<any[]>([]);
+  const [showTrash, setShowTrash] = useState(false);
+  const [deletedIdeas, setDeletedIdeas] = useState<any[]>([]);
+  const [isTrashLoading, setIsTrashLoading] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', status: 'neu', priority: 'mittel', tags: [] as string[], tagInput: '' });
 
   const load = async () => {
@@ -175,11 +178,32 @@ function IdeasTab() {
   };
 
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`Idee "${title}" löschen?`)) return;
+    if (!confirm(`Idee "${title}" in den Papierkorb verschieben? Sie kann dort wiederhergestellt werden.`)) return;
     try {
       await editorialApi.deleteIdea(id);
-      showSuccess('Idee gelöscht');
+      showSuccess('Idee in den Papierkorb verschoben');
       load();
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const loadTrash = async () => {
+    setIsTrashLoading(true);
+    try {
+      setDeletedIdeas(await editorialApi.listDeletedIdeas());
+    } catch (err: any) { showError(err.message); }
+    finally { setIsTrashLoading(false); }
+  };
+
+  const openTrash = async () => {
+    setShowTrash(true);
+    await loadTrash();
+  };
+
+  const handleRestore = async (idea: any) => {
+    try {
+      await editorialApi.restoreIdea(idea.id);
+      showSuccess(`Idee "${idea.title}" wiederhergestellt`);
+      await Promise.all([load(), loadTrash()]);
     } catch (err: any) { showError(err.message); }
   };
 
@@ -255,6 +279,11 @@ function IdeasTab() {
           <option value="">Alle Prioritäten</option>
           {IDEA_PRIORITY.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
         </select>
+        {can('canEditIdeas') && (
+          <button onClick={openTrash} className="btn-secondary whitespace-nowrap" title="Gelöschte Ideenmappen wiederherstellen">
+            <Trash2 size={16} /><span>Papierkorb</span>
+          </button>
+        )}
         {can('canCreateIdeas') && (
           <button onClick={openCreate} className="btn-primary whitespace-nowrap">
             <Plus size={16} /><span>Neue Idee</span>
@@ -459,6 +488,43 @@ function IdeasTab() {
           </div>
         )}
       </Modal>
+
+      {/* Papierkorb für wiederherstellbare Ideenmappen */}
+      <Modal isOpen={showTrash} onClose={() => setShowTrash(false)} title="Papierkorb – Ideenmappen" size="lg">
+        <div className="space-y-4">
+          <p className="text-sm text-text-secondary">
+            Gelöschte Ideenmappen bleiben mit ihren verknüpften Inhalten erhalten und können jederzeit wiederhergestellt werden.
+          </p>
+          {isTrashLoading ? (
+            <div className="flex justify-center py-10"><Loader2 size={24} className="animate-spin text-accent-purple" /></div>
+          ) : deletedIdeas.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-surface-border px-5 py-10 text-center">
+              <Trash2 size={28} className="mx-auto mb-3 text-text-muted" />
+              <p className="font-medium text-text-primary">Der Papierkorb ist leer</p>
+              <p className="mt-1 text-sm text-text-muted">Hier erscheinen gelöschte Ideenmappen zur Wiederherstellung.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+              {deletedIdeas.map(idea => (
+                <div key={idea.id} className="flex items-center gap-3 rounded-xl border border-surface-border bg-surface-raised/50 p-3">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-accent-purple/15 text-accent-purple"><Lightbulb size={17} /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-text-primary">{idea.title}</p>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      Gelöscht am {idea.deletedAt ? new Date(idea.deletedAt).toLocaleString('de-DE') : 'unbekannt'}
+                    </p>
+                  </div>
+                  {can('canEditIdeas') && (
+                    <button onClick={() => handleRestore(idea)} className="btn-secondary shrink-0 text-xs" title="Ideenmappe wiederherstellen">
+                      <RotateCcw size={14} /> Wiederherstellen
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -633,6 +699,8 @@ function InterviewsTab() {
   const [partnerForm, setPartnerForm] = useState({ name: '', company: '', role: '', email: '', phone: '', bio: '', notes: '', guestIntro: '', status: 'offen' });
   const [questionForm, setQuestionForm] = useState({ question: '', category: '', notes: '' });
   const [sendForm, setSendForm] = useState({ subject: '', customMessage: '', episodeId: '' });
+  const [showPdfDialog, setShowPdfDialog] = useState(false);
+  const [pdfCustomMessage, setPdfCustomMessage] = useState('');
 
   const loadPartners = async () => {
     setIsLoading(true);
@@ -869,7 +937,36 @@ function InterviewsTab() {
                   </button>
                 )}
                 {can('canEditInterviews') && (
-                  <button onClick={() => setShowQuestionModal(true)} className="btn-primary"><Plus size={16} /><span>Frage hinzufügen</span></button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!questions.length) return alert('Keine Fragen zum Übernehmen vorhanden.');
+                        const topicName = window.prompt('Unter welchem Thema sollen diese Fragen im allgemeinen Pool gespeichert werden?', selectedPartner.name);
+                        if (!topicName || !topicName.trim()) return;
+                        try {
+                          for (const q of questions) {
+                            await editorialApi.createPoolQuestion({ question: q.question, notes: q.notes, category: topicName.trim() });
+                          }
+                          alert(`${questions.length} Fragen wurden in den Pool unter "${topicName.trim()}" kopiert.`);
+                        } catch (err: any) { alert(err.message || 'Fehler beim Übernehmen'); }
+                      }}
+                      className="btn-secondary"
+                      title="Alle Fragen in den allgemeinen Pool kopieren"
+                    >
+                      <BookMarked size={16} /><span>In Pool übernehmen</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPdfCustomMessage(selectedPartner.guestIntro || `Liebe/r ${selectedPartner.name},\n\nvielen Dank, dass Sie sich die Zeit nehmen, bei unserem Podcast als Gast dabei zu sein. Hier sind die Interview-Fragen zur Vorbereitung:`);
+                        setShowPdfDialog(true);
+                      }}
+                      className="btn-secondary"
+                      title="Fragen mit persönlichem Anschreiben als PDF exportieren"
+                    >
+                      <Download size={16} /><span>Persönliches PDF</span>
+                    </button>
+                    <button onClick={() => setShowQuestionModal(true)} className="btn-primary"><Plus size={16} /><span>Frage hinzufügen</span></button>
+                  </div>
                 )}
               </div>
             </div>
@@ -1060,6 +1157,53 @@ function InterviewsTab() {
           </div>
         </form>
       </Modal>
+
+      {showPdfDialog && selectedPartner && (
+        <Modal isOpen={showPdfDialog} onClose={() => setShowPdfDialog(false)} title="Interview-Fragen als PDF exportieren" size="lg">
+          <div className="space-y-4">
+            <p className="text-text-secondary text-sm">Erstelle ein persönliches Dokument mit Anschreiben und allen Fragen für <strong>{selectedPartner.name}</strong>.</p>
+            <div>
+              <label className="label">Persönliches Anschreiben</label>
+              <textarea
+                className="textarea w-full font-mono text-sm"
+                rows={8}
+                value={pdfCustomMessage}
+                onChange={e => setPdfCustomMessage(e.target.value)}
+                placeholder="Liebe/r Gast..."
+              />
+            </div>
+            <div className="bg-surface-overlay rounded-lg p-4">
+              <h4 className="font-medium text-text-primary mb-2 text-sm">Enthaltene Fragen ({questions.length}):</h4>
+              <ol className="list-decimal list-inside text-sm text-text-secondary space-y-1">
+                {questions.map((q: any) => <li key={q.id} className="line-clamp-1">{q.question}</li>)}
+              </ol>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setShowPdfDialog(false)} className="btn-secondary">Abbrechen</button>
+              <button
+                onClick={async () => {
+                  try {
+                    const blob = await editorialApi.exportPartnerPdf(selectedPartner.id, pdfCustomMessage);
+                    const url = window.URL.createObjectURL(blob);
+                    const anchor = document.createElement('a');
+                    anchor.href = url;
+                    anchor.download = `Interview-Fragen-${selectedPartner.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+                    document.body.appendChild(anchor);
+                    anchor.click();
+                    window.URL.revokeObjectURL(url);
+                    anchor.remove();
+                    setShowPdfDialog(false);
+                    showSuccess('Interview-PDF wurde erstellt');
+                  } catch (err: any) { showError(err.message || 'Fehler beim PDF-Export'); }
+                }}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Download size={16} /> PDF herunterladen
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

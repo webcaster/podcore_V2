@@ -166,6 +166,8 @@ export const editorialApi = {
   updateIdea: (id: string, data: any) => api.put<any>(`/editorial/ideas/${id}`, data),
   patchIdea: (id: string, data: any) => api.patch<any>(`/editorial/ideas/${id}`, data),
   deleteIdea: (id: string) => api.delete(`/editorial/ideas/${id}`),
+  listDeletedIdeas: () => api.get<any[]>('/editorial/ideas/trash'),
+  restoreIdea: (id: string) => api.post<any>(`/editorial/ideas/${id}/restore`, {}),
   // Idea sub-resources
   listIdeaUploads: (ideaId: string) => api.get<any[]>(`/editorial/ideas/${ideaId}/uploads`),
   uploadIdeaFile: (ideaId: string, file: File, description?: string) => {
@@ -238,6 +240,8 @@ export const editorialApi = {
   deletePoolQuestion: (id: string) => api.delete(`/editorial/interviews/question-pool/${id}`),
   assignPoolQuestions: (partnerId: string, questionIds: string[]) =>
     api.post<any>('/editorial/interviews/question-pool/assign', { partnerId, questionIds }),
+  renameQuestionPoolTopic: (oldTopic: string, newTopic: string) =>
+    api.put<any>('/editorial/interviews/question-pool/rename-topic', { oldTopic, newTopic }),
   downloadQuestionPoolPdf: async (params?: { category?: string; search?: string; questionIds?: string[]; layoutId?: string; documentTitle?: string }): Promise<Blob> => {
     const query = buildQs({
       category: params?.category,
@@ -260,6 +264,16 @@ export const editorialApi = {
   sendSummaryUrl: (partnerId: string, episodeId?: string) => {
     const qs = episodeId ? `?episodeId=${episodeId}` : '';
     return `/api/editorial/interviews/partners/${partnerId}/send-summary${qs}`;
+  },
+  exportPartnerPdf: async (partnerId: string, customMessage?: string, episodeId?: string): Promise<Blob> => {
+    const query = buildQs({ customMessage: customMessage || undefined, episodeId });
+    const response = await fetch(`/api/editorial/interviews/partners/${partnerId}/export-pdf${query}`, { credentials: 'include' });
+    if (!response.ok) {
+      let message = 'Interview-PDF konnte nicht erzeugt werden';
+      try { const body = await response.json(); if (body?.error) message = body.error; } catch (_) {}
+      throw new Error(message);
+    }
+    return response.blob();
   },
 
   // Notes

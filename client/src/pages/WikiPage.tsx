@@ -266,6 +266,10 @@ const wikiData: WikiCategory[] = [
             heading: 'Episode erstellen',
             text: 'Aus einer ausgearbeiteten Idee kann direkt eine Episode erzeugt werden. Die Verknüpfung bleibt erhalten, damit Inhalte später im Episoden-Redaktionshub übernommen werden können.',
           },
+          {
+            heading: 'Papierkorb und Wiederherstellung',
+            text: 'Gelöschte Ideenmappen werden zunächst in den Papierkorb verschoben. Öffnen Sie den Papierkorb, wenn eine Idee versehentlich entfernt wurde, und stellen Sie sie dort wieder her. Die Ideenmappe kehrt anschließend mit ihren verknüpften redaktionellen Daten in die Arbeitsansicht zurück.',
+          },
         ],
       },
       {
@@ -341,7 +345,7 @@ const wikiData: WikiCategory[] = [
         content: [
           {
             heading: 'Interview vorbereiten',
-            text: 'Hinterlegen Sie Interview-Partner und erstellen Sie dazu passende Fragen. Diese Inhalte können später in der verknüpften Episode genutzt werden.',
+            text: 'Hinterlegen Sie Interview-Partner und erstellen Sie dazu passende Fragen. In einer Ideenmappe zeigt die Partnerauswahl nur die dieser Idee zugeordneten Gesprächspartner. Für die individuelle Vorbereitung kann pro Partner ein persönliches PDF mit Anschreiben und den zugeordneten Fragen erstellt werden.',
           },
           {
             heading: 'Notizen und Aufgaben',
@@ -365,8 +369,8 @@ const wikiData: WikiCategory[] = [
             text: 'Planen Sie redaktionelle Termine und behalten Sie Ideen sowie Veröffentlichungen im zeitlichen Zusammenhang im Blick. Verfügbare Exportfunktionen nutzen das ausgewählte Kalender-PDF-Layout.',
           },
           {
-            heading: 'Archiv',
-            text: 'Archivierte Redaktionsinhalte bleiben auffindbar, ohne die aktive Arbeitsansicht zu überladen. Stellen Sie Einträge wieder her, wenn sie erneut bearbeitet werden sollen.',
+            heading: 'Archiv und Archivmappe',
+            text: 'Archivierte Redaktionsinhalte bleiben auffindbar, ohne die aktive Arbeitsansicht zu überladen. Stellen Sie Einträge wieder her, wenn sie erneut bearbeitet werden sollen. Für archivierte Episoden steht zusätzlich eine ZIP-Archivmappe bereit; sie bündelt die Episode mit Ideenmappe, Interview-, Sponsoring-, Medien- und Workflow-Daten sowie verfügbaren Dateien.',
           },
         ],
       },
@@ -838,11 +842,24 @@ const wikiData: WikiCategory[] = [
     color: 'text-text-secondary',
     articles: [
       {
+        id: 'v2-14-8',
+        title: 'v2.14.8 · PDF-, Archiv- und Wiederherstellungsupdate',
+        summary: 'Vollständige Fragen-Pool- und Interview-PDFs, wiederherstellbare Ideenmappen, partnergenaue Fragenverwaltung und ZIP-Archivmappen für archivierte Episoden.',
+        icon: <CheckCircle size={16} />,
+        tags: ['aktuell', 'v2.14.8', 'pdf', 'archiv', 'papierkorb', 'interviews'],
+        compact: true,
+        content: [
+          {
+            text: 'Fragen-Pool-PDFs halten auch bei Seitenwechseln vollständige Fragenblöcke zusammen. Themen im allgemeinen Pool können umbenannt werden. Persönliche Interview-PDFs enthalten Anschreiben und Fragen eines Partners. Gelöschte Ideenmappen können aus dem Papierkorb wiederhergestellt werden, während deren Fragenverwaltung nur die eigenen Partner anzeigt. Der Kopf des modernen Staffelplan-PDFs trennt Logo und Titel. Archivierte Episoden lassen sich als ZIP-Archivmappe mit strukturierten Daten und verfügbaren Dateien herunterladen.',
+          },
+        ],
+      },
+      {
         id: 'v2-14-7',
         title: 'v2.14.7 · Ideenmappen-Workflow und geprüfte Hotfixes',
         summary: 'Strategische Folgen werden zuerst als Ideenmappe vorbereitet; Staffelplanung, Editor, Interviews, Sponsoring und PDF-Export wurden funktional nachgeschärft.',
         icon: <CheckCircle size={16} />,
-        tags: ['aktuell', 'v2.14.7', 'ideenmappe', 'staffelplanung', 'interviews', 'sponsoring', 'pdf'],
+        tags: ['v2.14.7', 'ideenmappe', 'staffelplanung', 'interviews', 'sponsoring', 'pdf'],
         compact: true,
         content: [
           {
@@ -981,7 +998,7 @@ export default function WikiPage() {
               PodCore Handbuch
             </h1>
             <p className="text-text-secondary mt-1">
-              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.7
+              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.8
             </p>
           </div>
           <div className="relative w-full lg:w-[28rem]">

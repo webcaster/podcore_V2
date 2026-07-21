@@ -96,7 +96,7 @@ function cleanQuestionPoolText(value: unknown, maxLength: number): string {
 router.get('/ideas', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const { status, priority, search } = req.query;
-  let query = 'SELECT * FROM ideas WHERE 1=1';
+  let query = 'SELECT * FROM ideas WHERE deleted_at IS NULL';
   const params: any[] = [];
 
   if (status) { query += ' AND status = ?'; params.push(status); }
@@ -110,6 +110,26 @@ router.get('/ideas', requirePermission('canViewIdeas') as any, (req: AuthRequest
     assignedTo: r.assigned_to, episodeId: r.episode_id,
   }));
 
+  return res.json({ success: true, data: ideas });
+});
+
+// Papierkorb: gelöschte Ideenmappen bleiben samt verknüpften Daten wiederherstellbar.
+router.get('/ideas/trash', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const ideas = db.all(
+    `SELECT * FROM ideas WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, updated_at DESC`,
+    []
+  ).map((r: any) => ({
+    ...r,
+    tags: JSON.parse(r.tags || '[]'),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    deletedAt: r.deleted_at,
+    deletedBy: r.deleted_by,
+    createdBy: r.created_by,
+    assignedTo: r.assigned_to,
+    episodeId: r.episode_id,
+  }));
   return res.json({ success: true, data: ideas });
 });
 
@@ -142,15 +162,48 @@ router.put('/ideas/:id', requirePermission('canEditIdeas') as any, (req: AuthReq
 
 router.delete('/ideas/:id', requirePermission('canDeleteIdeas') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  db.run('DELETE FROM ideas WHERE id = ?', [req.params.id]);
-  return res.json({ success: true, message: 'Idee gelöscht' });
+  const idea = db.get('SELECT id FROM ideas WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
+  if (!idea) return res.status(404).json({ success: false, error: 'Aktive Idee nicht gefunden' });
+
+  db.run(
+    `UPDATE ideas SET deleted_at = datetime('now'), deleted_by = ?, updated_at = datetime('now') WHERE id = ?`,
+    [req.user!.id, req.params.id]
+  );
+  broadcastIdeaUpdated(db, req.params.id, req, 'idea-deleted');
+  return res.json({ success: true, message: 'Idee in den Papierkorb verschoben' });
+});
+
+router.post('/ideas/:id/restore', requirePermission('canEditIdeas') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const idea = db.get('SELECT id FROM ideas WHERE id = ? AND deleted_at IS NOT NULL', [req.params.id]) as any;
+  if (!idea) return res.status(404).json({ success: false, error: 'Gelöschte Idee nicht gefunden' });
+
+  db.run(
+    `UPDATE ideas SET deleted_at = NULL, deleted_by = NULL, updated_at = datetime('now') WHERE id = ?`,
+    [req.params.id]
+  );
+  const restored = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
+  broadcastIdeaUpdated(db, req.params.id, req, 'idea-restored');
+  return res.json({
+    success: true,
+    data: {
+      ...restored,
+      tags: JSON.parse(restored.tags || '[]'),
+      createdAt: restored.created_at,
+      updatedAt: restored.updated_at,
+      createdBy: restored.created_by,
+      assignedTo: restored.assigned_to,
+      episodeId: restored.episode_id,
+    },
+    message: 'Idee wiederhergestellt',
+  });
 });
 
 // GET single idea with all sub-resources
 router.get('/ideas/:id', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const idea = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
-  if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+  const idea = db.get('SELECT * FROM ideas WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
+  if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden oder im Papierkorb' });
   const formatted = {
     ...idea,
     tags: JSON.parse(idea.tags || '[]'),
@@ -771,11 +824,24 @@ router.get('/calendar/:year/:month/export-pdf', requirePermission('canViewEditor
 
 router.get('/interviews/partners', requirePermission('canViewInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const partners = db.all('SELECT * FROM interview_partners ORDER BY name ASC', []).map((r: any) => ({
-    ...r, tags: JSON.parse(r.tags || '[]'), episodes: JSON.parse(r.episodes || '[]'),
-    status: r.status || 'offen', createdAt: r.created_at, updatedAt: r.updated_at, guestIntro: r.guest_intro,
-  }));
-  return res.json({ success: true, data: partners });
+  const requestedIdeaId = typeof req.query.ideaId === 'string' ? req.query.ideaId.trim() : '';
+  const partners = requestedIdeaId
+    ? db.all(
+        `SELECT DISTINCT partner.*
+         FROM interview_partners partner
+         LEFT JOIN idea_interview_partners link ON link.partner_id = partner.id
+         WHERE partner.idea_id = ? OR link.idea_id = ?
+         ORDER BY partner.name ASC`,
+        [requestedIdeaId, requestedIdeaId]
+      )
+    : db.all('SELECT * FROM interview_partners ORDER BY name ASC', []);
+  return res.json({
+    success: true,
+    data: partners.map((r: any) => ({
+      ...r, tags: JSON.parse(r.tags || '[]'), episodes: JSON.parse(r.episodes || '[]'),
+      status: r.status || 'offen', createdAt: r.created_at, updatedAt: r.updated_at, guestIntro: r.guest_intro,
+    })),
+  });
 });
 
 router.post('/interviews/partners', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
@@ -939,6 +1005,11 @@ router.get('/interviews/question-pool/export-pdf', requirePermission('canViewInt
     const ensureSpace = (height: number) => {
       if (doc.y + height > contentBottom()) doc.addPage();
     };
+    // Ein Fragenblock darf nie auf Grundlage des verbleibenden Platzes kleingerechnet
+    // werden. Das führte bislang dazu, dass einzelne Fragen am Seitenende nicht mehr
+    // gezeichnet wurden. Bei überlangen Texten wird der Text bewusst über mehrere
+    // Seiten fortgesetzt; bei regulären Fragen bleibt der gesamte Block zusammen.
+    const usablePageHeight = () => contentBottom() - (margin + 12);
 
     const categories = new Map<string, any[]>();
     for (const question of questions) {
@@ -982,7 +1053,14 @@ router.get('/interviews/question-pool/export-pdf', requirePermission('canViewInt
           doc.font(layout.typography.fontFamily).fontSize(layout.typography.smallSize);
           notesHeight = doc.heightOfString(notesText, { width: contentWidth - 30, lineGap: 1 }) + 8;
         }
-        ensureSpace(Math.min(questionHeight + notesHeight + 28, contentBottom() - doc.y));
+        const itemHeight = questionHeight + notesHeight + 40;
+        if (itemHeight <= usablePageHeight()) {
+          ensureSpace(itemHeight);
+        } else {
+          // Sehr lange Fragen dürfen mehrseitig umbrechen, beginnen aber nie in der
+          // Fußzeile. PDFKit führt den Rest auf der nächsten Seite inklusive Kopfzeile fort.
+          ensureSpace(44);
+        }
 
         const itemY = doc.y;
         doc.circle(margin + 10, itemY + 8, 8).fill(layout.colors.secondary);
@@ -1041,6 +1119,20 @@ router.post('/interviews/question-pool', requirePermission('canEditInterviews') 
   );
   const created = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 1', [id]) as any;
   return res.status(201).json({ success: true, data: normalizeInterviewQuestion(created), message: 'Frage zum allgemeinen Pool hinzugefügt' });
+});
+
+router.put('/interviews/question-pool/rename-topic', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const { oldTopic, newTopic } = req.body;
+  const safeOld = String(oldTopic || '').trim();
+  const safeNew = String(newTopic || '').trim();
+  if (!safeOld || !safeNew) return res.status(400).json({ success: false, error: 'Alter und neuer Themenname erforderlich' });
+
+  db.run(
+    "UPDATE interview_questions SET category = ?, updated_at = datetime('now') WHERE is_pool = 1 AND COALESCE(NULLIF(TRIM(category), ''), 'Allgemein') = ?",
+    [safeNew, safeOld === 'Allgemein' ? 'Allgemein' : safeOld]
+  );
+  return res.json({ success: true, message: 'Thema erfolgreich umbenannt' });
 });
 
 router.put('/interviews/question-pool/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
@@ -1433,6 +1525,90 @@ router.get('/interviews/partners/:partnerId/send-summary', requirePermission('ca
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(html);
+});
+
+// GET /api/editorial/interviews/partners/:partnerId/export-pdf
+// Exports a personalized PDF with a cover letter and interview questions
+router.get('/interviews/partners/:partnerId/export-pdf', requirePermission('canViewInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const partner = db.get('SELECT * FROM interview_partners WHERE id = ?', [req.params.partnerId]) as any;
+  if (!partner) return res.status(404).json({ success: false, error: 'Interview-Partner nicht gefunden' });
+
+  const customMessage = req.query.customMessage as string | undefined;
+  const episodeId = req.query.episodeId as string | undefined;
+
+  let questionsQuery = 'SELECT * FROM interview_questions WHERE partner_id = ?';
+  const qParams: any[] = [req.params.partnerId];
+  if (episodeId) { questionsQuery += ' AND episode_id = ?'; qParams.push(episodeId); }
+  questionsQuery += ' ORDER BY sort_order ASC';
+  const questions = db.all(questionsQuery, qParams) as any[];
+
+  const settingsRow = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+  const appSettings = settingsRow ? JSON.parse(settingsRow.value) : {};
+  const podcastName = appSettings?.branding?.podcastName || appSettings?.general?.podcastName || 'PodCore';
+
+  const PDFDocument = require('pdfkit');
+  const { getDefaultLayoutForType, renderPdfHeader, renderPdfFooter } = require('../pdfLayouts');
+  const layout = getDefaultLayoutForType('episode');
+  const m = layout.pageMargin;
+  const typography = layout.typography;
+  const colors = layout.colors;
+  const doc = new PDFDocument({
+    size: layout.pageSize,
+    // Der obere Rand reserviert Platz für die gemeinsame Layout-Kopfzeile.
+    margins: { top: m + 86, bottom: m + 30, left: m, right: m },
+    bufferPages: true,
+  });
+
+  const buffers: Buffer[] = [];
+  doc.on('data', buffers.push.bind(buffers));
+  doc.on('end', () => {
+    const pdfData = Buffer.concat(buffers);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Interview-Fragen-${partner.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`);
+    res.send(pdfData);
+  });
+
+  const documentTitle = `Interview-Vorbereitung: ${partner.name}`;
+  const renderHeader = () => renderPdfHeader(doc, layout, {
+    podcastName,
+    documentTitle,
+    logoPath: null,
+  });
+
+  doc.on('pageAdded', renderHeader);
+  renderHeader();
+  // renderPdfHeader setzt die aktuelle Position. Ein Mindestabstand schützt
+  // den Inhalt zusätzlich bei individuellen Layoutvarianten.
+  doc.y = Math.max(doc.y || 0, m + 86);
+
+  doc.font(typography.fontFamily).fontSize(typography.bodySize).fillColor(colors.text);
+  const greeting = customMessage || `Liebe/r ${partner.name},\n\nvielen Dank, dass Sie sich die Zeit nehmen, bei unserem Podcast als Gast dabei zu sein. Hier sind die Interview-Fragen zur Vorbereitung:`;
+  doc.text(greeting, { align: 'left', lineGap: 4 });
+  doc.moveDown(2);
+
+  doc.font(`${typography.fontFamily}-Bold`).fontSize(typography.headingSize).fillColor(colors.primary);
+  doc.text('Ihre Interview-Fragen', { align: 'left' });
+  doc.moveDown(0.5);
+
+  doc.font(typography.fontFamily).fontSize(typography.bodySize).fillColor(colors.text);
+  if (questions.length === 0) {
+    doc.font(`${typography.fontFamily}-Oblique`).text('Aktuell sind noch keine Fragen hinterlegt.');
+  } else {
+    questions.forEach((q, index) => {
+      doc.font(`${typography.fontFamily}-Bold`).text(`${index + 1}. `, { continued: true });
+      doc.font(typography.fontFamily).text(q.question, { lineGap: 4 });
+      doc.moveDown(0.5);
+    });
+  }
+
+  const pages = doc.bufferedPageRange();
+  for (let i = 0; i < pages.count; i++) {
+    doc.switchToPage(i);
+    renderPdfFooter(doc, layout, { podcastName, pageNum: i + 1 });
+  }
+
+  doc.end();
 });
 
 // POST /api/editorial/interviews/partners/:partnerId/send-email
