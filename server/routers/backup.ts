@@ -77,7 +77,7 @@ router.get('/export/full', requirePermission('canManageSettings') as any, (req: 
   const db = getDb();
 
   const exportData = {
-    version: '2.0.0',
+    version: '2.14.4',
     type: 'full',
     exportedAt: new Date().toISOString(),
     exportedBy: req.user!.username,
@@ -96,6 +96,19 @@ router.get('/export/full', requirePermission('canManageSettings') as any, (req: 
       sponsors: db.all('SELECT * FROM sponsors', []).map((s: any) => ({ ...s, tags: JSON.parse(s.tags || '[]') })),
       adSlots: db.all('SELECT * FROM ad_slots', []).map((s: any) => ({ ...s, booked_episodes: JSON.parse(s.booked_episodes || '[]') })),
       adPlacements: db.all('SELECT * FROM ad_placements', []),
+      adCategories: db.all('SELECT * FROM ad_categories', []),
+      episodeAdBookings: db.all('SELECT * FROM episode_ad_bookings', []),
+      seasons: db.all('SELECT * FROM seasons', []),
+      seasonPlanItems: db.all('SELECT * FROM season_plan_items', []),
+      seasonPlanItemPartners: db.all('SELECT * FROM season_plan_item_partners', []),
+      ideaChecklists: db.all('SELECT * FROM idea_checklists', []),
+      ideaNotes: db.all('SELECT * FROM idea_notes', []),
+      ideaUploads: db.all('SELECT * FROM idea_uploads', []),
+      ideaInterviewPartners: db.all('SELECT * FROM idea_interview_partners', []),
+      researchSources: db.all('SELECT * FROM research_sources', []),
+      users: db.all('SELECT * FROM users', []),
+      roles: db.all('SELECT * FROM roles', []),
+      podcastStats: db.all('SELECT * FROM podcast_stats', []),
     },
   };
 

@@ -851,7 +851,7 @@ router.get('/interviews/question-pool/export-pdf', requirePermission('canViewInt
     drawHeader();
 
     const contentWidth = doc.page.width - margin * 2;
-    const contentBottom = () => doc.page.height - margin - 34;
+    const contentBottom = () => doc.page.height - margin - 44;
     const ensureSpace = (height: number) => {
       if (doc.y + height > contentBottom()) doc.addPage();
     };
@@ -898,7 +898,7 @@ router.get('/interviews/question-pool/export-pdf', requirePermission('canViewInt
           doc.font(layout.typography.fontFamily).fontSize(layout.typography.smallSize);
           notesHeight = doc.heightOfString(notesText, { width: contentWidth - 30, lineGap: 1 }) + 8;
         }
-        ensureSpace(Math.min(questionHeight + notesHeight + 22, contentBottom() - doc.y));
+        ensureSpace(Math.min(questionHeight + notesHeight + 28, contentBottom() - doc.y));
 
         const itemY = doc.y;
         doc.circle(margin + 10, itemY + 8, 8).fill(layout.colors.secondary);
