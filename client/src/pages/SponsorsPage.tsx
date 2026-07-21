@@ -168,7 +168,7 @@ export default function SponsorsPage() {
         contractStart: sponsorForm.contractStart || null,
         contractEnd: sponsorForm.contractEnd || null,
       });
-      showSuccess('Sponsor erstellt');
+      showSuccess(sp.contracts?.length ? 'Sponsor und Erstvertrag erstellt' : 'Sponsor erstellt');
       setShowSponsorModal(false);
       navigate(`/sponsors/${sp.id}`);
     } catch (err: any) { showError(err.message); }
@@ -551,7 +551,7 @@ export default function SponsorsPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Vertrag von</label>
+              <label className="label">Vertrag von <span className="text-text-muted font-normal">(erstellt bei vollständiger Laufzeit automatisch als Erstvertrag)</span></label>
               <input type="date" value={sponsorForm.contractStart} onChange={e => setSponsorForm(p => ({ ...p, contractStart: e.target.value }))} className="input" />
             </div>
             <div>

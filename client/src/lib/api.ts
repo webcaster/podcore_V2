@@ -227,6 +227,8 @@ export const editorialApi = {
   createQuestion: (data: any) => api.post<any>('/editorial/interviews/questions', data),
   updateQuestion: (id: string, data: any) => api.put<any>(`/editorial/interviews/questions/${id}`, data),
   deleteQuestion: (id: string) => api.delete(`/editorial/interviews/questions/${id}`),
+  reorderQuestions: (questionIds: string[]) => api.post<any>('/editorial/interviews/questions/reorder', { questionIds }),
+  archiveQuestionToPool: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/archive-to-pool`, {}),
   approveQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/approve`, {}),
   revokeQuestion: (id: string) => api.post<any>(`/editorial/interviews/questions/${id}/revoke`, {}),
   listQuestionPool: (params?: { category?: string; search?: string }) =>
@@ -284,7 +286,7 @@ export const editorialHubApi = {
   getIdeasForEpisode: (params?: { search?: string; status?: string }) =>
     api.get<any[]>(`/editorial/ideas-for-episode${buildQs(params)}`),
   getIdeaFull: (id: string) => api.get<any>(`/editorial/ideas/${id}/full`),
-  getInterviewsForEpisode: () => api.get<any[]>('/editorial/interviews/for-episode'),
+  getInterviewsForEpisode: (params: { ideaId?: string } = {}) => api.get<any[]>(`/editorial/interviews/for-episode${buildQs(params)}`),
   getTopicWorkshop: (ideaId: string) => api.get<TopicWorkshopDraft | null>(`/editorial/ideas/${ideaId}/topic-workshop`),
   listTextBlocks: (params?: { ideaId?: string; scope?: 'all' | 'global' | 'idea'; type?: string; search?: string }) =>
     api.get<EditorialTextBlock[]>(`/editorial/text-blocks${buildQs(params)}`),

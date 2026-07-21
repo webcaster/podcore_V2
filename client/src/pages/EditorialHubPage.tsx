@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Lightbulb, Calendar, Users, FileText, Plus, Search, Trash2,
-  Edit2, Check, X, ArrowRight, Tag, Star, Clock, ChevronDown,
+  Edit2, Check, X, ArrowRight, ArrowUp, ArrowDown, Tag, Star, Clock, ChevronDown,
   Mic2, BookOpen, StickyNote, MessageSquare, Filter, Pin, PinOff, Loader2,
   Globe, BookMarked, Video, FileImage, Newspaper, ExternalLink, Link2, Save, Eye,
   ListChecks, UserPlus, Download, ListOrdered
@@ -28,6 +28,15 @@ const IDEA_PRIORITY = [
   { value: 'mittel', label: 'Mittel', color: 'text-accent-blue' },
   { value: 'hoch', label: 'Hoch', color: 'text-accent-orange' },
   { value: 'dringend', label: 'Dringend', color: 'text-accent-red' },
+];
+
+const INTERVIEW_PARTNER_STATUSES = [
+  { value: 'offen', label: 'Offen', color: 'bg-surface-overlay text-text-muted' },
+  { value: 'angefragt', label: 'Angefragt', color: 'bg-accent-orange/20 text-accent-orange' },
+  { value: 'bestaetigt', label: 'Bestätigt', color: 'bg-accent-green/20 text-accent-green' },
+  { value: 'terminiert', label: 'Terminiert', color: 'bg-accent-blue/20 text-accent-blue' },
+  { value: 'abgeschlossen', label: 'Abgeschlossen', color: 'bg-accent-purple/20 text-accent-purple' },
+  { value: 'abgesagt', label: 'Abgesagt', color: 'bg-accent-red/20 text-accent-red' },
 ];
 
 export default function EditorialHubPage() {
@@ -621,7 +630,7 @@ function InterviewsTab() {
   const [isSending, setIsSending] = useState(false);
   const [editingPartner, setEditingPartner] = useState<any>(null);
   const [editingQuestion, setEditingQuestion] = useState<any>(null);
-  const [partnerForm, setPartnerForm] = useState({ name: '', company: '', role: '', email: '', phone: '', bio: '', notes: '', guestIntro: '' });
+  const [partnerForm, setPartnerForm] = useState({ name: '', company: '', role: '', email: '', phone: '', bio: '', notes: '', guestIntro: '', status: 'offen' });
   const [questionForm, setQuestionForm] = useState({ question: '', category: '', notes: '' });
   const [sendForm, setSendForm] = useState({ subject: '', customMessage: '', episodeId: '' });
 
@@ -707,6 +716,29 @@ function InterviewsTab() {
     } catch (err: any) { showError(err.message); }
   };
 
+  const handleMoveQuestion = async (questionId: string, direction: -1 | 1) => {
+    const currentIndex = questions.findIndex(question => question.id === questionId);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= questions.length) return;
+    const reordered = [...questions];
+    [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
+    setQuestions(reordered);
+    try {
+      await editorialApi.reorderQuestions(reordered.map(question => question.id));
+      showSuccess('Fragenreihenfolge aktualisiert');
+    } catch (err: any) {
+      showError(err.message);
+      if (selectedPartner) loadQuestions(selectedPartner.id);
+    }
+  };
+
+  const handleArchiveQuestionToPool = async (question: any) => {
+    try {
+      await editorialApi.archiveQuestionToPool(question.id);
+      showSuccess('Frage in den allgemeinen Fragen-Pool übernommen');
+    } catch (err: any) { showError(err.message); }
+  };
+
   const handleOpenSummary = () => {
     if (!selectedPartner) return;
     const url = editorialApi.sendSummaryUrl(selectedPartner.id);
@@ -764,7 +796,7 @@ function InterviewsTab() {
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-text-primary">Interview-Partner</h3>
           {can('canEditInterviews') && (
-            <button onClick={() => { setEditingPartner(null); setPartnerForm({ name: '', company: '', role: '', email: '', phone: '', bio: '', notes: '', guestIntro: '' }); setShowPartnerModal(true); }} className="btn-ghost p-2"><Plus size={16} /></button>
+            <button onClick={() => { setEditingPartner(null); setPartnerForm({ name: '', company: '', role: '', email: '', phone: '', bio: '', notes: '', guestIntro: '', status: 'offen' }); setShowPartnerModal(true); }} className="btn-ghost p-2"><Plus size={16} /></button>
           )}
         </div>
 
@@ -786,10 +818,11 @@ function InterviewsTab() {
                 <div>
                   <p className="text-text-primary font-medium">{partner.name}</p>
                   {partner.company && <p className="text-text-muted text-xs">{partner.company}{partner.role ? ` · ${partner.role}` : ''}</p>}
+                  {(() => { const statusMeta = INTERVIEW_PARTNER_STATUSES.find(status => status.value === (partner.status || 'offen')) || INTERVIEW_PARTNER_STATUSES[0]; return <span className={`inline-flex mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${statusMeta.color}`}>{statusMeta.label}</span>; })()}
                 </div>
                 {can('canEditInterviews') && (
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={e => { e.stopPropagation(); setEditingPartner(partner); setPartnerForm({ name: partner.name, company: partner.company || '', role: partner.role || '', email: partner.email || '', phone: partner.phone || '', bio: partner.bio || '', notes: partner.notes || '', guestIntro: partner.guestIntro || '' }); setShowPartnerModal(true); }} className="p-1 text-text-muted hover:text-accent-blue"><Edit2 size={12} /></button>
+                    <button onClick={e => { e.stopPropagation(); setEditingPartner(partner); setPartnerForm({ name: partner.name, company: partner.company || '', role: partner.role || '', email: partner.email || '', phone: partner.phone || '', bio: partner.bio || '', notes: partner.notes || '', guestIntro: partner.guestIntro || '', status: partner.status || 'offen' }); setShowPartnerModal(true); }} className="p-1 text-text-muted hover:text-accent-blue"><Edit2 size={12} /></button>
                     <button onClick={e => { e.stopPropagation(); handleDeletePartner(partner.id); }} className="p-1 text-text-muted hover:text-accent-red"><Trash2 size={12} /></button>
                   </div>
                 )}
@@ -847,7 +880,7 @@ function InterviewsTab() {
               </div>
             ) : (
               <div className="space-y-2">
-                {questions.map((q) => (
+                {questions.map((q, index) => (
                   <div key={q.id} className={`card flex items-start gap-3 group ${q.approved ? 'border-accent-green/40 bg-accent-green/5' : ''}`}>
                     {/* Approve toggle - only for users with canApproveInterviewQuestions */}
                     {can('canApproveInterviewQuestions') ? (
@@ -868,6 +901,7 @@ function InterviewsTab() {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-accent-purple mb-1">Frage {index + 1}</p>
                       <p className="text-sm text-text-primary">{q.question}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         {q.category && <span className="badge bg-surface-overlay text-text-muted text-xs">{q.category}</span>}
@@ -879,6 +913,9 @@ function InterviewsTab() {
                     </div>
                     {can('canEditInterviews') && (
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button onClick={() => handleMoveQuestion(q.id, -1)} disabled={index === 0} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach oben"><ArrowUp size={12} /></button>
+                        <button onClick={() => handleMoveQuestion(q.id, 1)} disabled={index === questions.length - 1} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach unten"><ArrowDown size={12} /></button>
+                        <button onClick={() => handleArchiveQuestionToPool(q)} className="p-1 text-text-muted hover:text-accent-cyan" title="In allgemeinen Fragen-Pool übernehmen"><BookMarked size={12} /></button>
                         <button
                           onClick={() => {
                             setEditingQuestion(q);
@@ -925,6 +962,12 @@ function InterviewsTab() {
               <label className="label">E-Mail</label>
               <input type="email" value={partnerForm.email} onChange={e => setPartnerForm(p => ({ ...p, email: e.target.value }))} className="input" />
             </div>
+          </div>
+          <div>
+            <label className="label">Interviewstatus</label>
+            <select value={partnerForm.status} onChange={e => setPartnerForm(p => ({ ...p, status: e.target.value }))} className="input">
+              {INTERVIEW_PARTNER_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
+            </select>
           </div>
           <div>
             <label className="label">Biografie / Hintergrund</label>
@@ -1037,6 +1080,7 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
   const [editingQuestion, setEditingQuestion] = useState<any>(null);
   const [partnerId, setPartnerId] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
+  const [collapsedTopics, setCollapsedTopics] = useState<string[]>([]);
   const [form, setForm] = useState({ question: '', category: 'Allgemein', notes: '', order: 0 });
 
   const loadPool = async () => {
@@ -1068,6 +1112,12 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
     groups[key].push(question);
     return groups;
   }, {});
+
+  const toggleTopic = (topic: string) => {
+    setCollapsedTopics(current => current.includes(topic)
+      ? current.filter(item => item !== topic)
+      : [...current, topic]);
+  };
 
   const resetQuestionForm = () => {
     setEditingQuestion(null);
@@ -1222,14 +1272,18 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
         </div>
       ) : (
         <div className="space-y-5">
-          {Object.entries(groupedQuestions).map(([topic, topicQuestions]) => (
+          {Object.entries(groupedQuestions).sort(([topicA], [topicB]) => topicA.localeCompare(topicB, 'de')).map(([topic, topicQuestions]) => {
+            const isCollapsed = collapsedTopics.includes(topic);
+            return (
             <section key={topic} className="space-y-2">
-              <div className="flex items-center gap-2 px-1">
+              <button type="button" onClick={() => toggleTopic(topic)} className="w-full flex items-center gap-2 px-1 py-1 text-left rounded hover:bg-surface-raised/60 transition-colors" aria-expanded={!isCollapsed}>
+                <ChevronDown size={15} className={`text-accent-purple transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                 <Tag size={14} className="text-accent-purple" />
                 <h4 className="font-semibold text-text-primary">{topic}</h4>
                 <span className="badge bg-surface-overlay text-text-muted">{topicQuestions.length}</span>
-              </div>
-              <div className="space-y-2">
+                <span className="ml-auto text-[11px] text-text-muted">{isCollapsed ? 'Ausklappen' : 'Einklappen'}</span>
+              </button>
+              {!isCollapsed && <div className="space-y-2">
                 {topicQuestions.map(question => (
                   <div key={question.id} className={`card flex items-start gap-3 group transition-colors ${selectedIds.includes(question.id) ? 'border-accent-purple bg-accent-purple/5' : ''}`}>
                     {can('canEditInterviews') && (
@@ -1263,9 +1317,10 @@ function QuestionPoolPanel({ partners }: { partners: any[] }) {
                     )}
                   </div>
                 ))}
-              </div>
+              </div>}
             </section>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -36,6 +36,7 @@ interface PlanItem {
   status: string;
   priority: string;
   plannedDate?: string | null;
+  episodeNumber?: number | null;
   ideaId?: string | null;
   episodeId?: string | null;
   notes: string;
@@ -78,6 +79,7 @@ const emptyForm = () => ({
   status: 'kandidat',
   priority: 'mittel',
   plannedDate: '',
+  episodeNumber: '',
   lane: 'lineup' as 'lineup' | 'alternative',
   notes: '',
   partners: [] as PlanPartner[],
@@ -125,11 +127,19 @@ export default function SeasonPlanningTab({ initialSeasonId, onSeasonChange }: S
   const alternatives = useMemo(() => items.filter(item => item.lane === 'alternative').sort((a, b) => (a.position || 9999) - (b.position || 9999)), [items]);
 
   const loadSeasons = async () => {
-    const data = await request<any[]>('GET', '/seasons');
-    setSeasons(data || []);
-    const requested = initialSeasonId && data.some(item => item.id === initialSeasonId) ? initialSeasonId : '';
-    const next = requested || selectedSeasonId || data[0]?.id || '';
-    if (next && next !== selectedSeasonId) setSelectedSeasonId(next);
+    try {
+      const data = await request<any[]>('GET', '/seasons');
+      const availableSeasons = data || [];
+      setSeasons(availableSeasons);
+      const requested = initialSeasonId && availableSeasons.some(item => item.id === initialSeasonId) ? initialSeasonId : '';
+      const next = requested || selectedSeasonId || availableSeasons[0]?.id || '';
+      if (next && next !== selectedSeasonId) setSelectedSeasonId(next);
+      // Ohne strategische Staffel kann kein Plan geladen werden – die Leerseite muss trotzdem erscheinen.
+      if (!next) setLoading(false);
+    } catch (error) {
+      setLoading(false);
+      throw error;
+    }
   };
 
   const loadPlan = async (seasonId: string) => {
@@ -187,6 +197,7 @@ export default function SeasonPlanningTab({ initialSeasonId, onSeasonChange }: S
       status: item.status,
       priority: item.priority,
       plannedDate: item.plannedDate?.slice(0, 10) || '',
+      episodeNumber: item.episodeNumber == null ? '' : String(item.episodeNumber),
       lane: item.lane,
       notes: item.notes || '',
       partners: item.partners.map(partner => ({ ...partner })),
@@ -203,6 +214,7 @@ export default function SeasonPlanningTab({ initialSeasonId, onSeasonChange }: S
     status: form.status,
     priority: form.priority,
     plannedDate: form.plannedDate || null,
+    episodeNumber: form.episodeNumber === '' ? null : Number(form.episodeNumber),
     lane: form.lane,
     notes: form.notes.trim(),
     partners: form.partners.filter(partner => partner.displayName.trim()).map(partner => ({
@@ -277,11 +289,20 @@ export default function SeasonPlanningTab({ initialSeasonId, onSeasonChange }: S
       navigate(`/episodes/${item.episodeId}?from=season-plan&seasonId=${selectedSeasonId}&planItemId=${item.id}`);
       return;
     }
+    if (item.ideaId) {
+      navigate(`/editorial/ideas/${item.ideaId}?from=season-plan&seasonId=${selectedSeasonId}&planItemId=${item.id}`);
+      return;
+    }
     setContinuingId(item.id);
     try {
-      const result = await request<{ episodeId: string; ideaId: string }>('POST', `/seasons/plan-items/${item.id}/continue`, {});
-      showSuccess('Ideenmappe und Episode wurden vorbereitet');
-      navigate(`/episodes/${result.episodeId}?from=season-plan&seasonId=${selectedSeasonId}&planItemId=${item.id}`);
+      const result = await request<{ episodeId: string | null; ideaId: string; stage: 'idea' | 'episode' }>('POST', `/seasons/plan-items/${item.id}/continue`, {});
+      if (result.episodeId) {
+        showSuccess('Die zugehörige Episode wurde geöffnet');
+        navigate(`/episodes/${result.episodeId}?from=season-plan&seasonId=${selectedSeasonId}&planItemId=${item.id}`);
+      } else {
+        showSuccess('Ideenmappe angelegt. Vervollständige dort alle Folgeninformationen, bevor du die Episode erstellst.');
+        navigate(`/editorial/ideas/${result.ideaId}?from=season-plan&seasonId=${selectedSeasonId}&planItemId=${item.id}`);
+      }
     } catch (error: any) {
       showError(error.message);
     } finally {
@@ -382,6 +403,7 @@ export default function SeasonPlanningTab({ initialSeasonId, onSeasonChange }: S
           <div className="flex flex-wrap gap-2 mt-2 text-xs text-text-muted">
             <span>{item.episodeFormat}</span>
             {item.plannedDate && <span className="flex items-center gap-1"><Calendar size={11} /> {new Date(item.plannedDate).toLocaleDateString('de-DE')}</span>}
+            {item.episodeNumber != null && <span className="flex items-center gap-1"><FileText size={11} /> Folge {item.episodeNumber}</span>}
             {item.partners.length > 0 && <span className="flex items-center gap-1"><Users size={11} /> {item.partners.map(partner => partner.displayName).join(', ')}</span>}
           </div>
           {item.topics.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{item.topics.map(topic => <span key={topic} className="badge bg-accent-blue/10 text-accent-blue text-[10px]">{topic}</span>)}</div>}
@@ -405,7 +427,7 @@ export default function SeasonPlanningTab({ initialSeasonId, onSeasonChange }: S
           {can('canTransitionSeasonPlanningToEpisode') && (
             <button onClick={() => continueInEditor(item)} disabled={continuingId === item.id} className="btn-primary text-xs flex items-center gap-2">
               {continuingId === item.id ? <Loader2 size={14} className="animate-spin" /> : item.episodeId ? <ArrowRight size={14} /> : <Sparkles size={14} />}
-              {item.episodeId ? 'Episode weiterbearbeiten' : 'Im Episoden-Editor weiterarbeiten'}
+              {item.episodeId ? 'Episode weiterbearbeiten' : item.ideaId ? 'Ideenmappe weiterführen' : 'Ideenmappe anlegen'}
             </button>
           )}
         </div>
@@ -431,7 +453,7 @@ export default function SeasonPlanningTab({ initialSeasonId, onSeasonChange }: S
               <ListOrdered size={19} className="text-accent-purple" />
               <h3 className="font-semibold text-text-primary">Strategische Staffelplanung</h3>
             </div>
-            <p className="text-sm text-text-muted mt-1">Folgenreihenfolge, Themenmix, Interviewpartner und Alternativen planen – anschließend ohne Doppelpflege im Episoden-Editor weiterarbeiten.</p>
+            <p className="text-sm text-text-muted mt-1">Folgenreihenfolge, Themenmix und Interviewpartner planen. Jede Folge wird zuerst als Ideenmappe vorbereitet und anschließend daraus als Episode erstellt.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <select value={selectedSeasonId} onChange={event => setSelectedSeasonId(event.target.value)} className="input min-w-56">
@@ -498,6 +520,7 @@ export default function SeasonPlanningTab({ initialSeasonId, onSeasonChange }: S
             <div><label className="label">Status</label><select value={form.status} onChange={event => setForm(current => ({ ...current, status: event.target.value }))} className="input w-full">{STATUS_OPTIONS.map(option => <option key={option[0]} value={option[0]}>{option[1]}</option>)}</select></div>
             <div><label className="label">Priorität</label><select value={form.priority} onChange={event => setForm(current => ({ ...current, priority: event.target.value }))} className="input w-full">{PRIORITY_OPTIONS.map(option => <option key={option[0]} value={option[0]}>{option[1]}</option>)}</select></div>
             <div><label className="label">Geplanter Termin</label><input type="date" value={form.plannedDate} onChange={event => setForm(current => ({ ...current, plannedDate: event.target.value }))} className="input w-full" /></div>
+            <div><label className="label">Folgennummer <span className="text-text-muted font-normal">(optional)</span></label><input type="number" min="0" step="1" value={form.episodeNumber} onChange={event => setForm(current => ({ ...current, episodeNumber: event.target.value }))} className="input w-full" placeholder="z. B. 0" /><p className="text-[11px] text-text-muted mt-1">Ermöglicht Pilot- und Sonderfolgen ab Nummer 0.</p></div>
             <div><label className="label">Themen / Kategorien</label><input value={form.topics} onChange={event => setForm(current => ({ ...current, topics: event.target.value }))} className="input w-full" placeholder="Gesellschaft, Region, Bildung" /><p className="text-[11px] text-text-muted mt-1">Durch Kommas trennen</p></div>
             <div className="md:col-span-2"><label className="label">Schwerpunkte</label><textarea value={form.focusPoints} onChange={event => setForm(current => ({ ...current, focusPoints: event.target.value }))} className="textarea w-full" rows={4} placeholder={'Ein Schwerpunkt pro Zeile'} /></div>
             <div className="md:col-span-2"><label className="label">Planungsnotizen</label><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} className="textarea w-full" rows={3} /></div>
@@ -526,7 +549,7 @@ export default function SeasonPlanningTab({ initialSeasonId, onSeasonChange }: S
         <form onSubmit={exportPdf} className="space-y-4">
           <div className="bg-accent-purple/10 border border-accent-purple/30 rounded-lg p-3 text-sm text-text-secondary"><FileText size={16} className="inline mr-2 text-accent-purple" />Exportiert werden Staffelziel, geplante Reihenfolge, Themen, Partner, Schwerpunkte und Alternativen.</div>
           <div><label className="label">Dokumenttitel *</label><input value={documentTitle} onChange={event => setDocumentTitle(event.target.value)} className="input w-full" required maxLength={160} /></div>
-          <div><label className="label">PDF-Layout</label><PdfLayoutPicker exportType="episode" value={pdfLayoutId} onChange={setPdfLayoutId} className="w-full" /></div>
+          <div><label className="label">PDF-Layout</label><PdfLayoutPicker exportType="season_planning" value={pdfLayoutId} onChange={setPdfLayoutId} className="w-full" /></div>
           <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={() => setShowExportModal(false)} className="btn-secondary">Abbrechen</button><button type="submit" disabled={exporting || !documentTitle.trim()} className="btn-primary">{exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} PDF herunterladen</button></div>
         </form>
       </Modal>

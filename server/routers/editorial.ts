@@ -503,41 +503,105 @@ router.post('/ideas/:id/create-episode', requirePermission('canCreateEpisodes') 
   const db = getDb();
   const idea = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
   if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
+  if (idea.episode_id) return res.status(409).json({ success: false, error: 'Aus dieser Ideenmappe wurde bereits eine Episode erstellt' });
+
+  const planItem = db.get(
+    `SELECT * FROM season_plan_items WHERE idea_id = ? ORDER BY updated_at DESC LIMIT 1`,
+    [req.params.id]
+  ) as any;
 
   // Get idea notes to use as show notes
   const ideaNotes = db.all('SELECT content FROM idea_notes WHERE idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
   const notesText = ideaNotes.map((n: any) => n.content).join('\n\n');
 
-  // Get research sources
+  // Get research sources and interview content collected for the idea
   const sources = db.all('SELECT title, url, description FROM research_sources WHERE related_idea_id = ? ORDER BY created_at ASC', [req.params.id]) as any[];
   const questions = db.all('SELECT partner_id, question, category FROM interview_questions WHERE idea_id = ? ORDER BY sort_order ASC', [req.params.id]) as any[];
+  const partners = db.all(
+    `SELECT p.name FROM idea_interview_partners link
+     INNER JOIN interview_partners p ON p.id = link.partner_id
+     WHERE link.idea_id = ? ORDER BY p.name COLLATE NOCASE ASC`,
+    [req.params.id]
+  ) as any[];
   const questionsText = questions.length > 0
     ? '\n\n## Interview-Fragen\n' + questions.map((q: any) => `- ${q.question}${q.category ? ` (${q.category})` : ''}`).join('\n')
     : '';
-
   const sourcesText = sources.length > 0
     ? '\n\n## Quellen\n' + sources.map((s: any) => `- ${s.title}${s.url ? ` (${s.url})` : ''}${s.description ? `: ${s.description}` : ''}`).join('\n')
     : '';
 
-  const episodeId = uuidv4();
-  const { title, description } = req.body;
+  let episodeNumber: number | null = null;
+  if (planItem) {
+    if (planItem.episode_number != null) {
+      episodeNumber = Number(planItem.episode_number);
+      if (!Number.isInteger(episodeNumber) || episodeNumber < 0) {
+        return res.status(400).json({ success: false, error: 'Die in der Staffelplanung gespeicherte Folgennummer ist ungültig' });
+      }
+    } else {
+      const lastEpisode = db.get(
+        'SELECT MAX(number) AS max_number FROM episodes WHERE season_id = ? AND number IS NOT NULL',
+        [planItem.season_id]
+      ) as any;
+      episodeNumber = lastEpisode?.max_number == null ? 1 : Number(lastEpisode.max_number) + 1;
+    }
 
-  db.run(`INSERT INTO episodes (id, title, description, notes, status, created_by) VALUES (?, ?, ?, ?, 'entwurf', ?)`,
-    [episodeId, title || idea.title, description || idea.description || '',
-     (notesText + sourcesText + questionsText).trim() || null, req.user!.id]);
-
-  // Link idea to episode
-  db.run(`UPDATE ideas SET episode_id = ?, status = 'in_bearbeitung', updated_at = datetime('now') WHERE id = ?`, [episodeId, req.params.id]);
-
-  // Copy interview questions to episode
-  for (const q of questions) {
-    const qId = uuidv4();
-    db.run('INSERT INTO interview_questions (id, episode_id, question, category, sort_order, notes) VALUES (?, ?, ?, ?, ?, ?)',
-      [qId, episodeId, q.question, q.category || null, questions.indexOf(q), null]);
+    const duplicate = db.get(
+      'SELECT id FROM episodes WHERE season_id = ? AND number = ? LIMIT 1',
+      [planItem.season_id, episodeNumber]
+    ) as any;
+    if (duplicate) {
+      return res.status(409).json({ success: false, error: `Die Folgennummer ${episodeNumber} ist in dieser Staffel bereits vergeben. Bitte die Planposition anpassen.` });
+    }
   }
 
-  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [episodeId]) as any;
-  return res.status(201).json({ success: true, data: { ...episode, episodeId, ideaId: req.params.id } });
+  const episodeId = uuidv4();
+  const { title, description } = req.body;
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    db.run(
+      `INSERT INTO episodes
+       (id, number, season_id, season_plan_item_id, idea_id, title, description, status, publish_date, guests, tags, notes, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'entwurf', ?, ?, ?, ?, ?)`,
+      [
+        episodeId,
+        episodeNumber,
+        planItem?.season_id || null,
+        planItem?.id || null,
+        req.params.id,
+        title || idea.title,
+        description || idea.description || '',
+        planItem?.planned_date || null,
+        JSON.stringify(partners.map((partner: any) => partner.name).filter(Boolean)),
+        idea.tags || '[]',
+        (notesText + sourcesText + questionsText).trim() || null,
+        req.user!.id,
+      ]
+    );
+
+    // Link idea to episode and update the originating plan position, when present.
+    db.run(`UPDATE ideas SET episode_id = ?, status = 'in_bearbeitung', updated_at = datetime('now') WHERE id = ?`, [episodeId, req.params.id]);
+    if (planItem) {
+      db.run(
+        `UPDATE season_plan_items SET episode_id = ?, status = 'in_produktion', updated_at = datetime('now') WHERE id = ?`,
+        [episodeId, planItem.id]
+      );
+    }
+
+    // Copy interview questions to the episode while retaining their planned order.
+    questions.forEach((q: any, index: number) => {
+      db.run(
+        'INSERT INTO interview_questions (id, episode_id, question, category, sort_order, notes) VALUES (?, ?, ?, ?, ?, ?)',
+        [uuidv4(), episodeId, q.question, q.category || null, index, null]
+      );
+    });
+    db.exec('COMMIT');
+
+    const episode = db.get('SELECT * FROM episodes WHERE id = ?', [episodeId]) as any;
+    return res.status(201).json({ success: true, data: { ...episode, episodeId, ideaId: req.params.id } });
+  } catch (err: any) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    return res.status(500).json({ success: false, error: err.message || 'Episode konnte nicht aus der Ideenmappe erstellt werden' });
+  }
 });
 
 // ============================================================
@@ -709,7 +773,7 @@ router.get('/interviews/partners', requirePermission('canViewInterviews') as any
   const db = getDb();
   const partners = db.all('SELECT * FROM interview_partners ORDER BY name ASC', []).map((r: any) => ({
     ...r, tags: JSON.parse(r.tags || '[]'), episodes: JSON.parse(r.episodes || '[]'),
-    createdAt: r.created_at, updatedAt: r.updated_at, guestIntro: r.guest_intro,
+    status: r.status || 'offen', createdAt: r.created_at, updatedAt: r.updated_at, guestIntro: r.guest_intro,
   }));
   return res.json({ success: true, data: partners });
 });
@@ -717,26 +781,46 @@ router.get('/interviews/partners', requirePermission('canViewInterviews') as any
 router.post('/interviews/partners', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const id = uuidv4();
-  const { name, company, role, email, phone, bio, tags = [], episodes = [], notes } = req.body;
+  const { name, company, role, email, phone, bio, tags = [], episodes = [], notes, guestIntro, status = 'offen', ideaId } = req.body;
+  const normalizedIdeaId = typeof ideaId === 'string' && ideaId.trim() ? ideaId.trim() : null;
 
   if (!name) return res.status(400).json({ success: false, error: 'Name erforderlich' });
+  if (normalizedIdeaId && !db.get('SELECT id FROM ideas WHERE id = ?', [normalizedIdeaId])) {
+    return res.status(404).json({ success: false, error: 'Verknüpfte Ideenmappe nicht gefunden' });
+  }
 
-  db.run('INSERT INTO interview_partners (id, name, company, role, email, phone, bio, tags, episodes, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, name, company || null, role || null, email || null, phone || null, bio || null, JSON.stringify(tags), JSON.stringify(episodes), notes || null]);
+  db.run(
+    'INSERT INTO interview_partners (id, name, company, role, email, phone, bio, tags, episodes, notes, guest_intro, status, idea_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, name, company || null, role || null, email || null, phone || null, bio || null, JSON.stringify(tags), JSON.stringify(episodes), notes || null, guestIntro || null, status || 'offen', normalizedIdeaId]
+  );
+  if (normalizedIdeaId) {
+    db.run('INSERT OR IGNORE INTO idea_interview_partners (idea_id, partner_id) VALUES (?, ?)', [normalizedIdeaId, id]);
+  }
 
   const partner = db.get('SELECT * FROM interview_partners WHERE id = ?', [id]) as any;
-  return res.status(201).json({ success: true, data: { ...partner, tags: JSON.parse(partner.tags), episodes: JSON.parse(partner.episodes), createdAt: partner.created_at } });
+  return res.status(201).json({
+    success: true,
+    data: {
+      ...partner,
+      tags: JSON.parse(partner.tags),
+      episodes: JSON.parse(partner.episodes),
+      status: partner.status || 'offen',
+      ideaId: partner.idea_id,
+      guestIntro: partner.guest_intro,
+      createdAt: partner.created_at,
+    },
+  });
 });
 
 router.put('/interviews/partners/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { name, company, role, email, phone, bio, tags, episodes, notes, guestIntro } = req.body;
+  const { name, company, role, email, phone, bio, tags, episodes, notes, guestIntro, status } = req.body;
 
-  db.run(`UPDATE interview_partners SET name = COALESCE(?, name), company = ?, role = ?, email = ?, phone = ?, bio = ?, tags = COALESCE(?, tags), episodes = COALESCE(?, episodes), notes = ?, guest_intro = ?, updated_at = datetime('now') WHERE id = ?`,
-    [name ?? null, company ?? null, role ?? null, email ?? null, phone ?? null, bio ?? null, tags ? JSON.stringify(tags) : null, episodes ? JSON.stringify(episodes) : null, notes ?? null, guestIntro ?? null, req.params.id]);
+  db.run(`UPDATE interview_partners SET name = COALESCE(?, name), company = ?, role = ?, email = ?, phone = ?, bio = ?, tags = COALESCE(?, tags), episodes = COALESCE(?, episodes), notes = ?, guest_intro = ?, status = COALESCE(?, status), updated_at = datetime('now') WHERE id = ?`,
+    [name ?? null, company ?? null, role ?? null, email ?? null, phone ?? null, bio ?? null, tags ? JSON.stringify(tags) : null, episodes ? JSON.stringify(episodes) : null, notes ?? null, guestIntro ?? null, status ?? null, req.params.id]);
 
   const partner = db.get('SELECT * FROM interview_partners WHERE id = ?', [req.params.id]) as any;
-  return res.json({ success: true, data: { ...partner, tags: JSON.parse(partner.tags), episodes: JSON.parse(partner.episodes), createdAt: partner.created_at, guestIntro: partner.guest_intro } });
+  return res.json({ success: true, data: { ...partner, tags: JSON.parse(partner.tags), episodes: JSON.parse(partner.episodes), status: partner.status || 'offen', createdAt: partner.created_at, guestIntro: partner.guest_intro } });
 });
 
 router.delete('/interviews/partners/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
@@ -1162,6 +1246,35 @@ router.post('/interviews/questions/reorder', requirePermission('canEditInterview
   return res.json({ success: true, message: 'Reihenfolge aktualisiert' });
 });
 
+router.post('/interviews/questions/:id/archive-to-pool', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const source = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
+  if (!source) return res.status(404).json({ success: false, error: 'Frage nicht gefunden' });
+
+  // Eine aus dem Pool zugeordnete Frage verweist bereits auf ihre Ursprungsfrage.
+  if (source.source_question_id) {
+    const originalPoolQuestion = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 1', [source.source_question_id]) as any;
+    if (originalPoolQuestion) {
+      return res.json({ success: true, data: normalizeInterviewQuestion(originalPoolQuestion), existing: true, message: 'Die Frage ist bereits im allgemeinen Fragen-Pool vorhanden' });
+    }
+  }
+
+  const existingArchive = db.get('SELECT * FROM interview_questions WHERE is_pool = 1 AND source_question_id = ? LIMIT 1', [source.id]) as any;
+  if (existingArchive) {
+    return res.json({ success: true, data: normalizeInterviewQuestion(existingArchive), existing: true, message: 'Die Frage ist bereits im allgemeinen Fragen-Pool vorhanden' });
+  }
+
+  const nextOrder = db.get('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM interview_questions WHERE is_pool = 1') as any;
+  const poolQuestionId = uuidv4();
+  db.run(
+    `INSERT INTO interview_questions (id, partner_id, episode_id, idea_id, question, category, sort_order, notes, is_pool, source_question_id)
+     VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?, 1, ?)`,
+    [poolQuestionId, source.question, source.category || 'Allgemein', Number(nextOrder?.next_order || 0), source.notes || null, source.id]
+  );
+  const created = db.get('SELECT * FROM interview_questions WHERE id = ? AND is_pool = 1', [poolQuestionId]) as any;
+  return res.status(201).json({ success: true, data: normalizeInterviewQuestion(created), existing: false, message: 'Frage in den allgemeinen Fragen-Pool übernommen' });
+});
+
 router.delete('/interviews/questions/:id', requirePermission('canEditInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const existing = db.get('SELECT id FROM interview_questions WHERE id = ? AND is_pool = 0', [req.params.id]) as any;
@@ -1525,7 +1638,17 @@ router.get('/ideas/:id/full', requirePermission('canViewIdeas') as any, (req: Au
 // GET /editorial/interviews/for-episode - Interview-Partner für Episoden-Editor
 router.get('/interviews/for-episode', requirePermission('canViewInterviews') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const partners = db.all('SELECT * FROM interview_partners ORDER BY name ASC') as any[];
+  const ideaId = typeof req.query.ideaId === 'string' ? req.query.ideaId.trim() : '';
+  const partners = ideaId
+    ? db.all(
+      `SELECT DISTINCT p.*
+       FROM interview_partners p
+       LEFT JOIN idea_interview_partners link ON link.partner_id = p.id
+       WHERE p.idea_id = ? OR link.idea_id = ?
+       ORDER BY p.name COLLATE NOCASE ASC`,
+      [ideaId, ideaId]
+    ) as any[]
+    : db.all('SELECT * FROM interview_partners ORDER BY name COLLATE NOCASE ASC') as any[];
   const result = partners.map((p: any) => {
     const approvedQuestions = db.all(
       'SELECT * FROM interview_questions WHERE partner_id = ? AND approved = 1 ORDER BY sort_order ASC',

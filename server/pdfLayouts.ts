@@ -19,7 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
-export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report' | 'sponsor_dossier' | 'sponsor_offer' | 'question_pool';
+export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report' | 'sponsor_dossier' | 'sponsor_offer' | 'question_pool' | 'season_planning';
 
 export interface PdfLayoutColors {
   primary: string;       // Hauptfarbe (Überschriften, Akzente)
@@ -693,6 +693,38 @@ export function ensureDefaultLayouts(): void {
         JSON.stringify(layout.header), JSON.stringify(layout.footer),
         JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
         layout.pageOrientation || 'portrait',
+      ]);
+  }
+
+  // v2.14.7: Eigenes modernes Layout für die strategische Staffelplanung
+  const hasSeasonPlanning = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'season_planning' LIMIT 1");
+  if (!hasSeasonPlanning) {
+    const layout = {
+      ...DEFAULT_LAYOUT,
+      name: 'Staffelplanung Modern',
+      description: 'Übersichtliche Querformat-Vorlage für strategische Staffelplanung',
+      exportType: 'season_planning' as PdfExportType,
+      isDefault: true,
+      isSystem: false,
+      pageOrientation: 'landscape' as const,
+      header: { ...DEFAULT_LAYOUT.header, style: 'sidebar' as const },
+      colors: {
+        ...DEFAULT_LAYOUT.colors,
+        primary: '#18233f',
+        secondary: '#2563eb',
+        accent: '#0ea5a6',
+        background: '#18233f',
+      },
+    };
+    db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuidv4(), layout.name, layout.description, layout.exportType,
+        layout.isDefault ? 1 : 0, layout.isSystem ? 1 : 0,
+        JSON.stringify(layout.colors), JSON.stringify(layout.typography),
+        JSON.stringify(layout.header), JSON.stringify(layout.footer),
+        JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
+        layout.pageOrientation,
       ]);
   }
 

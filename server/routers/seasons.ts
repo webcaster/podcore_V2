@@ -72,6 +72,7 @@ function toPlanItem(db: any, row: any): any {
     status: row.status,
     priority: row.priority,
     plannedDate: row.planned_date || null,
+    episodeNumber: row.episode_number == null ? null : Number(row.episode_number),
     ideaId: row.idea_id || null,
     episodeId: row.episode_id || null,
     notes: row.notes || '',
@@ -371,13 +372,18 @@ seasonsRouter.post('/:id/plan-items', requirePermission('canEditSeasonPlanning')
     [req.params.id, lane]
   ) as any;
   const position = Number.isInteger(configuredPosition) && configuredPosition > 0 ? configuredPosition : Number(row?.next_position || 1);
+  const rawEpisodeNumber = req.body?.episodeNumber;
+  const episodeNumber = rawEpisodeNumber === undefined || rawEpisodeNumber === null || rawEpisodeNumber === '' ? null : Number(rawEpisodeNumber);
+  if (episodeNumber !== null && (!Number.isInteger(episodeNumber) || episodeNumber < 0 || episodeNumber > 999999)) {
+    return res.status(400).json({ success: false, error: 'Die Folgennummer muss eine ganze Zahl ab 0 sein' });
+  }
   const id = uuidv4();
   try {
     db.exec('BEGIN IMMEDIATE');
     db.run(
       `INSERT INTO season_plan_items
-       (id, season_id, position, lane, title, summary, topics, episode_format, focus_points, status, priority, planned_date, idea_id, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, season_id, position, lane, title, summary, topics, episode_format, focus_points, status, priority, planned_date, episode_number, idea_id, notes, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id, req.params.id, position, lane, title,
         cleanText(req.body?.summary, 6000) || null,
@@ -385,6 +391,7 @@ seasonsRouter.post('/:id/plan-items', requirePermission('canEditSeasonPlanning')
         cleanText(req.body?.episodeFormat, 120) || 'offen',
         JSON.stringify(cleanStringArray(req.body?.focusPoints, 40, 300)),
         status, priority, cleanText(req.body?.plannedDate, 30) || null,
+        episodeNumber,
         cleanText(req.body?.ideaId, 80) || null,
         cleanText(req.body?.notes, 10000) || null,
         req.user!.id,
@@ -410,12 +417,17 @@ seasonsRouter.put('/plan-items/:itemId', requirePermission('canEditSeasonPlannin
   const priority = ALLOWED_PRIORITIES.has(req.body?.priority) ? req.body.priority : current.priority;
   const configuredPosition = Number(req.body?.position);
   const position = Number.isInteger(configuredPosition) && configuredPosition > 0 ? configuredPosition : current.position;
+  const rawEpisodeNumber = req.body?.episodeNumber;
+  const episodeNumber = rawEpisodeNumber === undefined || rawEpisodeNumber === null || rawEpisodeNumber === '' ? null : Number(rawEpisodeNumber);
+  if (rawEpisodeNumber !== undefined && episodeNumber !== null && (!Number.isInteger(episodeNumber) || episodeNumber < 0 || episodeNumber > 999999)) {
+    return res.status(400).json({ success: false, error: 'Die Folgennummer muss eine ganze Zahl ab 0 sein' });
+  }
   try {
     db.exec('BEGIN IMMEDIATE');
     db.run(
       `UPDATE season_plan_items
        SET position = ?, lane = ?, title = ?, summary = ?, topics = ?, episode_format = ?,
-           focus_points = ?, status = ?, priority = ?, planned_date = ?, idea_id = ?, notes = ?, updated_at = datetime('now')
+           focus_points = ?, status = ?, priority = ?, planned_date = ?, episode_number = ?, idea_id = ?, notes = ?, updated_at = datetime('now')
        WHERE id = ?`,
       [
         position, lane, title,
@@ -425,6 +437,7 @@ seasonsRouter.put('/plan-items/:itemId', requirePermission('canEditSeasonPlannin
         req.body?.focusPoints === undefined ? current.focus_points : JSON.stringify(cleanStringArray(req.body.focusPoints, 40, 300)),
         status, priority,
         req.body?.plannedDate === undefined ? current.planned_date : cleanText(req.body.plannedDate, 30) || null,
+        req.body?.episodeNumber === undefined ? current.episode_number : episodeNumber,
         req.body?.ideaId === undefined ? current.idea_id : cleanText(req.body.ideaId, 80) || null,
         req.body?.notes === undefined ? current.notes : cleanText(req.body.notes, 10000) || null,
         req.params.itemId,
@@ -488,9 +501,10 @@ seasonsRouter.post('/plan-items/:itemId/continue', requirePermission('canTransit
   const db = getDb();
   const initial = db.get('SELECT * FROM season_plan_items WHERE id = ?', [req.params.itemId]) as any;
   if (!initial) return res.status(404).json({ success: false, error: 'Planposition nicht gefunden' });
+
   if (initial.episode_id) {
     const episode = db.get('SELECT id, idea_id FROM episodes WHERE id = ?', [initial.episode_id]) as any;
-    if (episode) return res.json({ success: true, data: { episodeId: episode.id, ideaId: episode.idea_id || initial.idea_id || null, existing: true } });
+    if (episode) return res.json({ success: true, data: { episodeId: episode.id, ideaId: episode.idea_id || initial.idea_id || null, existing: true, stage: 'episode' } });
   }
 
   try {
@@ -499,69 +513,55 @@ seasonsRouter.post('/plan-items/:itemId/continue', requirePermission('canTransit
     const season = item ? db.get('SELECT * FROM seasons WHERE id = ?', [item.season_id]) as any : null;
     if (!item || !season) throw new Error('Planposition oder Staffel nicht gefunden');
 
-    if (item.episode_id) {
-      const existing = db.get('SELECT id, idea_id FROM episodes WHERE id = ?', [item.episode_id]) as any;
-      db.exec('COMMIT');
-      return res.json({ success: true, data: { episodeId: existing?.id, ideaId: existing?.idea_id || item.idea_id || null, existing: true } });
-    }
-
     let ideaId = item.idea_id || null;
+    let createdIdea = false;
     const topics = parseJsonArray(item.topics);
     if (ideaId) {
       const existingIdea = db.get('SELECT id FROM ideas WHERE id = ?', [ideaId]) as any;
       if (!existingIdea) ideaId = null;
     }
+
+    const partners = toPlanItem(db, item).partners;
     if (!ideaId) {
       ideaId = uuidv4();
+      createdIdea = true;
       db.run(
         `INSERT INTO ideas (id, title, description, status, priority, tags, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [ideaId, item.title, item.summary || null, 'in_bearbeitung', item.priority || 'mittel', JSON.stringify(topics), req.user!.id]
       );
-      db.run('UPDATE season_plan_items SET idea_id = ?, updated_at = datetime(\'now\') WHERE id = ?', [ideaId, item.id]);
+      const planningNote = buildPlanNotes(item, partners);
+      if (planningNote) {
+        db.run(
+          'INSERT INTO idea_notes (id, idea_id, content, created_by) VALUES (?, ?, ?, ?)',
+          [uuidv4(), ideaId, planningNote, req.user!.id]
+        );
+      }
+      db.run(
+        `UPDATE season_plan_items
+         SET idea_id = ?, status = CASE WHEN status = 'kandidat' THEN 'vorgemerkt' ELSE status END, updated_at = datetime('now')
+         WHERE id = ?`,
+        [ideaId, item.id]
+      );
     }
 
-    const partners = toPlanItem(db, item).partners;
     createOrLinkPartners(db, ideaId, partners);
+    const linkedIdea = db.get('SELECT id, episode_id FROM ideas WHERE id = ?', [ideaId]) as any;
+    if (linkedIdea?.episode_id) {
+      db.run(
+        `UPDATE season_plan_items SET episode_id = ?, status = 'in_produktion', updated_at = datetime('now') WHERE id = ?`,
+        [linkedIdea.episode_id, item.id]
+      );
+      db.exec('COMMIT');
+      return res.json({ success: true, data: { episodeId: linkedIdea.episode_id, ideaId, existing: true, stage: 'episode' } });
+    }
 
-    const episodeId = uuidv4();
-    const notes = buildPlanNotes(item, partners);
-    const guestNames = partners.map((partner: any) => partner.displayName).filter(Boolean);
-    const nextNumber = db.get('SELECT COALESCE(MAX(number), 0) + 1 AS next_number FROM episodes WHERE season_id = ?', [item.season_id]) as any;
-    db.run(
-      `INSERT INTO episodes
-       (id, number, season_id, season_plan_item_id, idea_id, title, description, status, publish_date, guests, tags, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        episodeId,
-        Number(nextNumber?.next_number || 0),
-        item.season_id,
-        item.id,
-        ideaId,
-        item.title,
-        item.summary || null,
-        'entwurf',
-        item.planned_date || null,
-        JSON.stringify(guestNames),
-        JSON.stringify(topics),
-        notes || null,
-        req.user!.id,
-      ]
-    );
-    db.run(
-      `UPDATE ideas SET episode_id = ?, status = 'in_bearbeitung', updated_at = datetime('now') WHERE id = ?`,
-      [episodeId, ideaId]
-    );
-    db.run(
-      `UPDATE season_plan_items SET episode_id = ?, status = 'in_produktion', updated_at = datetime('now') WHERE id = ?`,
-      [episodeId, item.id]
-    );
     db.exec('COMMIT');
-    return res.status(201).json({ success: true, data: { episodeId, ideaId, existing: false } });
+    return res.status(createdIdea ? 201 : 200).json({ success: true, data: { episodeId: null, ideaId, existing: !createdIdea, stage: 'idea' } });
   } catch (err: any) {
     try { db.exec('ROLLBACK'); } catch (_) {}
-    console.error('Fehler beim Überführen der Planposition in den Episoden-Editor:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Die Planposition konnte nicht vorbereitet werden' });
+    console.error('Fehler beim Vorbereiten der Ideenmappe aus der Staffelplanung:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Die Ideenmappe konnte nicht vorbereitet werden' });
   }
 });
 
@@ -574,7 +574,7 @@ seasonsRouter.post('/:id/plan-items/pdf', requirePermission('canExportSeasonPlan
 
   try {
     const requestedLayoutId = cleanText(req.body?.layoutId, 80);
-    const layout = requestedLayoutId ? getLayoutById(requestedLayoutId) : getDefaultLayoutForType('episode');
+    const layout = requestedLayoutId ? getLayoutById(requestedLayoutId) : getDefaultLayoutForType('season_planning');
     if (!layout) return res.status(400).json({ success: false, error: 'PDF-Layout nicht gefunden' });
     const documentTitle = cleanText(req.body?.documentTitle, 200) || `Strategische Staffelplanung – Staffel ${season.number}`;
     const selectedItems = cleanStringArray(req.body?.selectedItems, 500, 80);
@@ -605,23 +605,61 @@ seasonsRouter.post('/:id/plan-items/pdf', requirePermission('canExportSeasonPlan
     res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
     doc.pipe(res);
 
+    const contentWidth = doc.page.width - margin * 2;
+    const fontFamily = layout.typography.fontFamily || 'Helvetica';
+    const bodySize = layout.typography.bodySize || 10;
+    const headingSize = layout.typography.headingSize || 11;
+    const titleColor = layout.colors.primary || '#18233f';
+    const accentColor = layout.colors.accent || '#0ea5a6';
+    const secondaryColor = layout.colors.secondary || '#2563eb';
+    const textColor = layout.colors.text || '#172033';
+    const mutedColor = layout.colors.muted || '#64748b';
+    const cardFill = '#f7fafc';
+    const cardBorder = '#dbe5ef';
+    const displayValue = (value: unknown) => String(value || '–')
+      .replace(/_/g, ' ')
+      .replace(/\b\p{L}/gu, char => char.toLocaleUpperCase('de-DE'));
+
     const renderHeader = () => {
       renderPdfHeader(doc, layout, { podcastName, documentTitle, logoPath });
       renderWatermark(doc, layout);
     };
-    renderHeader();
-    doc.font(layout.typography.fontFamily || 'Helvetica');
-    doc.fillColor(layout.colors.text);
-    doc.fontSize(layout.typography.titleSize || 18).text(documentTitle, { align: 'center' });
-    doc.moveDown(0.6);
-    doc.fontSize(layout.typography.smallSize || 8).fillColor(layout.colors.muted)
-      .text(`Staffel ${season.number}: ${season.title} · ${items.filter(item => item.lane === 'lineup').length} geplante Folge(n) · ${items.filter(item => item.lane === 'alternative').length} Alternative(n)`, { align: 'center' });
-    doc.moveDown(0.8);
+    const renderSeasonSummary = () => {
+      const cardY = doc.y;
+      const plannedCount = items.filter(item => item.lane === 'lineup').length;
+      const alternativeCount = items.filter(item => item.lane === 'alternative').length;
+      doc.save();
+      doc.roundedRect(margin, cardY, contentWidth, 46, 8).fillColor('#f1f5f9').fill();
+      doc.roundedRect(margin, cardY, 5, 46, 3).fillColor(accentColor).fill();
+      doc.font(`${fontFamily}-Bold`).fontSize(layout.typography.smallSize || 8).fillColor(secondaryColor)
+        .text('STAFFEL-ÜBERSICHT', margin + 17, cardY + 9);
+      doc.font(fontFamily).fontSize(layout.typography.smallSize || 8).fillColor(mutedColor)
+        .text(`Staffel ${season.number}: ${season.title}`, margin + 17, cardY + 23, { width: contentWidth - 34 });
+      doc.font(`${fontFamily}-Bold`).fontSize(10).fillColor(titleColor)
+        .text(`${plannedCount} geplant`, margin + contentWidth - 185, cardY + 12, { width: 70, align: 'right' })
+        .text(`${alternativeCount} alternativ`, margin + contentWidth - 100, cardY + 12, { width: 86, align: 'right' });
+      doc.restore();
+      doc.y = cardY + 58;
+    };
+    const renderLaneHeading = (label: string) => {
+      const headingY = doc.y;
+      doc.font(`${fontFamily}-Bold`).fontSize(headingSize).fillColor(titleColor).text(label, margin, headingY, { width: contentWidth });
+      doc.moveTo(margin, headingY + 18).lineTo(margin + contentWidth, headingY + 18).strokeColor(accentColor).lineWidth(1).stroke();
+      doc.y = headingY + 29;
+    };
 
+    renderHeader();
+    renderSeasonSummary();
     if (season.planning_notes) {
-      renderSectionHeading(doc, layout, 'Staffelziel und Planungshinweise');
-      doc.fontSize(layout.typography.bodySize || 10).fillColor(layout.colors.text).text(season.planning_notes);
-      doc.moveDown(0.6);
+      const noteHeight = Math.max(54, doc.heightOfString(season.planning_notes, { width: contentWidth - 32 }) + 32);
+      const noteY = doc.y;
+      doc.roundedRect(margin, noteY, contentWidth, noteHeight, 8).fillColor('#ffffff').fill();
+      doc.roundedRect(margin, noteY, contentWidth, noteHeight, 8).strokeColor(cardBorder).lineWidth(0.7).stroke();
+      doc.font(`${fontFamily}-Bold`).fontSize(layout.typography.smallSize || 8).fillColor(secondaryColor)
+        .text('STAFFELZIEL & LEITGEDANKEN', margin + 16, noteY + 11);
+      doc.font(fontFamily).fontSize(bodySize).fillColor(textColor)
+        .text(season.planning_notes, margin + 16, noteY + 25, { width: contentWidth - 32 });
+      doc.y = noteY + noteHeight + 14;
     }
 
     let activeLane = '';
@@ -633,28 +671,36 @@ seasonsRouter.post('/:id/plan-items/pdf', requirePermission('canExportSeasonPlan
       }
     };
     for (const item of items) {
-      const laneLabel = item.lane === 'lineup' ? 'Geplante Reihenfolge' : 'Alternativen';
-      if (laneLabel !== activeLane) {
-        ensureSpace(54);
-        renderSectionHeading(doc, layout, laneLabel);
-        activeLane = laneLabel;
-      }
+      const laneLabel = item.lane === 'lineup' ? 'Geplante Reihenfolge' : 'Alternativen und Überhang';
+      const headline = `${item.lane === 'lineup' ? `${item.position || '–'}.` : 'Alternative'}${item.episodeNumber != null ? `  ·  Folge ${item.episodeNumber}` : ''}  ${item.title}`;
       const detailLines = [
-        `Status: ${item.status} · Priorität: ${item.priority} · Format: ${item.episodeFormat}`,
+        `Status: ${displayValue(item.status)}  ·  Priorität: ${displayValue(item.priority)}  ·  Format: ${displayValue(item.episodeFormat)}`,
         item.plannedDate ? `Geplant: ${item.plannedDate}` : '',
         item.summary ? `Zusammenfassung: ${item.summary}` : '',
         item.topics.length ? `Themen: ${item.topics.join(', ')}` : '',
         item.focusPoints.length ? `Schwerpunkte: ${item.focusPoints.join(', ')}` : '',
-        item.partners.length ? `Partner: ${item.partners.map((partner: any) => `${partner.displayName}${partner.roleLabel ? ` (${partner.roleLabel})` : ''}`).join(', ')}` : '',
+        item.partners.length ? `Interview-Partner: ${item.partners.map((partner: any) => `${partner.displayName}${partner.roleLabel ? ` (${partner.roleLabel})` : ''}`).join(', ')}` : '',
         item.notes ? `Notizen: ${item.notes}` : '',
       ].filter(Boolean).join('\n');
-      doc.fontSize(layout.typography.headingSize || 11);
-      const estimated = 28 + doc.heightOfString(detailLines || ' ', { width: doc.page.width - margin * 2 });
-      ensureSpace(Math.min(estimated, 280));
-      doc.fontSize(layout.typography.headingSize || 11).fillColor(layout.colors.secondary)
-        .text(`${item.lane === 'lineup' ? `${item.position || '–'}.` : 'Alternative:'} ${item.title}`);
-      doc.fontSize(layout.typography.bodySize || 10).fillColor(layout.colors.text).text(detailLines);
-      doc.moveDown(0.65);
+      const titleHeight = doc.font(`${fontFamily}-Bold`).fontSize(headingSize + 1).heightOfString(headline, { width: contentWidth - 42 });
+      const bodyHeight = doc.font(fontFamily).fontSize(bodySize).heightOfString(detailLines || ' ', { width: contentWidth - 42 });
+      const cardHeight = Math.max(78, 31 + titleHeight + bodyHeight + 13);
+      const laneHeight = laneLabel !== activeLane ? 35 : 0;
+      ensureSpace(cardHeight + laneHeight + 9);
+      if (laneLabel !== activeLane) {
+        renderLaneHeading(laneLabel);
+        activeLane = laneLabel;
+      }
+
+      const cardY = doc.y;
+      doc.roundedRect(margin, cardY, contentWidth, cardHeight, 8).fillColor(cardFill).fill();
+      doc.roundedRect(margin, cardY, contentWidth, cardHeight, 8).strokeColor(cardBorder).lineWidth(0.7).stroke();
+      doc.roundedRect(margin, cardY, 5, cardHeight, 3).fillColor(item.lane === 'lineup' ? secondaryColor : accentColor).fill();
+      doc.font(`${fontFamily}-Bold`).fontSize(headingSize + 1).fillColor(titleColor)
+        .text(headline, margin + 18, cardY + 12, { width: contentWidth - 36 });
+      doc.font(fontFamily).fontSize(bodySize).fillColor(textColor)
+        .text(detailLines, margin + 18, cardY + 14 + titleHeight, { width: contentWidth - 36 });
+      doc.y = cardY + cardHeight + 11;
     }
 
     const range = doc.bufferedPageRange();

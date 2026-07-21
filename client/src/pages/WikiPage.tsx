@@ -838,11 +838,24 @@ const wikiData: WikiCategory[] = [
     color: 'text-text-secondary',
     articles: [
       {
+        id: 'v2-14-7',
+        title: 'v2.14.7 · Ideenmappen-Workflow und geprüfte Hotfixes',
+        summary: 'Strategische Folgen werden zuerst als Ideenmappe vorbereitet; Staffelplanung, Editor, Interviews, Sponsoring und PDF-Export wurden funktional nachgeschärft.',
+        icon: <CheckCircle size={16} />,
+        tags: ['aktuell', 'v2.14.7', 'ideenmappe', 'staffelplanung', 'interviews', 'sponsoring', 'pdf'],
+        compact: true,
+        content: [
+          {
+            text: 'Eine Planposition der strategischen Staffelplanung erzeugt jetzt zuerst eine Ideenmappe als redaktionelle Sammelstelle. Erst aus dieser Ideenmappe wird die Episode erstellt. Folgennummern sind frei wählbar und erlauben auch Folge 0. Der Staffelplan exportiert mit dem Layout „Staffelplanung Modern“ als Übersicht mit klaren Informationskarten. Im Episoden-Editor sind Medien-Upload, Kommentare & Feedback sowie Versionsverlauf übersichtlich einklappbar; verknüpfte Interview-Partner werden im Ideenmappen-Kontext gefiltert. Partnerfragen lassen sich sortieren und in den allgemeinen Fragen-Pool übernehmen. Ein Sponsor mit vollständiger Vertragslaufzeit erhält automatisch einen verwaltbaren Erstvertrag.',
+          },
+        ],
+      },
+      {
         id: 'v2-14-4',
         title: 'v2.14.4 · Strategische Staffelplanung',
         summary: 'Neue strategische Planungsebene pro Staffel mit PDF-Export, atomarem Übergang in den Episoden-Editor und granularen Rollenrechten.',
         icon: <CheckCircle size={16} />,
-        tags: ['aktuell', 'v2.14.4', 'staffelplanung', 'pdf', 'rollen'],
+        tags: ['v2.14.4', 'staffelplanung', 'pdf', 'rollen'],
         compact: true,
         content: [
           {
@@ -968,7 +981,7 @@ export default function WikiPage() {
               PodCore Handbuch
             </h1>
             <p className="text-text-secondary mt-1">
-              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.4
+              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.7
             </p>
           </div>
           <div className="relative w-full lg:w-[28rem]">

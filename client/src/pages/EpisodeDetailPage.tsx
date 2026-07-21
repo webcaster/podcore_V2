@@ -160,7 +160,7 @@ export default function EpisodeDetailPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [workflowUpdatedAt, setWorkflowUpdatedAt] = useState<string | undefined>();
-  const [activeTab, setActiveTab] = useState<'script' | 'shownotes' | 'meta' | 'production' | 'technical' | 'ads' | 'hub' | 'preview' | 'feedback' | 'history'>('script');
+  const [activeTab, setActiveTab] = useState<'script' | 'shownotes' | 'meta' | 'production' | 'technical' | 'ads' | 'hub' | 'preview'>('script');
   const [expandedSideMenus, setExpandedSideMenus] = useState<{ [key: string]: boolean }>({ feedback: false, history: false });
   const [expandedMediaSections, setExpandedMediaSections] = useState<{ [key: string]: boolean }>({ media: false, audio: false });
 
@@ -297,7 +297,7 @@ export default function EpisodeDetailPage() {
     try {
       const [ideas, interviews, topicDraft, textBlocks] = await Promise.all([
         editorialHubApi.getIdeasForEpisode({ search: hubSearch || undefined, status: hubStatusFilter || undefined }),
-        editorialHubApi.getInterviewsForEpisode(),
+        editorialHubApi.getInterviewsForEpisode({ ideaId: linkedIdeaId || undefined }),
         linkedIdeaId ? editorialHubApi.getTopicWorkshop(linkedIdeaId) : Promise.resolve(null),
         editorialHubApi.listTextBlocks({
           ideaId: linkedIdeaId || undefined,
@@ -511,7 +511,7 @@ export default function EpisodeDetailPage() {
   const handleCreateInterviewPartner = async () => {
     if (!newInterviewForm.name.trim()) return;
     try {
-      await editorialApi.createPartner({ ...newInterviewForm });
+      await editorialApi.createPartner({ ...newInterviewForm, ideaId: linkedIdeaId || undefined });
       setShowNewInterviewModal(false);
       setNewInterviewForm({ name: '', company: '', role: '', email: '', bio: '', guestIntro: '' });
       loadHubData();
@@ -1133,8 +1133,6 @@ export default function EpisodeDetailPage() {
           { key: 'ads', label: 'Werbung', icon: <Megaphone size={16} /> },
           { key: 'preview', label: 'Vorschau', icon: <Eye size={16} /> },
           { key: 'hub', label: 'Redaktionshub', icon: <BookOpen size={16} /> },
-          { key: 'feedback', label: 'Feedback & Kommentare', icon: <MessageCircle size={16} /> },
-          { key: 'history', label: 'Versionsverlauf', icon: <History size={16} /> },
         ].map(tab => (
           <button
             key={tab.key}
@@ -2031,12 +2029,12 @@ export default function EpisodeDetailPage() {
               {/* Interview-Partner */}
               <div className="card">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-semibold text-text-primary flex items-center gap-2"><UserCheck size={16} /> Interview-Partner</h2>
+                  <div><h2 className="font-semibold text-text-primary flex items-center gap-2"><UserCheck size={16} /> Interview-Partner</h2>{linkedIdeaId && <p className="text-xs text-text-muted mt-1">Es werden ausschließlich Partner der verknüpften Ideenmappe angezeigt.</p>}</div>
                   <button onClick={() => setShowNewInterviewModal(true)} className="btn-primary text-xs py-1.5"><Plus size={14} /> Neu erstellen</button>
                 </div>
                 {hubInterviews.length === 0 ? (
                   <div className="text-center py-6">
-                    <p className="text-text-muted text-sm mb-3">Keine Interview-Partner vorhanden.</p>
+                    <p className="text-text-muted text-sm mb-3">{linkedIdeaId ? 'Für die verknüpfte Ideenmappe sind noch keine Interview-Partner hinterlegt.' : 'Keine Interview-Partner vorhanden.'}</p>
                     <button onClick={() => setShowNewInterviewModal(true)} className="btn-primary text-xs"><Plus size={14} /> Ersten Partner erstellen</button>
                   </div>
                 ) : (
@@ -2073,32 +2071,66 @@ export default function EpisodeDetailPage() {
         {/* Right: Sidebar / Split-View */}
         {activeTab !== 'preview' && (
         <div className="space-y-4">
-          {id && <CommentThread episodeId={id} fieldKey={activeTab === 'meta' ? 'title' : activeTab === 'script' ? 'blocks' : activeTab === 'ads' ? 'sponsors' : 'general'} fieldOptions={[
-            { value: 'general', label: 'Allgemein' },
-            { value: 'title', label: 'Titel' },
-            { value: 'subtitle', label: 'Untertitel' },
-            { value: 'description', label: 'Beschreibung' },
-            { value: 'status', label: 'Status' },
-            { value: 'blocks', label: 'Script & Ablauf' },
-            { value: 'sponsors', label: 'Sponsoring' },
-            { value: 'media', label: 'Medien' },
-          ]} />}
-          {id && <ChangeHistory episodeId={id} onRollback={restored => {
-            setEpisode((current: any) => ({ ...current, ...restored }));
-            setForm((current: any) => ({
-              ...current,
-              title: restored.title ?? current.title,
-              subtitle: restored.subtitle ?? current.subtitle,
-              description: restored.description ?? current.description,
-              status: restored.status ?? current.status,
-              publishDate: restored.publishDate ?? current.publishDate,
-              category: restored.category ?? current.category,
-              tags: Array.isArray(restored.tags) ? restored.tags.join(', ') : current.tags,
-              hosts: Array.isArray(restored.hosts) ? restored.hosts.join(', ') : current.hosts,
-              guests: Array.isArray(restored.guests) ? restored.guests.join(', ') : current.guests,
-            }));
-            if (Array.isArray(restored.blocks)) setBlocks(restored.blocks);
-          }} />}
+          {id && (
+            <section className="card p-0 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setExpandedSideMenus(current => ({ ...current, feedback: !current.feedback }))}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-raised transition-colors"
+                aria-expanded={Boolean(expandedSideMenus.feedback)}
+              >
+                <span className="flex items-center gap-2 font-semibold text-text-primary"><MessageCircle size={16} className="text-accent-purple" /> Kommentare & Feedback</span>
+                {expandedSideMenus.feedback ? <ChevronUp size={16} className="text-text-muted" /> : <ChevronDown size={16} className="text-text-muted" />}
+              </button>
+              {expandedSideMenus.feedback && (
+                <div className="border-t border-border-subtle p-3">
+                  <CommentThread episodeId={id} fieldKey={activeTab === 'meta' ? 'title' : activeTab === 'script' ? 'blocks' : activeTab === 'ads' ? 'sponsors' : 'general'} fieldOptions={[
+                    { value: 'general', label: 'Allgemein' },
+                    { value: 'title', label: 'Titel' },
+                    { value: 'subtitle', label: 'Untertitel' },
+                    { value: 'description', label: 'Beschreibung' },
+                    { value: 'status', label: 'Status' },
+                    { value: 'blocks', label: 'Script & Ablauf' },
+                    { value: 'sponsors', label: 'Sponsoring' },
+                    { value: 'media', label: 'Medien' },
+                  ]} />
+                </div>
+              )}
+            </section>
+          )}
+          {id && (
+            <section className="card p-0 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setExpandedSideMenus(current => ({ ...current, history: !current.history }))}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-raised transition-colors"
+                aria-expanded={Boolean(expandedSideMenus.history)}
+              >
+                <span className="flex items-center gap-2 font-semibold text-text-primary"><History size={16} className="text-accent-blue" /> Versionsverlauf</span>
+                {expandedSideMenus.history ? <ChevronUp size={16} className="text-text-muted" /> : <ChevronDown size={16} className="text-text-muted" />}
+              </button>
+              {expandedSideMenus.history && (
+                <div className="border-t border-border-subtle p-3">
+                  <ChangeHistory episodeId={id} onRollback={restored => {
+                    setEpisode((current: any) => ({ ...current, ...restored }));
+                    setForm((current: any) => ({
+                      ...current,
+                      title: restored.title ?? current.title,
+                      subtitle: restored.subtitle ?? current.subtitle,
+                      description: restored.description ?? current.description,
+                      status: restored.status ?? current.status,
+                      publishDate: restored.publishDate ?? current.publishDate,
+                      category: restored.category ?? current.category,
+                      tags: Array.isArray(restored.tags) ? restored.tags.join(', ') : current.tags,
+                      hosts: Array.isArray(restored.hosts) ? restored.hosts.join(', ') : current.hosts,
+                      guests: Array.isArray(restored.guests) ? restored.guests.join(', ') : current.guests,
+                    }));
+                    if (Array.isArray(restored.blocks)) setBlocks(restored.blocks);
+                  }} />
+                </div>
+              )}
+            </section>
+          )}
 
           <div className="card">
             <h3 className="font-semibold text-text-primary mb-3">Zusammenfassung</h3>

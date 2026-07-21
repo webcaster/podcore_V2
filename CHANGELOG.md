@@ -1,5 +1,26 @@
 # PodCore – Release Notes
 
+## v2.14.7 – Verifizierter Ideenmappen-Workflow, Redaktions- und Sponsoring-Optimierungen
+
+Version **2.14.7** konsolidiert die angeforderten Hotfixes und erweitert den strategischen Produktionsablauf verbindlich: Aus einer strategischen Planposition wird zuerst eine Ideenmappe als redaktionelle Sammelstelle erzeugt. Eine Episode entsteht erst anschließend aus dieser vorbereiteten Ideenmappe. Der Release enthält zudem eine geprüfte Verbesserung der Staffelplan-PDF, des Episoden-Editors, der Interview-Verwaltung und der Sponsor-Verträge.
+
+| Bereich | Änderung |
+|---|---|
+| Strategische Staffelplanung | Planpositionen führen jetzt zuerst in eine Ideenmappe; erst aus dieser Ideenmappe wird eine Episode erzeugt. Der Übergang bleibt gegen Doppelanlage abgesichert und übernimmt die Staffelverknüpfung. |
+| Flexible Folgennummer | Die Folgennummer ist optional und akzeptiert ausdrücklich **0** für Pilot-, Trailer- oder Sonderfolgen. Sie ist von der Planposition getrennt und wird bis in die erzeugte Episode übernommen. |
+| Ideenmappe als Produktionsgrundlage | Staffelziel, Titel, Zusammenfassung, Themen, Schwerpunkte, Termin, Notizen und zugeordnete Interview-Partner werden in der Ideenmappe als Ausgangspunkt der weiteren Folgenarbeit gesammelt. |
+| Staffelplan-PDF | Der neue Exporttyp **„Staffelplanung Modern“** ist in Layoutverwaltung und Exportdialog verfügbar. Das Querformat-PDF enthält eine kompakte Staffel-Übersicht und klar abgegrenzte Informationskarten; Dokumenttitel bleiben individuell anpassbar. |
+| Episoden-Editor | Medien-Upload startet eingeklappt. Kommentare & Feedback sowie Versionsverlauf sind als einklappbare Seitenbereiche umgesetzt. Verknüpfte Ideenmappen werden sichtbar ausgewiesen. |
+| Interview-Partner im Editor | Partner werden im Ideenmappen-Kontext gefiltert. Neue Partner aus dem Editor werden zuverlässig mit der verknüpften Ideenmappe gespeichert und erscheinen anschließend direkt in der gefilterten Auswahl. |
+| Interview-Verwaltung | Partnerstatus ist sichtbar und bearbeitbar. Partnerfragen lassen sich sortieren sowie einzeln in den allgemeinen Fragen-Pool übernehmen. Themenbereiche im Pool sind einklappbar. |
+| Sponsoring | Bei einer Sponsor-Neuanlage mit vollständig angegebener Laufzeit wird automatisch ein **Erstvertrag** erzeugt und in der bestehenden Vertragsverwaltung angezeigt. |
+| Vollständigkeit | Fragen-Pool-PDF, Backup-Erweiterung und Firmenanzeige in der Sponsorenübersicht aus den vorherigen Hotfixes bleiben Bestandteil des geprüften Standes. |
+| Qualitätssicherung | Produktions-Build, Login, Ideenmappe-zuerst-Ablauf, Folge 0, Folgenerstellung, Editor-Integration, Partnerzuordnung, Status, Fragen-Archivierung, Themenansicht, Erstvertrag und Staffelplan-PDF wurden lokal funktional geprüft. |
+
+### Aktualisierung
+
+Ab einer bestehenden Installation von PodCore **2.14.3 oder neuer** kann das Release-ZIP über **Einstellungen → App-Update** verifiziert eingespielt werden. Erstellen Sie vorher ein Vollbackup des persistenten Datenverzeichnisses. Die Datenbankergänzungen für Folgennummern und Interviewstatus werden beim ersten Serverstart automatisch und idempotent ausgeführt. Eine vollständige Installations-, Bedien-, Prüf- und Rückfallanleitung befindet sich unter [`docs/UPDATE-2.14.7.md`](docs/UPDATE-2.14.7.md).
+
 ## v2.14.4 – Strategische Staffelplanung, Editorübergang und Rollenrechte
 
 Version **2.14.4** führt eine strategische Planungsebene für ganze Podcast-Staffeln ein. Redaktionsteams können Reihenfolge, Alternativen, Themen, Formate, Schwerpunkte und Partner vor der operativen Produktion festlegen. Bestätigte Planpositionen werden ohne doppelte Datenerfassung in eine Ideenmappe und anschließend in den Episoden-Editor überführt. Der neue Ablauf ist berechtigt, idempotent, PDF-exportierbar und über Rücknavigation mit der strategischen Quelle verbunden.

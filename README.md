@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.14.4**
+**Aktuelle Version: 2.14.7**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -21,8 +21,9 @@
 - Freie Texte als eigenständiger Recherchetyp ohne erforderliche URL
 - Vollständiger Themenwerkstatt-Abschnitt im Ideenmappen-PDF mit allen befüllten Entwurfsfeldern
 - Strategische Staffelplanung mit Reihenfolge, Alternativen, Themen, Formaten, Partnern, Rollen, Status und Staffelziel
-- Direkter Übergang bestätigter Planpositionen in Ideenmappe und Episoden-Editor ohne doppelte Datenpflege
-- Staffelplan-PDF mit vorhandenem CI-Layout, Dokumenttitel, Reihenfolge und Alternativen
+- Verbindlicher strategischer Ablauf: Aus einer Planposition wird zuerst eine vollständige Ideenmappe angelegt; erst aus dieser Ideenmappe wird eine Episode erstellt
+- Flexible Folgennummerierung in der Staffelplanung, einschließlich Pilot- oder Sonderfolge **0**
+- Staffelplan-PDF mit eigenem Layouttyp **„Staffelplanung Modern“**, individuellem Dokumenttitel, Staffelübersicht, Reihenfolge, Alternativen und Informationskarten
 
 ### 🎙️ Episoden-Editor
 - Rich-Text-Editor für Show-Notes und Skripte
@@ -32,6 +33,8 @@
 - Integrierte Medien-Bibliothek für Audio-Assets
 - **PDF-Export**: Professionelle Tabellen-Skripte für die Aufnahme
 - Verknüpfte Staffelplan-Episoden mit Herkunftshinweis und Rücksprung zur strategischen Planung
+- Standardmäßig eingeklappter Medien-Upload sowie einklappbare Bereiche für Kommentare & Feedback und Versionsverlauf
+- Sichtbarer Hinweis auf die verknüpfte Ideenmappe und auf diese Ideenmappe gefilterte Interview-Partner
 
 ### 💰 Sponsoren & Monetarisierung (v2)
 - CRM für Sponsoren und Werbepartner
@@ -40,6 +43,7 @@
 - Automatische Generierung von PDF-Angeboten mit den individuellen Optionsnamen im Corporate Design
 - Optionaler Sponsor-Logo-Upload mit Anzeige in Übersicht und Detailseite
 - Sponsor-Adresse und Kontaktperson als getrennte Stammdaten
+- Automatische Anlage eines verwaltbaren Erstvertrags bei vollständiger Vertragslaufzeit einer Sponsor-Neuanlage
 - Buchungs-Verwaltung mit vollständiger Speicherung von Slot, Laufzeit, Folgen, Preisen, Rabatt und Status sowie Konflikt-Prüfung im Kalender
 - Automatische Abrechnung mit Preisanpassungen und variabler Hörerbeteiligung
 - Vollständige Preislisten-PDFs mit Beschreibung, Präsentationstext, allen Preismodellen, Währung, Farbe, Exklusivität und Status

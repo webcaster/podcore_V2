@@ -1423,12 +1423,42 @@ router.post('/', requirePermission('canCreateSponsors') as any, (req: AuthReques
   const { name, company, address, contactName, contactEmail, contactPhone, website, logo, status = 'interessent', description, notes, tags = [], totalBudget, currency = 'EUR', customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
 
   if (!name || !company) return res.status(400).json({ success: false, error: 'Name und Firma erforderlich' });
+  if ((contractStart && !contractEnd) || (!contractStart && contractEnd)) {
+    return res.status(400).json({ success: false, error: 'Für einen Vertrag müssen Beginn und Ende gemeinsam angegeben werden' });
+  }
+  if (contractStart && contractEnd && String(contractEnd) < String(contractStart)) {
+    return res.status(400).json({ success: false, error: 'Das Vertragsende darf nicht vor dem Vertragsbeginn liegen' });
+  }
 
-  db.run('INSERT INTO sponsors (id, name, company, address, contact_name, contact_email, contact_phone, website, logo, status, description, notes, tags, total_budget, currency, customer_number, contract_start, contract_end, contact_hint, ad_delivery, color, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, name, company, address || null, contactName || null, contactEmail || null, contactPhone || null, website || null, logo || null, status, description || null, notes || null, JSON.stringify(tags), totalBudget || null, currency, customerNumber || null, contractStart || null, contractEnd || null, contactHint || null, adDelivery || 'self', color || null, req.user!.id]);
+  let initialContract: any = null;
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    db.run('INSERT INTO sponsors (id, name, company, address, contact_name, contact_email, contact_phone, website, logo, status, description, notes, tags, total_budget, currency, customer_number, contract_start, contract_end, contact_hint, ad_delivery, color, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, name, company, address || null, contactName || null, contactEmail || null, contactPhone || null, website || null, logo || null, status, description || null, notes || null, JSON.stringify(tags), totalBudget || null, currency, customerNumber || null, contractStart || null, contractEnd || null, contactHint || null, adDelivery || 'self', color || null, req.user!.id]);
+
+    if (contractStart && contractEnd) {
+      const contractId = uuidv4();
+      const contractNotes = 'Erstvertrag – bei Anlage des Sponsors automatisch aus der Vertragslaufzeit erstellt.';
+      db.run(
+        `INSERT INTO sponsor_contracts (id, sponsor_id, contract_start, contract_end, contact_person, contact_email, contact_phone, notes, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aktiv')`,
+        [contractId, id, contractStart, contractEnd, contactName || null, contactEmail || null, contactPhone || null, contractNotes]
+      );
+      initialContract = {
+        id: contractId, sponsorId: id, contractStart, contractEnd,
+        contactPerson: contactName || null, contactEmail: contactEmail || null, contactPhone: contactPhone || null,
+        notes: contractNotes, status: 'aktiv',
+      };
+    }
+    db.exec('COMMIT');
+  } catch (err: any) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    return res.status(500).json({ success: false, error: err.message || 'Sponsor konnte nicht erstellt werden' });
+  }
 
   const sponsor = parseSponsor(db.get('SELECT * FROM sponsors WHERE id = ?', [id]));
   sponsor.adSlots = [];
+  sponsor.contracts = initialContract ? [initialContract] : [];
   return res.status(201).json({ success: true, data: sponsor });
 });
 

@@ -1,6 +1,6 @@
 {
   "name": "podcore-server",
-  "version": "2.14.4",
+  "version": "2.14.7",
   "description": "PodCore Backend Server",
   "main": "dist/index.js",
   "scripts": {

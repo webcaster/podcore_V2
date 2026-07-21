@@ -20,6 +20,7 @@ const EXPORT_TYPES = [
   { value: 'sponsor_dossier', label: 'Sponsor-Dossier' },
   { value: 'sponsor_offer', label: 'Sponsor-Angebot' },
   { value: 'question_pool', label: 'Allgemeiner Fragen-Pool' },
+  { value: 'season_planning', label: 'Strategische Staffelplanung' },
   { value: 'price_list', label: 'Preisliste (Werbung)' },
   { value: 'episode_table', label: 'Episoden-Skript (Tabelle)' },
 ];
@@ -411,7 +412,7 @@ export default function PdfLayoutManagerPage() {
               if (!a.isSystem && b.isSystem) return 1;
               return a.name.localeCompare(b.name, 'de');
             }
-            const typeOrder = ['all','episode','idea','calendar','invoice','confirmation','booking_calendar','performance_report','sponsor_dossier','sponsor_offer','question_pool'];
+            const typeOrder = ['all','episode','idea','calendar','season_planning','invoice','confirmation','booking_calendar','performance_report','sponsor_dossier','sponsor_offer','question_pool'];
             const ta = typeOrder.indexOf(a.exportType);
             const tb = typeOrder.indexOf(b.exportType);
             if (ta !== tb) return ta - tb;

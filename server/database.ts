@@ -127,6 +127,7 @@ function initializeSchema(db: any): void {
       tags TEXT NOT NULL DEFAULT '[]',
       episodes TEXT NOT NULL DEFAULT '[]',
       notes TEXT,
+      status TEXT NOT NULL DEFAULT 'offen',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -370,6 +371,7 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE seasons ADD COLUMN target_episode_count INTEGER DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE seasons ADD COLUMN planning_notes TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE episodes ADD COLUMN season_plan_item_id TEXT DEFAULT NULL'); } catch (_) {}
+  try { db.exec('ALTER TABLE season_plan_items ADD COLUMN episode_number INTEGER DEFAULT NULL'); } catch (_) {}
   try { db.exec(`CREATE TABLE IF NOT EXISTS season_plan_items (
     id TEXT PRIMARY KEY,
     season_id TEXT NOT NULL,
@@ -383,6 +385,7 @@ function initializeSchema(db: any): void {
     status TEXT NOT NULL DEFAULT 'kandidat',
     priority TEXT NOT NULL DEFAULT 'mittel',
     planned_date TEXT,
+    episode_number INTEGER,
     idea_id TEXT,
     episode_id TEXT,
     notes TEXT,
@@ -513,6 +516,8 @@ function initializeSchema(db: any): void {
   )`); } catch (_) {}
   // Interview partners: add idea_id field
   try { db.exec('ALTER TABLE interview_partners ADD COLUMN idea_id TEXT DEFAULT NULL'); } catch (_) {}
+  // Interviewstatus im RedaktionsHub (z. B. angefragt, bestätigt, abgeschlossen)
+  try { db.exec("ALTER TABLE interview_partners ADD COLUMN status TEXT NOT NULL DEFAULT 'offen'"); } catch (_) {}
   // Interview questions: add idea_id field
   try { db.exec('ALTER TABLE interview_questions ADD COLUMN idea_id TEXT DEFAULT NULL'); } catch (_) {}
   // Research sources: add idea_id field (already has related_idea_id)
