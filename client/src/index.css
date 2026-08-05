@@ -94,6 +94,65 @@
     background-color: rgba(124, 58, 237, 0.3);
     color: var(--color-text-primary, #f1f5f9);
   }
+
+  /* ── Native form element base styles ─────────────────────────────────── */
+  /* Gilt für alle input/textarea/select die KEINE eigene Klasse haben      */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']):not(.no-base-style),
+  textarea:not(.no-base-style),
+  select:not(.no-base-style) {
+    color-scheme: dark;
+    background-color: var(--color-obsidian-800, #141420);
+    color: var(--color-text-primary, #f1f5f9);
+    border: 1.5px solid var(--color-surface-border, #2d2d4e);
+    border-radius: 0.75rem;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    width: 100%;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    outline: none;
+    caret-color: var(--color-text-primary, #f1f5f9);
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']):not(.no-base-style):hover,
+  textarea:not(.no-base-style):hover,
+  select:not(.no-base-style):hover {
+    border-color: rgba(124, 58, 237, 0.35);
+    background-color: var(--color-obsidian-750, #181828);
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']):not(.no-base-style):focus,
+  textarea:not(.no-base-style):focus,
+  select:not(.no-base-style):focus {
+    border-color: rgba(124, 58, 237, 0.65);
+    background-color: var(--color-obsidian-750, #181828);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12), 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']):not(.no-base-style)::placeholder,
+  textarea:not(.no-base-style)::placeholder {
+    color: var(--color-text-muted, #64748b);
+    opacity: 1;
+  }
+
+  select:not(.no-base-style) {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.5rem;
+  }
+
+  select:not(.no-base-style) option {
+    background-color: var(--color-obsidian-800, #141420);
+    color: var(--color-text-primary, #f1f5f9);
+  }
+
+  textarea:not(.no-base-style) {
+    min-height: 80px;
+    line-height: 1.6;
+    resize: vertical;
+  }
 }
 
 @layer components {
@@ -167,21 +226,43 @@
   }
 
   .input {
-    @apply bg-obsidian-800 border border-surface-border text-text-primary placeholder-text-muted rounded-lg px-3 py-2 w-full focus:outline-none transition-all duration-200;
+    @apply w-full px-4 py-2.5 rounded-xl text-sm text-text-primary placeholder-text-muted
+           focus:outline-none transition-all duration-200;
+    background-color: var(--color-obsidian-800, #141420);
+    border: 1.5px solid var(--color-surface-border, #2d2d4e);
+    color-scheme: dark;
+    caret-color: var(--color-text-primary, #f1f5f9);
+  }
+  .input:hover {
+    border-color: rgba(124, 58, 237, 0.35);
+    background-color: var(--color-obsidian-750, #181828);
   }
   .input:focus {
-    border-color: var(--color-accent-primary, #7c3aed);
-    box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.3);
+    border-color: rgba(124, 58, 237, 0.65);
+    background-color: var(--color-obsidian-750, #181828);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12), 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .input::placeholder {
+    color: var(--color-text-muted, #64748b);
+    opacity: 1;
   }
 
   /* Explicit contrast for editorial forms. Browser/OS defaults must not turn
      native inputs and selects white while retaining the light application text. */
   .editorial-field {
-    background-color: var(--color-obsidian-900, #0f0f1a) !important;
+    background-color: var(--color-obsidian-800, #141420) !important;
     color: var(--color-text-primary, #f1f5f9) !important;
-    border-color: var(--color-surface-border, #2d2d4e) !important;
+    border: 1.5px solid var(--color-surface-border, #2d2d4e) !important;
+    border-radius: 0.75rem !important;
+    padding: 0.625rem 1rem !important;
+    font-size: 0.875rem !important;
     color-scheme: dark;
     caret-color: var(--color-text-primary, #f1f5f9);
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  }
+  .editorial-field:hover {
+    border-color: rgba(124, 58, 237, 0.35) !important;
+    background-color: var(--color-obsidian-750, #181828) !important;
   }
   .editorial-field::placeholder {
     color: var(--color-text-muted, #64748b) !important;
@@ -192,24 +273,59 @@
     color: var(--color-text-primary, #f1f5f9);
   }
   .editorial-field:focus {
-    border-color: var(--color-accent-primary, #7c3aed) !important;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent-primary, #7c3aed) 35%, transparent);
+    border-color: rgba(124, 58, 237, 0.65) !important;
+    background-color: var(--color-obsidian-750, #181828) !important;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12), 0 1px 3px rgba(0,0,0,0.3) !important;
+    outline: none !important;
   }
 
   .select {
-    @apply bg-obsidian-800 border border-surface-border text-text-primary rounded-lg px-3 py-2 w-full focus:outline-none transition-all duration-200;
+    @apply w-full px-4 py-2.5 rounded-xl text-sm text-text-primary focus:outline-none transition-all duration-200;
+    background-color: var(--color-obsidian-800, #141420);
+    border: 1.5px solid var(--color-surface-border, #2d2d4e);
+    color-scheme: dark;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.5rem;
+  }
+  .select:hover {
+    border-color: rgba(124, 58, 237, 0.35);
+    background-color: var(--color-obsidian-750, #181828);
   }
   .select:focus {
-    border-color: var(--color-accent-primary, #7c3aed);
-    box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.3);
+    border-color: rgba(124, 58, 237, 0.65);
+    background-color: var(--color-obsidian-750, #181828);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12), 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .select option {
+    background-color: var(--color-obsidian-800, #141420);
+    color: var(--color-text-primary, #f1f5f9);
   }
 
   .textarea {
-    @apply bg-obsidian-800 border border-surface-border text-text-primary placeholder-text-muted rounded-lg px-3 py-2 w-full focus:outline-none transition-all duration-200 resize-y;
+    @apply w-full px-4 py-3 rounded-xl text-sm text-text-primary placeholder-text-muted
+           focus:outline-none transition-all duration-200 resize-y;
+    background-color: var(--color-obsidian-800, #141420);
+    border: 1.5px solid var(--color-surface-border, #2d2d4e);
+    color-scheme: dark;
+    caret-color: var(--color-text-primary, #f1f5f9);
+    min-height: 80px;
+    line-height: 1.6;
+  }
+  .textarea:hover {
+    border-color: rgba(124, 58, 237, 0.35);
+    background-color: var(--color-obsidian-750, #181828);
   }
   .textarea:focus {
-    border-color: var(--color-accent-primary, #7c3aed);
-    box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.3);
+    border-color: rgba(124, 58, 237, 0.65);
+    background-color: var(--color-obsidian-750, #181828);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12), 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .textarea::placeholder {
+    color: var(--color-text-muted, #64748b);
+    opacity: 1;
   }
 
   .label {

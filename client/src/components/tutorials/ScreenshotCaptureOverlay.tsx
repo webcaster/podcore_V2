@@ -1,33 +1,33 @@
 /**
- * ScreenshotCaptureOverlay
+ * ScreenshotCaptureOverlay v2
  *
- * Schwebender Overlay während des Screenshot-Modus:
- * - Zeigt Rollen-Badge oben rechts
- * - "Screenshot aufnehmen" Button
- * - "Abbrechen" Button
- * - Nach Capture: Annotations-Tool mit nummerierten Punkten
+ * Verwendet html-to-image statt html2canvas für zuverlässigeres Rendering.
+ * - Wartet 800ms nach Klick damit die Seite vollständig gerendert ist
+ * - Blendet das Overlay selbst aus vor dem Capture
+ * - Zeigt Fortschrittsanzeige während des Captures
+ * - Annotationspunkte mit Beschreibungsfeldern
  */
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Camera, X, Check, Plus, Trash2, ArrowLeft, Eye } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { Camera, X, Check, Plus, Trash2, ArrowLeft, Eye, Loader2 } from 'lucide-react';
 import { useScreenshotMode, AnnotationPoint } from '../../contexts/ScreenshotModeContext';
 import { useNavigate } from 'react-router-dom';
 
 const POINT_COLORS = [
   '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
-  '#7c3aed', '#0891b2', '#65a30d', '#ea580c', '#9333ea',
+  '#0891b2', '#65a30d', '#ea580c', '#9333ea', '#0d9488',
 ];
 
 export default function ScreenshotCaptureOverlay() {
   const { active, simulatedRole, onCapture, onCancel, endScreenshotMode } = useScreenshotMode();
   const navigate = useNavigate();
 
-  const [phase, setPhase] = useState<'ready' | 'annotate'>('ready');
+  const [phase, setPhase] = useState<'ready' | 'capturing' | 'annotate'>('ready');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<AnnotationPoint[]>([]);
   const [activePointId, setActivePointId] = useState<string | null>(null);
-  const [isCapturing, setIsCapturing] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const imgRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   // Reset when mode starts
   useEffect(() => {
@@ -36,38 +36,71 @@ export default function ScreenshotCaptureOverlay() {
       setCapturedImage(null);
       setAnnotations([]);
       setActivePointId(null);
+      setCaptureError(null);
     }
   }, [active]);
 
   const handleCapture = useCallback(async () => {
-    setIsCapturing(true);
+    setPhase('capturing');
+    setCaptureError(null);
+
     try {
-      // Hide this overlay during capture
-      const overlayEl = document.getElementById('screenshot-capture-overlay');
-      if (overlayEl) overlayEl.style.display = 'none';
+      // 1. Overlay ausblenden
+      if (overlayRef.current) {
+        overlayRef.current.style.visibility = 'hidden';
+        overlayRef.current.style.pointerEvents = 'none';
+      }
 
-      await new Promise(r => setTimeout(r, 100)); // wait for repaint
+      // 2. Warten bis Seite vollständig gerendert (Animationen, Bilder, Fonts)
+      await new Promise(r => setTimeout(r, 800));
 
-      const canvas = await html2canvas(document.body, {
-        useCORS: true,
-        allowTaint: true,
-        scale: window.devicePixelRatio || 1,
-        logging: false,
-        ignoreElements: (el) => el.id === 'screenshot-capture-overlay' || el.id === 'tutorial-overlay-root',
+      // 3. Alle Bilder vorladen
+      const images = Array.from(document.querySelectorAll('img'));
+      await Promise.allSettled(images.map(img =>
+        img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
+      ));
+
+      // 4. html-to-image lazy import
+      const { toPng } = await import('html-to-image');
+
+      // 5. Screenshot des sichtbaren Bereichs
+      const dataUrl = await toPng(document.documentElement, {
+        cacheBust: true,
+        pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+        width: window.innerWidth,
+        height: window.innerHeight,
+        style: {
+          transform: 'none',
+          transformOrigin: 'top left',
+        },
+        filter: (node: HTMLElement) => {
+          // Overlay und Tutorial-Elemente ausblenden
+          if (node.id === 'screenshot-capture-overlay') return false;
+          if (node.id === 'tutorial-overlay-root') return false;
+          if (node.getAttribute?.('data-screenshot-exclude') === 'true') return false;
+          return true;
+        },
       });
 
-      if (overlayEl) overlayEl.style.display = '';
+      // 6. Overlay wieder einblenden
+      if (overlayRef.current) {
+        overlayRef.current.style.visibility = '';
+        overlayRef.current.style.pointerEvents = '';
+      }
 
-      const dataUrl = canvas.toDataURL('image/png');
       setCapturedImage(dataUrl);
       setAnnotations([]);
       setPhase('annotate');
     } catch (err) {
       console.error('Screenshot failed:', err);
-      const overlayEl = document.getElementById('screenshot-capture-overlay');
-      if (overlayEl) overlayEl.style.display = '';
-    } finally {
-      setIsCapturing(false);
+      setCaptureError('Screenshot fehlgeschlagen. Bitte erneut versuchen.');
+
+      // Overlay wieder einblenden
+      if (overlayRef.current) {
+        overlayRef.current.style.visibility = '';
+        overlayRef.current.style.pointerEvents = '';
+      }
+      setPhase('ready');
     }
   }, []);
 
@@ -93,7 +126,6 @@ export default function ScreenshotCaptureOverlay() {
   const removePoint = useCallback((id: string) => {
     setAnnotations(prev => {
       const filtered = prev.filter(p => p.id !== id);
-      // Re-number
       return filtered.map((p, i) => ({ ...p, label: String(i + 1) }));
     });
     setActivePointId(null);
@@ -108,8 +140,7 @@ export default function ScreenshotCaptureOverlay() {
   const handleCancel = useCallback(() => {
     if (onCancel) onCancel();
     endScreenshotMode();
-    navigate('/admin');
-  }, [onCancel, endScreenshotMode, navigate]);
+  }, [onCancel, endScreenshotMode]);
 
   const handleRetake = useCallback(() => {
     setPhase('ready');
@@ -120,12 +151,15 @@ export default function ScreenshotCaptureOverlay() {
   if (!active) return null;
 
   return (
-    <div id="screenshot-capture-overlay">
+    <div id="screenshot-capture-overlay" ref={overlayRef}>
       {/* ── READY PHASE: floating bar ─────────────────────────────────────── */}
       {phase === 'ready' && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3
-                        bg-obsidian-900 border border-accent-purple/50 rounded-2xl px-5 py-3 shadow-2xl
-                        shadow-accent-purple/20 backdrop-blur-sm">
+        <div
+          data-screenshot-exclude="true"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3
+                     bg-obsidian-900 border border-accent-purple/50 rounded-2xl px-5 py-3 shadow-2xl
+                     shadow-accent-purple/20 backdrop-blur-sm"
+        >
           {/* Role badge */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-purple/20 rounded-lg border border-accent-purple/30">
             <Eye size={14} className="text-accent-purple" />
@@ -136,14 +170,17 @@ export default function ScreenshotCaptureOverlay() {
 
           <div className="w-px h-6 bg-obsidian-600" />
 
+          {captureError && (
+            <span className="text-xs text-red-400">{captureError}</span>
+          )}
+
           <button
             onClick={handleCapture}
-            disabled={isCapturing}
             className="flex items-center gap-2 px-4 py-2 bg-accent-purple hover:bg-accent-purple/80
-                       text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+                       text-white rounded-xl text-sm font-semibold transition-all"
           >
             <Camera size={16} />
-            {isCapturing ? 'Aufnahme...' : 'Screenshot aufnehmen'}
+            Screenshot aufnehmen
           </button>
 
           <button
@@ -157,9 +194,26 @@ export default function ScreenshotCaptureOverlay() {
         </div>
       )}
 
+      {/* ── CAPTURING PHASE: loading indicator ───────────────────────────── */}
+      {phase === 'capturing' && (
+        <div
+          data-screenshot-exclude="true"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3
+                     bg-obsidian-900 border border-accent-purple/50 rounded-2xl px-5 py-3 shadow-2xl"
+          style={{ visibility: 'hidden' }}
+        >
+          {/* Invisible during capture — just a placeholder */}
+          <Loader2 size={16} className="animate-spin text-accent-purple" />
+          <span className="text-sm text-text-muted">Aufnahme läuft...</span>
+        </div>
+      )}
+
       {/* ── ANNOTATE PHASE: full-screen annotation editor ────────────────── */}
       {phase === 'annotate' && capturedImage && (
-        <div className="fixed inset-0 z-[9999] bg-obsidian-950/95 flex flex-col overflow-hidden">
+        <div
+          data-screenshot-exclude="true"
+          className="fixed inset-0 z-[9999] bg-obsidian-950/95 flex flex-col overflow-hidden"
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-obsidian-700 bg-obsidian-900 shrink-0">
             <div>
@@ -172,16 +226,24 @@ export default function ScreenshotCaptureOverlay() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <button onClick={handleRetake}
-                className="flex items-center gap-2 px-3 py-2 bg-obsidian-700 hover:bg-obsidian-600 text-text-secondary hover:text-text-primary rounded-xl text-sm transition-all">
+              <button
+                onClick={handleRetake}
+                className="flex items-center gap-2 px-3 py-2 bg-obsidian-700 hover:bg-obsidian-600
+                           text-text-secondary hover:text-text-primary rounded-xl text-sm transition-all"
+              >
                 <Camera size={14} /> Neu aufnehmen
               </button>
-              <button onClick={handleConfirm}
-                className="flex items-center gap-2 px-4 py-2 bg-accent-purple hover:bg-accent-purple/80 text-white rounded-xl text-sm font-semibold transition-all">
+              <button
+                onClick={handleConfirm}
+                className="flex items-center gap-2 px-4 py-2 bg-accent-purple hover:bg-accent-purple/80
+                           text-white rounded-xl text-sm font-semibold transition-all"
+              >
                 <Check size={16} /> Übernehmen
               </button>
-              <button onClick={handleCancel}
-                className="p-2 text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-obsidian-700">
+              <button
+                onClick={handleCancel}
+                className="p-2 text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-obsidian-700"
+              >
                 <X size={18} />
               </button>
             </div>
@@ -190,7 +252,7 @@ export default function ScreenshotCaptureOverlay() {
           {/* Body */}
           <div className="flex flex-1 overflow-hidden">
             {/* Screenshot with annotation points */}
-            <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
+            <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-obsidian-950">
               <div
                 ref={imgRef}
                 className="relative cursor-crosshair select-none max-w-full"
@@ -287,11 +349,13 @@ export default function ScreenshotCaptureOverlay() {
                 ))}
               </div>
 
-              {/* Hint */}
               {annotations.length > 0 && (
                 <div className="px-4 py-3 border-t border-obsidian-700 bg-obsidian-950/50">
                   <p className="text-xs text-text-muted">
-                    Im Beschreibungstext kannst du mit <code className="bg-obsidian-700 px-1 rounded">[1]</code>, <code className="bg-obsidian-700 px-1 rounded">[2]</code> auf Punkte verweisen.
+                    Im Beschreibungstext mit{' '}
+                    <code className="bg-obsidian-700 px-1 rounded">[1]</code>,{' '}
+                    <code className="bg-obsidian-700 px-1 rounded">[2]</code>{' '}
+                    auf Punkte verweisen.
                   </p>
                 </div>
               )}
