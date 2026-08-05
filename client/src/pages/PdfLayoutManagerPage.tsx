@@ -13,6 +13,7 @@ const EXPORT_TYPES = [
   { value: 'episode', label: 'Episoden-Dokument' },
   { value: 'idea', label: 'Ideenmappe' },
   { value: 'calendar', label: 'Redaktionskalender' },
+  { value: 'interview_partner', label: 'Persönliches PDF (Interview-Partner)' },
   { value: 'invoice', label: 'Sponsoring-Abrechnung' },
   { value: 'confirmation', label: 'Buchungsbestätigung (Sponsor)' },
   { value: 'booking_calendar', label: 'Buchungskalender-Übersicht' },
@@ -111,6 +112,10 @@ const SECTION_GROUPS: Record<string, { label: string; keys: string[] }> = {
     label: 'Fragenbibliothek',
     keys: ['showQuestionPoolNotes'],
   },
+  interview_partner: {
+    label: 'Persönliches PDF (Interview-Partner)',
+    keys: ['showPartnerGreeting', 'showPartnerQuestions', 'showPartnerEpisodeInfo', 'showPartnerTechnicalNotes', 'showPartnerSignature'],
+  },
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -146,6 +151,11 @@ const SECTION_LABELS: Record<string, string> = {
   showTableRegie: 'Regieanweisungen-Spalte anzeigen',
   showTableNotesPage: 'Zusätzliche Notizseite anhängen',
   showQuestionPoolNotes: 'Interne Notizen zu Fragen anzeigen',
+  showPartnerGreeting: 'Personalisierte Begrüßung (Interview-Partner)',
+  showPartnerQuestions: 'Interview-Fragen (Interview-Partner)',
+  showPartnerEpisodeInfo: 'Episoden-Informationen (Interview-Partner)',
+  showPartnerTechnicalNotes: 'Technische Anweisungen (Interview-Partner)',
+  showPartnerSignature: 'Unterschriftsfeld (Interview-Partner)',
 };
 
 const LINE_SPACING_OPTIONS = [

@@ -124,7 +124,14 @@ export default function SettingsPage() {
     setVerifiedUpdateVersion(null);
     setApplyLog(['Update wird im Staging geprüft und anschließend angewendet...']);
     try {
-      const result = await updateApi.applyUpdate(uploadResult.updateId);
+      setApplyLog(prev => [...prev, 'Sicherheits-Token wird angefordert...']);
+      const elevationData = await updateApi.requestElevation();
+      const elevationToken = elevationData.elevationToken;
+      if (!elevationToken) {
+        throw new Error('Elevation-Token konnte nicht generiert werden.');
+      }
+      setApplyLog(prev => [...prev, `Sicherheits-Token erhalten (gültig für ${elevationData.expiresIn} Sekunden).`]);
+      const result = await updateApi.applyUpdate(uploadResult.updateId, elevationToken);
       const targetVersion = String(result.targetVersion || uploadResult.updateVersion || '');
       setApplyLog(result.log || ['Update-Dateien wurden übernommen.']);
       if (!result.restartScheduled) {

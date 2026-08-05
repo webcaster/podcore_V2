@@ -818,7 +818,8 @@ function InterviewsTab() {
 
   const handleOpenSummary = () => {
     if (!selectedPartner) return;
-    const url = editorialApi.sendSummaryUrl(selectedPartner.id);
+    // Export PDF instead of opening HTML summary
+    const url = `/api/editorial/interviews/partners/${selectedPartner.id}/export-pdf?documentName=Interview-${selectedPartner.name?.replace(/\s+/g, '-')}`;
     window.open(url, '_blank');
   };
 

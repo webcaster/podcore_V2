@@ -63,7 +63,7 @@ function buildQs(params?: Record<string, any>): string {
 
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
-  post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
+  post: <T>(path: string, body?: unknown, options?: RequestInit) => request<T>('POST', path, body, options),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
@@ -672,7 +672,11 @@ export const updateApi = {
       xhr.send(fd);
     });
   },
-  applyUpdate: (updateId: string) => api.post<any>('/admin/update/apply', { updateId }),
+  requestElevation: () => api.post<any>('/admin/update/request-elevation', {}),
+  applyUpdate: async (updateId: string, elevationToken?: string) => {
+    const headers = elevationToken ? { 'x-elevation-token': elevationToken } : {};
+    return api.post<any>('/admin/update/apply', { updateId }, { headers });
+  },
   getLogs: () => api.get<any[]>('/admin/update/logs'),
 };
 
