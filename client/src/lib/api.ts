@@ -674,8 +674,8 @@ export const updateApi = {
   },
   requestElevation: () => api.post<any>('/admin/update/request-elevation', {}),
   applyUpdate: async (updateId: string, elevationToken?: string) => {
-    const headers = elevationToken ? { 'x-elevation-token': elevationToken } : {};
-    return api.post<any>('/admin/update/apply', { updateId }, { headers });
+    const options: RequestInit | undefined = elevationToken ? { headers: { 'x-elevation-token': elevationToken } } : undefined;
+    return api.post<any>('/admin/update/apply', { updateId }, options);
   },
   getLogs: () => api.get<any[]>('/admin/update/logs'),
 };
