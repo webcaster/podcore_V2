@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Eye, EyeOff, Copy, Send } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, EyeOff, Copy, Send, Upload } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 
 interface TutorialStep {
@@ -41,13 +41,16 @@ export default function TutorialsManagementPage() {
   const [editingStep, setEditingStep] = useState<TutorialStep | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
 
-  const ROLES = [
+  const DEFAULT_ROLES = [
     { value: 'editor', label: 'Redakteur' },
     { value: 'moderator', label: 'Moderator' },
     { value: 'producer', label: 'Produktion' },
     { value: 'admin', label: 'Administrator' },
   ];
+
+  const ROLES = roles.length > 0 ? roles.map(r => ({ value: r.name, label: r.label })) : DEFAULT_ROLES;
 
   const POSITIONS = [
     { value: 'top', label: 'Oben' },
@@ -76,6 +79,23 @@ export default function TutorialsManagementPage() {
     }
   };
 
+  // Load roles from database
+  const loadRoles = async () => {
+    try {
+      const response = await fetch('/api/admin/roles', {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRoles(data);
+      }
+    } catch (error) {
+      console.error('Error loading roles:', error);
+      setRoles(DEFAULT_ROLES.map(r => ({ name: r.value, label: r.label })));
+    }
+  };
+
   // Load users for tutorial initialization
   const loadUsers = async () => {
     try {
@@ -96,6 +116,7 @@ export default function TutorialsManagementPage() {
     if (can('canManageSettings')) {
       loadTutorials();
       loadUsers();
+      loadRoles();
     }
   }, []);
 
@@ -226,7 +247,8 @@ export default function TutorialsManagementPage() {
   const resetForm = () => {
     setShowForm(false);
     setEditingTutorial(null);
-    setFormData({ role: 'editor', title: '', description: '', enabled: true });
+    const defaultRole = roles.length > 0 ? roles[0].name : 'editor';
+    setFormData({ role: defaultRole, title: '', description: '', enabled: true });
     setSteps([]);
     setEditingStep(null);
   };
@@ -234,8 +256,9 @@ export default function TutorialsManagementPage() {
   // Edit tutorial
   const handleEditTutorial = (tutorial: Tutorial) => {
     setEditingTutorial(tutorial);
+    const validRole = roles.find(r => r.name === tutorial.role) ? tutorial.role : (roles.length > 0 ? roles[0].name : 'editor');
     setFormData({
-      role: tutorial.role,
+      role: validRole,
       title: tutorial.title,
       description: tutorial.description,
       enabled: tutorial.enabled,
@@ -285,11 +308,19 @@ export default function TutorialsManagementPage() {
                     onChange={e => setFormData({ ...formData, role: e.target.value })}
                     className="input"
                   >
-                    {ROLES.map(r => (
-                      <option key={r.value} value={r.value}>
-                        {r.label}
-                      </option>
-                    ))}
+                    {roles.length > 0 ? (
+                      roles.map(role => (
+                        <option key={role.name} value={role.name}>
+                          {role.label}
+                        </option>
+                      ))
+                    ) : (
+                      DEFAULT_ROLES.map(r => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 
@@ -412,13 +443,53 @@ export default function TutorialsManagementPage() {
                       </label>
                     </div>
 
-                    <input
-                      type="text"
-                      value={step.image || ''}
-                      onChange={e => handleUpdateStep(step.id, { image: e.target.value })}
-                      placeholder="Bild-URL oder Base64"
-                      className="input text-sm"
-                    />
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-text-primary">Bild</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={step.image || ''}
+                          onChange={e => handleUpdateStep(step.id, { image: e.target.value })}
+                          placeholder="Bild-URL oder Base64"
+                          className="input text-sm flex-1"
+                        />
+                        <label className="btn-secondary flex items-center gap-2 cursor-pointer">
+                          <Upload size={16} />
+                          <span>Hochladen</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const base64 = event.target?.result as string;
+                                  handleUpdateStep(step.id, { image: base64 });
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                      {step.image && (
+                        <div className="mt-2 relative">
+                          <img
+                            src={step.image}
+                            alt="Vorschau"
+                            className="max-w-xs h-auto rounded-lg border border-surface-border"
+                          />
+                          <button
+                            onClick={() => handleUpdateStep(step.id, { image: undefined })}
+                            className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded hover:bg-red-600"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -447,7 +518,7 @@ export default function TutorialsManagementPage() {
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="font-semibold text-text-primary">{tutorial.title}</h3>
                       <span className="text-xs bg-accent-purple/20 text-accent-purple px-2 py-1 rounded">
-                        {ROLES.find(r => r.value === tutorial.role)?.label}
+                        {roles.find(r => r.name === tutorial.role)?.label || tutorial.role}
                       </span>
                     </div>
                     <p className="text-sm text-text-secondary mb-2">{tutorial.description}</p>
@@ -505,7 +576,7 @@ export default function TutorialsManagementPage() {
                     <option value="">-- Bitte wählen --</option>
                     {tutorials.map(t => (
                       <option key={t.id} value={t.id}>
-                        {t.title} ({ROLES.find(r => r.value === t.role)?.label})
+                        {t.title} ({roles.find(r => r.name === t.role)?.label || t.role})
                       </option>
                     ))}
                   </select>
