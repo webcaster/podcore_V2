@@ -217,27 +217,49 @@ export default function Layout() {
 
       {/* User info */}
       <div data-tutorial-id="sidebar-user-info" className={`p-3 border-t border-surface-border ${collapsed && !mobile ? 'flex flex-col items-center gap-2' : ''}`}>
-        {(!collapsed || mobile) ? (
-          <div className="flex items-center gap-3 mb-2 px-2">
+        {/* Im Screenshot-Modus: simulierte Rolle anzeigen, nicht den echten Admin */}
+        {screenshotActive ? (
+          (!collapsed || mobile) ? (
+            <div className="flex items-center gap-3 mb-2 px-2">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 bg-accent-purple">
+                {(simulatedRole || '?')[0].toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-text-primary text-sm font-medium truncate capitalize">{simulatedRole}</p>
+                <p className="text-accent-purple text-xs">Vorschau-Modus</p>
+              </div>
+            </div>
+          ) : (
             <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold bg-accent-purple"
+              title={`Vorschau: ${simulatedRole}`}
+            >
+              {(simulatedRole || '?')[0].toUpperCase()}
+            </div>
+          )
+        ) : (
+          (!collapsed || mobile) ? (
+            <div className="flex items-center gap-3 mb-2 px-2">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                style={{ backgroundColor: user?.avatarColor || '#7c3aed' }}
+              >
+                {avatarInitials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-text-primary text-sm font-medium truncate">{user?.displayName}</p>
+                <p className="text-text-muted text-xs capitalize">{user?.role}</p>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
               style={{ backgroundColor: user?.avatarColor || '#7c3aed' }}
+              title={user?.displayName}
             >
               {avatarInitials}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-text-primary text-sm font-medium truncate">{user?.displayName}</p>
-              <p className="text-text-muted text-xs capitalize">{user?.role}</p>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-            style={{ backgroundColor: user?.avatarColor || '#7c3aed' }}
-            title={user?.displayName}
-          >
-            {avatarInitials}
-          </div>
+          )
         )}
         <div className={`mb-1 ${collapsed && !mobile ? '' : 'px-0'}`}>
           <NotificationCenter compact={collapsed && !mobile} />

@@ -391,8 +391,10 @@ export default function TutorialsManagementPage() {
       },
     });
 
-    // Navigate to target page (or dashboard as fallback)
-    navigate(route?.path || '/');
+    // Einstiegs-Tutorial (mehrere Rollen) oder kein Ziel gesetzt → immer Dashboard
+    const isMultiRole = (current.roles?.length || 0) > 1;
+    const targetPath = isMultiRole ? '/' : (route?.path || '/');
+    navigate(targetPath);
   }, [roles, startScreenshotMode, navigate]);
 
   // ── STEP HELPERS ──
