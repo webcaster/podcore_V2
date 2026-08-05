@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { episodesApi, editorialApi, adminApi, podigeeApi, authApi } from '../lib/api';
 import { useApp, useOnlineUsers } from '../contexts/AppContext';
+import { useTutorialAutoInit } from '../hooks/useTutorialAutoInit';
 
 interface Stats {
   episodes: { total: number; byStatus: Record<string, number> };
@@ -21,6 +22,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user, can, branding, podcastProfile, refreshPodcastProfile, showSuccess, showError, refreshUser } = useApp();
   const { onlineUsers } = useOnlineUsers();
+  useTutorialAutoInit();
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentEpisodes, setRecentEpisodes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);

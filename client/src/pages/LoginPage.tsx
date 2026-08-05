@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Headphones, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AppContext';
 import { authApi } from '../lib/api';
+import { useTutorial } from '../contexts/TutorialContext';
 
 // Injected at build time by vite.config.ts
 declare const __APP_VERSION__: string;

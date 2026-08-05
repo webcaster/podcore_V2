@@ -2,6 +2,8 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useAuth } from './contexts/AppContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { TutorialProvider } from './contexts/TutorialContext';
+import { TutorialOverlay } from './components/tutorials/TutorialOverlay';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import ToastContainer from './components/ui/ToastContainer';
@@ -34,6 +36,7 @@ const ChatPage = lazy(() => import('./pages/ChatPage'));
 const EpisodesDashboardPage = lazy(() => import('./pages/EpisodesDashboardPage'));
 const EpisodeSchedulePage = lazy(() => import('./pages/EpisodeSchedulePage'));
 const PdfLayoutManagerPage = lazy(() => import('./pages/PdfLayoutManagerPage'));
+const TutorialsManagementPage = lazy(() => import('./pages/TutorialsManagementPage'));
 
 function LoadingSpinner() {
   return (
@@ -108,6 +111,7 @@ function AppRoutes() {
         <Route path="chat" element={<Suspense fallback={<LoadingSpinner />}><ChatPage /></Suspense>} />
         <Route path="episodes-dashboard" element={<Suspense fallback={<LoadingSpinner />}><EpisodesDashboardPage /></Suspense>} />
         <Route path="pdf-layouts" element={<Suspense fallback={<LoadingSpinner />}><PdfLayoutManagerPage /></Suspense>} />
+        <Route path="admin/tutorials" element={<Suspense fallback={<LoadingSpinner />}><TutorialsManagementPage /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -118,10 +122,13 @@ export default function App() {
   return (
     <ThemeProvider>
       <AppProvider>
-        <BrowserRouter>
-          <AppRoutes />
-          <ToastContainer />
-        </BrowserRouter>
+        <TutorialProvider>
+          <BrowserRouter>
+            <AppRoutes />
+            <TutorialOverlay />
+            <ToastContainer />
+          </BrowserRouter>
+        </TutorialProvider>
       </AppProvider>
     </ThemeProvider>
   );
