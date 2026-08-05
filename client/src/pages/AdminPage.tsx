@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import {
   Shield, Users, Plus, Edit2, Trash2, Key, Check, X, Eye, EyeOff,
   Server, Database, HardDrive, Activity, RefreshCw, Loader2, Lock, Tag, Save,
@@ -8,7 +8,7 @@ import {
 import { adminApi, backupApi } from '../lib/api';
 import { useApp, useFeatures } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
-import TutorialsManagementPage from './TutorialsManagementPage';
+const TutorialsManagementPage = lazy(() => import('./TutorialsManagementPage'));
 
 const ALL_PERMISSIONS = [
   { key: 'canViewEpisodes', label: 'Episoden ansehen', group: 'Episoden' },
@@ -1323,7 +1323,9 @@ export default function AdminPage() {
 
       {/* ── TUTORIALS TAB ──────────────────────────────────────── */}
       {activeTab === 'tutorials' && (
-        <TutorialsManagementPage />
+        <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" /></div>}>
+          <TutorialsManagementPage />
+        </Suspense>
       )}
 
       {/* ── Delete with Transfer Modal ────────────────────────── */}

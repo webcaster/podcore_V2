@@ -21,7 +21,7 @@ import * as path from 'path';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
-export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report' | 'sponsor_dossier' | 'sponsor_offer' | 'question_pool' | 'season_planning';
+export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report' | 'sponsor_dossier' | 'sponsor_offer' | 'question_pool' | 'season_planning' | 'interview_partner' | 'price_list' | 'episode_table';
 
 export interface PdfLayoutColors {
   primary: string;       // Hauptfarbe (Überschriften, Akzente)
@@ -977,6 +977,34 @@ export function ensureDefaultLayouts(): void {
       colors: { primary: '#7c3aed', secondary: '#1e3a5f', accent: '#a855f7', text: '#111111', muted: '#6b7280', background: '#7c3aed', headerText: '#ffffff' },
       footer: { showPageNumbers: true, showDate: true, showPodcastName: true, customText: 'Angebot freibleibend – Preise zzgl. gesetzlicher MwSt.' },
       sections: { showOfferIntro: true, showOfferOutro: true, showOfferNotes: true, showOfferOptions: true, showSponsorAddress: true },
+    };
+    db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation, header_height, line_spacing, divider_style, watermark)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuidv4(), layout.name, layout.description, layout.exportType,
+        layout.isDefault ? 1 : 0, layout.isSystem ? 1 : 0,
+        JSON.stringify(layout.colors), JSON.stringify(layout.typography),
+        JSON.stringify(layout.header), JSON.stringify(layout.footer),
+        JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
+        layout.pageOrientation || 'portrait',
+        layout.headerHeight || 70, layout.lineSpacing || 'normal',
+        layout.dividerStyle || 'line', JSON.stringify(layout.watermark),
+      ]);
+  }
+
+  // v2.15.8: Persönliches PDF (Interview-Partner) Standard-Layout
+  const hasInterviewPartner = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'interview_partner' LIMIT 1");
+  if (!hasInterviewPartner) {
+    const layout = {
+      ...DEFAULT_LAYOUT,
+      name: 'Persönliches PDF Standard',
+      description: 'Persönliches Begrüßungs-PDF für Interview-Partner mit Fragen, Episodeninfos und technischen Hinweisen',
+      exportType: 'interview_partner' as PdfExportType,
+      isDefault: true,
+      isSystem: true,
+      colors: { primary: '#7c3aed', secondary: '#1e3a5f', accent: '#a855f7', text: '#111111', muted: '#6b7280', background: '#7c3aed', headerText: '#ffffff' },
+      sections: { showPartnerGreeting: true, showPartnerQuestions: true, showPartnerEpisodeInfo: true, showPartnerTechnicalNotes: true, showPartnerSignature: false },
+      footer: { showPageNumbers: true, showDate: true, showPodcastName: true, customText: '' },
     };
     db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation, header_height, line_spacing, divider_style, watermark)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

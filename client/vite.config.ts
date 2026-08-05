@@ -47,11 +47,18 @@ export default defineConfig({
     outDir: '../server/public',
     emptyOutDir: true,
     // Content-based hashes in filenames → browser always loads new files after update
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
+        manualChunks(id) {
+          // Schwere PDF/Screenshot-Bibliotheken in eigene Chunks auslagern
+          if (id.includes('html2canvas')) return 'vendor-html2canvas';
+          if (id.includes('jspdf')) return 'vendor-jspdf';
+          if (id.includes('node_modules')) return 'vendor';
+        },
       },
     },
   },
