@@ -1,239 +1,203 @@
-import express, { Request, Response, Router } from 'express';
+import express, { Response, Router } from 'express';
 import { getDb } from '../database';
 import { v4 as uuidv4 } from 'uuid';
+import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router: Router = express.Router();
 
 // ── TYPES ──────────────────────────────────────────────────────────────────
+interface AnnotationPoint {
+  id: string;
+  x: number;
+  y: number;
+  label: string;
+  description: string;
+}
+
 interface TutorialStep {
   id: string;
   title: string;
   description: string;
-  target?: string; // CSS selector for highlighting
+  target?: string;
   position?: 'top' | 'bottom' | 'left' | 'right';
-  image?: string; // Base64 or URL
+  image?: string;
+  annotations?: AnnotationPoint[];
   highlightColor?: string;
   allowSkip?: boolean;
-  action?: string; // Optional action to perform
+  action?: string;
 }
 
-interface Tutorial {
-  id: string;
-  role: string;
-  title: string;
-  description: string;
-  enabled: boolean;
-  steps: TutorialStep[];
-  createdAt: string;
-  updatedAt: string;
-  createdBy: string;
-}
-
-// ── MIDDLEWARE ─────────────────────────────────────────────────────────────
-const requireAdmin = (req: Request, res: Response, next: Function) => {
-  const user = (req as any).user;
-  if (!user || !user.isAdmin) {
-    return res.status(403).json({ error: 'Admin access required' });
+// ── HELPERS ────────────────────────────────────────────────────────────────
+const requireAdmin = (req: AuthRequest, res: Response, next: Function) => {
+  const user = req.user;
+  if (!user || user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin-Zugriff erforderlich' });
   }
   next();
 };
 
-// ── GET ALL TUTORIALS ──────────────────────────────────────────────────────
-router.get('/tutorials', async (req: Request, res: Response) => {
+const parseTutorial = (t: any) => ({
+  id: t.id,
+  roles: (() => {
+    try {
+      const parsed = JSON.parse(t.roles || '[]');
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {}
+    return t.role ? [t.role] : [];
+  })(),
+  // keep legacy role field for backward compat
+  role: t.role || '',
+  title: t.title,
+  description: t.description || '',
+  enabled: t.enabled === 1,
+  steps: (() => { try { return JSON.parse(t.steps || '[]'); } catch { return []; } })(),
+  createdAt: t.created_at,
+  updatedAt: t.updated_at,
+  createdBy: t.created_by,
+});
+
+// ── MIGRATION: add roles column if missing ─────────────────────────────────
+function ensureRolesColumn() {
   try {
-    const db = (req as any).db as any;
-    const user = (req as any).user;
+    const db = getDb();
+    const cols = (db.all('PRAGMA table_info(tutorials)', []) as any[]).map((c: any) => c.name);
+    if (!cols.includes('roles')) {
+      db.run('ALTER TABLE tutorials ADD COLUMN roles TEXT');
+      db.run(`UPDATE tutorials SET roles = json_array(role) WHERE roles IS NULL OR roles = ''`);
+    }
+  } catch (e) {
+    console.warn('[tutorials] Migration warning:', e);
+  }
+}
+ensureRolesColumn();
 
-    // Get tutorials for user's role
-    const tutorials = db.prepare(`
-      SELECT * FROM tutorials 
-      WHERE role = ? AND enabled = 1
-      ORDER BY created_at ASC
-    `).all(user?.role || 'editor') as any[];
-
-    const formattedTutorials = tutorials.map(t => ({
-      id: t.id,
-      role: t.role,
-      title: t.title,
-      description: t.description,
-      enabled: t.enabled === 1,
-      steps: JSON.parse(t.steps),
-      createdAt: t.created_at,
-      updatedAt: t.updated_at,
-      createdBy: t.created_by,
-    }));
-
-    res.json(formattedTutorials);
+// ── GET TUTORIALS FOR CURRENT USER ────────────────────────────────────────
+router.get('/tutorials', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const db = getDb();
+    const user = req.user!;
+    const all = db.all('SELECT * FROM tutorials WHERE enabled = 1 ORDER BY created_at ASC', []) as any[];
+    const filtered = all.filter(t => {
+      try {
+        const roles = JSON.parse(t.roles || `["${t.role}"]`);
+        return Array.isArray(roles) ? roles.includes(user.role) : roles === user.role;
+      } catch { return t.role === user.role; }
+    });
+    res.json(filtered.map(parseTutorial));
   } catch (error) {
     console.error('Error fetching tutorials:', error);
-    res.status(500).json({ error: 'Failed to fetch tutorials' });
+    res.status(500).json({ error: 'Fehler beim Laden der Tutorials' });
   }
 });
 
 // ── GET TUTORIAL BY ID ─────────────────────────────────────────────────────
-router.get('/tutorials/:id', async (req: Request, res: Response) => {
+router.get('/tutorials/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const db = (req as any).db as any;
-    const { id } = req.params;
-
-    const tutorial = db.prepare(`
-      SELECT * FROM tutorials WHERE id = ?
-    `).get(id) as any;
-
-    if (!tutorial) {
-      return res.status(404).json({ error: 'Tutorial not found' });
-    }
-
-    res.json({
-      id: tutorial.id,
-      role: tutorial.role,
-      title: tutorial.title,
-      description: tutorial.description,
-      enabled: tutorial.enabled === 1,
-      steps: JSON.parse(tutorial.steps),
-      createdAt: tutorial.created_at,
-      updatedAt: tutorial.updated_at,
-      createdBy: tutorial.created_by,
-    });
+    const db = getDb();
+    const t = db.get('SELECT * FROM tutorials WHERE id = ?', [req.params.id]) as any;
+    if (!t) return res.status(404).json({ error: 'Tutorial nicht gefunden' });
+    res.json(parseTutorial(t));
   } catch (error) {
     console.error('Error fetching tutorial:', error);
-    res.status(500).json({ error: 'Failed to fetch tutorial' });
+    res.status(500).json({ error: 'Fehler beim Laden des Tutorials' });
   }
 });
 
 // ── CREATE TUTORIAL (ADMIN ONLY) ───────────────────────────────────────────
-router.post('/tutorials', requireAdmin, async (req: Request, res: Response) => {
+router.post('/tutorials', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
   try {
-    const db = (req as any).db as any;
-    const user = (req as any).user;
-    const { role, title, description, steps, enabled = true } = req.body;
+    const db = getDb();
+    const user = req.user!;
+    const { roles, role, title, description, steps, enabled = true } = req.body;
 
-    if (!role || !title || !steps || !Array.isArray(steps)) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    const rolesArray: string[] = Array.isArray(roles) && roles.length > 0
+      ? roles
+      : (role ? [role] : []);
+
+    if (rolesArray.length === 0 || !title || !steps || !Array.isArray(steps)) {
+      return res.status(400).json({ error: 'Pflichtfelder fehlen (roles, title, steps)' });
     }
 
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    db.prepare(`
-      INSERT INTO tutorials (id, role, title, description, enabled, steps, created_at, updated_at, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      role,
-      title,
-      description || '',
-      enabled ? 1 : 0,
-      JSON.stringify(steps),
-      now,
-      now,
-      user.id
+    db.run(
+      `INSERT INTO tutorials (id, role, roles, title, description, enabled, steps, created_at, updated_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, rolesArray[0], JSON.stringify(rolesArray), title, description || '',
+       enabled ? 1 : 0, JSON.stringify(steps), now, now, user.id]
     );
 
-    res.status(201).json({
-      id,
-      role,
-      title,
-      description,
-      enabled,
-      steps,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: user.id,
-    });
+    const created = db.get('SELECT * FROM tutorials WHERE id = ?', [id]) as any;
+    res.status(201).json(parseTutorial(created));
   } catch (error) {
     console.error('Error creating tutorial:', error);
-    res.status(500).json({ error: 'Failed to create tutorial' });
+    res.status(500).json({ error: 'Fehler beim Erstellen des Tutorials' });
   }
 });
 
 // ── UPDATE TUTORIAL (ADMIN ONLY) ───────────────────────────────────────────
-router.put('/tutorials/:id', requireAdmin, async (req: Request, res: Response) => {
+router.put('/tutorials/:id', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
   try {
-    const db = (req as any).db as any;
+    const db = getDb();
     const { id } = req.params;
-    const { role, title, description, steps, enabled } = req.body;
+    const existing = db.get('SELECT * FROM tutorials WHERE id = ?', [id]) as any;
+    if (!existing) return res.status(404).json({ error: 'Tutorial nicht gefunden' });
 
-    const tutorial = db.prepare('SELECT * FROM tutorials WHERE id = ?').get(id) as any;
-    if (!tutorial) {
-      return res.status(404).json({ error: 'Tutorial not found' });
-    }
+    const { roles, role, title, description, steps, enabled } = req.body;
+    const rolesArray: string[] = Array.isArray(roles) && roles.length > 0
+      ? roles
+      : (role ? [role] : (() => {
+          try { return JSON.parse(existing.roles || `["${existing.role}"]`); } catch { return [existing.role]; }
+        })());
 
     const now = new Date().toISOString();
-
-    db.prepare(`
-      UPDATE tutorials 
-      SET role = ?, title = ?, description = ?, steps = ?, enabled = ?, updated_at = ?
-      WHERE id = ?
-    `).run(
-      role || tutorial.role,
-      title || tutorial.title,
-      description !== undefined ? description : tutorial.description,
-      steps ? JSON.stringify(steps) : tutorial.steps,
-      enabled !== undefined ? (enabled ? 1 : 0) : tutorial.enabled,
-      now,
-      id
+    db.run(
+      `UPDATE tutorials SET role = ?, roles = ?, title = ?, description = ?, steps = ?, enabled = ?, updated_at = ? WHERE id = ?`,
+      [
+        rolesArray[0],
+        JSON.stringify(rolesArray),
+        title !== undefined ? title : existing.title,
+        description !== undefined ? description : existing.description,
+        steps ? JSON.stringify(steps) : existing.steps,
+        enabled !== undefined ? (enabled ? 1 : 0) : existing.enabled,
+        now, id,
+      ]
     );
 
-    res.json({
-      id,
-      role: role || tutorial.role,
-      title: title || tutorial.title,
-      description: description !== undefined ? description : tutorial.description,
-      enabled: enabled !== undefined ? enabled : tutorial.enabled === 1,
-      steps: steps || JSON.parse(tutorial.steps),
-      createdAt: tutorial.created_at,
-      updatedAt: now,
-      createdBy: tutorial.created_by,
-    });
+    const updated = db.get('SELECT * FROM tutorials WHERE id = ?', [id]) as any;
+    res.json(parseTutorial(updated));
   } catch (error) {
     console.error('Error updating tutorial:', error);
-    res.status(500).json({ error: 'Failed to update tutorial' });
+    res.status(500).json({ error: 'Fehler beim Aktualisieren des Tutorials' });
   }
 });
 
 // ── DELETE TUTORIAL (ADMIN ONLY) ───────────────────────────────────────────
-router.delete('/tutorials/:id', requireAdmin, async (req: Request, res: Response) => {
+router.delete('/tutorials/:id', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
   try {
-    const db = (req as any).db as any;
-    const { id } = req.params;
-
-    const tutorial = db.prepare('SELECT * FROM tutorials WHERE id = ?').get(id) as any;
-    if (!tutorial) {
-      return res.status(404).json({ error: 'Tutorial not found' });
-    }
-
-    // Delete tutorial and all progress records
-    db.prepare('DELETE FROM user_tutorial_progress WHERE tutorial_id = ?').run(id);
-    db.prepare('DELETE FROM tutorials WHERE id = ?').run(id);
-
-    res.json({ message: 'Tutorial deleted successfully' });
+    const db = getDb();
+    const existing = db.get('SELECT id FROM tutorials WHERE id = ?', [req.params.id]) as any;
+    if (!existing) return res.status(404).json({ error: 'Tutorial nicht gefunden' });
+    db.run('DELETE FROM user_tutorial_progress WHERE tutorial_id = ?', [req.params.id]);
+    db.run('DELETE FROM tutorials WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Tutorial gelöscht' });
   } catch (error) {
     console.error('Error deleting tutorial:', error);
-    res.status(500).json({ error: 'Failed to delete tutorial' });
+    res.status(500).json({ error: 'Fehler beim Löschen des Tutorials' });
   }
 });
 
-// ── GET USER TUTORIAL PROGRESS ─────────────────────────────────────────────
-router.get('/tutorials/:id/progress', async (req: Request, res: Response) => {
+// ── GET USER PROGRESS ──────────────────────────────────────────────────────
+router.get('/tutorials/:id/progress', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const db = (req as any).db as any;
-    const user = (req as any).user;
-    const { id } = req.params;
-
-    const progress = db.prepare(`
-      SELECT * FROM user_tutorial_progress 
-      WHERE tutorial_id = ? AND user_id = ?
-    `).get(id, user.id) as any;
-
-    if (!progress) {
-      return res.json({
-        completed: false,
-        skipped: false,
-        currentStep: 0,
-      });
-    }
-
+    const db = getDb();
+    const user = req.user!;
+    const progress = db.get(
+      'SELECT * FROM user_tutorial_progress WHERE tutorial_id = ? AND user_id = ?',
+      [req.params.id, user.id]
+    ) as any;
+    if (!progress) return res.json({ completed: false, skipped: false, currentStep: 0 });
     res.json({
       id: progress.id,
       completed: progress.completed === 1,
@@ -244,123 +208,72 @@ router.get('/tutorials/:id/progress', async (req: Request, res: Response) => {
       updatedAt: progress.updated_at,
     });
   } catch (error) {
-    console.error('Error fetching tutorial progress:', error);
-    res.status(500).json({ error: 'Failed to fetch progress' });
+    console.error('Error fetching progress:', error);
+    res.status(500).json({ error: 'Fehler beim Laden des Fortschritts' });
   }
 });
 
-// ── UPDATE TUTORIAL PROGRESS ───────────────────────────────────────────────
-router.post('/tutorials/:id/progress', async (req: Request, res: Response) => {
+// ── UPDATE USER PROGRESS ───────────────────────────────────────────────────
+router.post('/tutorials/:id/progress', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const db = (req as any).db as any;
-    const user = (req as any).user;
-    const { id } = req.params;
+    const db = getDb();
+    const user = req.user!;
     const { completed, skipped, currentStep } = req.body;
-
-    let progress = db.prepare(`
-      SELECT * FROM user_tutorial_progress 
-      WHERE tutorial_id = ? AND user_id = ?
-    `).get(id, user.id) as any;
-
     const now = new Date().toISOString();
 
-    if (!progress) {
-      const progressId = uuidv4();
-      db.prepare(`
-        INSERT INTO user_tutorial_progress 
-        (id, user_id, tutorial_id, completed, completed_at, skipped, current_step, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        progressId,
-        user.id,
-        id,
-        completed ? 1 : 0,
-        completed ? now : null,
-        skipped ? 1 : 0,
-        currentStep || 0,
-        now,
-        now
+    const existing = db.get(
+      'SELECT id FROM user_tutorial_progress WHERE tutorial_id = ? AND user_id = ?',
+      [req.params.id, user.id]
+    ) as any;
+
+    if (existing) {
+      db.run(
+        `UPDATE user_tutorial_progress
+         SET completed = ?, completed_at = ?, skipped = ?, current_step = ?, updated_at = ?
+         WHERE tutorial_id = ? AND user_id = ?`,
+        [completed ? 1 : 0, completed ? now : null, skipped ? 1 : 0, currentStep ?? 0, now,
+         req.params.id, user.id]
       );
-
-      return res.status(201).json({
-        id: progressId,
-        completed: completed || false,
-        completedAt: completed ? now : null,
-        skipped: skipped || false,
-        currentStep: currentStep || 0,
-      });
+    } else {
+      db.run(
+        `INSERT INTO user_tutorial_progress
+         (id, user_id, tutorial_id, completed, completed_at, skipped, current_step, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [uuidv4(), user.id, req.params.id, completed ? 1 : 0, completed ? now : null,
+         skipped ? 1 : 0, currentStep ?? 0, now, now]
+      );
     }
-
-    db.prepare(`
-      UPDATE user_tutorial_progress 
-      SET completed = ?, completed_at = ?, skipped = ?, current_step = ?, updated_at = ?
-      WHERE tutorial_id = ? AND user_id = ?
-    `).run(
-      completed ? 1 : 0,
-      completed ? now : progress.completed_at,
-      skipped ? 1 : 0,
-      currentStep || progress.current_step,
-      now,
-      id,
-      user.id
-    );
-
-    res.json({
-      id: progress.id,
-      completed: completed || progress.completed === 1,
-      completedAt: completed ? now : progress.completed_at,
-      skipped: skipped || progress.skipped === 1,
-      currentStep: currentStep || progress.current_step,
-    });
+    res.json({ success: true });
   } catch (error) {
-    console.error('Error updating tutorial progress:', error);
-    res.status(500).json({ error: 'Failed to update progress' });
+    console.error('Error updating progress:', error);
+    res.status(500).json({ error: 'Fehler beim Speichern des Fortschritts' });
   }
 });
 
 // ── GET ALL TUTORIALS FOR ADMIN ────────────────────────────────────────────
-router.get('/admin/tutorials', requireAdmin, async (req: Request, res: Response) => {
+router.get('/admin/tutorials', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
   try {
-    const db = (req as any).db as any;
-
-    const tutorials = db.prepare(`
-      SELECT * FROM tutorials 
-      ORDER BY role ASC, created_at DESC
-    `).all() as any[];
-
-    const formattedTutorials = tutorials.map(t => ({
-      id: t.id,
-      role: t.role,
-      title: t.title,
-      description: t.description,
-      enabled: t.enabled === 1,
-      steps: JSON.parse(t.steps),
-      createdAt: t.created_at,
-      updatedAt: t.updated_at,
-      createdBy: t.created_by,
-    }));
-
-    res.json(formattedTutorials);
+    const db = getDb();
+    const tutorials = db.all('SELECT * FROM tutorials ORDER BY created_at DESC', []) as any[];
+    res.json(tutorials.map(parseTutorial));
   } catch (error) {
     console.error('Error fetching admin tutorials:', error);
-    res.status(500).json({ error: 'Failed to fetch tutorials' });
+    res.status(500).json({ error: 'Fehler beim Laden der Tutorials' });
   }
 });
 
-// ── GET USER PROGRESS FOR A SPECIFIC TUTORIAL (ADMIN ONLY) ──────────────────
-router.get('/admin/tutorials/:id/progress', requireAdmin, async (req: Request, res: Response) => {
+// ── GET USER PROGRESS FOR A SPECIFIC TUTORIAL (ADMIN) ─────────────────────
+router.get('/admin/tutorials/:id/progress', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
   try {
-    const db = (req as any).db as any;
-    const { id } = req.params;
-
-    const progress = db.prepare(`
-      SELECT utp.*, u.username, u.display_name, u.role
-      FROM user_tutorial_progress utp
-      JOIN users u ON utp.user_id = u.id
-      WHERE utp.tutorial_id = ?
-      ORDER BY utp.updated_at DESC
-    `).all(id) as any[];
-
+    const db = getDb();
+    const progress = db.all(
+      `SELECT utp.*, u.username, u.display_name, u.role
+       FROM user_tutorial_progress utp
+       JOIN users u ON utp.user_id = u.id
+       WHERE utp.tutorial_id = ?
+       ORDER BY utp.updated_at DESC`,
+      [req.params.id]
+    ) as any[];
     res.json(progress.map(p => ({
       userId: p.user_id,
       username: p.username,
@@ -374,86 +287,56 @@ router.get('/admin/tutorials/:id/progress', requireAdmin, async (req: Request, r
     })));
   } catch (error) {
     console.error('Error fetching tutorial progress:', error);
-    res.status(500).json({ error: 'Failed to fetch progress' });
+    res.status(500).json({ error: 'Fehler beim Laden des Fortschritts' });
   }
 });
 
-// ── RESET USER TUTORIAL PROGRESS (ADMIN ONLY) ──────────────────────────────
-router.post('/admin/tutorials/:id/reset/:userId', requireAdmin, async (req: Request, res: Response) => {
+// ── RESET USER TUTORIAL PROGRESS (ADMIN) ──────────────────────────────────
+router.post('/admin/tutorials/:id/reset/:userId', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
   try {
-    const db = (req as any).db as any;
-    const { id, userId } = req.params;
-
-    db.prepare(`
-      DELETE FROM user_tutorial_progress 
-      WHERE tutorial_id = ? AND user_id = ?
-    `).run(id, userId);
-
-    res.json({ message: 'Tutorial progress reset successfully' });
+    const db = getDb();
+    db.run(
+      'DELETE FROM user_tutorial_progress WHERE tutorial_id = ? AND user_id = ?',
+      [req.params.id, req.params.userId]
+    );
+    res.json({ message: 'Tutorial-Fortschritt zurückgesetzt' });
   } catch (error) {
     console.error('Error resetting tutorial progress:', error);
-    res.status(500).json({ error: 'Failed to reset progress' });
+    res.status(500).json({ error: 'Fehler beim Zurücksetzen des Fortschritts' });
   }
 });
 
-// ── INITIALIZE TUTORIAL FOR USER (ADMIN ONLY) ──────────────────────────────
-router.post('/admin/tutorials/:id/initialize/:userId', requireAdmin, async (req: Request, res: Response) => {
+// ── INITIALIZE TUTORIAL FOR USER (ADMIN) ──────────────────────────────────
+router.post('/admin/tutorials/:id/initialize/:userId', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
   try {
-    const db = (req as any).db as any;
+    const db = getDb();
     const { id, userId } = req.params;
-    const { theme } = req.body; // Optional: 'light' | 'dark'
+    const { theme } = req.body;
 
-    // Delete existing progress
-    db.prepare(`
-      DELETE FROM user_tutorial_progress 
-      WHERE tutorial_id = ? AND user_id = ?
-    `).run(id, userId);
+    db.run('DELETE FROM user_tutorial_progress WHERE tutorial_id = ? AND user_id = ?', [id, userId]);
 
-    // Create new progress entry
     const progressId = uuidv4();
     const now = new Date().toISOString();
-
-    db.prepare(`
-      INSERT INTO user_tutorial_progress 
-      (id, user_id, tutorial_id, completed, skipped, current_step, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      progressId,
-      userId,
-      id,
-      0,
-      0,
-      0,
-      now,
-      now
+    db.run(
+      `INSERT INTO user_tutorial_progress (id, user_id, tutorial_id, completed, skipped, current_step, created_at, updated_at)
+       VALUES (?, ?, ?, 0, 0, 0, ?, ?)`,
+      [progressId, userId, id, now, now]
     );
 
-    // If theme is specified, update the user's theme preference in their profile
     if (theme === 'light' || theme === 'dark') {
       try {
-        // Get current user theme settings
         const userRow = db.get('SELECT theme FROM users WHERE id = ?', [userId]) as any;
         let currentTheme: any = {};
-        if (userRow?.theme) {
-          try { currentTheme = JSON.parse(userRow.theme); } catch (_) {}
-        }
-        // Merge the mode into the existing theme object
-        const updatedTheme = { ...currentTheme, mode: theme };
-        db.prepare(`UPDATE users SET theme = ?, updated_at = datetime('now') WHERE id = ?`)
-          .run(JSON.stringify(updatedTheme), userId);
-      } catch (themeErr) {
-        console.warn('Could not update user theme during tutorial init:', themeErr);
-      }
+        try { currentTheme = JSON.parse(userRow?.theme || '{}'); } catch {}
+        db.run(`UPDATE users SET theme = ?, updated_at = datetime('now') WHERE id = ?`,
+          [JSON.stringify({ ...currentTheme, mode: theme }), userId]);
+      } catch {}
     }
 
-    res.status(201).json({
-      message: 'Tutorial initialized for user',
-      progressId,
-      themeApplied: theme || null,
-    });
+    res.status(201).json({ message: 'Tutorial für Benutzer initialisiert', progressId });
   } catch (error) {
     console.error('Error initializing tutorial:', error);
-    res.status(500).json({ error: 'Failed to initialize tutorial' });
+    res.status(500).json({ error: 'Fehler beim Initialisieren des Tutorials' });
   }
 });
 

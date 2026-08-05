@@ -58,6 +58,8 @@ interface Props {
   permissions?: Record<string, boolean>;
   /** Optional: highlight a specific nav item by its tutorial-id */
   highlightId?: string;
+  /** Alias for highlightId — used from TutorialsManagementPage */
+  highlightedTarget?: string | null;
   onSelectItem?: (id: string) => void;
 }
 
@@ -67,8 +69,11 @@ export default function RoleMenuPreview({
   roleColor = '#7c3aed',
   permissions = {},
   highlightId,
+  highlightedTarget,
   onSelectItem,
 }: Props) {
+  // Support both prop names
+  const effectiveHighlightId = highlightId || highlightedTarget || undefined;
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const displayLabel = roleLabel || role;
@@ -120,7 +125,7 @@ export default function RoleMenuPreview({
           {/* Nav items */}
           <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto max-h-72">
             {visibleItems.map((item, idx) => {
-              const isHighlighted = item.id === highlightId;
+              const isHighlighted = item.id === effectiveHighlightId;
               const isHovered = item.id === hoveredId;
               const showDivider = item.dividerBefore && idx > 0;
               return (
@@ -181,11 +186,11 @@ export default function RoleMenuPreview({
               <div
                 key={item.id}
                 className={`flex items-center gap-2 text-xs px-2 py-1 rounded cursor-pointer transition-colors ${
-                  item.id === highlightId
+                  item.id === effectiveHighlightId
                     ? 'text-white rounded-lg'
                     : 'text-text-secondary hover:text-text-primary hover:bg-surface-raised'
                 }`}
-                style={item.id === highlightId ? { backgroundColor: displayColor } : undefined}
+                style={item.id === effectiveHighlightId ? { backgroundColor: displayColor } : undefined}
                 onClick={() => onSelectItem?.(item.id)}
                 title={`[data-tutorial-id="${item.id}"]`}
               >

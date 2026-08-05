@@ -5,6 +5,8 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { TutorialProvider } from './contexts/TutorialContext';
 import { TutorialOverlay } from './components/tutorials/TutorialOverlay';
 import TutorialWikiPanel from './components/tutorials/TutorialWikiPanel';
+import { ScreenshotModeProvider } from './contexts/ScreenshotModeContext';
+import ScreenshotCaptureOverlay from './components/tutorials/ScreenshotCaptureOverlay';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import ToastContainer from './components/ui/ToastContainer';
@@ -123,14 +125,17 @@ export default function App() {
   return (
     <ThemeProvider>
       <AppProvider>
-        <TutorialProvider>
-          <BrowserRouter>
-            <AppRoutes />
-            <TutorialOverlay />
-            <TutorialWikiPanel />
-            <ToastContainer />
-          </BrowserRouter>
-        </TutorialProvider>
+        <ScreenshotModeProvider>
+          <TutorialProvider>
+            <BrowserRouter>
+              <AppRoutes />
+              <TutorialOverlay />
+              <TutorialWikiPanel />
+              <ScreenshotCaptureOverlay />
+              <ToastContainer />
+            </BrowserRouter>
+          </TutorialProvider>
+        </ScreenshotModeProvider>
       </AppProvider>
     </ThemeProvider>
   );

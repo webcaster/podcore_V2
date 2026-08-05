@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
 import { useTutorial } from '../../contexts/TutorialContext';
+import { useScreenshotMode } from '../../contexts/ScreenshotModeContext';
 import { api } from '../../lib/api';
 import NotificationCenter from './NotificationCenter';
 
@@ -127,6 +128,28 @@ export default function Layout() {
 
   const { openWiki, tutorials } = useTutorial();
   const hasTutorials = tutorials.length > 0;
+  const { active: screenshotActive, simulatedRole, simulatedPermissions } = useScreenshotMode();
+
+  // Im Screenshot-Modus: Menü auf die Berechtigungen der simulierten Rolle filtern
+  const screenshotFilteredItems = screenshotActive
+    ? navItems.filter(item => {
+        // Admin-only items ausblenden
+        if (item.permission === 'canManageUsers' || item.permission === 'canManageSettings') return false;
+        // Berechtigungen der simulierten Rolle prüfen
+        if (item.permission && !simulatedPermissions[item.permission]) return false;
+        // Feature-Flags prüfen
+        const path = item.to;
+        if ((path === '/editorial' || path === '/calendar') && !features.editorial) return false;
+        if (path === '/approvals' && !features.approvals) return false;
+        if ((path === '/sponsors' || path === '/sponsors/calendar' || path === '/sponsors/reports') && !features.sponsoring) return false;
+        if (path === '/media' && !features.mediaLibrary) return false;
+        if (path === '/chat' && !features.chat) return false;
+        if ((path === '/analytics' || path === '/stats') && !features.statistics) return false;
+        if (path === '/seasons' && !features.seasons) return false;
+        if (path === '/branding' && !features.branding) return false;
+        return true;
+      })
+    : visibleItems;
 
   const Sidebar = ({ mobile = false }) => (
     <aside
@@ -158,8 +181,16 @@ export default function Layout() {
       </div>
 
       {/* Navigation */}
+      {/* Screenshot-Modus: Rollen-Badge in der Sidebar */}
+      {screenshotActive && (
+        <div className="mx-3 mb-2 px-3 py-2 bg-accent-purple/20 border border-accent-purple/40 rounded-xl">
+          <p className="text-xs text-accent-purple font-semibold text-center">
+            Ansicht: {simulatedRole}
+          </p>
+        </div>
+      )}
       <nav data-tutorial-id="sidebar-nav" className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {visibleItems.map((item) => (
+        {(screenshotActive ? screenshotFilteredItems : visibleItems).map((item) => (
           <React.Fragment key={item.to}>
             {item.dividerBefore && !collapsed && (
               <div className="my-2 border-t border-surface-border/50" />

@@ -29,6 +29,7 @@ import approvalsRouter from './routers/approvals';
 import sponsorsV2Router from './routers/sponsors-v2';
 import updateRouter from './routers/update';
 import episodeWorkflowRouter from './routers/episodeWorkflow';
+import tutorialsRouter from './routers/tutorials';
 import { initializeRealtime } from './services/realtime';
 
 const app: import("express").Express = express();
@@ -141,6 +142,7 @@ app.use('/api/chat', chatRouter);
 app.use('/api/pdf-layouts', pdfLayoutsRouter);
 app.use('/api/update', updateRouter);
 app.use('/api/episode-workflow', episodeWorkflowRouter);
+app.use('/api', tutorialsRouter);
 
 // Serve branding assets publicly (no auth needed for display)
 const brandingDir = path.join(DATA_DIR, 'branding');
