@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { readFileSync } from 'fs'
@@ -9,8 +9,21 @@ const rootPackageJson = JSON.parse(
 )
 const APP_VERSION = rootPackageJson.version
 
+// Vite-Plugin: Ersetzt <title> automatisch mit korrekter Version
+function htmlVersionPlugin(): Plugin {
+  return {
+    name: 'html-version-inject',
+    transformIndexHtml(html: string) {
+      return html.replace(
+        /<title>.*?<\/title>/,
+        `<title>PodCore v${APP_VERSION}</title>`
+      );
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), htmlVersionPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
