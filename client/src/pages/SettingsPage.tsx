@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings, User, FolderOpen, Save, Eye, EyeOff, Loader2, Mic2,
-  Palette, Radio, Sliders, Globe, Clock, Tag, Info, Download,
+  Palette, Radio, Sliders, Globe, Clock, Tag, Info, Download, Sun, Moon,
   Upload, CheckCircle, XCircle, AlertTriangle, RefreshCw, Package
 } from 'lucide-react';
 import { adminApi, authApi, updateApi } from '../lib/api';
+import { useTheme } from '../contexts/ThemeContext';
 import { useApp, applyUserTheme } from '../contexts/AppContext';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ const SIDEBAR_PRESETS = [
 // ── component ─────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { user, can, showSuccess, showError, refreshUser, refreshPodcastProfile } = useApp();
+  const { mode, setMode } = useTheme();
 
   type TabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'app' | 'update';
   const [activeTab, setActiveTab] = useState<TabKey>(() =>
@@ -571,6 +573,36 @@ export default function SettingsPage() {
               <Palette size={16} /> Persönliches Design
             </h3>
             <p className="text-text-secondary text-sm -mt-2">Diese Einstellungen gelten nur für dein Konto und werden beim Login automatisch angewendet.</p>
+
+            {/* Light/Dark Mode Toggle */}
+            <div>
+              <label className="label">Farbschema</label>
+              <p className="text-text-muted text-xs mb-3">Wählen Sie zwischen hellem und dunklem Design</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setMode('dark')}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
+                    mode === 'dark'
+                      ? 'border-accent-purple bg-accent-purple/10 text-text-primary'
+                      : 'border-surface-border text-text-secondary hover:border-surface-border-light'
+                  }`}
+                >
+                  <Moon size={16} />
+                  <span>Dunkles Design</span>
+                </button>
+                <button
+                  onClick={() => setMode('light')}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
+                    mode === 'light'
+                      ? 'border-accent-purple bg-accent-purple/10 text-text-primary'
+                      : 'border-surface-border text-text-secondary hover:border-surface-border-light'
+                  }`}
+                >
+                  <Sun size={16} />
+                  <span>Helles Design</span>
+                </button>
+              </div>
+            </div>
 
             {/* Accent Color */}
             <div>

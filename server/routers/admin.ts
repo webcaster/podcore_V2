@@ -21,6 +21,20 @@ import {
 
 const router: import("express").Router = Router();
 
+// Utility: Compare semantic versions (returns -1, 0, or 1)
+function compareVersions(v1: string, v2: string): number {
+  const parts1 = v1.split('.').map(p => parseInt(p, 10) || 0);
+  const parts2 = v2.split('.').map(p => parseInt(p, 10) || 0);
+  const maxLen = Math.max(parts1.length, parts2.length);
+  for (let i = 0; i < maxLen; i++) {
+    const p1 = parts1[i] || 0;
+    const p2 = parts2[i] || 0;
+    if (p1 > p2) return 1;
+    if (p1 < p2) return -1;
+  }
+  return 0;
+}
+
 // ============================================================
 // PUBLIC ROUTES (kein Auth nötig)
 // ============================================================
@@ -792,7 +806,24 @@ router.post('/update/upload', requirePermission('canManageSettings') as any, upl
 });
 
 // POST /api/admin/update/apply — Update im Staging prüfen, rollbackfähig übernehmen und Neustart planen
+// POST /api/admin/update/apply — Wendet ein hochgeladenes Update an
+// Erfordert: canManageSettings UND Elevation-Token für Sicherheit
 router.post('/update/apply', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+  // Elevation-Token Prüfung: Verhindert versehentliche Updates
+  const elevationToken = req.headers['x-elevation-token'] as string;
+  const sessionElevationToken = (req.session as any)?.elevationToken;
+  
+  if (!elevationToken || elevationToken !== sessionElevationToken) {
+    return res.status(403).json({
+      success: false,
+      error: 'Elevation-Token erforderlich. Bitte bestätigen Sie das Update in den Sicherheitseinstellungen.',
+      requiresElevation: true,
+    });
+  }
+
+  // Elevation-Token nach Verwendung löschen (One-Time-Token)
+  (req.session as any).elevationToken = null;
+  
   const updateId = String(req.body?.updateId || '');
   if (!/^\d+$/.test(updateId)) return res.status(400).json({ success: false, error: 'Ungültige updateId' });
   const zipPath = path.join(UPDATE_DIR, `update-${updateId}.zip`);
@@ -1131,6 +1162,28 @@ router.get('/db/migration-log', requirePermission('canManageSettings') as any, (
 });
 
 // GET /api/admin/update/check-github — Neueste Version auf GitHub prüfen (v2.12.7)
+// POST /api/admin/update/request-elevation — Fordert Elevation-Token an
+router.post('/update/request-elevation', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+  // Generiere einen einmaligen Elevation-Token
+  const elevationToken = require('crypto').randomBytes(32).toString('hex');
+  (req.session as any).elevationToken = elevationToken;
+  
+  // Token verfällt nach 5 Minuten
+  setTimeout(() => {
+    (req.session as any).elevationToken = null;
+  }, 5 * 60 * 1000);
+
+  return res.json({
+    success: true,
+    data: {
+      elevationToken,
+      expiresIn: 300, // 5 Minuten
+      message: 'Elevation-Token generiert. Bitte bestätigen Sie das Update.',
+    },
+  });
+});
+
+// GET /api/admin/update/check-github — Prüft auf neue Version auf GitHub
 router.get('/update/check-github', requirePermission('canManageSettings') as any, async (req: AuthRequest, res: Response) => {
   const https = require('https');
   const pkgPath = path.join(__dirname, '..', '..', 'package.json');
@@ -1141,7 +1194,7 @@ router.get('/update/check-github', requirePermission('canManageSettings') as any
     hostname: 'api.github.com',
     path: '/repos/webcaster/podcore_V2/releases/latest',
     method: 'GET',
-    headers: { 'User-Agent': 'PodCore-App/2.12.7', 'Accept': 'application/vnd.github.v3+json' },
+    headers: { 'User-Agent': `PodCore-App/${currentVersion}`, 'Accept': 'application/vnd.github.v3+json' },
   };
 
   try {
@@ -1169,13 +1222,15 @@ router.get('/update/check-github', requirePermission('canManageSettings') as any
     }
 
     const latestVersion = data.tag_name.replace(/^v/, '');
-    const hasUpdate = latestVersion !== currentVersion;
+    const hasUpdate = latestVersion !== currentVersion && compareVersions(latestVersion, currentVersion) > 0;
     const zipAsset = (data.assets || []).find((a: any) => a.name.endsWith('.zip'));
 
     return res.json({
       success: true,
       data: {
-        currentVersion, latestVersion, hasUpdate,
+        currentVersion,
+        latestVersion,
+        hasUpdate,
         message: hasUpdate
           ? `Neue Version ${latestVersion} verfügbar (aktuell: ${currentVersion})`
           : `Version ${currentVersion} ist aktuell`,
@@ -1183,6 +1238,7 @@ router.get('/update/check-github', requirePermission('canManageSettings') as any
         downloadUrl: zipAsset?.browser_download_url || null,
         releaseNotes: data.body || null,
         publishedAt: data.published_at || null,
+        requiresElevation: hasUpdate,
       },
     });
   } catch (err: any) {
