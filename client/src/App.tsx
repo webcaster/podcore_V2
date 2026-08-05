@@ -115,6 +115,7 @@ function AppRoutes() {
         <Route path="episodes-dashboard" element={<Suspense fallback={<LoadingSpinner />}><EpisodesDashboardPage /></Suspense>} />
         <Route path="pdf-layouts" element={<Suspense fallback={<LoadingSpinner />}><PdfLayoutManagerPage /></Suspense>} />
         <Route path="admin/tutorials" element={<Suspense fallback={<LoadingSpinner />}><TutorialsManagementPage /></Suspense>} />
+        <Route path="admin/tutorials/edit" element={<Suspense fallback={<LoadingSpinner />}><TutorialsManagementPage /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
