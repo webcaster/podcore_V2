@@ -39,6 +39,9 @@ interface TutorialContextType {
   currentStep: number;
   progress: TutorialProgress | null;
   isLoading: boolean;
+  wikiOpen: boolean;
+  openWiki: () => void;
+  closeWiki: () => void;
   startTutorial: (tutorialId: string) => Promise<void>;
   nextStep: () => void;
   previousStep: () => void;
@@ -57,6 +60,11 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState<TutorialProgress | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [wikiOpen, setWikiOpen] = useState(false);
+
+  // Open/close wiki panel
+  const openWiki = () => setWikiOpen(true);
+  const closeWiki = () => setWikiOpen(false);
 
   // Load tutorials for user's role
   const loadTutorials = async () => {
@@ -102,6 +110,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
 
       setActiveTutorial(tutorial);
+      setWikiOpen(false);
     } catch (error) {
       console.error('Error starting tutorial:', error);
     }
@@ -204,6 +213,9 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
         currentStep,
         progress,
         isLoading,
+        wikiOpen,
+        openWiki,
+        closeWiki,
         startTutorial,
         nextStep,
         previousStep,

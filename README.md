@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.14.10**
+**Aktuelle Version: 2.15.7**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -76,6 +76,40 @@
 - Kategorisierte, aufklappbare Anleitungen zu Episoden, RedaktionsHub, Medien, Sponsoring, Statistiken, PDF-Exporten und Einstellungen
 - Kennzeichnung berechtigungsabhängiger Administrationsfunktionen
 - Kompakte und übersichtliche Versionshistorie
+
+---
+
+## 🆕 Neue Features in v2.15.x
+
+### 🎨 Light/Dark Mode
+PodCore unterstützt jetzt ein helles und dunkles Design. Umschalten unter **Einstellungen → Mein Design → Erscheinungsbild**. Das Theme wird im Benutzerprofil gespeichert und bei jedem Login automatisch angewendet.
+
+### 🎓 Rollenbasiertes Tutorial-System
+Administratoren können anpassbare Onboarding-Tutorials erstellen und für einzelne Benutzer aktivieren:
+- **Administration → Tutorials** – Tutorials erstellen und verwalten
+- Schritte mit Titel, Beschreibung, Hervorhebung, Bild-Upload und Tooltip-Position
+- Per-User-Aktivierung mit optionaler Theme-Wahl (Light/Dark)
+- Automatischer Start beim ersten Login des Benutzers
+
+### 🗑️ Kaskadierendes Löschen mit Papierkorb
+- Gelöschte Ideenmappen landen im Papierkorb
+- Wiederherstellung oder permanentes Löschen möglich
+- Alle verknüpften Daten (Checklisten, Notizen, Uploads) werden mitgelöscht
+
+### 🔐 Sichere Auto-Updates
+- Elevation-Token-System für Updates (One-Time-Token, 5 Min gültig)
+- Verhindert versehentliche Updates
+- Token wird automatisch angefordert und nach Verwendung gelöscht
+
+### 📄 Erweiterter PDF-Export
+- Persönliches PDF für Interview-Partner im PDF-Layout-Manager konfigurierbar
+- Benutzerdefinierter Dokumentname
+- Episode-Informationen im PDF einbindbar
+
+### 🔔 Freigabeanfragen-System
+- Episoden und Fragen zur Genehmigung anfordern
+- Automatische Benachrichtigungen an Genehmiger
+- Integration mit dem Notification Center
 
 ---
 

@@ -347,6 +347,37 @@ router.get('/admin/tutorials', requireAdmin, async (req: Request, res: Response)
   }
 });
 
+// ── GET USER PROGRESS FOR A SPECIFIC TUTORIAL (ADMIN ONLY) ──────────────────
+router.get('/admin/tutorials/:id/progress', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const db = (req as any).db as any;
+    const { id } = req.params;
+
+    const progress = db.prepare(`
+      SELECT utp.*, u.username, u.display_name, u.role
+      FROM user_tutorial_progress utp
+      JOIN users u ON utp.user_id = u.id
+      WHERE utp.tutorial_id = ?
+      ORDER BY utp.updated_at DESC
+    `).all(id) as any[];
+
+    res.json(progress.map(p => ({
+      userId: p.user_id,
+      username: p.username,
+      displayName: p.display_name,
+      role: p.role,
+      completed: p.completed === 1,
+      completedAt: p.completed_at,
+      skipped: p.skipped === 1,
+      currentStep: p.current_step,
+      updatedAt: p.updated_at,
+    })));
+  } catch (error) {
+    console.error('Error fetching tutorial progress:', error);
+    res.status(500).json({ error: 'Failed to fetch progress' });
+  }
+});
+
 // ── RESET USER TUTORIAL PROGRESS (ADMIN ONLY) ──────────────────────────────
 router.post('/admin/tutorials/:id/reset/:userId', requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -370,6 +401,7 @@ router.post('/admin/tutorials/:id/initialize/:userId', requireAdmin, async (req:
   try {
     const db = (req as any).db as any;
     const { id, userId } = req.params;
+    const { theme } = req.body; // Optional: 'light' | 'dark'
 
     // Delete existing progress
     db.prepare(`
@@ -396,9 +428,28 @@ router.post('/admin/tutorials/:id/initialize/:userId', requireAdmin, async (req:
       now
     );
 
+    // If theme is specified, update the user's theme preference in their profile
+    if (theme === 'light' || theme === 'dark') {
+      try {
+        // Get current user theme settings
+        const userRow = db.get('SELECT theme FROM users WHERE id = ?', [userId]) as any;
+        let currentTheme: any = {};
+        if (userRow?.theme) {
+          try { currentTheme = JSON.parse(userRow.theme); } catch (_) {}
+        }
+        // Merge the mode into the existing theme object
+        const updatedTheme = { ...currentTheme, mode: theme };
+        db.prepare(`UPDATE users SET theme = ?, updated_at = datetime('now') WHERE id = ?`)
+          .run(JSON.stringify(updatedTheme), userId);
+      } catch (themeErr) {
+        console.warn('Could not update user theme during tutorial init:', themeErr);
+      }
+    }
+
     res.status(201).json({
       message: 'Tutorial initialized for user',
       progressId,
+      themeApplied: theme || null,
     });
   } catch (error) {
     console.error('Error initializing tutorial:', error);

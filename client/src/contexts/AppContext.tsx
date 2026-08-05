@@ -25,6 +25,7 @@ export interface UserTheme {
   accentColorDark?: string;
   surfaceColor?: string;
   surfaceRaisedColor?: string;
+  mode?: 'light' | 'dark'; // Light/Dark Mode Preference
 }
 
 // Feature-Flags: welche Module sind aktiviert
@@ -424,6 +425,15 @@ export function applyUserTheme(theme: UserTheme | null | undefined) {
 
   if (theme.fontScale) {
     root.style.setProperty('--font-scale', String(theme.fontScale));
+  }
+
+  // Apply light/dark mode if specified in user theme
+  if (theme.mode === 'light' || theme.mode === 'dark') {
+    localStorage.setItem('podcore-theme', theme.mode);
+    root.setAttribute('data-theme', theme.mode);
+    root.style.setProperty('color-scheme', theme.mode);
+    // Dispatch event so ThemeContext can react
+    window.dispatchEvent(new CustomEvent('podcore-theme-change', { detail: { mode: theme.mode } }));
   }
 }
 

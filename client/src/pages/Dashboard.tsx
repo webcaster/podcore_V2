@@ -950,9 +950,9 @@ export default function Dashboard() {
   });
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div data-tutorial-id="page-dashboard" className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div data-tutorial-id="dashboard-header" className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">
             {greeting()}, {user?.displayName?.split(' ')[0] || user?.username}! 👋

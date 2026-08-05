@@ -7,6 +7,7 @@ import {
   Layers, Archive, BarChart2, Calendar, MessageSquare, Radio, CheckCircle
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
+import { useTutorial } from '../../contexts/TutorialContext';
 import { api } from '../../lib/api';
 import NotificationCenter from './NotificationCenter';
 
@@ -21,6 +22,7 @@ interface NavItem {
   permission?: string;
   exact?: boolean;
   dividerBefore?: boolean;
+  tutorialId?: string;
 }
 
 export default function Layout() {
@@ -58,26 +60,26 @@ export default function Layout() {
   };
 
   const navItems: NavItem[] = [
-    { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard', exact: true },
-    { to: '/approvals', icon: <CheckCircle size={18} />, label: 'Freigabe-Center', permission: 'canApproveEpisodes' },
-    { to: '/episodes', icon: <Mic2 size={18} />, label: 'Episoden', permission: 'canViewEpisodes' },
-    { to: '/episodes-dashboard', icon: <Radio size={18} />, label: 'Episoden-Dashboard', permission: 'canViewEpisodes' },
-    { to: '/editorial', icon: <BookOpen size={18} />, label: 'Redaktions-Hub', permission: 'canViewIdeas' },
-    { to: '/calendar', icon: <Calendar size={18} />, label: 'Redaktionskalender', permission: 'canViewEditorialPlan' },
-    { to: '/chat', icon: <MessageSquare size={18} />, label: 'Team-Chat' },
-    { to: '/media', icon: <Library size={18} />, label: 'Media Library', permission: 'canViewMedia' },
-    { to: '/sponsors', icon: <Megaphone size={18} />, label: 'Sponsoring', permission: 'canViewSponsors', dividerBefore: true },
-    { to: '/sponsors/calendar', icon: <Calendar size={18} />, label: 'Buchungskalender', permission: 'canViewSponsors' },
-    { to: '/sponsors/reports', icon: <BarChart3 size={18} />, label: 'Sponsor-Auswertungen', permission: 'canViewSponsorReports' },
-    { to: '/seasons', icon: <Layers size={18} />, label: 'Staffeln', permission: 'canViewEpisodes' },
-    { to: '/archive', icon: <Archive size={18} />, label: 'Archiv', permission: 'canViewEpisodes' },
-    { to: '/analytics', icon: <TrendingUp size={18} />, label: 'Podigee Analytics', permission: 'canViewEpisodes', dividerBefore: true },
-    { to: '/stats', icon: <BarChart2 size={18} />, label: 'Podcast-Statistiken', permission: 'canViewEpisodes' },
-    { to: '/branding', icon: <Image size={18} />, label: 'Branding & Backup', permission: 'canManageSettings' },
-    { to: '/admin', icon: <Shield size={18} />, label: 'Administration', permission: 'canManageUsers', dividerBefore: true },
-    { to: '/admin/tutorials', icon: <Info size={18} />, label: 'Tutorial-Verwaltung', permission: 'canManageSettings' },
-    { to: '/pdf-layouts', icon: <FileText size={18} />, label: 'PDF-Layouts', permission: 'canManageSettings' },
-    { to: '/settings', icon: <Settings size={18} />, label: 'Einstellungen', permission: 'canManageSettings' },
+    { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard', exact: true, tutorialId: 'nav-dashboard' },
+    { to: '/approvals', icon: <CheckCircle size={18} />, label: 'Freigabe-Center', permission: 'canApproveEpisodes', tutorialId: 'nav-approvals' },
+    { to: '/episodes', icon: <Mic2 size={18} />, label: 'Episoden', permission: 'canViewEpisodes', tutorialId: 'nav-episodes' },
+    { to: '/episodes-dashboard', icon: <Radio size={18} />, label: 'Episoden-Dashboard', permission: 'canViewEpisodes', tutorialId: 'nav-episodes-dashboard' },
+    { to: '/editorial', icon: <BookOpen size={18} />, label: 'Redaktions-Hub', permission: 'canViewIdeas', tutorialId: 'nav-editorial' },
+    { to: '/calendar', icon: <Calendar size={18} />, label: 'Redaktionskalender', permission: 'canViewEditorialPlan', tutorialId: 'nav-calendar' },
+    { to: '/chat', icon: <MessageSquare size={18} />, label: 'Team-Chat', tutorialId: 'nav-chat' },
+    { to: '/media', icon: <Library size={18} />, label: 'Media Library', permission: 'canViewMedia', tutorialId: 'nav-media' },
+    { to: '/sponsors', icon: <Megaphone size={18} />, label: 'Sponsoring', permission: 'canViewSponsors', dividerBefore: true, tutorialId: 'nav-sponsors' },
+    { to: '/sponsors/calendar', icon: <Calendar size={18} />, label: 'Buchungskalender', permission: 'canViewSponsors', tutorialId: 'nav-sponsors-calendar' },
+    { to: '/sponsors/reports', icon: <BarChart3 size={18} />, label: 'Sponsor-Auswertungen', permission: 'canViewSponsorReports', tutorialId: 'nav-sponsors-reports' },
+    { to: '/seasons', icon: <Layers size={18} />, label: 'Staffeln', permission: 'canViewEpisodes', tutorialId: 'nav-seasons' },
+    { to: '/archive', icon: <Archive size={18} />, label: 'Archiv', permission: 'canViewEpisodes', tutorialId: 'nav-archive' },
+    { to: '/analytics', icon: <TrendingUp size={18} />, label: 'Podigee Analytics', permission: 'canViewEpisodes', dividerBefore: true, tutorialId: 'nav-analytics' },
+    { to: '/stats', icon: <BarChart2 size={18} />, label: 'Podcast-Statistiken', permission: 'canViewEpisodes', tutorialId: 'nav-stats' },
+    { to: '/branding', icon: <Image size={18} />, label: 'Branding & Backup', permission: 'canManageSettings', tutorialId: 'nav-branding' },
+    { to: '/admin', icon: <Shield size={18} />, label: 'Administration', permission: 'canManageUsers', dividerBefore: true, tutorialId: 'nav-admin' },
+    { to: '/admin/tutorials', icon: <Info size={18} />, label: 'Tutorial-Verwaltung', permission: 'canManageSettings', tutorialId: 'nav-tutorials' },
+    { to: '/pdf-layouts', icon: <FileText size={18} />, label: 'PDF-Layouts', permission: 'canManageSettings', tutorialId: 'nav-pdf-layouts' },
+    { to: '/settings', icon: <Settings size={18} />, label: 'Einstellungen', permission: 'canManageSettings', tutorialId: 'nav-settings' },
   ];
 
   // Feature-Flag-basierte Filterung der Navigation
@@ -123,8 +125,13 @@ export default function Layout() {
     );
   };
 
+  const { openWiki, tutorials } = useTutorial();
+  const hasTutorials = tutorials.length > 0;
+
   const Sidebar = ({ mobile = false }) => (
-    <aside className={`
+    <aside
+      data-tutorial-id={mobile ? 'sidebar-mobile' : 'sidebar'}
+      className={`
       flex flex-col h-full bg-obsidian-800 border-r border-surface-border
       ${mobile ? 'w-72' : collapsed ? 'w-16' : 'w-64'}
       transition-all duration-300
@@ -151,7 +158,7 @@ export default function Layout() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <nav data-tutorial-id="sidebar-nav" className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {visibleItems.map((item) => (
           <React.Fragment key={item.to}>
             {item.dividerBefore && !collapsed && (
@@ -168,6 +175,7 @@ export default function Layout() {
                   : `nav-item ${collapsed && !mobile ? 'justify-center px-0' : ''}`
               }
               title={collapsed && !mobile ? item.label : undefined}
+              data-tutorial-id={item.tutorialId}
             >
               <span className="flex-shrink-0">{item.icon}</span>
               {(!collapsed || mobile) && <span className="text-sm">{item.label}</span>}
@@ -177,7 +185,7 @@ export default function Layout() {
       </nav>
 
       {/* User info */}
-      <div className={`p-3 border-t border-surface-border ${collapsed && !mobile ? 'flex flex-col items-center gap-2' : ''}`}>
+      <div data-tutorial-id="sidebar-user-info" className={`p-3 border-t border-surface-border ${collapsed && !mobile ? 'flex flex-col items-center gap-2' : ''}`}>
         {(!collapsed || mobile) ? (
           <div className="flex items-center gap-3 mb-2 px-2">
             <div
@@ -214,17 +222,17 @@ export default function Layout() {
 
         {(!collapsed || mobile) ? (
           <div className="flex items-center gap-1 mt-1">
-            <NavLink
-              to="/wiki"
-              className={({ isActive }) =>
-                `flex items-center gap-1.5 text-xs px-2 py-1 rounded transition-colors flex-1 ${
-                  isActive ? 'text-accent-purple' : 'text-text-muted hover:text-text-secondary'
-                }`
-              }
+            <button
+              onClick={openWiki}
+              className="flex items-center gap-1.5 text-xs px-2 py-1 rounded transition-colors flex-1 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10"
+              title="Hilfe & Tutorial"
             >
               <HelpCircle size={12} />
-              <span>Wiki</span>
-            </NavLink>
+              <span>Hilfe / Wiki</span>
+              {hasTutorials && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent-purple" />
+              )}
+            </button>
             <NavLink
               to="/impressum"
               className={({ isActive }) =>
@@ -238,17 +246,16 @@ export default function Layout() {
             </NavLink>
           </div>
         ) : (
-          <NavLink
-            to="/wiki"
-            className={({ isActive }) =>
-              `flex items-center justify-center p-1 rounded transition-colors mt-1 ${
-                isActive ? 'text-accent-purple' : 'text-text-muted hover:text-text-secondary'
-              }`
-            }
-            title="Wiki"
+          <button
+            onClick={openWiki}
+            className="flex items-center justify-center p-1 rounded transition-colors mt-1 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10 relative"
+            title="Hilfe / Wiki"
           >
             <HelpCircle size={14} />
-          </NavLink>
+            {hasTutorials && (
+              <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-accent-purple" />
+            )}
+          </button>
         )}
       </div>
     </aside>
@@ -325,7 +332,7 @@ export default function Layout() {
         </div>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main data-tutorial-id="main-content" className="flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
       </div>

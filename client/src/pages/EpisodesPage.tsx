@@ -112,9 +112,9 @@ export default function EpisodesPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div data-tutorial-id="page-episodes" className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="page-header">
+      <div data-tutorial-id="episodes-header" className="page-header">
         <div>
           <h1 className="page-title">Episoden</h1>
           <p className="text-text-secondary text-sm mt-1">{total} Episode{total !== 1 ? 'n' : ''} gesamt</p>
@@ -125,7 +125,7 @@ export default function EpisodesPage() {
             <span className="hidden sm:inline">Planungsübersicht</span>
           </Link>
           {can('canCreateEpisodes') && (
-            <button onClick={() => setShowCreateModal(true)} className="btn-primary">
+            <button data-tutorial-id="btn-create-episode" onClick={() => setShowCreateModal(true)} className="btn-primary">
               <Plus size={16} />
               <span>Neue Episode</span>
             </button>

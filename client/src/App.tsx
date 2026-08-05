@@ -4,6 +4,7 @@ import { AppProvider, useAuth } from './contexts/AppContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { TutorialProvider } from './contexts/TutorialContext';
 import { TutorialOverlay } from './components/tutorials/TutorialOverlay';
+import TutorialWikiPanel from './components/tutorials/TutorialWikiPanel';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import ToastContainer from './components/ui/ToastContainer';
@@ -126,6 +127,7 @@ export default function App() {
           <BrowserRouter>
             <AppRoutes />
             <TutorialOverlay />
+            <TutorialWikiPanel />
             <ToastContainer />
           </BrowserRouter>
         </TutorialProvider>

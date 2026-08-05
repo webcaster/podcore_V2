@@ -1,6 +1,6 @@
 {
   "name": "podcore-client",
-  "version": "2.15.6",
+  "version": "2.15.8",
   "description": "PodCore Frontend",
   "type": "module",
   "scripts": {
@@ -11,6 +11,8 @@
   "dependencies": {
     "@tanstack/react-query": "^5.17.19",
     "date-fns": "^3.3.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.316.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

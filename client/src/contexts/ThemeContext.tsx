@@ -60,16 +60,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>('dark');
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load theme from localStorage on mount
-  useEffect(() => {
-    const savedMode = localStorage.getItem('podcore-theme') as ThemeMode | null;
-    const preferredMode = savedMode || 'dark';
-    setModeState(preferredMode);
-    applyTheme(preferredMode);
-    setIsInitialized(true);
-  }, []);
-
-  // Apply theme to document
+  // Apply theme to document (declared first so it can be used in useEffects below)
   const applyTheme = useCallback((themeMode: ThemeMode) => {
     const colors = themeMode === 'light' ? LIGHT_MODE_COLORS : DARK_MODE_COLORS;
     const root = document.documentElement;
@@ -89,6 +80,28 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       root.style.setProperty('color-scheme', 'dark');
     }
   }, []);
+
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedMode = localStorage.getItem('podcore-theme') as ThemeMode | null;
+    const preferredMode = savedMode || 'dark';
+    setModeState(preferredMode);
+    applyTheme(preferredMode);
+    setIsInitialized(true);
+  }, [applyTheme]);
+
+  // Listen for theme changes triggered by user profile (e.g. tutorial init by admin)
+  useEffect(() => {
+    const handleExternalThemeChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.mode === 'light' || detail?.mode === 'dark') {
+        setModeState(detail.mode);
+        applyTheme(detail.mode);
+      }
+    };
+    window.addEventListener('podcore-theme-change', handleExternalThemeChange);
+    return () => window.removeEventListener('podcore-theme-change', handleExternalThemeChange);
+  }, [applyTheme]);
 
   // Update theme mode
   const setMode = useCallback((newMode: ThemeMode) => {

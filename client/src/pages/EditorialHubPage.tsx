@@ -75,9 +75,9 @@ export default function EditorialHubPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div data-tutorial-id="page-editorial" className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div>
+      <div data-tutorial-id="editorial-header">
         <h1 className="page-title flex items-center gap-3">
           <BookOpen size={24} className="text-accent-purple" />
           Redaktions-Hub
@@ -88,7 +88,7 @@ export default function EditorialHubPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit flex-wrap">
+      <div data-tutorial-id="editorial-tabs" className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit flex-wrap">
         {tabs.map(tab => (
           <button
             key={tab.key}
@@ -285,7 +285,7 @@ function IdeasTab() {
           </button>
         )}
         {can('canCreateIdeas') && (
-          <button onClick={openCreate} className="btn-primary whitespace-nowrap">
+          <button data-tutorial-id="btn-create-idea" onClick={openCreate} className="btn-primary whitespace-nowrap">
             <Plus size={16} /><span>Neue Idee</span>
           </button>
         )}

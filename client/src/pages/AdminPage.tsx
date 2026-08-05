@@ -75,6 +75,12 @@ const ALL_PERMISSIONS = [
   // Sponsoring-System v2.12.13 – Angebote
   { key: 'canManageSponsorOffers', label: 'Angebote erstellen & verwalten', group: 'Sponsoring' },
   { key: 'canViewSponsorOffers', label: 'Angebote ansehen', group: 'Sponsoring' },
+  // Tutorial-System & Wiki (v2.15.8)
+  { key: 'canViewTutorials', label: 'Tutorials / Wiki ansehen', group: 'Tutorial & Wiki' },
+  { key: 'canManageTutorials', label: 'Tutorials erstellen & verwalten', group: 'Tutorial & Wiki' },
+  { key: 'canExportTutorialPdf', label: 'Tutorial als PDF exportieren', group: 'Tutorial & Wiki' },
+  { key: 'canResetTutorials', label: 'Tutorials für Nutzer neu starten', group: 'Tutorial & Wiki' },
+  { key: 'canTakeScreenshots', label: 'Screenshots in der App aufnehmen', group: 'Tutorial & Wiki' },
 ];
 
 const PERMISSION_GROUPS = [...new Set(ALL_PERMISSIONS.map(p => p.group))];
@@ -411,9 +417,9 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div data-tutorial-id="page-admin" className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div>
+      <div data-tutorial-id="admin-header">
         <h1 className="page-title flex items-center gap-3">
           <Shield size={24} className="text-accent-red" />
           Administration
@@ -422,7 +428,7 @@ export default function AdminPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit flex-wrap">
+      <div data-tutorial-id="admin-tabs" className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit flex-wrap">
         {[
           { key: 'users', label: 'Benutzer', icon: <Users size={14} /> },
           { key: 'roles', label: 'Rollen', icon: <Tag size={14} /> },

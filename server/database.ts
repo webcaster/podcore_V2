@@ -1273,6 +1273,12 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
     // Sponsoring-System v2.12.13 – Angebote
     canManageSponsorOffers: false,
     canViewSponsorOffers: false,
+    // Tutorial-System & Wiki (v2.15.8)
+    canViewTutorials: false,
+    canManageTutorials: false,
+    canExportTutorialPdf: false,
+    canResetTutorials: false,
+    canTakeScreenshots: false,
   };
 
   switch (role) {
@@ -1310,6 +1316,10 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         // v2.12.13
         canViewSponsorOffers: true,
         canManageSponsorOffers: true,
+        // Tutorial-System & Wiki (v2.15.8)
+        canViewTutorials: true,
+        canExportTutorialPdf: true,
+        canTakeScreenshots: true,
       };
     case 'moderator':
       return {
@@ -1343,6 +1353,10 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         // v2.12.13
         canViewSponsorOffers: true,
         canManageSponsorOffers: true,
+        // Tutorial-System & Wiki (v2.15.8)
+        canViewTutorials: true,
+        canExportTutorialPdf: true,
+        canTakeScreenshots: true,
       };
     case 'produktion':
       return {
@@ -1369,6 +1383,10 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canManageAdBookingsV2: true,
         // v2.12.13
         canViewSponsorOffers: true,
+        // Tutorial-System & Wiki (v2.15.8)
+        canViewTutorials: true,
+        canExportTutorialPdf: true,
+        canTakeScreenshots: true,
       };
     default:
       return base;
