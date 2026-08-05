@@ -177,14 +177,29 @@ export default function TutorialsManagementPage() {
   const loadRoles = async () => {
     try {
       const res = await fetch('/api/admin/roles', { credentials: 'include' });
-      if (res.ok) setRoles(await res.json());
+      if (res.ok) {
+        const json = await res.json();
+        // API returns { success: true, data: [...] }
+        const list = Array.isArray(json) ? json : (json.data || json);
+        if (Array.isArray(list) && list.length > 0) {
+          setRoles(list);
+        } else {
+          setRoles(DEFAULT_ROLES);
+        }
+      } else {
+        setRoles(DEFAULT_ROLES);
+      }
     } catch { setRoles(DEFAULT_ROLES); }
   };
 
   const loadUsers = async () => {
     try {
       const res = await fetch('/api/admin/users', { credentials: 'include' });
-      if (res.ok) setUsers(await res.json());
+      if (res.ok) {
+        const json = await res.json();
+        const list = Array.isArray(json) ? json : (json.data || json);
+        setUsers(Array.isArray(list) ? list : []);
+      }
     } catch {}
   };
 
@@ -787,19 +802,25 @@ export default function TutorialsManagementPage() {
                 {showMenuPreview ? 'Ausblenden' : 'Einblenden'}
               </button>
             </div>
-            {showMenuPreview && (
-              <RoleMenuPreview
-                role={formData.role}
-                highlightId={menuPreviewHighlight || undefined}
-                onSelectItem={(id) => {
-                  const selector = `[data-tutorial-id="${id}"]`;
-                  if (activeStepForPreview) {
-                    updateStep(activeStepForPreview, { target: selector });
-                  }
-                  setMenuPreviewHighlight(id);
-                }}
-              />
-            )}
+            {showMenuPreview && (() => {
+              const selectedRole = ROLES.find((r: any) => r.name === formData.role);
+              return (
+                <RoleMenuPreview
+                  role={formData.role}
+                  roleLabel={selectedRole?.label || formData.role}
+                  roleColor={selectedRole?.color || '#7c3aed'}
+                  permissions={selectedRole?.permissions || {}}
+                  highlightId={menuPreviewHighlight || undefined}
+                  onSelectItem={(id) => {
+                    const selector = `[data-tutorial-id="${id}"]`;
+                    if (activeStepForPreview) {
+                      updateStep(activeStepForPreview, { target: selector });
+                    }
+                    setMenuPreviewHighlight(id);
+                  }}
+                />
+              );
+            })()}
           </div>
 
           {/* Basic Info */}
