@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
-  Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle,
+  Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle, Info,
   Layers, Archive, BarChart2, Calendar, MessageSquare, Radio, CheckCircle
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
@@ -75,6 +75,7 @@ export default function Layout() {
     { to: '/stats', icon: <BarChart2 size={18} />, label: 'Podcast-Statistiken', permission: 'canViewEpisodes' },
     { to: '/branding', icon: <Image size={18} />, label: 'Branding & Backup', permission: 'canManageSettings' },
     { to: '/admin', icon: <Shield size={18} />, label: 'Administration', permission: 'canManageUsers', dividerBefore: true },
+    { to: '/admin/tutorials', icon: <Info size={18} />, label: 'Tutorial-Verwaltung', permission: 'canManageSettings' },
     { to: '/pdf-layouts', icon: <FileText size={18} />, label: 'PDF-Layouts', permission: 'canManageSettings' },
     { to: '/settings', icon: <Settings size={18} />, label: 'Einstellungen', permission: 'canManageSettings' },
   ];

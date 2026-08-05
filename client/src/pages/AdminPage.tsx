@@ -3,11 +3,12 @@ import {
   Shield, Users, Plus, Edit2, Trash2, Key, Check, X, Eye, EyeOff,
   Server, Database, HardDrive, Activity, RefreshCw, Loader2, Lock, Tag, Save,
   UserX, ArrowRight, AlertTriangle, ToggleLeft, ToggleRight, Layers, RotateCcw,
-  Upload, FileText, Download, Info, CheckCircle2, XCircle, GitBranch
+  Upload, FileText, Download, Info, CheckCircle2, XCircle, GitBranch, HelpCircle
 } from 'lucide-react';
 import { adminApi, backupApi } from '../lib/api';
 import { useApp, useFeatures } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
+import TutorialsManagementPage from './TutorialsManagementPage';
 
 const ALL_PERMISSIONS = [
   { key: 'canViewEpisodes', label: 'Episoden ansehen', group: 'Episoden' },
@@ -86,7 +87,7 @@ export default function AdminPage() {
   const [roles, setRoles] = useState<any[]>([]);
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'modules' | 'system' | 'database' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'modules' | 'system' | 'database' | 'tutorials' | 'logs'>('users');
 
   // Database Migration State
   const [dbStatus, setDbStatus] = useState<any>(null);
@@ -428,6 +429,7 @@ export default function AdminPage() {
           { key: 'modules', label: 'Module', icon: <Layers size={14} /> },
           { key: 'system', label: 'System', icon: <Server size={14} /> },
           { key: 'database', label: 'Datenbank', icon: <Database size={14} /> },
+          { key: 'tutorials', label: 'Tutorials', icon: <HelpCircle size={14} /> },
           { key: 'logs', label: 'Logs', icon: <Activity size={14} /> },
         ].map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
@@ -1311,6 +1313,11 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── TUTORIALS TAB ──────────────────────────────────────── */}
+      {activeTab === 'tutorials' && (
+        <TutorialsManagementPage />
       )}
 
       {/* ── Delete with Transfer Modal ────────────────────────── */}
