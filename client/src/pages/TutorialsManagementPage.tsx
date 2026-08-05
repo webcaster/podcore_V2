@@ -592,7 +592,7 @@ export default function TutorialsManagementPage() {
                     </span>
                   </h2>
 
-                  {roleTutorials.map(tutorial => {
+                  {roleTutorials.map((tutorial: Tutorial) => {
                     const isExpanded = expandedTutorial === tutorial.id;
                     const progress = userProgress[tutorial.id];
 
