@@ -1,8 +1,8 @@
-import express, { Request, Response } from 'express';
-import { Database } from '../database';
+import express, { Request, Response, Router } from 'express';
+import { getDb } from '../database';
 import { v4 as uuidv4 } from 'uuid';
 
-const router = express.Router();
+const router: Router = express.Router();
 
 // ── TYPES ──────────────────────────────────────────────────────────────────
 interface TutorialStep {
@@ -41,7 +41,7 @@ const requireAdmin = (req: Request, res: Response, next: Function) => {
 // ── GET ALL TUTORIALS ──────────────────────────────────────────────────────
 router.get('/tutorials', async (req: Request, res: Response) => {
   try {
-    const db = (req as any).db as Database;
+    const db = (req as any).db as any;
     const user = (req as any).user;
 
     // Get tutorials for user's role
@@ -73,7 +73,7 @@ router.get('/tutorials', async (req: Request, res: Response) => {
 // ── GET TUTORIAL BY ID ─────────────────────────────────────────────────────
 router.get('/tutorials/:id', async (req: Request, res: Response) => {
   try {
-    const db = (req as any).db as Database;
+    const db = (req as any).db as any;
     const { id } = req.params;
 
     const tutorial = db.prepare(`
@@ -104,7 +104,7 @@ router.get('/tutorials/:id', async (req: Request, res: Response) => {
 // ── CREATE TUTORIAL (ADMIN ONLY) ───────────────────────────────────────────
 router.post('/tutorials', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const db = (req as any).db as Database;
+    const db = (req as any).db as any;
     const user = (req as any).user;
     const { role, title, description, steps, enabled = true } = req.body;
 
@@ -150,7 +150,7 @@ router.post('/tutorials', requireAdmin, async (req: Request, res: Response) => {
 // ── UPDATE TUTORIAL (ADMIN ONLY) ───────────────────────────────────────────
 router.put('/tutorials/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const db = (req as any).db as Database;
+    const db = (req as any).db as any;
     const { id } = req.params;
     const { role, title, description, steps, enabled } = req.body;
 
@@ -195,7 +195,7 @@ router.put('/tutorials/:id', requireAdmin, async (req: Request, res: Response) =
 // ── DELETE TUTORIAL (ADMIN ONLY) ───────────────────────────────────────────
 router.delete('/tutorials/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const db = (req as any).db as Database;
+    const db = (req as any).db as any;
     const { id } = req.params;
 
     const tutorial = db.prepare('SELECT * FROM tutorials WHERE id = ?').get(id) as any;
@@ -217,7 +217,7 @@ router.delete('/tutorials/:id', requireAdmin, async (req: Request, res: Response
 // ── GET USER TUTORIAL PROGRESS ─────────────────────────────────────────────
 router.get('/tutorials/:id/progress', async (req: Request, res: Response) => {
   try {
-    const db = (req as any).db as Database;
+    const db = (req as any).db as any;
     const user = (req as any).user;
     const { id } = req.params;
 
@@ -252,7 +252,7 @@ router.get('/tutorials/:id/progress', async (req: Request, res: Response) => {
 // ── UPDATE TUTORIAL PROGRESS ───────────────────────────────────────────────
 router.post('/tutorials/:id/progress', async (req: Request, res: Response) => {
   try {
-    const db = (req as any).db as Database;
+    const db = (req as any).db as any;
     const user = (req as any).user;
     const { id } = req.params;
     const { completed, skipped, currentStep } = req.body;
@@ -321,7 +321,7 @@ router.post('/tutorials/:id/progress', async (req: Request, res: Response) => {
 // ── GET ALL TUTORIALS FOR ADMIN ────────────────────────────────────────────
 router.get('/admin/tutorials', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const db = (req as any).db as Database;
+    const db = (req as any).db as any;
 
     const tutorials = db.prepare(`
       SELECT * FROM tutorials 
@@ -350,7 +350,7 @@ router.get('/admin/tutorials', requireAdmin, async (req: Request, res: Response)
 // ── RESET USER TUTORIAL PROGRESS (ADMIN ONLY) ──────────────────────────────
 router.post('/admin/tutorials/:id/reset/:userId', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const db = (req as any).db as Database;
+    const db = (req as any).db as any;
     const { id, userId } = req.params;
 
     db.prepare(`
@@ -368,7 +368,7 @@ router.post('/admin/tutorials/:id/reset/:userId', requireAdmin, async (req: Requ
 // ── INITIALIZE TUTORIAL FOR USER (ADMIN ONLY) ──────────────────────────────
 router.post('/admin/tutorials/:id/initialize/:userId', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const db = (req as any).db as Database;
+    const db = (req as any).db as any;
     const { id, userId } = req.params;
 
     // Delete existing progress
