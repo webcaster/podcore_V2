@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useApp } from './AppContext';
 
+export interface AnnotationPoint {
+  id: string;
+  x: number;
+  y: number;
+  label: string;
+  description: string;
+}
+
 export interface TutorialStep {
   id: string;
   title: string;
@@ -8,6 +16,7 @@ export interface TutorialStep {
   target?: string;
   position?: 'top' | 'bottom' | 'left' | 'right';
   image?: string;
+  annotations?: AnnotationPoint[];
   highlightColor?: string;
   allowSkip?: boolean;
   action?: string;

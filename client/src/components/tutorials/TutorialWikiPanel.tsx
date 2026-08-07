@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { X, BookOpen, Play, ChevronRight, ChevronDown, ChevronUp, HelpCircle, Image as ImageIcon } from 'lucide-react';
 import { useTutorial, Tutorial, TutorialStep } from '../../contexts/TutorialContext';
 
+const ANN_COLORS = [
+  '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
+  '#0891b2', '#65a30d', '#ea580c', '#9333ea', '#0d9488',
+];
+
 // ─── Step Detail View ────────────────────────────────────────────────────────
 
 const StepCard = ({ step, index, total }: { step: TutorialStep; index: number; total: number }) => {
@@ -37,12 +42,27 @@ const StepCard = ({ step, index, total }: { step: TutorialStep; index: number; t
             <p className="text-sm text-text-secondary pt-3 leading-relaxed">{step.description}</p>
           )}
           {step.image && (
-            <div className="rounded-lg overflow-hidden border border-surface-border">
+            <div className="rounded-lg overflow-hidden border border-surface-border relative bg-obsidian-950">
               <img
                 src={step.image}
                 alt={step.title || `Schritt ${index + 1}`}
                 className="w-full object-contain max-h-64"
               />
+              {/* Render annotation points on the image */}
+              {step.annotations?.map((ann, i) => (
+                <div
+                  key={ann.id}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shadow-lg border border-white/60"
+                  style={{
+                    left: `${ann.x}%`,
+                    top: `${ann.y}%`,
+                    backgroundColor: ANN_COLORS[i % ANN_COLORS.length],
+                  }}
+                  title={ann.description}
+                >
+                  {ann.label}
+                </div>
+              ))}
             </div>
           )}
           {step.target && (

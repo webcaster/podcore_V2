@@ -297,6 +297,36 @@ export default function TutorialsManagementPage() {
     } catch { setError('Fehler beim Aktualisieren'); }
   }, [loadData]);
 
+  // ── HELPERS FOR PDF ──
+  const bakeAnnotationsToImage = (dataUrl: string, annotations: AnnotationPoint[]): Promise<string> => {
+    if (!annotations || annotations.length === 0) return Promise.resolve(dataUrl);
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(dataUrl); return; }
+        ctx.drawImage(img, 0, 0);
+        annotations.forEach((ann, i) => {
+          const x = (ann.x / 100) * img.width;
+          const y = (ann.y / 100) * img.height;
+          const radius = Math.max(img.width, img.height) * 0.012;
+          ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = ANN_COLORS[i % ANN_COLORS.length]; ctx.fill();
+          ctx.lineWidth = radius * 0.2; ctx.strokeStyle = 'white'; ctx.stroke();
+          ctx.fillStyle = 'white'; ctx.font = `bold ${radius * 1.2}px Arial`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(ann.label, x, y);
+        });
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  };
+
   // ── PDF EXPORT ──
   const handleExportPDF = useCallback(async (tutorial: Tutorial) => {
     try {
@@ -329,10 +359,15 @@ export default function TutorialsManagementPage() {
         }
         if (s.image) {
           try {
+            const bakedImage = await bakeAnnotationsToImage(s.image, s.annotations || []);
             checkY(90);
+            doc.addImage(bakedImage, 'PNG', M, y, W - 2 * M, 80);
+            y += 84;
+          } catch (err) {
+            console.error('Image bake error:', err);
             doc.addImage(s.image, 'PNG', M, y, W - 2 * M, 80);
             y += 84;
-          } catch {}
+          }
         }
         if (s.annotations?.length) {
           checkY(10 + s.annotations.length * 8);
@@ -350,7 +385,10 @@ export default function TutorialsManagementPage() {
       doc.save(`${tutorial.title.replace(/[^a-z0-9]/gi, '_')}_Tutorial.pdf`);
       setSuccess('PDF exportiert');
       setTimeout(() => setSuccess(null), 3000);
-    } catch { setError('Fehler beim PDF-Export'); }
+    } catch (err) { 
+      console.error('PDF Export error:', err);
+      setError('Fehler beim PDF-Export'); 
+    }
   }, []);
 
   // ── SCREENSHOT ──
