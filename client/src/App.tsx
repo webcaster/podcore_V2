@@ -5,6 +5,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { TutorialProvider } from './contexts/TutorialContext';
 import { TutorialOverlay } from './components/tutorials/TutorialOverlay';
 import TutorialWikiPanel from './components/tutorials/TutorialWikiPanel';
+import TutorialHintNotification from './components/tutorials/TutorialHintNotification';
 import { ScreenshotModeProvider } from './contexts/ScreenshotModeContext';
 import ScreenshotCaptureOverlay from './components/tutorials/ScreenshotCaptureOverlay';
 import Layout from './components/layout/Layout';
@@ -132,6 +133,7 @@ export default function App() {
               <AppRoutes />
               <TutorialOverlay />
               <TutorialWikiPanel />
+              <TutorialHintNotification />
               <ScreenshotCaptureOverlay />
               <ToastContainer />
             </BrowserRouter>

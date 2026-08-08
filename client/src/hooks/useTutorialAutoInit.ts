@@ -1,17 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { useTutorial } from '../contexts/TutorialContext';
 
 /**
- * Hook to automatically initialize tutorials for new users on login
- * Checks if user has completed tutorials and starts first incomplete one
+ * Hook to load tutorials on login and show a hint if tutorials are available
+ * Does NOT auto-start tutorials - user must click to start
  */
 export const useTutorialAutoInit = () => {
   const { user } = useApp();
-  const { tutorials, startTutorial, loadTutorials } = useTutorial();
+  const { tutorials, loadTutorials, openWiki } = useTutorial();
+  const hintShownRef = useRef(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      hintShownRef.current = false;
+      return;
+    }
 
     // Load tutorials for user's role
     const initTutorials = async () => {
@@ -23,39 +27,24 @@ export const useTutorialAutoInit = () => {
     };
 
     initTutorials();
-  }, [user?.id]);
+  }, [user?.id, loadTutorials]);
 
-  // Auto-start first incomplete tutorial
+  // Show hint if tutorials available (but don't auto-start)
   useEffect(() => {
-    if (!user || tutorials.length === 0) return;
+    if (!user || tutorials.length === 0 || hintShownRef.current) return;
 
-    // Find first enabled tutorial that hasn't been completed
-    const checkAndStartTutorial = async () => {
-      for (const tutorial of tutorials) {
-        if (!tutorial.enabled) continue;
-
-        try {
-          const progressResponse = await fetch(`/api/tutorials/${tutorial.id}/progress`, {
-            credentials: 'include',
-          });
-
-          if (progressResponse.ok) {
-            const progress = await progressResponse.json();
-
-            // If not completed and not skipped, start it
-            if (!progress.completed && !progress.skipped) {
-              await startTutorial(tutorial.id);
-              break;
-            }
-          }
-        } catch (error) {
-          console.error('Error checking tutorial progress:', error);
-        }
-      }
-    };
-
+    // Show hint once per session
+    hintShownRef.current = true;
+    
     // Delay to allow UI to settle
-    const timer = setTimeout(checkAndStartTutorial, 1000);
+    const timer = setTimeout(() => {
+      // Show a subtle toast notification instead of auto-starting
+      const event = new CustomEvent('tutorial-hint', {
+        detail: { tutorialCount: tutorials.length }
+      });
+      window.dispatchEvent(event);
+    }, 2000);
+
     return () => clearTimeout(timer);
   }, [user?.id, tutorials]);
 };

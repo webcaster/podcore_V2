@@ -13,7 +13,7 @@
 /* ── Highlight Box ── */
 .tutorial-highlight-box {
   position: absolute;
-  border-radius: 12px;
+  border-radius: 16px;
   pointer-events: none;
   z-index: 9999;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -22,18 +22,18 @@
 
 @keyframes tutorial-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65), inset 0 0 0 2px rgba(124, 58, 237, 0.8);
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7), inset 0 0 0 3px rgba(124, 58, 237, 0.9);
   }
   50% {
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65), inset 0 0 0 4px rgba(124, 58, 237, 0.4);
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7), inset 0 0 0 6px rgba(124, 58, 237, 0.5);
   }
 }
 
 /* ── Tooltip Container ── */
 .tutorial-tooltip-container {
   z-index: 10000;
-  width: 340px;
-  max-width: 90vw;
+  width: 500px;
+  max-width: 95vw;
   pointer-events: auto;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -41,110 +41,153 @@
 /* ── Tutorial Card ── */
 .tutorial-card {
   background: #141420; /* obsidian-800 */
-  border: 1px solid #2d2d4e; /* surface-border */
-  border-radius: 16px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(124, 58, 237, 0.2);
+  border: 1.5px solid #2d2d4e; /* surface-border */
+  border-radius: 20px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(124, 58, 237, 0.25);
   display: flex;
-  flex-col: column;
+  flex-direction: column;
   overflow: hidden;
   animation: tutorial-fade-in 0.3s ease-out;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 @keyframes tutorial-fade-in {
-  from { opacity: 0; transform: scale(0.95) translateY(10px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  from { 
+    opacity: 0; 
+    transform: scale(0.92) translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1) translateY(0); 
+  }
 }
 
 .tutorial-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #2d2d4e;
+  padding: 20px 24px;
+  border-bottom: 1.5px solid #2d2d4e;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(20, 20, 32, 0.8);
-  backdrop-blur: 8px;
+  background: rgba(20, 20, 32, 0.95);
+  backdrop-filter: blur(12px);
+  flex-shrink: 0;
+  gap: 16px;
 }
 
 .tutorial-image-container {
-  padding: 8px;
+  padding: 16px;
   background: #0a0a0f; /* obsidian-950 */
+  flex-shrink: 0;
 }
 
 .tutorial-image-container img {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 200px;
+  max-height: 280px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: 12px;
+  border: 1px solid #2d2d4e;
 }
 
 .tutorial-body {
-  padding: 16px;
-  max-height: 150px;
+  padding: 20px 24px;
+  flex: 1;
   overflow-y: auto;
+  min-height: 60px;
+}
+
+.tutorial-body p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #cbd5e1;
+}
+
+.tutorial-annotations-list {
+  padding: 16px 24px;
+  background: rgba(20, 20, 32, 0.5);
+  border-top: 1px solid #2d2d4e;
+  flex-shrink: 0;
 }
 
 .tutorial-footer {
-  padding: 12px 16px;
-  border-top: 1px solid #2d2d4e;
-  background: rgba(10, 10, 15, 0.4);
+  padding: 16px 24px;
+  border-top: 1.5px solid #2d2d4e;
+  background: rgba(10, 10, 15, 0.6);
+  flex-shrink: 0;
 }
 
-/* ── Progress Bar ── */
-.tutorial-progress-bar-bg {
-  height: 4px;
-  background: #1a1a2e;
-  border-radius: 2px;
-  overflow: hidden;
+/* ── Custom Scrollbar ── */
+.tutorial-card::-webkit-scrollbar {
+  width: 6px;
 }
 
-.tutorial-progress-bar-fill {
-  height: 100%;
-  background: #7c3aed;
-  transition: width 0.3s ease;
-}
-
-/* ── Buttons ── */
-.tutorial-btn-primary {
-  background: #7c3aed;
-  color: white;
-  border: none;
-  padding: 6px 16px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tutorial-btn-primary:hover {
-  background: #8b5cf6;
-  transform: translateY(-1px);
-}
-
-.tutorial-btn-secondary {
-  background: #1e1e35;
-  color: #94a3b8;
-  border: 1px solid #2d2d4e;
-  padding: 6px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tutorial-btn-secondary:hover {
-  background: #252540;
-  color: #f1f5f9;
-}
-
-/* Custom Scrollbar for tutorial body */
-.tutorial-body::-webkit-scrollbar {
-  width: 4px;
-}
-.tutorial-body::-webkit-scrollbar-track {
+.tutorial-card::-webkit-scrollbar-track {
   background: transparent;
 }
-.tutorial-body::-webkit-scrollbar-thumb {
-  background: #2d2d4e;
-  border-radius: 2px;
+
+.tutorial-card::-webkit-scrollbar-thumb {
+  background: #3d3d5e;
+  border-radius: 3px;
+}
+
+.tutorial-card::-webkit-scrollbar-thumb:hover {
+  background: #4d4d6e;
+}
+
+/* ── Mobile Responsiveness ── */
+@media (max-width: 768px) {
+  .tutorial-tooltip-container {
+    width: calc(100vw - 24px);
+    max-width: none;
+  }
+
+  .tutorial-card {
+    max-height: 80vh;
+  }
+
+  .tutorial-header {
+    padding: 16px 20px;
+  }
+
+  .tutorial-body {
+    padding: 16px 20px;
+  }
+
+  .tutorial-footer {
+    padding: 12px 20px;
+  }
+
+  .tutorial-image-container {
+    padding: 12px;
+  }
+
+  .tutorial-image-container img {
+    max-height: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tutorial-card {
+    border-radius: 16px;
+  }
+
+  .tutorial-header {
+    padding: 12px 16px;
+  }
+
+  .tutorial-header h3 {
+    font-size: 16px;
+  }
+
+  .tutorial-body {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .tutorial-footer {
+    padding: 10px 16px;
+  }
 }
