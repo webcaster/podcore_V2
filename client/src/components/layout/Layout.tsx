@@ -189,7 +189,7 @@ export default function Layout() {
           </p>
         </div>
       )}
-      <nav data-tutorial-id="sidebar-nav" className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <nav data-tutorial-id="sidebar-nav" className="flex-1 p-3 space-y-0.5 overflow-y-auto scrollbar-gutter-stable">
         {(screenshotActive ? screenshotFilteredItems : visibleItems).map((item) => (
           <React.Fragment key={item.to}>
             {item.dividerBefore && !collapsed && (
@@ -315,7 +315,7 @@ export default function Layout() {
   );
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-obsidian-900">
+    <div className="flex flex-col h-screen overflow-hidden bg-obsidian-900 scrollbar-gutter-stable">
       {/* Update available banner */}
       {hasUpdate && !updateDismissed && (
         <div className="bg-accent-purple/20 border-b border-accent-purple/30 px-4 py-2 flex items-center justify-between text-sm z-50">
@@ -385,7 +385,7 @@ export default function Layout() {
         </div>
 
         {/* Page Content */}
-        <main data-tutorial-id="main-content" className="flex-1 overflow-y-auto p-6">
+        <main data-tutorial-id="main-content" className="flex-1 overflow-y-auto p-6 scrollbar-gutter-stable">
           <Outlet />
         </main>
       </div>
