@@ -14,7 +14,7 @@ import NotificationCenter from './NotificationCenter';
 
 // Injected at build time by vite.config.ts
 declare const __APP_VERSION__: string;
-const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.11.7';
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.15.8';
 
 interface NavItem {
   to: string;
