@@ -139,6 +139,7 @@ export default function TutorialsManagementPage() {
   const [progressMap, setProgressMap] = useState<Record<string, UserProgress[]>>({});
   const [loadingProgress, setLoadingProgress] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'steps' | 'roles' | 'preview'>('steps');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Ref to hold the current editTutorial for use inside screenshot callbacks
   const editTutorialRef = useRef<Tutorial | null>(null);
@@ -480,6 +481,55 @@ export default function TutorialsManagementPage() {
     </div>
   );
 
+  const handleExportAll = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tutorials, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `podcore_tutorials_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    setSuccess('Export erfolgreich!');
+    setTimeout(() => setSuccess(null), 3000);
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        const importedTutorials = Array.isArray(json) ? json : [json];
+        
+        setSaving(true);
+        let count = 0;
+        for (const t of importedTutorials) {
+          // Clean up ID to avoid conflicts, let backend handle it or create new
+          const { id, createdAt, updatedAt, ...cleanT } = t;
+          const res = await fetch('/api/tutorials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cleanT),
+            credentials: 'include',
+          });
+          if (res.ok) count++;
+        }
+        
+        setSuccess(`${count} Tutorials erfolgreich importiert!`);
+        loadData();
+        setTimeout(() => setSuccess(null), 3000);
+      } catch (err) {
+        setError('Fehler beim Importieren der Datei.');
+      } finally {
+        setSaving(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
   // ── LOADING ──
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -498,27 +548,50 @@ export default function TutorialsManagementPage() {
           <h1 className="page-title">Tutorial-Verwaltung</h1>
           <p className="page-subtitle">Einstiegs-Tutorials für alle Rollen erstellen und verwalten</p>
         </div>
-        <button
-          onClick={() => {
-            const t: Tutorial = {
-              id: `new-${Date.now()}`,
-              roles: [],
-              title: '',
-              description: '',
-              enabled: true,
-              steps: [newStep()],
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
-            setEditTutorial(t);
-            setActiveTab('steps');
-            setCollapsedSteps(new Set());
-            setView('edit');
-          }}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={16} />Neues Tutorial
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImport}
+            className="hidden"
+            accept=".json"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="btn-secondary flex items-center gap-2"
+            title="Tutorials aus JSON importieren"
+          >
+            <Download size={16} className="rotate-180" /> Import
+          </button>
+          <button
+            onClick={handleExportAll}
+            className="btn-secondary flex items-center gap-2"
+            title="Alle Tutorials als JSON exportieren"
+          >
+            <Download size={16} /> Export
+          </button>
+          <button
+            onClick={() => {
+              const t: Tutorial = {
+                id: `new-${Date.now()}`,
+                roles: [],
+                title: '',
+                description: '',
+                enabled: true,
+                steps: [newStep()],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
+              setEditTutorial(t);
+              setActiveTab('steps');
+              setCollapsedSteps(new Set());
+              setView('edit');
+            }}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={16} />Neues Tutorial
+          </button>
+        </div>
       </div>
 
       <Notifications />
