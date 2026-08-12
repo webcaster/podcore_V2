@@ -182,13 +182,17 @@ export default function AdminPage() {
   };
 
   const TABLE_LABELS: Record<string, string> = {
-    episodes: 'Episoden', ideas: 'Ideen', editorial_plan: 'Redaktionsplan',
-    editorial_notes: 'Redaktionsnotizen', interview_partners: 'Interview-Partner',
-    interview_questions: 'Interview-Fragen', sponsors: 'Sponsoren',
-    ad_slots: 'Werbe-Slots', ad_placements: 'Werbe-Platzierungen',
-    ad_categories: 'Werbe-Kategorien', episode_ad_bookings: 'Episoden-Buchungen',
-    seasons: 'Staffeln', assets: 'Media-Assets', media_folders: 'Media-Ordner',
-    research_sources: 'Recherche-Quellen', roles: 'Rollen',
+    users: 'Benutzer', roles: 'Rollen', settings: 'Einstellungen',
+    episodes: 'Episoden', ideas: 'Ideen', editorial_plan: 'Redaktionsplan', editorial_notes: 'Redaktionsnotizen',
+    interview_partners: 'Interview-Partner', interview_questions: 'Interview-Fragen', research_sources: 'Recherche-Quellen',
+    assets: 'Media-Assets', media_folders: 'Media-Ordner',
+    sponsors: 'Sponsoren', sponsor_contracts: 'Sponsoren-Verträge', sponsor_offers: 'Sponsoren-Angebote',
+    ad_categories: 'Werbe-Kategorien', ad_slots: 'Werbe-Slots', ad_placements: 'Werbe-Platzierungen', ad_bookings: 'Werbe-Buchungen', episode_ad_bookings: 'Episoden-Buchungen',
+    seasons: 'Staffeln', season_plan_items: 'Staffelplan-Einträge', season_plan_item_partners: 'Staffelplan-Partner',
+    idea_checklists: 'Ideen-Checklisten', idea_notes: 'Ideen-Notizen', idea_uploads: 'Ideen-Dateien', idea_interview_partners: 'Ideen-Interviewpartner', idea_topic_drafts: 'Themenentwürfe', editorial_text_blocks: 'Redaktionstext-Blöcke',
+    episode_templates: 'Episoden-Vorlagen', episode_revisions: 'Episoden-Versionen', episode_comments: 'Episoden-Kommentare', episode_media_links: 'Episoden-Medienverknüpfungen', audio_analysis_jobs: 'Audio-Analysen',
+    podcast_stats: 'Podcast-Statistiken', chat_messages: 'Chat-Nachrichten', notifications: 'Benachrichtigungen',
+    tutorials: 'Tutorials', user_tutorial_progress: 'Tutorial-Fortschritte',
   };
 
   // Password reset modal (Admin resets another user's password without knowing the old one)
@@ -828,7 +832,19 @@ export default function AdminPage() {
                           {importPreview.exportedBy && (
                             <><span className="text-text-muted">Erstellt von:</span><span className="text-text-primary">{importPreview.exportedBy}</span></>
                           )}
+                          {importPreview.schemaVersion && (
+                            <><span className="text-text-muted">Schema-Version:</span><span className="text-text-primary">{importPreview.schemaVersion}</span></>
+                          )}
+                          {importPreview.tableCount !== undefined && (
+                            <><span className="text-text-muted">Datenbereiche:</span><span className="text-text-primary">{importPreview.tableCount}</span></>
+                          )}
                         </div>
+                        {importPreview.fileSummary && (
+                          <div className="mt-3 rounded-lg border border-surface-border bg-surface-raised/40 p-2 text-xs">
+                            <p className="font-semibold text-text-primary">Dateien</p>
+                            <p className="mt-1 text-text-muted">{importPreview.fileSummary.included} eingebettet · {importPreview.fileSummary.missing} nur als Verweis oder nicht verfügbar</p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-1.5">
@@ -882,6 +898,14 @@ export default function AdminPage() {
                         <p className="text-xs text-text-muted flex items-center gap-1">
                           <Info size={11} /> Vor-Import-Backup gespeichert: <code className="text-accent-purple">{importResult.preImportBackup}</code>
                         </p>
+                      )}
+                      {importResult.fileRestore && (
+                        <p className="text-xs text-text-muted">Dateien: {importResult.fileRestore.restored} wiederhergestellt, {importResult.fileRestore.skipped} übersprungen, {importResult.fileRestore.failed} fehlgeschlagen.</p>
+                      )}
+                      {Array.isArray(importResult.warnings) && importResult.warnings.length > 0 && (
+                        <div className="rounded-lg border border-accent-orange/30 bg-accent-orange/10 p-2 text-xs text-accent-orange">
+                          {importResult.warnings.map((warning: string, index: number) => <p key={index}>{warning}</p>)}
+                        </div>
                       )}
                       <button onClick={() => setImportResult(null)} className="btn-secondary text-sm w-full">Schließen</button>
                     </div>

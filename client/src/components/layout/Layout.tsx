@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useRef } from 'react';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
@@ -37,6 +38,7 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const developerUnlockRef = useRef({ count: 0, startedAt: 0 });
 
   // Check server version periodically
   useEffect(() => {
@@ -58,6 +60,24 @@ export default function Layout() {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  // Exklusiver Entwickler-Handshake: sieben Klicks auf die Versionsanzeige
+  // innerhalb von drei Sekunden öffnen ausschließlich die Profil-Freischaltung.
+  const handleVersionClick = () => {
+    const now = Date.now();
+    const unlock = developerUnlockRef.current;
+    if (!unlock.startedAt || now - unlock.startedAt > 3000) {
+      unlock.count = 0;
+      unlock.startedAt = now;
+    }
+    unlock.count += 1;
+    if (unlock.count >= 7) {
+      unlock.count = 0;
+      unlock.startedAt = 0;
+      sessionStorage.setItem('podcore_developer_unlock', '1');
+      navigate('/settings?tab=profile&developer_unlock=1');
+    }
   };
 
   const navItems: NavItem[] = [
@@ -167,7 +187,14 @@ export default function Layout() {
             <h1 className="text-text-primary font-bold text-sm leading-tight truncate">
               {branding.podcastName || 'PodCore'}
             </h1>
-            <p className="text-text-muted text-xs">v{APP_VERSION}</p>
+            <button
+              type="button"
+              onClick={handleVersionClick}
+              className="block text-left text-text-muted text-xs transition-colors hover:text-text-secondary"
+              aria-label="PodCore-Version"
+            >
+              v{APP_VERSION}
+            </button>
           </div>
         )}
         {!mobile && (

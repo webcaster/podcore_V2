@@ -65,7 +65,7 @@ export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown, options?: RequestInit) => request<T>('POST', path, body, options),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
-  delete: <T>(path: string) => request<T>('DELETE', path),
+  delete: <T>(path: string, body?: unknown) => request<T>('DELETE', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
 
   // File upload
@@ -169,6 +169,8 @@ export const editorialApi = {
   deleteIdea: (id: string) => api.delete(`/editorial/ideas/${id}`),
   listDeletedIdeas: () => api.get<any[]>('/editorial/ideas/trash'),
   restoreIdea: (id: string) => api.post<any>(`/editorial/ideas/${id}/restore`, {}),
+  permanentlyDeleteIdea: (id: string) => api.delete<any>(`/editorial/ideas/${id}/trash/delete`, { body: { confirm: true } }),
+  emptyIdeaTrash: () => api.delete<any>('/editorial/ideas/trash/empty', { body: { confirm: true } }),
   // Idea sub-resources
   listIdeaUploads: (ideaId: string) => api.get<any[]>(`/editorial/ideas/${ideaId}/uploads`),
   uploadIdeaFile: (ideaId: string, file: File, description?: string) => {

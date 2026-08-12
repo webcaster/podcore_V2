@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings, User, FolderOpen, Save, Eye, EyeOff, Loader2, Mic2,
   Palette, Radio, Sliders, Globe, Clock, Tag, Info, Download, Sun, Moon,
-  Upload, CheckCircle, XCircle, AlertTriangle, RefreshCw, Package, KeyRound
+  Upload, CheckCircle, XCircle, AlertTriangle, RefreshCw, Package, KeyRound, ShieldAlert
 } from 'lucide-react';
 import { adminApi, authApi, updateApi, licenseApi, LicenseStatus } from '../lib/api';
 import { useTheme } from '../contexts/ThemeContext';
@@ -45,6 +45,14 @@ export default function SettingsPage() {
     new URLSearchParams(window.location.search).get('tab') === 'update' ? 'update' : 'profile'
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [developerControlsUnlocked, setDeveloperControlsUnlocked] = useState(() => {
+    try {
+      return sessionStorage.getItem('podcore_developer_unlock') === '1'
+        || new URLSearchParams(window.location.search).get('developer_unlock') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [settings, setSettings] = useState<any>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
@@ -595,20 +603,37 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="space-y-4">
-              {user?.role === 'admin' && (
-                <div className="rounded-xl border border-accent-purple/30 bg-accent-purple/10 p-4">
+              {user?.role === 'admin' && developerControlsUnlocked && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+                  <div className="mb-3 flex items-start gap-3">
+                    <ShieldAlert size={18} className="mt-0.5 shrink-0 text-amber-300" />
+                    <div>
+                      <p className="font-semibold text-amber-200">Geschützter Entwicklerbereich</p>
+                      <p className="mt-1 text-xs leading-relaxed text-text-secondary">Diese Einstellung ist ausschließlich für die Entwicklung und Pflege offizieller PodCore-Tutorials vorgesehen. Sie wird serverseitig nur für Administratoren akzeptiert.</p>
+                    </div>
+                  </div>
                   <label className="flex cursor-pointer items-start gap-3">
                     <input
                       type="checkbox"
                       checked={profileForm.developerMode}
                       onChange={e => setProfileForm(p => ({ ...p, developerMode: e.target.checked }))}
-                      className="mt-1 h-4 w-4 accent-accent-purple"
+                      className="mt-1 h-4 w-4 accent-amber-400"
                     />
                     <span>
-                      <span className="block font-medium text-text-primary">Entwickler-Modus</span>
-                      <span className="mt-1 block text-xs leading-relaxed text-text-secondary">Erlaubt das Erstellen, Bearbeiten, Importieren und Exportieren von Tutorials. Für normale Nutzer bleibt die Tutorial-Verwaltung verborgen.</span>
+                      <span className="block font-medium text-text-primary">Entwickler-Modus aktivieren</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-text-secondary">Erlaubt das Erstellen, Bearbeiten, Importieren und Exportieren von Tutorials.</span>
                     </span>
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeveloperControlsUnlocked(false);
+                      sessionStorage.removeItem('podcore_developer_unlock');
+                    }}
+                    className="mt-3 text-xs text-text-muted underline-offset-2 hover:text-text-primary hover:underline"
+                  >
+                    Geschützten Bereich schließen
+                  </button>
                 </div>
               )}
               <div>

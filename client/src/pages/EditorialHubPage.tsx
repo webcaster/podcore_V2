@@ -207,6 +207,27 @@ function IdeasTab() {
     } catch (err: any) { showError(err.message); }
   };
 
+  const handlePermanentDelete = async (idea: any) => {
+    const confirmation = window.prompt(`Diese Aktion kann nicht rückgängig gemacht werden. Tippe den Titel der Ideenmappe exakt ein, um sie endgültig zu löschen:\n\n${idea.title}`);
+    if (confirmation !== idea.title) return;
+    try {
+      const result = await editorialApi.permanentlyDeleteIdea(idea.id);
+      showSuccess(`${idea.title} endgültig gelöscht (${result?.deleted?.ideas || 1} Ideenmappe).`);
+      await Promise.all([load(), loadTrash()]);
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const handleEmptyTrash = async () => {
+    if (!deletedIdeas.length) return;
+    const confirmation = window.prompt(`Alle ${deletedIdeas.length} Ideenmappen und eindeutig verknüpfte Unterdaten werden endgültig gelöscht. Tippe LEEREN ein, um fortzufahren.`);
+    if (confirmation !== 'LEEREN') return;
+    try {
+      const result = await editorialApi.emptyIdeaTrash();
+      showSuccess(`${result?.count || deletedIdeas.length} Ideenmappen endgültig gelöscht.`);
+      await Promise.all([load(), loadTrash()]);
+    } catch (err: any) { showError(err.message); }
+  };
+
   const handleStatusChange = async (id: string, status: string) => {
     try {
       await editorialApi.updateIdea(id, { status });
@@ -492,9 +513,16 @@ function IdeasTab() {
       {/* Papierkorb für wiederherstellbare Ideenmappen */}
       <Modal isOpen={showTrash} onClose={() => setShowTrash(false)} title="Papierkorb – Ideenmappen" size="lg">
         <div className="space-y-4">
-          <p className="text-sm text-text-secondary">
-            Gelöschte Ideenmappen bleiben mit ihren verknüpften Inhalten erhalten und können jederzeit wiederhergestellt werden.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <p className="text-sm text-text-secondary">
+              Gelöschte Ideenmappen bleiben mit ihren verknüpften Inhalten erhalten und können wiederhergestellt werden. Endgültiges Löschen entfernt die Ideenmappe und eindeutig zugehörige Unterdaten unwiderruflich.
+            </p>
+            {can('canDeleteIdeas') && deletedIdeas.length > 0 && (
+              <button onClick={handleEmptyTrash} className="btn-secondary shrink-0 text-xs text-accent-red hover:border-accent-red/50">
+                <Trash2 size={14} /> Papierkorb leeren
+              </button>
+            )}
+          </div>
           {isTrashLoading ? (
             <div className="flex justify-center py-10"><Loader2 size={24} className="animate-spin text-accent-purple" /></div>
           ) : deletedIdeas.length === 0 ? (
@@ -514,11 +542,18 @@ function IdeasTab() {
                       Gelöscht am {idea.deletedAt ? new Date(idea.deletedAt).toLocaleString('de-DE') : 'unbekannt'}
                     </p>
                   </div>
-                  {can('canEditIdeas') && (
-                    <button onClick={() => handleRestore(idea)} className="btn-secondary shrink-0 text-xs" title="Ideenmappe wiederherstellen">
-                      <RotateCcw size={14} /> Wiederherstellen
-                    </button>
-                  )}
+                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                    {can('canEditIdeas') && (
+                      <button onClick={() => handleRestore(idea)} className="btn-secondary text-xs" title="Ideenmappe wiederherstellen">
+                        <RotateCcw size={14} /> Wiederherstellen
+                      </button>
+                    )}
+                    {can('canDeleteIdeas') && (
+                      <button onClick={() => handlePermanentDelete(idea)} className="btn-secondary text-xs text-accent-red hover:border-accent-red/50" title="Unwiderruflich löschen">
+                        <Trash2 size={14} /> Endgültig löschen
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

@@ -26,6 +26,58 @@ function broadcastEditorialResourceUpdated(db: any, resource: any, req: AuthRequ
   if (episodeId) broadcastRealtime({ type: 'editorial.idea.updated', episodeId, userId: req.user?.id, payload: { ideaId, scope, changedBy: req.user?.displayName || req.user?.username } });
 }
 
+function removeIdeaUploadFile(filepath: string | null | undefined): void {
+  if (!filepath) return;
+  try {
+    const resolved = path.resolve(path.isAbsolute(filepath) ? filepath : path.join(DATA_DIR, filepath));
+    const dataRoot = path.resolve(DATA_DIR);
+    if (!resolved.startsWith(`${dataRoot}${path.sep}`)) return;
+    if (fs.existsSync(resolved)) fs.unlinkSync(resolved);
+  } catch (_) {}
+}
+
+/** Löscht nur Daten, die eindeutig zu einer Ideenmappe gehören. Geteilte Interviewpartner bleiben erhalten. */
+export function permanentlyDeleteIdeaData(db: any, ideaId: string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const count = (key: string, value: any[] | undefined) => { counts[key] = value?.length || 0; };
+  const uploads = db.all('SELECT filepath FROM idea_uploads WHERE idea_id = ?', [ideaId]) as any[];
+  count('idea_uploads', uploads);
+  uploads.forEach(upload => removeIdeaUploadFile(upload.filepath));
+
+  const planItems = db.all('SELECT id FROM season_plan_items WHERE idea_id = ?', [ideaId]) as any[];
+  count('season_plan_items', planItems);
+  if (planItems.length) {
+    const ids = planItems.map(item => item.id);
+    db.run(`DELETE FROM season_plan_item_partners WHERE plan_item_id IN (${ids.map(() => '?').join(',')})`, ids);
+  }
+
+  const dependentDeletes: Array<[string, string]> = [
+    ['idea_checklists', 'DELETE FROM idea_checklists WHERE idea_id = ?'],
+    ['idea_notes', 'DELETE FROM idea_notes WHERE idea_id = ?'],
+    ['idea_uploads', 'DELETE FROM idea_uploads WHERE idea_id = ?'],
+    ['idea_interview_partners', 'DELETE FROM idea_interview_partners WHERE idea_id = ?'],
+    ['idea_topic_drafts', 'DELETE FROM idea_topic_drafts WHERE idea_id = ?'],
+    ['editorial_text_blocks', 'DELETE FROM editorial_text_blocks WHERE idea_id = ?'],
+    ['interview_questions', 'DELETE FROM interview_questions WHERE idea_id = ?'],
+    ['research_sources', 'DELETE FROM research_sources WHERE related_idea_id = ?'],
+    ['editorial_plan', 'DELETE FROM editorial_plan WHERE idea_id = ?'],
+    ['season_plan_items', 'DELETE FROM season_plan_items WHERE idea_id = ?'],
+  ];
+
+  for (const [table, statement] of dependentDeletes) {
+    const relationColumn = table === 'research_sources' ? 'related_idea_id' : 'idea_id';
+    const countRow = db.get(`SELECT COUNT(*) AS count FROM ${table} WHERE ${relationColumn} = ?`, [ideaId]) as any;
+    counts[table] = Number(countRow?.count || 0);
+    db.run(statement, [ideaId]);
+  }
+
+  // Interviewpartner können auch von anderen Ideen verwendet werden und werden daher nicht gelöscht.
+  db.run('UPDATE interview_partners SET idea_id = NULL WHERE idea_id = ?', [ideaId]);
+  db.run('DELETE FROM ideas WHERE id = ?', [ideaId]);
+  counts.ideas = 1;
+  return counts;
+}
+
 const TOPIC_DRAFT_STATUSES = new Set(['draft', 'review', 'ready']);
 const TEXT_BLOCK_TYPES = new Set(['intro', 'outro', 'teaser', 'description', 'show-notes', 'cta', 'sponsor', 'transition', 'question', 'custom']);
 
@@ -140,40 +192,26 @@ router.get('/ideas', requirePermission('canViewIdeas') as any, (req: AuthRequest
 // Permanentes Leeren des Papierkorbs
 router.delete('/ideas/trash/empty', requirePermission('canDeleteIdeas') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  if (req.body?.confirm !== true) return res.status(400).json({ success: false, error: 'Explizite Löschbestätigung erforderlich' });
   const deletedIdeas = db.all('SELECT id FROM ideas WHERE deleted_at IS NOT NULL', []) as any[];
+  const deleted: Record<string, number> = {};
 
   try {
+    db.exec('BEGIN');
     for (const idea of deletedIdeas) {
-      // Lösche alle Dateien
-      const uploads = db.all('SELECT filepath FROM idea_uploads WHERE idea_id = ?', [idea.id]) as any[];
-      for (const upload of uploads) {
-        try {
-          if (upload.filepath && fs.existsSync(upload.filepath)) {
-            fs.unlinkSync(upload.filepath);
-          }
-        } catch (_) {}
-      }
-
-      // Lösche alle verknüpften Daten
-      db.run('DELETE FROM idea_checklists WHERE idea_id = ?', [idea.id]);
-      db.run('DELETE FROM idea_notes WHERE idea_id = ?', [idea.id]);
-      db.run('DELETE FROM idea_uploads WHERE idea_id = ?', [idea.id]);
-      db.run('DELETE FROM idea_interview_partners WHERE idea_id = ?', [idea.id]);
-      db.run('DELETE FROM topic_drafts WHERE idea_id = ?', [idea.id]);
-      db.run('DELETE FROM text_blocks WHERE idea_id = ?', [idea.id]);
-      db.run('DELETE FROM interview_questions WHERE idea_id = ?', [idea.id]);
-      db.run('DELETE FROM research_sources WHERE related_idea_id = ?', [idea.id]);
-      db.run('DELETE FROM editorial_plan WHERE idea_id = ?', [idea.id]);
-      db.run('DELETE FROM season_plan_items WHERE idea_id = ?', [idea.id]);
-      db.run('DELETE FROM ideas WHERE id = ?', [idea.id]);
+      const result = permanentlyDeleteIdeaData(db, idea.id);
+      Object.entries(result).forEach(([key, value]) => { deleted[key] = (deleted[key] || 0) + value; });
     }
+    db.exec('COMMIT');
 
     return res.json({
       success: true,
-      message: `${deletedIdeas.length} gelöschte Ideen permanent entfernt`,
+      message: `${deletedIdeas.length} gelöschte Ideen und ihre eindeutigen Unterdaten permanent entfernt`,
       count: deletedIdeas.length,
+      deleted,
     });
   } catch (err: any) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
     return res.status(500).json({ success: false, error: `Papierkorb leeren fehlgeschlagen: ${err.message}` });
   }
 });
@@ -238,64 +276,17 @@ router.delete('/ideas/:id', requirePermission('canDeleteIdeas') as any, (req: Au
   return res.json({ success: true, message: 'Idee in den Papierkorb verschoben' });
 });
 
-// Permanentes Löschen einer Idee mit kaskadierendem Löschen aller verknüpften Daten
+// Permanentes Löschen einer aktiven Idee mit expliziter Bestätigung.
 router.delete('/ideas/:id/permanent', requirePermission('canDeleteIdeas') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  if (req.body?.confirm !== true) return res.status(400).json({ success: false, error: 'Explizite Löschbestätigung erforderlich' });
   const idea = db.get('SELECT id FROM ideas WHERE id = ?', [req.params.id]) as any;
   if (!idea) return res.status(404).json({ success: false, error: 'Idee nicht gefunden' });
 
   try {
-    // 1. Lösche alle Dateien aus idea_uploads
-    const uploads = db.all('SELECT filepath FROM idea_uploads WHERE idea_id = ?', [req.params.id]) as any[];
-    for (const upload of uploads) {
-      try {
-        if (upload.filepath && fs.existsSync(upload.filepath)) {
-          fs.unlinkSync(upload.filepath);
-        }
-      } catch (_) {}
-    }
-
-    // 2. Lösche alle Checklisten
-    db.run('DELETE FROM idea_checklists WHERE idea_id = ?', [req.params.id]);
-
-    // 3. Lösche alle Notizen
-    db.run('DELETE FROM idea_notes WHERE idea_id = ?', [req.params.id]);
-
-    // 4. Lösche alle Datei-Uploads
-    db.run('DELETE FROM idea_uploads WHERE idea_id = ?', [req.params.id]);
-
-    // 5. Lösche alle Interview-Partner-Verknüpfungen
-    db.run('DELETE FROM idea_interview_partners WHERE idea_id = ?', [req.params.id]);
-
-    // 6. Lösche Topic Drafts
-    db.run('DELETE FROM topic_drafts WHERE idea_id = ?', [req.params.id]);
-
-    // 7. Lösche Text Blocks
-    db.run('DELETE FROM text_blocks WHERE idea_id = ?', [req.params.id]);
-
-    // 8. Lösche Interview-Fragen, die nur zu dieser Idee gehören
-    const questionsToDelete = db.all(
-      `SELECT id FROM interview_questions WHERE idea_id = ? AND partner_id IS NULL`,
-      [req.params.id]
-    ) as any[];
-    for (const q of questionsToDelete) {
-      db.run('DELETE FROM interview_questions WHERE id = ?', [q.id]);
-    }
-
-    // 9. Lösche Recherche-Quellen
-    db.run('DELETE FROM research_sources WHERE related_idea_id = ?', [req.params.id]);
-
-    // 10. Lösche Redaktionsplan-Einträge
-    db.run('DELETE FROM editorial_plan WHERE idea_id = ?', [req.params.id]);
-
-    // 11. Lösche Staffelplan-Einträge
-    db.run('DELETE FROM season_plan_items WHERE idea_id = ?', [req.params.id]);
-
-    // 12. Lösche die Idee selbst
-    db.run('DELETE FROM ideas WHERE id = ?', [req.params.id]);
-
+    const deleted = permanentlyDeleteIdeaData(db, req.params.id);
     broadcastIdeaUpdated(db, req.params.id, req, 'idea-permanently-deleted');
-    return res.json({ success: true, message: 'Idee und alle verknüpften Daten permanent gelöscht' });
+    return res.json({ success: true, message: 'Idee und alle eindeutig verknüpften Daten permanent gelöscht', deleted });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: `Permanentes Löschen fehlgeschlagen: ${err.message}` });
   }
@@ -327,37 +318,16 @@ router.post('/ideas/:id/restore', requirePermission('canEditIdeas') as any, (req
   });
 });
 
-// Permanentes Löschen einer gelöschten Idee
+// Permanentes Löschen einer gelöschten Idee aus dem Papierkorb.
 router.delete('/ideas/:id/trash/delete', requirePermission('canDeleteIdeas') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  if (req.body?.confirm !== true) return res.status(400).json({ success: false, error: 'Explizite Löschbestätigung erforderlich' });
   const idea = db.get('SELECT id FROM ideas WHERE id = ? AND deleted_at IS NOT NULL', [req.params.id]) as any;
   if (!idea) return res.status(404).json({ success: false, error: 'Gelöschte Idee nicht gefunden' });
 
   try {
-    // Lösche alle Dateien
-    const uploads = db.all('SELECT filepath FROM idea_uploads WHERE idea_id = ?', [req.params.id]) as any[];
-    for (const upload of uploads) {
-      try {
-        if (upload.filepath && fs.existsSync(upload.filepath)) {
-          fs.unlinkSync(upload.filepath);
-        }
-      } catch (_) {}
-    }
-
-    // Lösche alle verknüpften Daten
-    db.run('DELETE FROM idea_checklists WHERE idea_id = ?', [req.params.id]);
-    db.run('DELETE FROM idea_notes WHERE idea_id = ?', [req.params.id]);
-    db.run('DELETE FROM idea_uploads WHERE idea_id = ?', [req.params.id]);
-    db.run('DELETE FROM idea_interview_partners WHERE idea_id = ?', [req.params.id]);
-    db.run('DELETE FROM topic_drafts WHERE idea_id = ?', [req.params.id]);
-    db.run('DELETE FROM text_blocks WHERE idea_id = ?', [req.params.id]);
-    db.run('DELETE FROM interview_questions WHERE idea_id = ?', [req.params.id]);
-    db.run('DELETE FROM research_sources WHERE related_idea_id = ?', [req.params.id]);
-    db.run('DELETE FROM editorial_plan WHERE idea_id = ?', [req.params.id]);
-    db.run('DELETE FROM season_plan_items WHERE idea_id = ?', [req.params.id]);
-    db.run('DELETE FROM ideas WHERE id = ?', [req.params.id]);
-
-    return res.json({ success: true, message: 'Gelöschte Idee permanent entfernt' });
+    const deleted = permanentlyDeleteIdeaData(db, req.params.id);
+    return res.json({ success: true, message: 'Gelöschte Idee und alle eindeutig verknüpften Daten permanent entfernt', deleted });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: `Permanentes Löschen fehlgeschlagen: ${err.message}` });
   }
