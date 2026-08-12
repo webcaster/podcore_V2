@@ -15,7 +15,7 @@ import NotificationCenter from './NotificationCenter';
 
 // Injected at build time by vite.config.ts
 declare const __APP_VERSION__: string;
-const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.15.8';
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.16.0';
 
 interface NavItem {
   to: string;
@@ -96,7 +96,7 @@ export default function Layout() {
     { to: '/archive', icon: <Archive size={18} />, label: 'Archiv', permission: 'canViewEpisodes', tutorialId: 'nav-archive' },
     { to: '/analytics', icon: <TrendingUp size={18} />, label: 'Podigee Analytics', permission: 'canViewEpisodes', dividerBefore: true, tutorialId: 'nav-analytics' },
     { to: '/stats', icon: <BarChart2 size={18} />, label: 'Podcast-Statistiken', permission: 'canViewEpisodes', tutorialId: 'nav-stats' },
-    { to: '/branding', icon: <Image size={18} />, label: 'Branding & Backup', permission: 'canManageSettings', tutorialId: 'nav-branding' },
+    { to: '/branding', icon: <Image size={18} />, label: 'Branding', permission: 'canManageSettings', tutorialId: 'nav-branding' },
     { to: '/admin', icon: <Shield size={18} />, label: 'Administration', permission: 'canManageUsers', dividerBefore: true, tutorialId: 'nav-admin' },
     { to: '/admin/tutorials', icon: <Info size={18} />, label: 'Tutorial-Verwaltung', permission: 'canManageSettings', tutorialId: 'nav-tutorials' },
     { to: '/pdf-layouts', icon: <FileText size={18} />, label: 'PDF-Layouts', permission: 'canManageSettings', tutorialId: 'nav-pdf-layouts' },
@@ -107,6 +107,8 @@ export default function Layout() {
   const featureFilteredItems = navItems.filter(item => {
     // Zuerst Berechtigungen prüfen
     if (item.permission && !can(item.permission)) return false;
+    // Tutorial-Erstellung und Import/Export bleiben im exklusiven Entwickler-Modus verborgen.
+    if (item.to === '/admin/tutorials' && !user?.developerMode) return false;
     // Dann Feature-Flags prüfen
     const path = item.to;
     if ((path === '/editorial' || path === '/calendar') && !features.editorial) return false;

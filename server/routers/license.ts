@@ -20,7 +20,7 @@ interface LicenseSettings {
   expiresAt: string | null;
   licenseId: string | number | null;
   productName: string;
-  plan: 'monthly' | 'yearly' | 'unknown';
+  plan: 'monthly' | 'yearly' | 'lifetime' | 'unknown';
   lastError: string | null;
 }
 
@@ -73,8 +73,9 @@ function mask(value: string): string {
   return `${value.slice(0, 4)}••••${value.slice(-4)}`;
 }
 
-function detectPlan(productName: string, expiresAt: string | null): 'monthly' | 'yearly' | 'unknown' {
+function detectPlan(productName: string, expiresAt: string | null): 'monthly' | 'yearly' | 'lifetime' | 'unknown' {
   const value = productName.toLowerCase();
+  if (/(lifetime|lebenslang|unbefristet|permanent|never\s*expire|sonderkunde|exclusive)/i.test(value)) return 'lifetime';
   if (/(jährlich|jaehrlich|yearly|annual|12\s*monat|365\s*day)/i.test(value)) return 'yearly';
   if (/(monatlich|monthly|30\s*day)/i.test(value)) return 'monthly';
   if (expiresAt) {

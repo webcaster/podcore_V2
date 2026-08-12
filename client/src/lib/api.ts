@@ -742,7 +742,7 @@ export interface LicenseStatus {
   expiresAt: string | null;
   licenseId: string | number | null;
   productName?: string;
-  plan?: 'monthly' | 'yearly' | 'unknown';
+  plan?: 'monthly' | 'yearly' | 'lifetime' | 'unknown';
   lastError: string | null;
 }
 

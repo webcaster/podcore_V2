@@ -59,8 +59,16 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
+const configuredCorsOrigins = (process.env.CORS_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
 app.use(cors({
-  origin: true, // Allow all origins — user controls network access via firewall
+  origin: (origin, callback) => {
+    // Same-origin requests do not carry an Origin header and remain allowed.
+    if (!origin || configuredCorsOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Origin not allowed'));
+  },
   credentials: true,
 }));
 
@@ -95,12 +103,18 @@ app.get('/api/media/stream/:filename', (req: any, res: any) => {
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ success: false, error: 'Nicht authentifiziert' });
 
-  const filename = req.params.filename;
+  const rawFilename = String(req.params.filename || '');
+  const filename = path.basename(rawFilename);
+  if (!filename || filename !== rawFilename) return res.status(400).json({ success: false, error: 'Ungültiger Dateiname' });
+
   const db = getDb();
   const asset = db.get('SELECT filepath, filename FROM assets WHERE filename = ?', [filename]) as any;
-
-  let filePath = asset?.filepath || path.join(ASSETS_DIR, filename);
-  if (!fs.existsSync(filePath)) filePath = path.join(ASSETS_DIR, filename);
+  const assetsRoot = path.resolve(ASSETS_DIR);
+  let filePath = path.resolve(asset?.filepath || path.join(ASSETS_DIR, filename));
+  const relativeAssetPath = path.relative(assetsRoot, filePath);
+  if (relativeAssetPath.startsWith('..') || path.isAbsolute(relativeAssetPath)) {
+    filePath = path.join(assetsRoot, filename);
+  }
   if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, error: 'Datei nicht gefunden' });
 
   const stat = fs.statSync(filePath);
@@ -116,8 +130,12 @@ app.get('/api/media/stream/:filename', (req: any, res: any) => {
 
   if (range) {
     const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const start = Number.parseInt(parts[0], 10);
+    const requestedEnd = parts[1] ? Number.parseInt(parts[1], 10) : fileSize - 1;
+    const end = Math.min(Number.isFinite(requestedEnd) ? requestedEnd : fileSize - 1, fileSize - 1);
+    if (!Number.isFinite(start) || start < 0 || start >= fileSize || end < start) {
+      return res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
+    }
     const chunksize = end - start + 1;
     res.writeHead(206, {
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,

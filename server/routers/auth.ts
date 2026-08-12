@@ -6,6 +6,38 @@ import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router: import("express").Router = Router();
 
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+const loginAttempts = new Map<string, { count: number; firstAttemptAt: number }>();
+
+function getClientKey(req: Request): string {
+  return String((req as any).ip || req.headers['x-forwarded-for'] || 'unknown');
+}
+
+function isLoginRateLimited(key: string): boolean {
+  const current = loginAttempts.get(key);
+  if (!current) return false;
+  if (Date.now() - current.firstAttemptAt > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(key);
+    return false;
+  }
+  return current.count >= LOGIN_MAX_ATTEMPTS;
+}
+
+function registerFailedLogin(key: string): void {
+  const now = Date.now();
+  const current = loginAttempts.get(key);
+  if (!current || now - current.firstAttemptAt > LOGIN_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, firstAttemptAt: now });
+  } else {
+    current.count += 1;
+  }
+}
+
+function clearFailedLogins(key: string): void {
+  loginAttempts.delete(key);
+}
+
 function resolveUserPermissions(user: any): Record<string, boolean> {
   if (user.role === 'admin') return {};
   try {
@@ -42,6 +74,12 @@ function formatUser(user: any) {
 // POST /api/auth/login
 router.post('/login', (req: Request, res: Response) => {
   const { username, password } = req.body;
+  const clientKey = getClientKey(req);
+
+  if (isLoginRateLimited(clientKey)) {
+    res.setHeader('Retry-After', String(Math.ceil(LOGIN_WINDOW_MS / 1000)));
+    return res.status(429).json({ success: false, error: 'Zu viele Anmeldeversuche. Bitte später erneut versuchen.' });
+  }
 
   if (!username || !password) {
     return res.status(400).json({ success: false, error: 'Benutzername und Passwort erforderlich' });
@@ -51,14 +89,18 @@ router.post('/login', (req: Request, res: Response) => {
   const user = db.get('SELECT * FROM users WHERE username = ? AND is_active = 1', [username]) as any;
 
   if (!user) {
+    registerFailedLogin(clientKey);
     return res.status(401).json({ success: false, error: 'Ungültige Anmeldedaten' });
   }
 
   const passwordValid = bcrypt.compareSync(password, user.password_hash);
   if (!passwordValid) {
+    registerFailedLogin(clientKey);
     return res.status(401).json({ success: false, error: 'Ungültige Anmeldedaten' });
   }
 
+  clearFailedLogins(clientKey);
+  db.run("DELETE FROM sessions WHERE expires_at <= datetime('now')");
   const sessionToken = uuidv4() + '-' + uuidv4();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -69,7 +111,7 @@ router.post('/login', (req: Request, res: Response) => {
 
   res.cookie('podcore_session', sessionToken, {
     httpOnly: true,
-    secure: false,
+    secure: process.env.COOKIE_SECURE === 'true',
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
