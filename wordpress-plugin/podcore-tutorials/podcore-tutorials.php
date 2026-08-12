@@ -3,7 +3,7 @@
  * Plugin Name: PodCore Tutorial Hub
  * Plugin URI: https://github.com/webcaster/podcore_V2
  * Description: Zeigt PodCore-Tutorials mit Schritten, Screenshots und Annotationen auf einer WordPress-Seite an und bietet kompatible JSON-Downloads.
- * Version: 2.16.2
+ * Version: 2.16.3
  * Author: PodCore / Max
  * License: GPLv2 or later
  */
@@ -153,14 +153,86 @@ function podcore_tutorial_save_meta($post_id) {
 }
 add_action('save_post_podcore_tutorial', 'podcore_tutorial_save_meta');
 
+function podcore_tutorial_diagnostics_menu() {
+    add_submenu_page(
+        'edit.php?post_type=podcore_tutorial',
+        'PodCore Diagnose',
+        'Diagnose',
+        'manage_options',
+        'podcore-tutorial-diagnostics',
+        'podcore_tutorial_diagnostics_page'
+    );
+}
+add_action('admin_menu', 'podcore_tutorial_diagnostics_menu');
+
+function podcore_tutorial_diagnostics_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die('Keine Berechtigung.');
+    }
+    $posts = get_posts(array(
+        'post_type' => 'podcore_tutorial',
+        'post_status' => array('publish', 'draft', 'pending', 'private'),
+        'posts_per_page' => -1,
+        'orderby' => 'title',
+        'order' => 'ASC',
+    ));
+    ?>
+    <div class="wrap">
+        <h1>PodCore Tutorial-Diagnose</h1>
+        <p>Diese Prüfung zeigt, ob WordPress das JSON-Feld und das <code>steps</code>-Array erkennt. WordPress <?php echo esc_html(get_bloginfo('version')); ?> · Plugin 2.16.3.</p>
+        <table class="widefat striped">
+            <thead><tr><th>Tutorial</th><th>Status</th><th>JSON</th><th>Schritte</th><th>Aktion</th></tr></thead>
+            <tbody>
+            <?php if (empty($posts)) : ?>
+                <tr><td colspan="5">Keine PodCore Tutorials gefunden.</td></tr>
+            <?php else : foreach ($posts as $tutorial_post) :
+                $raw = get_post_meta($tutorial_post->ID, '_podcore_tutorial_json', true);
+                $decoded = podcore_tutorial_post_data($tutorial_post->ID);
+                $steps = podcore_tutorial_steps($decoded);
+                $json_ok = !empty($raw) && !empty($decoded);
+                ?>
+                <tr>
+                    <td><strong><?php echo esc_html($tutorial_post->post_title); ?></strong><br><code><?php echo esc_html($tutorial_post->post_name); ?></code></td>
+                    <td><?php echo esc_html($tutorial_post->post_status); ?></td>
+                    <td><?php echo $json_ok ? '<span style="color:#047857;font-weight:700;">OK</span>' : '<span style="color:#b91c1c;font-weight:700;">Fehlt/ungültig</span>'; ?></td>
+                    <td><?php echo esc_html(count($steps)); ?></td>
+                    <td><a class="button" href="<?php echo esc_url(get_edit_post_link($tutorial_post->ID)); ?>">Bearbeiten</a> <a class="button" href="<?php echo esc_url(get_permalink($tutorial_post->ID)); ?>" target="_blank" rel="noopener">Frontend</a></td>
+                </tr>
+            <?php endforeach; endif; ?>
+            </tbody>
+        </table>
+        <div style="margin-top:20px;padding:14px;background:#f0f6fc;border-left:4px solid #2271b1;">
+            <strong>WPBakery/The7-Hinweis:</strong> Verwende auf der Seite das native WPBakery-Element <strong>PodCore Tutorial</strong> mit dem Slug des veröffentlichten Tutorials. Für den Text-Block funktioniert <code>[podcore_tutorial slug="erste-schritte"]</code>.
+        </div>
+    </div>
+    <?php
+}
+
 function podcore_tutorial_decode($json_raw) {
     if (is_array($json_raw)) {
         $decoded = $json_raw;
     } elseif (is_string($json_raw) && trim($json_raw) !== '') {
         $clean = trim(wp_strip_all_tags($json_raw));
+        $clean = preg_replace('/^\\xEF\\xBB\\xBF/', '', $clean);
+        $clean = html_entity_decode($clean, ENT_QUOTES, get_bloginfo('charset') ?: 'UTF-8');
         $clean = preg_replace('/^```(?:json)?/i', '', $clean);
         $clean = preg_replace('/```$/', '', trim($clean));
         $decoded = json_decode(trim($clean), true);
+
+        // Repariert JSON, das von Editoren mit zusätzlichem Text umgeben wurde.
+        if (!is_array($decoded)) {
+            $starts = array(strpos($clean, '{'), strpos($clean, '['));
+            $starts = array_values(array_filter($starts, function ($value) { return $value !== false; }));
+            if (!empty($starts)) {
+                $start = min($starts);
+                $end_object = strrpos($clean, '}');
+                $end_array = strrpos($clean, ']');
+                $end = max($end_object === false ? -1 : $end_object, $end_array === false ? -1 : $end_array);
+                if ($end > $start) {
+                    $decoded = json_decode(substr($clean, $start, $end - $start + 1), true);
+                }
+            }
+        }
     } else {
         return array();
     }
@@ -676,6 +748,7 @@ function podcore_tutorial_force_render_footer() {
     echo '</div>';
     $GLOBALS['podcore_tutorial_rendered'][$tutorial_post_id] = true;
 }
+add_action('wp_body_open', 'podcore_tutorial_force_render_footer', 1);
 add_action('wp_footer', 'podcore_tutorial_force_render_footer', 20);
 
 function podcore_tutorial_mobile_styles() {

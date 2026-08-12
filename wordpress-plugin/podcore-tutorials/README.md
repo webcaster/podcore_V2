@@ -108,3 +108,11 @@ Nicht das Element **Raw HTML** verwenden, weil viele Page-Builder darin Shortcod
 ### The7-Cache
 
 Nach der Plugin-Aktualisierung unter **The7 → Settings → Performance** den Theme-Cache leeren. Zusätzlich vorhandene Cache-, CDN- und Minify-Caches löschen. Danach die Seite in einem privaten Browserfenster testen.
+
+## Version 2.16.3: Diagnose und The7/WPBakery-Fallback
+
+Unter **PodCore Tutorials → Diagnose** zeigt das Plugin für jedes Tutorial den Veröffentlichungsstatus, ob das JSON erkannt wurde und wie viele Schritte gefunden wurden. Ein Tutorial sollte dort mindestens einen Schritt anzeigen, bevor die Frontend-Seite getestet wird.
+
+Die JSON-Erkennung repariert jetzt Byte-Order-Marks, HTML-Entities, Markdown-Codeblöcke und zusätzlichen Text um den JSON-Export herum. Die Ausgabe wird zusätzlich früh über `wp_body_open` und ersatzweise über `wp_footer` eingebunden, falls The7 oder WPBakery den normalen Inhaltsfilter nicht verwendet.
+
+Für WPBakery ist weiterhin das native Element **PodCore Tutorial** mit dem Slug `erste-schritte` die bevorzugte Methode. Nach jeder Plugin-Aktualisierung müssen The7-Cache, WPBakery-Cache, Cache-Plugin und gegebenenfalls CDN-Cache geleert werden.
