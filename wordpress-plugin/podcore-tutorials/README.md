@@ -80,3 +80,31 @@ Die Shortcodes bleiben kompatibel:
 ```
 
 Alle Funktionen sind ohne externe JavaScript- oder CSS-Bibliothek enthalten.
+
+## The7 und WPBakery
+
+Version 2.16.2 registriert ein natives WPBakery-Element namens **PodCore Tutorial**. Dadurch muss der Shortcode nicht mehr manuell in ein Textfeld geschrieben werden.
+
+### Empfohlene Einrichtung
+
+1. Das Plugin aktivieren und im WordPress-Backend eine Seite mit WPBakery bearbeiten.
+2. Auf **Element hinzufügen** klicken.
+3. In der Kategorie **PodCore** das Element **PodCore Tutorial** auswählen.
+4. Im Feld **Tutorial-Slug** `erste-schritte` eintragen. Alternativ kann die Tutorial-ID verwendet werden; die ID hat Vorrang.
+5. Speichern, die Seite aktualisieren und anschließend veröffentlichen.
+
+Das WPBakery-Element erzeugt intern den kompatiblen Shortcode. Es ist zuverlässiger als ein **Raw HTML**-Element. Falls das Element nicht sichtbar ist, WPBakery und das Plugin deaktivieren/aktivieren und den WordPress-Cache leeren.
+
+### Alternative mit Text Block
+
+Wenn das native Element nicht angeboten wird, den Inhalt in ein WPBakery-Element **Text Block** einfügen:
+
+```text
+[podcore_tutorial slug="erste-schritte"]
+```
+
+Nicht das Element **Raw HTML** verwenden, weil viele Page-Builder darin Shortcodes als reinen Text behandeln.
+
+### The7-Cache
+
+Nach der Plugin-Aktualisierung unter **The7 → Settings → Performance** den Theme-Cache leeren. Zusätzlich vorhandene Cache-, CDN- und Minify-Caches löschen. Danach die Seite in einem privaten Browserfenster testen.

@@ -3,7 +3,7 @@
  * Plugin Name: PodCore Tutorial Hub
  * Plugin URI: https://github.com/webcaster/podcore_V2
  * Description: Zeigt PodCore-Tutorials mit Schritten, Screenshots und Annotationen auf einer WordPress-Seite an und bietet kompatible JSON-Downloads.
- * Version: 2.16.1
+ * Version: 2.16.2
  * Author: PodCore / Max
  * License: GPLv2 or later
  */
@@ -503,6 +503,42 @@ function podcore_single_tutorial_shortcode($atts = array()) {
 }
 add_shortcode('podcore_single_tutorial', 'podcore_single_tutorial_shortcode');
 add_shortcode('podcore_tutorial', 'podcore_single_tutorial_shortcode');
+
+/**
+ * Native WPBakery-Integration für The7.
+ * Das Element erzeugt den vorhandenen PodCore-Shortcode, sodass es auch dann
+ * funktioniert, wenn das Theme den normalen Inhalt anders rendert.
+ */
+function podcore_tutorial_register_wpbakery_element() {
+    if (!function_exists('vc_map')) {
+        return;
+    }
+
+    vc_map(array(
+        'name'        => 'PodCore Tutorial',
+        'base'        => 'podcore_tutorial',
+        'icon'        => 'dashicons dashicons-book-alt',
+        'category'    => 'PodCore',
+        'description' => 'Zeigt ein PodCore-Tutorial mit Schritten, Screenshots und Download an.',
+        'params'      => array(
+            array(
+                'type'        => 'textfield',
+                'heading'     => 'Tutorial-Slug',
+                'param_name'  => 'slug',
+                'description' => 'Zum Beispiel: erste-schritte',
+                'admin_label' => true,
+            ),
+            array(
+                'type'        => 'textfield',
+                'heading'     => 'Tutorial-ID',
+                'param_name'  => 'id',
+                'description' => 'Optional. Die ID hat Vorrang vor dem Slug.',
+                'admin_label' => true,
+            ),
+        ),
+    ));
+}
+add_action('vc_before_init', 'podcore_tutorial_register_wpbakery_element');
 
 /**
  * WordPress und manche mobile Editoren ersetzen gerade Anführungszeichen durch
