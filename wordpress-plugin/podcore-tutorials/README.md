@@ -35,7 +35,7 @@ Als Alias funktioniert ebenfalls:
 [podcore_tutorials]
 ```
 
-Die Seite muss veröffentlicht sein. Der Shortcode wird am zuverlässigsten in einem **Shortcode-Block** des WordPress-Editors eingefügt, nicht in einem reinen HTML- oder Code-Block.
+Die Seite muss veröffentlicht sein. Der Shortcode wird am zuverlässigsten in einem **Shortcode-Block** des WordPress-Editors eingefügt, nicht in einem reinen HTML- oder Code-Block. Die Einzelansicht eines veröffentlichten `PodCore Tutorial` zeigt die Schritte zusätzlich automatisch unterhalb des normalen Beitragsinhalts; dort ist kein zweiter Shortcode erforderlich.
 
 ## Download für Endnutzer
 
@@ -43,7 +43,7 @@ Jede veröffentlichte Tutorial-Karte besitzt einen Button **Tutorial herunterlad
 
 ## Wenn nichts angezeigt wird
 
-Prüfe zunächst, ob das Plugin aktiviert ist, ob mindestens ein Tutorial den Status **Veröffentlicht** besitzt und ob der Shortcode exakt geschrieben wurde. Wenn die Seite nach der Plugin-Aktualisierung leer bleibt oder 404 anzeigt, speichere die Permalink-Einstellungen erneut. Bei einem Tutorial ohne gültiges `steps`-Array zeigt die Seite eine gelbe Warnung direkt in der Tutorial-Karte an.
+Prüfe zunächst, ob das Plugin aktiviert ist, ob mindestens ein Tutorial den Status **Veröffentlicht** besitzt und ob der Shortcode exakt geschrieben wurde. Für die automatische Einzelansicht muss außerdem der JSON-Export im Feld **Vollständiger Tutorial-Export aus PodCore** gespeichert sein. Wenn die Seite nach der Plugin-Aktualisierung leer bleibt oder 404 anzeigt, speichere die Permalink-Einstellungen erneut. Bei einem Tutorial ohne gültiges `steps`-Array zeigt die Seite eine gelbe Warnung direkt in der Tutorial-Karte an.
 
 ## Entwickler-Modus in PodCore
 

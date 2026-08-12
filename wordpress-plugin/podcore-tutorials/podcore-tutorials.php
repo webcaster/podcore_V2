@@ -283,3 +283,41 @@ function podcore_tutorials_shortcode($atts = array()) {
 }
 add_shortcode('podcore_tutorial_hub', 'podcore_tutorials_shortcode');
 add_shortcode('podcore_tutorials', 'podcore_tutorials_shortcode');
+
+/**
+ * Gibt die JSON-Schritte zusätzlich in der nativen WordPress-Einzelansicht aus.
+ * Dadurch funktionieren auch die automatisch erzeugten CPT-Seiten, ohne dass
+ * dort nochmals ein Shortcode eingefügt werden muss.
+ */
+function podcore_tutorial_single_content($content) {
+    if (!is_singular('podcore_tutorial') || !in_the_loop() || !is_main_query()) {
+        return $content;
+    }
+
+    global $post;
+    if (!$post || $post->post_type !== 'podcore_tutorial') {
+        return $content;
+    }
+
+    $decoded = podcore_tutorial_decode(get_post_meta($post->ID, '_podcore_tutorial_json', true));
+    $steps = podcore_tutorial_steps($decoded);
+    if (empty($steps)) {
+        return $content;
+    }
+
+    ob_start();
+    ?>
+    <section class="podcore-tutorial-single" style="max-width:980px; margin:32px auto 0; padding:24px; background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 4px 14px rgba(15,23,42,.06);">
+        <h2 style="font-size:24px; line-height:1.25; color:#0f172a; margin:0 0 8px;">Tutorial-Schritte</h2>
+        <p style="font-size:14px; color:#64748b; margin:0 0 18px;">Folge den einzelnen Schritten. Screenshots und Markierungen werden direkt aus dem PodCore-Export angezeigt.</p>
+        <?php foreach ($steps as $index => $step) {
+            podcore_tutorial_render_step($step, $index);
+        } ?>
+        <p style="margin:24px 0 0;">
+            <a href="<?php echo esc_url(add_query_arg('download_podcore_tutorial', $post->ID, get_permalink($post->ID))); ?>" style="display:inline-flex; align-items:center; justify-content:center; background:#7c3aed; color:#fff; font-weight:600; padding:11px 18px; border-radius:8px; text-decoration:none;">Tutorial als JSON herunterladen</a>
+        </p>
+    </section>
+    <?php
+    return $content . ob_get_clean();
+}
+add_filter('the_content', 'podcore_tutorial_single_content', 20);
