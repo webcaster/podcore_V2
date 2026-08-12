@@ -405,6 +405,35 @@ function podcore_single_tutorial_shortcode($atts = array()) {
     return ob_get_clean();
 }
 add_shortcode('podcore_single_tutorial', 'podcore_single_tutorial_shortcode');
+add_shortcode('podcore_tutorial', 'podcore_single_tutorial_shortcode');
+
+/**
+ * WordPress und manche mobile Editoren ersetzen gerade Anführungszeichen durch
+ * typografische Quotes. Diese werden vor der normalen Shortcode-Verarbeitung
+ * nur innerhalb des PodCore-Shortcodes wieder in ASCII-Quotes umgewandelt.
+ */
+function podcore_normalize_shortcode_quotes($content) {
+    if (!is_string($content) || strpos($content, 'podcore_') === false) {
+        return $content;
+    }
+
+    $content = preg_replace_callback(
+        '/\[(podcore_(?:single_tutorial|tutorial))([^\]]*)\]/iu',
+        function ($match) {
+            $attributes = str_replace(
+                array('“', '”', '„', '«', '»', '＂'),
+                '"',
+                $match[2]
+            );
+            return '[' . $match[1] . $attributes . ']';
+        },
+        $content
+    );
+
+    return $content;
+}
+add_filter('the_content', 'podcore_normalize_shortcode_quotes', 10);
+add_filter('widget_text_content', 'podcore_normalize_shortcode_quotes', 10);
 
 /**
  * Gibt die JSON-Schritte zusätzlich in der nativen WordPress-Einzelansicht aus.
