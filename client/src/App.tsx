@@ -11,6 +11,7 @@ import ScreenshotCaptureOverlay from './components/tutorials/ScreenshotCaptureOv
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import ToastContainer from './components/ui/ToastContainer';
+import LicenseStatusBanner from './components/license/LicenseStatusBanner';
 
 // Lazy load pages for better performance
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -135,6 +136,7 @@ export default function App() {
               <TutorialWikiPanel />
               <TutorialHintNotification />
               <ScreenshotCaptureOverlay />
+              <LicenseStatusBanner />
               <ToastContainer />
             </BrowserRouter>
           </TutorialProvider>

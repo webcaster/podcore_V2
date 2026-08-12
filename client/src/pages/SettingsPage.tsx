@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings, User, FolderOpen, Save, Eye, EyeOff, Loader2, Mic2,
   Palette, Radio, Sliders, Globe, Clock, Tag, Info, Download, Sun, Moon,
-  Upload, CheckCircle, XCircle, AlertTriangle, RefreshCw, Package
+  Upload, CheckCircle, XCircle, AlertTriangle, RefreshCw, Package, KeyRound
 } from 'lucide-react';
-import { adminApi, authApi, updateApi } from '../lib/api';
+import { adminApi, authApi, updateApi, licenseApi, LicenseStatus } from '../lib/api';
 import { useTheme } from '../contexts/ThemeContext';
 import { useApp, applyUserTheme } from '../contexts/AppContext';
 
@@ -40,13 +40,26 @@ export default function SettingsPage() {
   const { user, can, showSuccess, showError, refreshUser, refreshPodcastProfile } = useApp();
   const { mode, setMode } = useTheme();
 
-  type TabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'app' | 'update';
+  type TabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'app' | 'update' | 'license';
   const [activeTab, setActiveTab] = useState<TabKey>(() =>
     new URLSearchParams(window.location.search).get('tab') === 'update' ? 'update' : 'profile'
   );
   const [isSaving, setIsSaving] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+
+  // ── License state ───────────────────────────────────────────────────────────
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
+  const [isLoadingLicense, setIsLoadingLicense] = useState(false);
+  const [isLicenseBusy, setIsLicenseBusy] = useState(false);
+  const [licenseForm, setLicenseForm] = useState({
+    siteUrl: 'https://podcore.de',
+    consumerKey: '',
+    consumerSecret: '',
+    licenseKey: '',
+    software: '',
+    label: 'PodCore Installation',
+  });
 
   // ── Update state ────────────────────────────────────────────────────────────
   const [updateStatus, setUpdateStatus] = useState<any>(null);
@@ -82,6 +95,72 @@ export default function SettingsPage() {
   useEffect(() => {
     if (activeTab === 'update') loadUpdateStatus();
   }, [activeTab, loadUpdateStatus]);
+
+  const loadLicenseStatus = useCallback(async () => {
+    setIsLoadingLicense(true);
+    try {
+      const status = await licenseApi.getStatus();
+      setLicenseStatus(status);
+      setLicenseForm(current => ({
+        ...current,
+        siteUrl: status.siteUrl || current.siteUrl,
+        software: status.software || current.software,
+        label: status.label || current.label,
+      }));
+    } catch (err: any) {
+      showError(err.message);
+    } finally {
+      setIsLoadingLicense(false);
+    }
+  }, [showError]);
+
+  useEffect(() => {
+    if (activeTab === 'license') loadLicenseStatus();
+  }, [activeTab, loadLicenseStatus]);
+
+  const handleLicenseActivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLicenseBusy(true);
+    try {
+      const status = await licenseApi.activate(licenseForm);
+      setLicenseStatus(status);
+      showSuccess('Lizenzaktivierung wurde erfolgreich angefordert.');
+    } catch (err: any) {
+      showError(err.message);
+      await loadLicenseStatus();
+    } finally {
+      setIsLicenseBusy(false);
+    }
+  };
+
+  const handleLicenseValidate = async () => {
+    setIsLicenseBusy(true);
+    try {
+      const status = await licenseApi.validate();
+      setLicenseStatus(status);
+      showSuccess('Lizenzstatus wurde aktualisiert.');
+    } catch (err: any) {
+      showError(err.message);
+      await loadLicenseStatus();
+    } finally {
+      setIsLicenseBusy(false);
+    }
+  };
+
+  const handleLicenseDeactivate = async () => {
+    if (!window.confirm('Soll diese PodCore-Installation wirklich deaktiviert werden?')) return;
+    setIsLicenseBusy(true);
+    try {
+      const status = await licenseApi.deactivate();
+      setLicenseStatus(status);
+      showSuccess('Lizenzaktivierung wurde deaktiviert.');
+    } catch (err: any) {
+      showError(err.message);
+      await loadLicenseStatus();
+    } finally {
+      setIsLicenseBusy(false);
+    }
+  };
 
   const handleUpdateFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
@@ -473,6 +552,7 @@ export default function SettingsPage() {
       { key: 'technical' as TabKey, label: 'Technische Daten', icon: <Sliders size={15} />, adminOnly: true },
       { key: 'app' as TabKey, label: 'App-Einstellungen', icon: <Settings size={15} />, adminOnly: true },
       { key: 'update' as TabKey, label: 'App-Update', icon: <Download size={15} />, adminOnly: true },
+      { key: 'license' as TabKey, label: 'Lizenzierung', icon: <KeyRound size={15} />, adminOnly: true },
     ] : []),
   ];
 
@@ -1213,6 +1293,109 @@ export default function SettingsPage() {
           )}
         </form>
       )}
+      {/* ── LICENSE TAB ─────────────────────────────────────────────────────────── */}
+      {activeTab === 'license' && can('canManageSettings') && (
+        <div className="max-w-2xl space-y-6">
+          <div className="card">
+            <h3 className="font-semibold text-text-primary mb-2 flex items-center gap-2">
+              <KeyRound size={16} /> PodCore-Lizenzierung
+            </h3>
+            <p className="text-text-muted text-sm leading-relaxed">
+              PodCore wird über den Digital License Manager auf <span className="font-mono text-accent-purple">podcore.de</span> aktiviert. Die Zugangsdaten werden nur serverseitig gespeichert und niemals an den Browser zurückgegeben.
+            </p>
+            <a href="https://docs.codeverve.com/digital-license-manager/rest-api/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-accent-purple hover:underline mt-2">
+              DLM-REST-API-Dokumentation öffnen <Globe size={12} />
+            </a>
+          </div>
+
+          {isLoadingLicense ? (
+            <div className="card flex items-center justify-center py-10"><Loader2 size={24} className="animate-spin text-accent-purple" /></div>
+          ) : (
+            <>
+              {licenseStatus && (
+                <div className={`card border ${
+                  licenseStatus.status === 'active' ? 'border-green-500/40 bg-green-500/10' :
+                  licenseStatus.status === 'offline' ? 'border-amber-500/40 bg-amber-500/10' :
+                  'border-red-500/30 bg-red-500/10'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    {licenseStatus.status === 'active'
+                      ? <CheckCircle size={20} className="text-green-400 mt-0.5" />
+                      : licenseStatus.status === 'offline'
+                        ? <AlertTriangle size={20} className="text-amber-400 mt-0.5" />
+                        : <XCircle size={20} className="text-red-400 mt-0.5" />}
+                    <div className="flex-1">
+                      <p className={`font-semibold ${licenseStatus.status === 'active' ? 'text-green-300' : licenseStatus.status === 'offline' ? 'text-amber-300' : 'text-red-300'}`}>
+                        {licenseStatus.status === 'active' ? 'Lizenz aktiv' : licenseStatus.status === 'offline' ? 'Lizenzprüfung momentan nicht erreichbar' : licenseStatus.status === 'deactivated' ? 'Lizenz deaktiviert' : licenseStatus.status === 'unconfigured' ? 'Noch keine Lizenz konfiguriert' : 'Lizenz nicht aktiv'}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-xs">
+                        <div><span className="text-text-muted">Schlüssel:</span> <span className="font-mono text-text-secondary">{licenseStatus.licenseKeyMasked || '—'}</span></div>
+                        <div><span className="text-text-muted">Aktivierung:</span> <span className="font-mono text-text-secondary">{licenseStatus.activationTokenMasked || '—'}</span></div>
+                        {licenseStatus.expiresAt && <div><span className="text-text-muted">Gültig bis:</span> <span className="text-text-secondary">{new Date(licenseStatus.expiresAt).toLocaleDateString('de-DE')}</span></div>}
+                        {licenseStatus.lastValidatedAt && <div><span className="text-text-muted">Zuletzt geprüft:</span> <span className="text-text-secondary">{new Date(licenseStatus.lastValidatedAt).toLocaleString('de-DE')}</span></div>}
+                      </div>
+                      {licenseStatus.lastError && <p className="text-xs text-red-300 mt-3">{licenseStatus.lastError}</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleLicenseActivate} className="card space-y-4">
+                <div>
+                  <label className="label">Lizenz-Webseite</label>
+                  <input type="url" value={licenseForm.siteUrl} onChange={e => setLicenseForm(p => ({ ...p, siteUrl: e.target.value }))} className="input" placeholder="https://podcore.de" required />
+                  <p className="text-text-muted text-xs mt-1">Die WordPress-Installation mit aktiviertem Digital License Manager.</p>
+                </div>
+                <div>
+                  <label className="label">Lizenzschlüssel</label>
+                  <input type="text" value={licenseForm.licenseKey} onChange={e => setLicenseForm(p => ({ ...p, licenseKey: e.target.value }))} className="input font-mono" placeholder="XXXX-XXXX-XXXX-XXXX" required />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Consumer Key</label>
+                    <input type="text" value={licenseForm.consumerKey} onChange={e => setLicenseForm(p => ({ ...p, consumerKey: e.target.value }))} className="input font-mono" placeholder="ck_..." required />
+                  </div>
+                  <div>
+                    <label className="label">Consumer Secret</label>
+                    <input type="password" value={licenseForm.consumerSecret} onChange={e => setLicenseForm(p => ({ ...p, consumerSecret: e.target.value }))} className="input font-mono" placeholder="cs_..." required />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Software-ID (DLM Pro, optional)</label>
+                    <input type="text" value={licenseForm.software} onChange={e => setLicenseForm(p => ({ ...p, software: e.target.value }))} className="input" placeholder="z.B. 12" />
+                  </div>
+                  <div>
+                    <label className="label">Installationsbezeichnung</label>
+                    <input type="text" value={licenseForm.label} onChange={e => setLicenseForm(p => ({ ...p, label: e.target.value }))} className="input" placeholder="PodCore Installation" />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <button type="submit" disabled={isLicenseBusy} className="btn-primary">
+                    {isLicenseBusy ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
+                    Lizenz aktivieren
+                  </button>
+                  <button type="button" onClick={handleLicenseValidate} disabled={isLicenseBusy || !licenseStatus?.activationTokenMasked} className="btn-secondary">
+                    {isLicenseBusy ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                    Status prüfen
+                  </button>
+                  <button type="button" onClick={handleLicenseDeactivate} disabled={isLicenseBusy || !licenseStatus?.activationTokenMasked} className="btn-secondary text-red-300 hover:text-red-200">
+                    <XCircle size={15} /> Deaktivieren
+                  </button>
+                </div>
+              </form>
+
+              <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-4">
+                <div className="flex items-start gap-2">
+                  <Info size={15} className="text-accent-blue mt-0.5 shrink-0" />
+                  <p className="text-text-muted text-xs leading-relaxed">Für die Verbindung brauchst du im WordPress-Dashboard des Digital License Manager einen Consumer Key und Consumer Secret. Der Lizenzschlüssel stammt aus dem Verkauf beziehungsweise der Lizenzzuweisung auf podcore.de.</p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── UPDATE TAB ──────────────────────────────────────────────────────────── */}
       {activeTab === 'update' && can('canManageSettings') && (
         <div className="max-w-2xl space-y-6">

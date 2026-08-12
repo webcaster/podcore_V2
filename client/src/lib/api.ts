@@ -719,3 +719,30 @@ export const seasonPlanningApi = {
     return response.blob();
   },
 };
+
+
+// ============================================================
+// Digital License Manager API
+// ============================================================
+export interface LicenseStatus {
+  configured: boolean;
+  siteUrl: string;
+  software: string;
+  label: string;
+  status: 'unconfigured' | 'active' | 'invalid' | 'offline' | 'deactivated';
+  licenseKeyMasked: string;
+  activationTokenMasked: string;
+  lastValidatedAt: string | null;
+  activatedAt: string | null;
+  expiresAt: string | null;
+  licenseId: string | number | null;
+  lastError: string | null;
+}
+
+export const licenseApi = {
+  getStatus: () => api.get<LicenseStatus>('/license/status'),
+  activate: (data: { siteUrl: string; consumerKey: string; consumerSecret: string; licenseKey: string; software?: string; label?: string }) =>
+    api.post<LicenseStatus>('/license/activate', data),
+  validate: () => api.post<LicenseStatus>('/license/validate', {}),
+  deactivate: () => api.post<LicenseStatus>('/license/deactivate', {}),
+};
