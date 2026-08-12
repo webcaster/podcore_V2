@@ -106,11 +106,56 @@ function podcore_tutorial_save_meta($post_id) {
 add_action('save_post_podcore_tutorial', 'podcore_tutorial_save_meta');
 
 function podcore_tutorial_decode($json_raw) {
-    if (!is_string($json_raw) || trim($json_raw) === '') {
+    if (is_array($json_raw)) {
+        $decoded = $json_raw;
+    } elseif (is_string($json_raw) && trim($json_raw) !== '') {
+        $clean = trim(wp_strip_all_tags($json_raw));
+        $clean = preg_replace('/^```(?:json)?/i', '', $clean);
+        $clean = preg_replace('/```$/', '', trim($clean));
+        $decoded = json_decode(trim($clean), true);
+    } else {
         return array();
     }
-    $decoded = json_decode($json_raw, true);
-    return is_array($decoded) ? $decoded : array();
+
+    if (!is_array($decoded)) {
+        return array();
+    }
+    // Unterstützt auch Wrapper aus Website-Exporten wie { data: {...} }.
+    if (isset($decoded['data']) && is_array($decoded['data'])) {
+        $decoded = $decoded['data'];
+    }
+    if (isset($decoded['tutorial']) && is_array($decoded['tutorial'])) {
+        $decoded = $decoded['tutorial'];
+    }
+    return $decoded;
+}
+
+function podcore_tutorial_post_data($post_id) {
+    $meta_keys = array(
+        '_podcore_tutorial_json',
+        '_podcore_tutorial_export',
+        '_podcore_tutorial_data',
+        '_tutorial_json',
+        'podcore_tutorial_json',
+    );
+
+    foreach ($meta_keys as $key) {
+        $raw = get_post_meta($post_id, $key, true);
+        $decoded = podcore_tutorial_decode($raw);
+        if (!empty($decoded)) {
+            return $decoded;
+        }
+    }
+
+    // Fallback: Wenn JSON in einem normalen Beitrag gespeichert wurde.
+    $post = get_post($post_id);
+    if ($post && is_string($post->post_content) && strpos($post->post_content, '"steps"') !== false) {
+        $decoded = podcore_tutorial_decode($post->post_content);
+        if (!empty($decoded)) {
+            return $decoded;
+        }
+    }
+    return array();
 }
 
 function podcore_tutorial_steps($decoded) {
@@ -243,7 +288,7 @@ function podcore_tutorials_shortcode($atts = array()) {
             <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:24px;">
                 <?php while ($query->have_posts()) : $query->the_post();
                     $post_id = get_the_ID();
-                    $decoded = podcore_tutorial_decode(get_post_meta($post_id, '_podcore_tutorial_json', true));
+                    $decoded = podcore_tutorial_post_data($post_id);
                     $steps = podcore_tutorial_steps($decoded);
                     $roles = get_post_meta($post_id, '_podcore_tutorial_roles', true);
                     $description = get_the_content();
@@ -290,22 +335,45 @@ add_shortcode('podcore_tutorials', 'podcore_tutorials_shortcode');
  * dort nochmals ein Shortcode eingefügt werden muss.
  */
 function podcore_tutorial_single_content($content) {
-    if (!is_singular('podcore_tutorial') || !in_the_loop() || !is_main_query()) {
+    static $rendered = false;
+    if ($rendered || !is_singular()) {
         return $content;
     }
 
     global $post;
-    if (!$post || $post->post_type !== 'podcore_tutorial') {
+    if (!$post) {
         return $content;
     }
 
-    $decoded = podcore_tutorial_decode(get_post_meta($post->ID, '_podcore_tutorial_json', true));
+    $tutorial_post_id = 0;
+    if ($post->post_type === 'podcore_tutorial') {
+        $tutorial_post_id = (int) $post->ID;
+    } else {
+        // Fallback für eine normale WordPress-Seite mit demselben Titel wie das Tutorial.
+        $linked = get_page_by_title($post->post_title, OBJECT, 'podcore_tutorial');
+        if ($linked && $linked->post_status === 'publish') {
+            $tutorial_post_id = (int) $linked->ID;
+        }
+    }
+    if (!$tutorial_post_id) {
+        return $content;
+    }
+
+    $decoded = podcore_tutorial_post_data($tutorial_post_id);
     $steps = podcore_tutorial_steps($decoded);
+
     if (empty($steps)) {
+        if (current_user_can('manage_options')) {
+            return $content . '<!-- PodCore Tutorial: keine gültigen steps gefunden; bitte den vollständigen JSON-Export im Tutorial-Metafeld speichern. -->';
+        }
         return $content;
     }
 
     ob_start();
+    if (current_user_can('manage_options')) {
+        echo '<!-- PodCore Tutorial: Einzelansicht aktiv; ' . esc_html(count($steps)) . ' Schritte erkannt. -->';
+    }
+    $rendered = true;
     ?>
     <section class="podcore-tutorial-single" style="max-width:980px; margin:32px auto 0; padding:24px; background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 4px 14px rgba(15,23,42,.06);">
         <h2 style="font-size:24px; line-height:1.25; color:#0f172a; margin:0 0 8px;">Tutorial-Schritte</h2>
@@ -314,7 +382,7 @@ function podcore_tutorial_single_content($content) {
             podcore_tutorial_render_step($step, $index);
         } ?>
         <p style="margin:24px 0 0;">
-            <a href="<?php echo esc_url(add_query_arg('download_podcore_tutorial', $post->ID, get_permalink($post->ID))); ?>" style="display:inline-flex; align-items:center; justify-content:center; background:#7c3aed; color:#fff; font-weight:600; padding:11px 18px; border-radius:8px; text-decoration:none;">Tutorial als JSON herunterladen</a>
+            <a href="<?php echo esc_url(add_query_arg('download_podcore_tutorial', $tutorial_post_id, get_permalink($tutorial_post_id))); ?>" style="display:inline-flex; align-items:center; justify-content:center; background:#7c3aed; color:#fff; font-weight:600; padding:11px 18px; border-radius:8px; text-decoration:none;">Tutorial als JSON herunterladen</a>
         </p>
     </section>
     <?php
