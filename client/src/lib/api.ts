@@ -741,6 +741,8 @@ export interface LicenseStatus {
   activatedAt: string | null;
   expiresAt: string | null;
   licenseId: string | number | null;
+  productName?: string;
+  plan?: 'monthly' | 'yearly' | 'unknown';
   lastError: string | null;
 }
 

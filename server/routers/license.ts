@@ -19,6 +19,8 @@ interface LicenseSettings {
   activatedAt: string | null;
   expiresAt: string | null;
   licenseId: string | number | null;
+  productName: string;
+  plan: 'monthly' | 'yearly' | 'unknown';
   lastError: string | null;
 }
 
@@ -37,6 +39,8 @@ const DEFAULT_LICENSE: LicenseSettings = {
   activatedAt: null,
   expiresAt: null,
   licenseId: null,
+  productName: '',
+  plan: 'unknown',
   lastError: null,
 };
 
@@ -69,6 +73,18 @@ function mask(value: string): string {
   return `${value.slice(0, 4)}••••${value.slice(-4)}`;
 }
 
+function detectPlan(productName: string, expiresAt: string | null): 'monthly' | 'yearly' | 'unknown' {
+  const value = productName.toLowerCase();
+  if (/(jährlich|jaehrlich|yearly|annual|12\s*monat|365\s*day)/i.test(value)) return 'yearly';
+  if (/(monatlich|monthly|30\s*day)/i.test(value)) return 'monthly';
+  if (expiresAt) {
+    const days = (new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    if (days > 300) return 'yearly';
+    if (days > 0 && days <= 90) return 'monthly';
+  }
+  return 'unknown';
+}
+
 function publicStatus(license: LicenseSettings) {
   let effectiveStatus = license.status;
   let isGracePeriod = false;
@@ -99,6 +115,8 @@ function publicStatus(license: LicenseSettings) {
     activatedAt: license.activatedAt,
     expiresAt: license.expiresAt,
     licenseId: license.licenseId,
+    productName: license.productName,
+    plan: license.plan,
     lastError: license.lastError,
   };
 }
@@ -191,6 +209,8 @@ router.post('/activate', requirePermission('canManageSettings') as any, async (r
       activatedAt: now,
       expiresAt: data.license?.expires_at || data.expires_at || null,
       licenseId: data.license_id || data.license?.id || data.id || null,
+      productName: String(data.license?.name || data.license?.title || data.license?.product_name || data.product_name || data.product || label || '').trim(),
+      plan: detectPlan(String(data.license?.name || data.license?.title || data.license?.product_name || data.product_name || data.product || label || ''), data.license?.expires_at || data.expires_at || null),
       lastError: data.token ? null : 'Die Lizenz wurde bestätigt, aber kein Aktivierungs-Token geliefert.',
     };
     writeLicense(activated);
@@ -222,6 +242,8 @@ router.post('/validate', requirePermission('canManageSettings') as any, async (_
       lastValidatedAt: new Date().toISOString(),
       expiresAt: data.license?.expires_at || data.expires_at || current.expiresAt,
       licenseId: data.license_id || data.license?.id || current.licenseId,
+      productName: String(data.license?.name || data.license?.title || data.license?.product_name || data.product_name || data.product || current.productName || '').trim(),
+      plan: detectPlan(String(data.license?.name || data.license?.title || data.license?.product_name || data.product_name || data.product || current.productName || ''), data.license?.expires_at || data.expires_at || current.expiresAt),
       lastError: null,
     };
     writeLicense(next);

@@ -26,6 +26,8 @@ const ACCENT_PRESETS = [
   { label: 'Indigo', value: '#4f46e5' },
 ];
 
+const PODCORE_PURCHASE_URL = 'https://podcore.de';
+
 const SIDEBAR_PRESETS = [
   { label: 'Obsidian (Standard)', value: '#0f0f13' },
   { label: 'Dunkelblau', value: '#0f172a' },
@@ -1326,9 +1328,21 @@ export default function SettingsPage() {
               <KeyRound size={16} /> PodCore-Lizenzierung
             </h3>
             <p className="text-text-muted text-sm leading-relaxed">
-              PodCore wird über den Digital License Manager auf <span className="font-mono text-accent-purple">podcore.de</span> aktiviert. Die Zugangsdaten werden nur serverseitig gespeichert und niemals an den Browser zurückgegeben.
+              Kaufe den Lizenzschlüssel auf <span className="font-mono text-accent-purple">podcore.de</span>, lade ihn nach dem Kauf herunter und aktiviere ihn anschließend hier. Die Zugangsdaten werden nur serverseitig gespeichert und niemals an den Browser zurückgegeben.
             </p>
-            <a href="https://docs.codeverve.com/digital-license-manager/rest-api/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-accent-purple hover:underline mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+              <a href={PODCORE_PURCHASE_URL} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-accent-purple/30 bg-accent-purple/10 p-3 transition-colors hover:border-accent-purple/70 hover:bg-accent-purple/20">
+                <p className="font-semibold text-text-primary text-sm">Monatliche Lizenz</p>
+                <p className="text-xs text-text-muted mt-1">30 Tage Laufzeit · monatlich verlängern</p>
+                <span className="inline-flex items-center gap-1 text-xs text-accent-purple mt-2">Auf podcore.de kaufen <Globe size={12} /></span>
+              </a>
+              <a href={PODCORE_PURCHASE_URL} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-accent-blue/30 bg-accent-blue/10 p-3 transition-colors hover:border-accent-blue/70 hover:bg-accent-blue/20">
+                <p className="font-semibold text-text-primary text-sm">Jährliche Lizenz</p>
+                <p className="text-xs text-text-muted mt-1">365 Tage Laufzeit · jährlich verlängern</p>
+                <span className="inline-flex items-center gap-1 text-xs text-accent-blue mt-2">Auf podcore.de kaufen <Globe size={12} /></span>
+              </a>
+            </div>
+            <a href="https://docs.codeverve.com/digital-license-manager/rest-api/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-accent-purple hover:underline mt-3">
               DLM-REST-API-Dokumentation öffnen <Globe size={12} />
             </a>
           </div>
@@ -1356,6 +1370,8 @@ export default function SettingsPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-xs">
                         <div><span className="text-text-muted">Schlüssel:</span> <span className="font-mono text-text-secondary">{licenseStatus.licenseKeyMasked || '—'}</span></div>
                         <div><span className="text-text-muted">Aktivierung:</span> <span className="font-mono text-text-secondary">{licenseStatus.activationTokenMasked || '—'}</span></div>
+                        {licenseStatus.productName && <div><span className="text-text-muted">Produkt:</span> <span className="text-text-secondary">{licenseStatus.productName}</span></div>}
+                        {licenseStatus.plan && licenseStatus.plan !== 'unknown' && <div><span className="text-text-muted">Tarif:</span> <span className="text-text-secondary">{licenseStatus.plan === 'yearly' ? 'Jährlich · 365 Tage' : 'Monatlich · 30 Tage'}</span></div>}
                         {licenseStatus.expiresAt && <div><span className="text-text-muted">Gültig bis:</span> <span className="text-text-secondary">{new Date(licenseStatus.expiresAt).toLocaleDateString('de-DE')}</span></div>}
                         {licenseStatus.lastValidatedAt && <div><span className="text-text-muted">Zuletzt geprüft:</span> <span className="text-text-secondary">{new Date(licenseStatus.lastValidatedAt).toLocaleString('de-DE')}</span></div>}
                       </div>
@@ -1410,12 +1426,12 @@ export default function SettingsPage() {
                 </div>
               </form>
 
-              <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-4">
-                <div className="flex items-start gap-2">
-                  <Info size={15} className="text-accent-blue mt-0.5 shrink-0" />
-                  <p className="text-text-muted text-xs leading-relaxed">Für die Verbindung brauchst du im WordPress-Dashboard des Digital License Manager einen Consumer Key und Consumer Secret. Der Lizenzschlüssel stammt aus dem Verkauf beziehungsweise der Lizenzzuweisung auf podcore.de.</p>
+                <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-4">
+                  <div className="flex items-start gap-2">
+                    <Info size={15} className="text-accent-blue mt-0.5 shrink-0" />
+                    <p className="text-text-muted text-xs leading-relaxed">Für die Verbindung brauchst du im WordPress-Dashboard des Digital License Manager einen Consumer Key und Consumer Secret. Der Lizenzschlüssel stammt aus dem Verkauf beziehungsweise der Lizenzzuweisung auf podcore.de. Nach dem Download kopierst du den Schlüssel hier in das Feld und aktivierst die Installation.</p>
+                  </div>
                 </div>
-              </div>
             </>
           )}
         </div>
