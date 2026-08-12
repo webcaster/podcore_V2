@@ -22,6 +22,8 @@ interface LicenseSettings {
   lastError: string | null;
 }
 
+const GRACE_PERIOD_DAYS = 14;
+
 const DEFAULT_LICENSE: LicenseSettings = {
   siteUrl: 'https://podcore.de',
   consumerKey: '',
@@ -68,12 +70,29 @@ function mask(value: string): string {
 }
 
 function publicStatus(license: LicenseSettings) {
+  let effectiveStatus = license.status;
+  let isGracePeriod = false;
+
+  if (license.status === 'offline' && license.lastValidatedAt) {
+    const lastCheck = new Date(license.lastValidatedAt).getTime();
+    const now = Date.now();
+    const diffDays = (now - lastCheck) / (1000 * 60 * 60 * 24);
+    
+    if (diffDays <= GRACE_PERIOD_DAYS) {
+      effectiveStatus = 'active';
+      isGracePeriod = true;
+    }
+  }
+
   return {
     configured: Boolean(license.siteUrl && license.consumerKey && license.consumerSecret && license.licenseKey),
     siteUrl: license.siteUrl,
     software: license.software,
     label: license.label,
-    status: license.status,
+    status: effectiveStatus,
+    realStatus: license.status,
+    isGracePeriod,
+    gracePeriodDaysRemaining: isGracePeriod ? Math.max(0, Math.floor(GRACE_PERIOD_DAYS - (Date.now() - new Date(license.lastValidatedAt!).getTime()) / (1000 * 60 * 60 * 24))) : 0,
     licenseKeyMasked: mask(license.licenseKey),
     activationTokenMasked: mask(license.activationToken),
     lastValidatedAt: license.lastValidatedAt,

@@ -732,6 +732,9 @@ export interface LicenseStatus {
   software: string;
   label: string;
   status: 'unconfigured' | 'active' | 'invalid' | 'offline' | 'deactivated';
+  realStatus?: 'unconfigured' | 'active' | 'invalid' | 'offline' | 'deactivated';
+  isGracePeriod?: boolean;
+  gracePeriodDaysRemaining?: number;
   licenseKeyMasked: string;
   activationTokenMasked: string;
   lastValidatedAt: string | null;
