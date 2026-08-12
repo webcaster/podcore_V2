@@ -8,11 +8,12 @@ export interface AuthRequest extends Request {
     displayName: string;
     role: string;
     permissions: Record<string, boolean>;
+    developerMode: boolean;
   };
 }
 
 const SESSION_QUERY = `
-  SELECT s.*, u.id as user_id, u.username, u.display_name, u.role, u.permissions, u.is_active
+  SELECT s.*, u.id as user_id, u.username, u.display_name, u.role, u.permissions, u.developer_mode, u.is_active
   FROM sessions s
   JOIN users u ON s.user_id = u.id
   WHERE s.token = ? AND s.expires_at > datetime('now')
@@ -71,6 +72,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
     displayName: session.display_name,
     role: session.role,
     permissions: resolvePermissions(session.permissions, session.role),
+    developerMode: session.developer_mode === 1,
   };
 
   next();
@@ -122,6 +124,7 @@ export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction
       displayName: session.display_name,
       role: session.role,
       permissions: resolvePermissions(session.permissions, session.role),
+      developerMode: session.developer_mode === 1,
     };
   }
 

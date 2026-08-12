@@ -12,6 +12,7 @@ export interface CurrentUser {
   email?: string;
   role: string;
   permissions: Record<string, boolean>;
+  developerMode?: boolean;
   avatarColor?: string;
   theme?: UserTheme | null;
   dashboardLayout?: string[] | null;

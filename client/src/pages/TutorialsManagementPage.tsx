@@ -10,12 +10,13 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useApp } from '../contexts/AppContext';
 import {
   Plus, Trash2, Save, ChevronDown, ChevronUp,
   Camera, Download, Eye, Users, BookOpen, Edit3,
   X, Check, AlertCircle, Loader2, ArrowLeft,
   ToggleLeft, ToggleRight, GripVertical, Image as ImageIcon,
-  FileText, Settings, ChevronRight, RefreshCw,
+  FileText, Settings as SettingsIcon, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import { useScreenshotMode } from '../contexts/ScreenshotModeContext';
 import RoleMenuPreview from '../components/tutorials/RoleMenuPreview';
@@ -121,7 +122,11 @@ const newStep = (): TutorialStep => ({
 // ── COMPONENT ──────────────────────────────────────────────────────────────
 export default function TutorialsManagementPage() {
   const navigate = useNavigate();
+  const { user } = useApp();
   const { startScreenshotMode, persistedState, clearPersistedState } = useScreenshotMode();
+
+  // Developer Mode Check
+  const isDeveloper = user?.developerMode === true;
 
   // ── State ──
   type View = 'list' | 'edit' | 'progress';
@@ -529,6 +534,20 @@ export default function TutorialsManagementPage() {
     };
     reader.readAsText(file);
   };
+
+  // ── DEVELOPER MODE CHECK ──
+  if (!isDeveloper) return (
+    <div className="flex items-center justify-center h-screen">
+      <div className="card max-w-md text-center">
+        <AlertCircle size={48} className="mx-auto mb-4 text-accent-red" />
+        <h2 className="text-xl font-bold text-text-primary mb-2">Entwickler-Modus erforderlich</h2>
+        <p className="text-text-muted mb-4">Die Tutorial-Verwaltung ist nur im Entwickler-Modus verfügbar. Aktiviere diesen in deinen Einstellungen.</p>
+        <button onClick={() => navigate('/settings')} className="btn-primary inline-flex items-center gap-2">
+          <SettingsIcon size={16} /> Zu den Einstellungen
+        </button>
+      </div>
+    </div>
+  );
 
   // ── LOADING ──
   if (loading) return (

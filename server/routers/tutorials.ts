@@ -28,10 +28,10 @@ interface TutorialStep {
 }
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
-const requireAdmin = (req: AuthRequest, res: Response, next: Function) => {
+const requireDeveloper = (req: AuthRequest, res: Response, next: Function) => {
   const user = req.user;
-  if (!user || user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin-Zugriff erforderlich' });
+  if (!user || user.role !== 'admin' || user.developerMode !== true) {
+    return res.status(403).json({ error: 'Entwickler-Modus erforderlich' });
   }
   next();
 };
@@ -103,8 +103,8 @@ router.get('/tutorials/:id', requireAuth, async (req: AuthRequest, res: Response
   }
 });
 
-// ── CREATE TUTORIAL (ADMIN ONLY) ───────────────────────────────────────────
-router.post('/tutorials', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
+// ── CREATE TUTORIAL (DEVELOPER MODE ONLY) ─────────────────────────────────
+router.post('/tutorials', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const user = req.user!;
@@ -136,8 +136,8 @@ router.post('/tutorials', requireAuth, requireAdmin as any, async (req: AuthRequ
   }
 });
 
-// ── UPDATE TUTORIAL (ADMIN ONLY) ───────────────────────────────────────────
-router.put('/tutorials/:id', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
+// ── UPDATE TUTORIAL (DEVELOPER MODE ONLY) ─────────────────────────────────
+router.put('/tutorials/:id', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const { id } = req.params;
@@ -173,8 +173,8 @@ router.put('/tutorials/:id', requireAuth, requireAdmin as any, async (req: AuthR
   }
 });
 
-// ── DELETE TUTORIAL (ADMIN ONLY) ───────────────────────────────────────────
-router.delete('/tutorials/:id', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
+// ── DELETE TUTORIAL (DEVELOPER MODE ONLY) ─────────────────────────────────
+router.delete('/tutorials/:id', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const existing = db.get('SELECT id FROM tutorials WHERE id = ?', [req.params.id]) as any;
@@ -251,7 +251,7 @@ router.post('/tutorials/:id/progress', requireAuth, async (req: AuthRequest, res
 });
 
 // ── GET ALL TUTORIALS FOR ADMIN ────────────────────────────────────────────
-router.get('/admin/tutorials', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
+router.get('/admin/tutorials', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const tutorials = db.all('SELECT * FROM tutorials ORDER BY created_at DESC', []) as any[];
@@ -263,7 +263,7 @@ router.get('/admin/tutorials', requireAuth, requireAdmin as any, async (req: Aut
 });
 
 // ── GET USER PROGRESS FOR A SPECIFIC TUTORIAL (ADMIN) ─────────────────────
-router.get('/admin/tutorials/:id/progress', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
+router.get('/admin/tutorials/:id/progress', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const progress = db.all(
@@ -292,7 +292,7 @@ router.get('/admin/tutorials/:id/progress', requireAuth, requireAdmin as any, as
 });
 
 // ── RESET USER TUTORIAL PROGRESS (ADMIN) ──────────────────────────────────
-router.post('/admin/tutorials/:id/reset/:userId', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
+router.post('/admin/tutorials/:id/reset/:userId', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     db.run(
@@ -307,7 +307,7 @@ router.post('/admin/tutorials/:id/reset/:userId', requireAuth, requireAdmin as a
 });
 
 // ── INITIALIZE TUTORIAL FOR USER (ADMIN) ──────────────────────────────────
-router.post('/admin/tutorials/:id/initialize/:userId', requireAuth, requireAdmin as any, async (req: AuthRequest, res: Response) => {
+router.post('/admin/tutorials/:id/initialize/:userId', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const { id, userId } = req.params;

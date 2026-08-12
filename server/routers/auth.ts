@@ -32,6 +32,7 @@ function formatUser(user: any) {
     email: user.email,
     role: user.role,
     permissions: resolveUserPermissions(user),
+    developerMode: user.developer_mode === 1,
     avatarColor: user.avatar_color,
     theme: user.theme ? JSON.parse(user.theme) : null,
     dashboardLayout: user.dashboard_layout ? JSON.parse(user.dashboard_layout) : null,
@@ -115,7 +116,7 @@ router.get('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
 
 // PUT /api/auth/me — Update own profile (displayName, email, avatarColor, theme)
 router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
-  const { displayName, email, avatarColor, theme, dashboardLayout, currentPassword, newPassword } = req.body;
+  const { displayName, email, avatarColor, theme, dashboardLayout, developerMode, currentPassword, newPassword } = req.body;
 
   const db = getDb();
   const user = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;
@@ -145,10 +146,14 @@ router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
   const newAvatarColor = avatarColor !== undefined ? avatarColor : user.avatar_color;
   const newTheme = theme !== undefined ? JSON.stringify(theme) : user.theme;
   const newDashboardLayout = dashboardLayout !== undefined ? JSON.stringify(dashboardLayout) : user.dashboard_layout;
+  // Only administrators may switch developer mode for their own account.
+  const newDeveloperMode = user.role === 'admin' && typeof developerMode === 'boolean'
+    ? (developerMode ? 1 : 0)
+    : (user.developer_mode === 1 ? 1 : 0);
 
   db.run(
-    "UPDATE users SET display_name = ?, email = ?, avatar_color = ?, theme = ?, dashboard_layout = ?, updated_at = datetime('now') WHERE id = ?",
-    [newDisplayName, newEmail, newAvatarColor, newTheme, newDashboardLayout, req.user!.id]
+    "UPDATE users SET display_name = ?, email = ?, avatar_color = ?, theme = ?, dashboard_layout = ?, developer_mode = ?, updated_at = datetime('now') WHERE id = ?",
+    [newDisplayName, newEmail, newAvatarColor, newTheme, newDashboardLayout, newDeveloperMode, req.user!.id]
   );
 
   const updated = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;

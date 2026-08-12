@@ -160,6 +160,7 @@ export default function SettingsPage() {
     newPassword: '',
     confirmPassword: '',
     avatarColor: user?.avatarColor || '#7c3aed',
+    developerMode: user?.developerMode === true,
   });
   const [showPasswords, setShowPasswords] = useState(false);
 
@@ -359,6 +360,7 @@ export default function SettingsPage() {
         displayName: user.displayName || '',
         email: user.email || '',
         avatarColor: user.avatarColor || '#7c3aed',
+        developerMode: user.developerMode === true,
       }));
       setThemeForm({
         accentColor: user.theme?.accentColor || '#7c3aed',
@@ -380,6 +382,7 @@ export default function SettingsPage() {
         displayName: profileForm.displayName,
         email: profileForm.email || undefined,
         avatarColor: profileForm.avatarColor,
+        ...(user?.role === 'admin' ? { developerMode: profileForm.developerMode } : {}),
       };
       if (profileForm.newPassword) {
         payload.currentPassword = profileForm.currentPassword;
@@ -512,6 +515,22 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="space-y-4">
+              {user?.role === 'admin' && (
+                <div className="rounded-xl border border-accent-purple/30 bg-accent-purple/10 p-4">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={profileForm.developerMode}
+                      onChange={e => setProfileForm(p => ({ ...p, developerMode: e.target.checked }))}
+                      className="mt-1 h-4 w-4 accent-accent-purple"
+                    />
+                    <span>
+                      <span className="block font-medium text-text-primary">Entwickler-Modus</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-text-secondary">Erlaubt das Erstellen, Bearbeiten, Importieren und Exportieren von Tutorials. Für normale Nutzer bleibt die Tutorial-Verwaltung verborgen.</span>
+                    </span>
+                  </label>
+                </div>
+              )}
               <div>
                 <label className="label">Anzeigename</label>
                 <input type="text" value={profileForm.displayName} onChange={e => setProfileForm(p => ({ ...p, displayName: e.target.value }))} className="input" required />

@@ -56,6 +56,7 @@ function initializeSchema(db: any): void {
       permissions TEXT NOT NULL DEFAULT '{}',
       is_active INTEGER NOT NULL DEFAULT 1,
       avatar_color TEXT DEFAULT '#7c3aed',
+      developer_mode INTEGER NOT NULL DEFAULT 0,
       last_login TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -1228,6 +1229,11 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE ideas ADD COLUMN deleted_at TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE ideas ADD COLUMN deleted_by TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_ideas_deleted_at ON ideas(deleted_at, updated_at DESC)'); } catch (_) {}
+
+  // v2.15.8: Add developer_mode column if not exists
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN developer_mode INTEGER NOT NULL DEFAULT 0`);
+  } catch (_) {}
 
   // v2.15.1: Tutorial System
   try {
