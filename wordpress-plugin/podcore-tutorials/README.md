@@ -62,3 +62,21 @@ Prüfe zunächst, ob das Plugin aktiviert ist, ob mindestens ein Tutorial den St
 ## Entwickler-Modus in PodCore
 
 In PodCore ist die Tutorial-Verwaltung für Erstellen, Bearbeiten, Importieren und Exportieren durch den exklusiven Entwickler-Modus geschützt. Die serverseitige Prüfung bleibt aktiv; eine bloß sichtbare URL reicht nicht aus. Die Tutorial-Verwaltung wird nur nach der geheimen Freischaltung und mit aktivem Entwickler-Modus angezeigt.
+
+## Neue Funktionen in Version 2.16.1
+
+Der Tutorial-Hub besitzt jetzt ein responsives Kartenlayout mit Suchfeld, Rollenfilter und Trefferzähler. Die Karten können per **Schritte anzeigen** auf- und zugeklappt werden; Screenshots werden lazy geladen und auf mobilen Geräten automatisch skaliert.
+
+Das Erscheinungsbild unterstützt helle und dunkle WordPress-Themes über `prefers-color-scheme: dark`. Die Oberfläche verwendet ein neutrales PodCore-Design mit Hover-Zuständen, klaren Download-Schaltflächen und zugänglichen Formularbeschriftungen.
+
+Im Backend wird der JSON-Export während der Eingabe live geprüft. Der Editor zeigt die erkannte Schrittanzahl, meldet ungültiges JSON und besitzt die Schaltfläche **JSON formatieren**. Die Bildverarbeitung akzeptiert nur sichere `data:image`, HTTPS- und relative Bildpfade.
+
+Die Shortcodes bleiben kompatibel:
+
+```text
+[podcore_tutorial_hub]
+[podcore_single_tutorial slug="erste-schritte"]
+[podcore_tutorial slug="erste-schritte"]
+```
+
+Alle Funktionen sind ohne externe JavaScript- oder CSS-Bibliothek enthalten.

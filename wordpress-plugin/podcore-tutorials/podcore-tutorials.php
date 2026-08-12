@@ -3,7 +3,7 @@
  * Plugin Name: PodCore Tutorial Hub
  * Plugin URI: https://github.com/webcaster/podcore_V2
  * Description: Zeigt PodCore-Tutorials mit Schritten, Screenshots und Annotationen auf einer WordPress-Seite an und bietet kompatible JSON-Downloads.
- * Version: 2.16.0
+ * Version: 2.16.1
  * Author: PodCore / Max
  * License: GPLv2 or later
  */
@@ -76,7 +76,9 @@ function podcore_tutorial_meta_box_callback($post) {
     </p>
     <p>
         <label for="podcore_tutorial_json"><strong>Vollständiger Tutorial-Export aus PodCore (JSON):</strong></label><br>
-        <textarea id="podcore_tutorial_json" name="podcore_tutorial_json" rows="16" style="width:100%; font-family:monospace;"><?php echo esc_textarea($json_data); ?></textarea>
+        <textarea id="podcore_tutorial_json" name="podcore_tutorial_json" rows="16" spellcheck="false" style="width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; line-height:1.5;"><?php echo esc_textarea($json_data); ?></textarea>
+        <button type="button" class="button" id="podcore-format-json" style="margin-top:8px;">JSON formatieren</button>
+        <span id="podcore-json-live-status" style="margin-left:8px; font-weight:600;"></span>
     </p>
     <p class="description">
         Füge hier die komplette JSON-Datei aus PodCore ein. Das Plugin erkennt automatisch die Struktur mit <code>steps</code>, Screenshots, Base64-Bildern und Annotationen.
@@ -94,6 +96,40 @@ function podcore_tutorial_meta_box_callback($post) {
             <strong>Keine Schritte erkannt.</strong> Bitte den vollständigen Export mit einem <code>steps</code>-Array einfügen.
         </p>
     <?php endif; ?>
+    <script>
+    (function(){
+        var field = document.getElementById('podcore_tutorial_json');
+        var status = document.getElementById('podcore-json-live-status');
+        var format = document.getElementById('podcore-format-json');
+        if (!field || !status) return;
+        function validate(){
+            var raw = field.value.trim();
+            if (!raw) { status.textContent = ''; return; }
+            try {
+                var data = JSON.parse(raw);
+                if (data && data.data) data = data.data;
+                if (data && data.tutorial) data = data.tutorial;
+                var steps = data && Array.isArray(data.steps) ? data.steps : (Array.isArray(data) ? data : []);
+                status.textContent = steps.length ? '✓ ' + steps.length + ' Schritte erkannt' : '⚠ Kein steps-Array gefunden';
+                status.style.color = steps.length ? '#047857' : '#b45309';
+            } catch (error) {
+                status.textContent = '✕ Ungültiges JSON';
+                status.style.color = '#b91c1c';
+            }
+        }
+        field.addEventListener('input', validate);
+        if (format) format.addEventListener('click', function(){
+            try {
+                field.value = JSON.stringify(JSON.parse(field.value), null, 2);
+                validate();
+            } catch (error) {
+                status.textContent = '✕ Erst gültiges JSON einfügen';
+                status.style.color = '#b91c1c';
+            }
+        });
+        validate();
+    }());
+    </script>
     <?php
 }
 
@@ -187,7 +223,10 @@ function podcore_tutorial_image($step) {
     }
     foreach (array('screenshotUrl', 'imageUrl', 'screenshot', 'image', 'imageData') as $key) {
         if (!empty($step[$key]) && is_string($step[$key])) {
-            return trim($step[$key]);
+            $candidate = trim($step[$key]);
+            if (preg_match('/^data:image\/(?:png|jpe?g|gif|webp);base64,/i', $candidate) || preg_match('/^(?:https?:)?\/\//i', $candidate) || strpos($candidate, '/') === 0) {
+                return $candidate;
+            }
         }
     }
     return '';
@@ -290,14 +329,39 @@ function podcore_tutorials_shortcode($atts = array()) {
 
     ob_start();
     ?>
-    <div class="podcore-tutorial-hub" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; color:#1e293b; max-width:1200px; margin:0 auto; padding:20px;">
-        <div style="text-align:center; margin-bottom:40px;">
-            <h2 style="font-size:28px; font-weight:700; color:#0f172a; margin:0 0 10px;">PodCore Tutorial-Wissensbasis</h2>
-            <p style="font-size:16px; color:#64748b; margin:0;">Alle Anleitungen mit Schritten, Screenshots und kompatiblen Downloads.</p>
-        </div>
+    <div class="podcore-tutorial-hub" data-podcore-hub>
+        <header class="podcore-hub-header">
+            <div>
+                <span class="podcore-eyebrow">PODCORE KNOWLEDGE BASE</span>
+                <h2>PodCore Tutorial-Wissensbasis</h2>
+                <p>Alle Anleitungen mit Schritten, Screenshots und kompatiblen Downloads.</p>
+            </div>
+            <div class="podcore-hub-mark" aria-hidden="true">?</div>
+        </header>
 
-        <?php if ($query->have_posts()) : ?>
-            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:24px;">
+        <?php if ($query->have_posts()) :
+            $available_roles = array();
+            foreach ($query->posts as $role_post) {
+                $role_value = get_post_meta($role_post->ID, '_podcore_tutorial_roles', true);
+                foreach (array_filter(array_map('trim', explode(',', (string) $role_value))) as $role_name) {
+                    $available_roles[$role_name] = $role_name;
+                }
+            }
+            ksort($available_roles);
+        ?>
+            <div class="podcore-hub-tools" role="search">
+                <label class="podcore-sr-only" for="podcore-tutorial-search">Tutorials durchsuchen</label>
+                <input class="podcore-tutorial-search" id="podcore-tutorial-search" type="search" placeholder="Tutorials durchsuchen …" autocomplete="off" />
+                <label class="podcore-sr-only" for="podcore-tutorial-role">Nach Rolle filtern</label>
+                <select class="podcore-tutorial-role" id="podcore-tutorial-role">
+                    <option value="">Alle Rollen</option>
+                    <?php foreach ($available_roles as $role_name) : ?>
+                        <option value="<?php echo esc_attr(strtolower($role_name)); ?>"><?php echo esc_html($role_name); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <span class="podcore-hub-count" aria-live="polite"><?php echo esc_html(count($query->posts)); ?> Tutorials</span>
+            </div>
+            <div class="podcore-tutorial-grid">
                 <?php while ($query->have_posts()) : $query->the_post();
                     $post_id = get_the_ID();
                     $decoded = podcore_tutorial_post_data($post_id);
@@ -307,34 +371,67 @@ function podcore_tutorials_shortcode($atts = array()) {
                     if (trim(wp_strip_all_tags($description)) === '' && !empty($decoded['description'])) {
                         $description = $decoded['description'];
                     }
+                    $title = get_the_title();
+                    $search_text = strtolower($title . ' ' . $roles . ' ' . wp_strip_all_tags($description));
                     $download_url = add_query_arg('download_podcore_tutorial', $post_id, get_permalink());
                     ?>
-                    <section style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:24px; box-shadow:0 4px 6px -1px rgba(0,0,0,.05);">
-                        <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:12px;">
-                            <h3 style="font-size:20px; font-weight:700; color:#0f172a; margin:0;"><?php echo esc_html(get_the_title()); ?></h3>
-                            <?php if ($roles) : ?><span style="background:#f1f5f9; color:#475569; font-size:11px; padding:4px 8px; border-radius:6px; white-space:nowrap;"><?php echo esc_html($roles); ?></span><?php endif; ?>
+                    <article class="podcore-tutorial-card" data-tutorial-card data-search="<?php echo esc_attr($search_text); ?>" data-roles="<?php echo esc_attr(strtolower($roles)); ?>">
+                        <div class="podcore-card-topline"><span class="podcore-card-icon" aria-hidden="true">▣</span><span><?php echo esc_html(count($steps)); ?> Schritte</span></div>
+                        <div class="podcore-card-heading">
+                            <h3><?php echo esc_html($title); ?></h3>
+                            <?php if ($roles) : ?><span class="podcore-role-badge"><?php echo esc_html($roles); ?></span><?php endif; ?>
                         </div>
                         <?php if (trim(wp_strip_all_tags($description)) !== '') : ?>
-                            <div style="font-size:14px; color:#475569; line-height:1.6; margin-bottom:16px;"><?php echo wpautop(esc_html(wp_strip_all_tags($description))); ?></div>
+                            <div class="podcore-card-description"><?php echo wpautop(esc_html(wp_strip_all_tags($description))); ?></div>
                         <?php endif; ?>
                         <?php if (!empty($steps)) : ?>
-                            <div style="margin-bottom:20px;">
-                                <p style="font-size:13px; font-weight:700; color:#64748b; margin:0 0 8px;">Schritte und Screenshots</p>
-                                <?php foreach ($steps as $index => $step) podcore_tutorial_render_step($step, $index); ?>
-                            </div>
+                            <details class="podcore-card-steps">
+                                <summary>Schritte anzeigen</summary>
+                                <div class="podcore-card-step-list">
+                                    <?php foreach ($steps as $index => $step) podcore_tutorial_render_step($step, $index); ?>
+                                </div>
+                            </details>
                         <?php else : ?>
-                            <p style="font-size:13px; color:#b45309; background:#fffbeb; border:1px solid #fde68a; padding:10px; border-radius:8px;">Für dieses Tutorial wurden noch keine gültigen Schritte gefunden. Bitte den vollständigen JSON-Export im Backend einfügen.</p>
+                            <p class="podcore-card-warning">Keine gültigen Schritte gefunden. Bitte den vollständigen JSON-Export speichern.</p>
                         <?php endif; ?>
-                        <a href="<?php echo esc_url($download_url); ?>" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; width:100%; background:#7c3aed; color:#fff; font-weight:600; padding:11px 16px; border-radius:8px; text-decoration:none;">
-                            Tutorial herunterladen (.json)
-                        </a>
-                    </section>
+                        <a class="podcore-download-button" href="<?php echo esc_url($download_url); ?>">Tutorial herunterladen <span aria-hidden="true">↓</span></a>
+                    </article>
                 <?php endwhile; wp_reset_postdata(); ?>
             </div>
+            <p class="podcore-hub-empty" data-empty-state hidden>Keine Tutorials passen zu deiner Suche.</p>
         <?php else : ?>
-            <p style="text-align:center; color:#64748b;">Aktuell sind keine veröffentlichten Tutorials vorhanden. Lege unter „PodCore Tutorials“ einen Beitrag an und klicke auf „Veröffentlichen“.</p>
+            <p class="podcore-hub-empty">Aktuell sind keine veröffentlichten Tutorials vorhanden. Lege unter „PodCore Tutorials“ einen Beitrag an und klicke auf „Veröffentlichen“.</p>
         <?php endif; ?>
     </div>
+    <?php if ($query->have_posts() || !empty($available_roles)) : ?>
+    <script>
+    (function(){
+        document.querySelectorAll('[data-podcore-hub]').forEach(function(hub){
+            var input = hub.querySelector('.podcore-tutorial-search');
+            var role = hub.querySelector('.podcore-tutorial-role');
+            var cards = Array.prototype.slice.call(hub.querySelectorAll('[data-tutorial-card]'));
+            var empty = hub.querySelector('[data-empty-state]');
+            var count = hub.querySelector('.podcore-hub-count');
+            function filter(){
+                var query = (input ? input.value : '').toLowerCase().trim();
+                var selected = (role ? role.value : '').toLowerCase();
+                var visible = 0;
+                cards.forEach(function(card){
+                    var matchesText = !query || (card.getAttribute('data-search') || '').indexOf(query) !== -1;
+                    var matchesRole = !selected || (card.getAttribute('data-roles') || '').indexOf(selected) !== -1;
+                    var show = matchesText && matchesRole;
+                    card.hidden = !show;
+                    if (show) visible++;
+                });
+                if (empty) empty.hidden = visible !== 0;
+                if (count) count.textContent = visible + (visible === 1 ? ' Tutorial' : ' Tutorials');
+            }
+            if (input) input.addEventListener('input', filter);
+            if (role) role.addEventListener('change', filter);
+        });
+    }());
+    </script>
+    <?php endif; ?>
     <?php
     return ob_get_clean();
 }
@@ -549,6 +646,59 @@ function podcore_tutorial_mobile_styles() {
     if (is_admin()) return;
     ?>
     <style id="podcore-tutorial-mobile-styles">
+        .podcore-tutorial-hub {
+            --podcore-accent: #7c3aed;
+            --podcore-accent-dark: #5b21b6;
+            --podcore-surface: #ffffff;
+            --podcore-soft: #f8fafc;
+            --podcore-border: #e2e8f0;
+            --podcore-text: #0f172a;
+            --podcore-muted: #64748b;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--podcore-text);
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: clamp(16px, 3vw, 34px);
+        }
+        .podcore-hub-header {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:20px;
+            padding:clamp(22px, 4vw, 40px);
+            margin-bottom:20px;
+            border-radius:22px;
+            color:#fff;
+            background:linear-gradient(135deg, #27134d 0%, #5b21b6 55%, #7c3aed 100%);
+            box-shadow:0 18px 40px rgba(91,33,182,.22);
+        }
+        .podcore-hub-header h2 { margin:4px 0 8px; color:#fff; font-size:clamp(24px, 4vw, 36px); line-height:1.15; }
+        .podcore-hub-header p { margin:0; color:rgba(255,255,255,.78); font-size:15px; }
+        .podcore-eyebrow { font-size:11px; letter-spacing:.14em; font-weight:800; color:#ddd6fe; }
+        .podcore-hub-mark { display:grid; place-items:center; flex:0 0 52px; width:52px; height:52px; border:1px solid rgba(255,255,255,.35); border-radius:16px; color:#fff; font-size:28px; font-weight:800; }
+        .podcore-hub-tools { display:grid; grid-template-columns:minmax(180px,1fr) minmax(150px,220px) auto; align-items:center; gap:12px; margin:0 0 24px; }
+        .podcore-tutorial-search, .podcore-tutorial-role { width:100%; min-height:46px; box-sizing:border-box; padding:0 14px; border:1px solid var(--podcore-border); border-radius:12px; background:var(--podcore-surface); color:var(--podcore-text); font:inherit; }
+        .podcore-tutorial-search:focus, .podcore-tutorial-role:focus { outline:3px solid rgba(124,58,237,.18); border-color:var(--podcore-accent); }
+        .podcore-hub-count { justify-self:end; color:var(--podcore-muted); font-size:13px; font-weight:700; white-space:nowrap; }
+        .podcore-tutorial-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr)); gap:20px; }
+        .podcore-tutorial-card { display:flex; flex-direction:column; min-width:0; padding:22px; border:1px solid var(--podcore-border); border-radius:18px; background:var(--podcore-surface); box-shadow:0 8px 24px rgba(15,23,42,.06); transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+        .podcore-tutorial-card:hover { transform:translateY(-3px); border-color:rgba(124,58,237,.45); box-shadow:0 16px 32px rgba(91,33,182,.13); }
+        .podcore-card-topline { display:flex; align-items:center; gap:8px; color:var(--podcore-muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+        .podcore-card-icon { display:grid; place-items:center; width:26px; height:26px; border-radius:8px; background:#ede9fe; color:var(--podcore-accent); }
+        .podcore-card-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:14px 0 10px; }
+        .podcore-card-heading h3 { margin:0; color:var(--podcore-text); font-size:21px; line-height:1.25; }
+        .podcore-role-badge { flex:0 0 auto; padding:5px 8px; border-radius:999px; background:#f1f5f9; color:#475569; font-size:11px; line-height:1.2; }
+        .podcore-card-description { color:var(--podcore-muted); font-size:14px; line-height:1.65; margin-bottom:14px; }
+        .podcore-card-description p { margin:0 0 8px; }
+        .podcore-card-steps { margin-top:auto; border-top:1px solid var(--podcore-border); }
+        .podcore-card-steps summary { cursor:pointer; padding:14px 0; color:var(--podcore-accent-dark); font-size:14px; font-weight:800; list-style-position:inside; }
+        .podcore-card-step-list { max-height:560px; overflow:auto; padding-right:3px; }
+        .podcore-card-step-list .podcore-tutorial-step { padding-top:14px !important; margin-top:14px !important; }
+        .podcore-download-button { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:18px; padding:12px 15px; border-radius:11px; color:#fff !important; background:linear-gradient(135deg,#7c3aed,#5b21b6); text-decoration:none !important; font-size:14px; font-weight:800; transition:filter .18s ease, transform .18s ease; }
+        .podcore-download-button:hover { filter:brightness(1.08); transform:translateY(-1px); }
+        .podcore-card-warning, .podcore-hub-empty { padding:13px; border-radius:11px; background:#fffbeb; border:1px solid #fde68a; color:#92400e; font-size:13px; line-height:1.5; }
+        .podcore-hub-empty[hidden] { display:none; }
+        .podcore-sr-only { position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
         .podcore-tutorial-hub,
         .podcore-single-tutorial,
         .podcore-tutorial-single,
@@ -562,7 +712,24 @@ function podcore_tutorial_mobile_styles() {
             max-width: 100% !important;
             height: auto !important;
         }
+        @media (prefers-color-scheme: dark) {
+            .podcore-tutorial-hub {
+                --podcore-surface:#111827;
+                --podcore-soft:#1f2937;
+                --podcore-border:#374151;
+                --podcore-text:#f8fafc;
+                --podcore-muted:#cbd5e1;
+            }
+            .podcore-tutorial-hub .podcore-tutorial-search,
+            .podcore-tutorial-hub .podcore-tutorial-role { color:var(--podcore-text); background:var(--podcore-surface); border-color:var(--podcore-border); }
+            .podcore-tutorial-hub .podcore-role-badge, .podcore-tutorial-hub .podcore-card-icon { background:#312e81; color:#ddd6fe; }
+            .podcore-tutorial-hub .podcore-tutorial-step h4 { color:#f8fafc !important; }
+            .podcore-tutorial-hub .podcore-tutorial-step div, .podcore-tutorial-hub .podcore-tutorial-step ol { color:#cbd5e1 !important; }
+        }
         @media (max-width: 640px) {
+            .podcore-hub-header { border-radius:16px; }
+            .podcore-hub-tools { grid-template-columns:1fr; }
+            .podcore-hub-count { justify-self:start; }
             .podcore-tutorial-hub,
             .podcore-single-tutorial,
             .podcore-tutorial-single {
