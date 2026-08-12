@@ -35,6 +35,20 @@ Als Alias funktioniert ebenfalls:
 [podcore_tutorials]
 ```
 
+Wenn ein Theme oder Page-Builder die automatische Einzelansicht nicht ausgibt, nutze den manuellen Shortcode. Für ein Tutorial mit der ID 123:
+
+```text
+[podcore_single_tutorial id="123"]
+```
+
+Alternativ kann der Slug verwendet werden:
+
+```text
+[podcore_single_tutorial slug="erste-schritte"]
+```
+
+Der Shortcode kann in einem WordPress-Shortcode-Block, Elementor-Shortcode-Widget oder Divi-Code-Modul eingefügt werden. Ohne `id` oder `slug` wird das zuletzt veröffentlichte PodCore-Tutorial verwendet.
+
 Die Seite muss veröffentlicht sein. Der Shortcode wird am zuverlässigsten in einem **Shortcode-Block** des WordPress-Editors eingefügt, nicht in einem reinen HTML- oder Code-Block. Die Einzelansicht eines veröffentlichten `PodCore Tutorial` zeigt die Schritte zusätzlich automatisch unterhalb des normalen Beitragsinhalts; dort ist kein zweiter Shortcode erforderlich.
 
 ## Download für Endnutzer

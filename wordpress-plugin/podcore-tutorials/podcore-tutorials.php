@@ -83,6 +83,18 @@ function podcore_tutorial_meta_box_callback($post) {
         Der Beitrag muss anschließend rechts über <strong>Veröffentlichen</strong> veröffentlicht werden.
     </p>
     <?php
+    $preview_data = podcore_tutorial_decode($json_data);
+    $preview_steps = podcore_tutorial_steps($preview_data);
+    if (!empty($json_data) && !empty($preview_steps)) : ?>
+        <p style="padding:10px; background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46;">
+            <strong>JSON erkannt:</strong> <?php echo esc_html(count($preview_steps)); ?> Schritte gefunden.
+        </p>
+    <?php elseif (!empty($json_data)) : ?>
+        <p style="padding:10px; background:#fffbeb; border:1px solid #fde68a; color:#92400e;">
+            <strong>Keine Schritte erkannt.</strong> Bitte den vollständigen Export mit einem <code>steps</code>-Array einfügen.
+        </p>
+    <?php endif; ?>
+    <?php
 }
 
 function podcore_tutorial_save_meta($post_id) {
@@ -328,6 +340,71 @@ function podcore_tutorials_shortcode($atts = array()) {
 }
 add_shortcode('podcore_tutorial_hub', 'podcore_tutorials_shortcode');
 add_shortcode('podcore_tutorials', 'podcore_tutorials_shortcode');
+
+/**
+ * Manueller Shortcode für Themes und Page-Builder:
+ * [podcore_single_tutorial id="123"]
+ * [podcore_single_tutorial slug="erste-schritte"]
+ */
+function podcore_single_tutorial_shortcode($atts = array()) {
+    $atts = shortcode_atts(array(
+        'id'    => 0,
+        'slug'  => '',
+        'title' => '',
+    ), $atts, 'podcore_single_tutorial');
+
+    $tutorial = false;
+    if (!empty($atts['id'])) {
+        $candidate = get_post(absint($atts['id']));
+        if ($candidate && $candidate->post_type === 'podcore_tutorial' && $candidate->post_status === 'publish') {
+            $tutorial = $candidate;
+        }
+    }
+    if (!$tutorial && !empty($atts['slug'])) {
+        $tutorial = get_page_by_path(sanitize_title($atts['slug']), OBJECT, 'podcore_tutorial');
+    }
+    if (!$tutorial && !empty($atts['title'])) {
+        $tutorial = get_page_by_title(sanitize_text_field($atts['title']), OBJECT, 'podcore_tutorial');
+    }
+    if (!$tutorial) {
+        $posts = get_posts(array(
+            'post_type' => 'podcore_tutorial',
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'orderby' => 'date',
+            'order' => 'DESC',
+        ));
+        $tutorial = !empty($posts) ? $posts[0] : false;
+    }
+
+    if (!$tutorial) {
+        return current_user_can('manage_options')
+            ? '<div style="padding:14px; background:#fffbeb; border:1px solid #fde68a; color:#92400e;">PodCore: Kein veröffentlichtes Tutorial gefunden. Bitte zuerst unter <strong>PodCore Tutorials</strong> einen Beitrag veröffentlichen.</div>'
+            : '';
+    }
+
+    $decoded = podcore_tutorial_post_data($tutorial->ID);
+    $steps = podcore_tutorial_steps($decoded);
+    $description = !empty($decoded['description']) ? $decoded['description'] : $tutorial->post_content;
+
+    ob_start();
+    ?>
+    <div class="podcore-single-tutorial" style="max-width:980px; margin:24px auto; padding:24px; background:#fff; border:1px solid #e2e8f0; border-radius:14px; color:#1e293b;">
+        <h2 style="margin:0 0 10px; color:#0f172a;"><?php echo esc_html($tutorial->post_title); ?></h2>
+        <?php if (trim(wp_strip_all_tags($description)) !== '') : ?>
+            <div style="color:#475569; line-height:1.6; margin-bottom:20px;"><?php echo wpautop(esc_html(wp_strip_all_tags($description))); ?></div>
+        <?php endif; ?>
+        <?php if (empty($steps)) : ?>
+            <div style="padding:12px; background:#fffbeb; border:1px solid #fde68a; color:#92400e;">Für dieses Tutorial wurden keine Schritte erkannt. Bitte den vollständigen JSON-Export im Tutorial-Metafeld speichern.</div>
+        <?php else : ?>
+            <?php foreach ($steps as $index => $step) podcore_tutorial_render_step($step, $index); ?>
+        <?php endif; ?>
+        <a href="<?php echo esc_url(add_query_arg('download_podcore_tutorial', $tutorial->ID, get_permalink($tutorial->ID))); ?>" style="display:inline-flex; margin-top:20px; background:#7c3aed; color:#fff; padding:11px 16px; border-radius:8px; text-decoration:none; font-weight:600;">Tutorial herunterladen (.json)</a>
+    </div>
+    <?php
+    return ob_get_clean();
+}
+add_shortcode('podcore_single_tutorial', 'podcore_single_tutorial_shortcode');
 
 /**
  * Gibt die JSON-Schritte zusätzlich in der nativen WordPress-Einzelansicht aus.
