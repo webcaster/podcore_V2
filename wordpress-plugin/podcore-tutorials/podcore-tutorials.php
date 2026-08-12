@@ -463,6 +463,94 @@ function podcore_tutorial_single_content($content) {
         </p>
     </section>
     <?php
+    $GLOBALS['podcore_tutorial_rendered'] = isset($GLOBALS['podcore_tutorial_rendered']) && is_array($GLOBALS['podcore_tutorial_rendered']) ? $GLOBALS['podcore_tutorial_rendered'] : array();
+    $GLOBALS['podcore_tutorial_rendered'][$tutorial_post_id] = true;
     return $content . ob_get_clean();
 }
 add_filter('the_content', 'podcore_tutorial_single_content', 20);
+
+/**
+ * Fallback für Themes, die the_content nicht normal filtern oder Page-Builder
+ * verwenden. Die Ausgabe erscheint am Ende des Seiteninhalts vor dem Footer.
+ */
+function podcore_tutorial_force_render_footer() {
+    if (is_admin() || !is_singular()) {
+        return;
+    }
+
+    global $post;
+    if (!$post) {
+        return;
+    }
+
+    $tutorial_post_id = 0;
+    if ($post->post_type === 'podcore_tutorial') {
+        $tutorial_post_id = (int) $post->ID;
+    } else {
+        $linked = get_page_by_title($post->post_title, OBJECT, 'podcore_tutorial');
+        if ($linked && $linked->post_status === 'publish') {
+            $tutorial_post_id = (int) $linked->ID;
+        }
+    }
+    if (!$tutorial_post_id) {
+        return;
+    }
+
+    $rendered = isset($GLOBALS['podcore_tutorial_rendered']) && is_array($GLOBALS['podcore_tutorial_rendered']) ? $GLOBALS['podcore_tutorial_rendered'] : array();
+    if (!empty($rendered[$tutorial_post_id])) {
+        return;
+    }
+
+    $decoded = podcore_tutorial_post_data($tutorial_post_id);
+    if (empty(podcore_tutorial_steps($decoded))) {
+        if (current_user_can('manage_options')) {
+            echo '<div style="margin:20px auto; max-width:980px; padding:12px; background:#fff7ed; border:1px solid #fdba74; color:#9a3412; font-family:Arial,sans-serif;">PodCore-Diagnose: Die Seite wurde erkannt, aber das JSON enthält kein gültiges <code>steps</code>-Array.</div>';
+        }
+        return;
+    }
+
+    echo '<div class="podcore-force-render" style="clear:both; width:100%; box-sizing:border-box;">';
+    echo do_shortcode('[podcore_single_tutorial id="' . absint($tutorial_post_id) . '"]');
+    echo '</div>';
+    $GLOBALS['podcore_tutorial_rendered'][$tutorial_post_id] = true;
+}
+add_action('wp_footer', 'podcore_tutorial_force_render_footer', 20);
+
+function podcore_tutorial_mobile_styles() {
+    if (is_admin()) return;
+    ?>
+    <style id="podcore-tutorial-mobile-styles">
+        .podcore-tutorial-hub,
+        .podcore-single-tutorial,
+        .podcore-tutorial-single,
+        .podcore-force-render {
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .podcore-tutorial-hub img,
+        .podcore-single-tutorial img,
+        .podcore-tutorial-single img {
+            max-width: 100% !important;
+            height: auto !important;
+        }
+        @media (max-width: 640px) {
+            .podcore-tutorial-hub,
+            .podcore-single-tutorial,
+            .podcore-tutorial-single {
+                padding: 14px !important;
+                margin: 16px 0 !important;
+                border-radius: 10px !important;
+            }
+            .podcore-tutorial-hub h2,
+            .podcore-single-tutorial h2,
+            .podcore-tutorial-single h2 {
+                font-size: 22px !important;
+            }
+            .podcore-tutorial-step {
+                overflow-wrap: anywhere;
+            }
+        }
+    </style>
+    <?php
+}
+add_action('wp_head', 'podcore_tutorial_mobile_styles', 20);
