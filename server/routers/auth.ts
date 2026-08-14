@@ -211,9 +211,6 @@ router.post('/heartbeat', requireAuth as any, (req: AuthRequest, res: Response) 
   const db = getDb();
   const token = req.cookies?.podcore_session || req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ success: false });
-  try {
-    db.run('ALTER TABLE sessions ADD COLUMN last_seen TEXT');
-  } catch (_) { /* column already exists */ }
   db.run(`UPDATE sessions SET last_seen = datetime('now') WHERE token = ?`, [token]);
   return res.json({ success: true });
 });
@@ -221,9 +218,6 @@ router.post('/heartbeat', requireAuth as any, (req: AuthRequest, res: Response) 
 // GET /api/auth/online-users — Alle Nutzer mit aktiver Session in den letzten 5 Minuten
 router.get('/online-users', requireAuth as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  try {
-    db.run('ALTER TABLE sessions ADD COLUMN last_seen TEXT');
-  } catch (_) { /* column already exists */ }
   const rows = db.all(`
     SELECT DISTINCT u.id, u.username, u.display_name as displayName, u.avatar_color as avatarColor, u.role
     FROM sessions s

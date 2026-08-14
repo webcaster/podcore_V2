@@ -358,6 +358,7 @@ function initializeSchema(db: any): void {
       user_id TEXT NOT NULL,
       token TEXT UNIQUE NOT NULL,
       expires_at TEXT NOT NULL,
+      last_seen TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -375,6 +376,9 @@ function initializeSchema(db: any): void {
   `);
 
   // Migration: add new columns if they don't exist (for existing databases)
+  // Session-Status gehört in die zentrale Initialisierung; Auth-Routen dürfen
+  // im laufenden Betrieb keine ALTER TABLE-Anweisungen ausführen.
+  try { db.exec('ALTER TABLE sessions ADD COLUMN last_seen TEXT'); } catch (_) {}
   try { db.exec('ALTER TABLE episodes ADD COLUMN production_info TEXT'); } catch (_) {}
   try { db.exec("ALTER TABLE episodes ADD COLUMN technical_data TEXT NOT NULL DEFAULT '{}'"); } catch (_) {}
   try { db.exec('ALTER TABLE users ADD COLUMN theme TEXT DEFAULT NULL'); } catch (_) {}
@@ -1270,6 +1274,9 @@ function initializeSchema(db: any): void {
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
         created_by TEXT NOT NULL,
+        source TEXT DEFAULT 'local',
+        source_url TEXT,
+        cloud_updated_at TEXT,
         FOREIGN KEY (created_by) REFERENCES users(id)
       )
     `);
@@ -1297,15 +1304,21 @@ function initializeSchema(db: any): void {
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_user_tutorial_progress_tutorial ON user_tutorial_progress(tutorial_id)'); } catch (_) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_tutorials_role ON tutorials(role, enabled)'); } catch (_) {}
 
-  // v2.15.8: Add roles column to tutorials if missing (migration)
+  // Tutorial-Cloud-Migrationen werden bewusst ausschließlich hier ausgeführt.
+  // Router dürfen beim Modulimport keine Datenbank öffnen oder verändern, weil
+  // dies den eigentlichen Serverstart bei einer bestehenden Fremdsperre stört.
   try {
-    const cols = (db.all('PRAGMA table_info(tutorials)', []) as any[]).map((c: any) => c.name);
-    if (!cols.includes('roles')) {
+    const columns = (db.all('PRAGMA table_info(tutorials)', []) as any[]).map((column: any) => column.name);
+    if (!columns.includes('roles')) {
       db.run('ALTER TABLE tutorials ADD COLUMN roles TEXT DEFAULT \'[]\'');
       db.run(`UPDATE tutorials SET roles = json_array(role) WHERE roles IS NULL OR roles = '' OR roles = '[]'`);
     }
-  } catch (_) {}
-
+    if (!columns.includes('source')) db.run("ALTER TABLE tutorials ADD COLUMN source TEXT DEFAULT 'local'");
+    if (!columns.includes('source_url')) db.run('ALTER TABLE tutorials ADD COLUMN source_url TEXT');
+    if (!columns.includes('cloud_updated_at')) db.run('ALTER TABLE tutorials ADD COLUMN cloud_updated_at TEXT');
+  } catch (error) {
+    console.warn('[DB] Tutorial-Migration konnte nicht vollständig abgeschlossen werden:', error instanceof Error ? error.message : error);
+  }
 
   console.log('[DB] Database initialized at:', DB_PATH);
 }

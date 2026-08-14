@@ -159,20 +159,6 @@ async function upsertCloudTutorial(item: any, actorId: string): Promise<void> {
   );
 }
 
-function ensureCloudColumns(): void {
-  try {
-    const db = getDb();
-    const columns = (db.all('PRAGMA table_info(tutorials)', []) as any[]).map((column: any) => column.name);
-    if (!columns.includes('source')) db.run("ALTER TABLE tutorials ADD COLUMN source TEXT DEFAULT 'local'");
-    if (!columns.includes('source_url')) db.run('ALTER TABLE tutorials ADD COLUMN source_url TEXT');
-    if (!columns.includes('cloud_updated_at')) db.run('ALTER TABLE tutorials ADD COLUMN cloud_updated_at TEXT');
-  } catch (error) {
-    console.warn('[tutorial-cloud] Migration warning:', error);
-  }
-}
-
-ensureCloudColumns();
-
 router.get('/status', requireAuth, (req: AuthRequest, res: Response) => {
   const settings = readCloudSettings();
   res.json({

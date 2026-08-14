@@ -118,21 +118,6 @@ async function cacheImportedSteps(value: any): Promise<TutorialStep[]> {
   return result;
 }
 
-// ── MIGRATION: add roles column if missing ─────────────────────────────────
-function ensureRolesColumn() {
-  try {
-    const db = getDb();
-    const cols = (db.all('PRAGMA table_info(tutorials)', []) as any[]).map((c: any) => c.name);
-    if (!cols.includes('roles')) {
-      db.run('ALTER TABLE tutorials ADD COLUMN roles TEXT');
-      db.run(`UPDATE tutorials SET roles = json_array(role) WHERE roles IS NULL OR roles = ''`);
-    }
-  } catch (e) {
-    console.warn('[tutorials] Migration warning:', e);
-  }
-}
-ensureRolesColumn();
-
 // ── GET TUTORIALS FOR CURRENT USER ────────────────────────────────────────
 router.get('/tutorials', requireAuth, async (req: AuthRequest, res: Response) => {
   try {

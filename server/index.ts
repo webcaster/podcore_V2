@@ -76,8 +76,61 @@ if (NODE_ENV !== 'test') {
 }
 
 // ============================================================
-// Initialize Database
+// Single-Instance Guard & Initialize Database
 // ============================================================
+
+const INSTANCE_LOCK_PATH = path.join(DATA_DIR, 'podcore-server.lock');
+
+function isProcessRunning(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function acquireInstanceLock(): void {
+  try {
+    if (fs.existsSync(INSTANCE_LOCK_PATH)) {
+      let existing: { pid?: number } = {};
+      try { existing = JSON.parse(fs.readFileSync(INSTANCE_LOCK_PATH, 'utf8')); } catch (_) {}
+      if (isProcessRunning(Number(existing.pid))) {
+        console.error(`[FATAL] PodCore läuft bereits mit Prozess ${existing.pid} und verwendet ${DATA_DIR}.`);
+        console.error('[FATAL] Beende die vorhandene Instanz, bevor du PodCore erneut startest.');
+        process.exit(1);
+      }
+      // Ein abgestürzter Prozess kann eine verwaiste Sperrdatei hinterlassen.
+      fs.unlinkSync(INSTANCE_LOCK_PATH);
+    }
+
+    fs.writeFileSync(INSTANCE_LOCK_PATH, JSON.stringify({
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      version: APP_VERSION,
+    }), { encoding: 'utf8', flag: 'wx' });
+
+    const release = () => {
+      try {
+        const current = JSON.parse(fs.readFileSync(INSTANCE_LOCK_PATH, 'utf8'));
+        if (current.pid === process.pid) fs.unlinkSync(INSTANCE_LOCK_PATH);
+      } catch (_) {}
+    };
+    process.once('exit', release);
+    for (const signal of ['SIGINT', 'SIGTERM']) {
+      process.once(signal, () => {
+        release();
+        process.exit(0);
+      });
+    }
+  } catch (error: any) {
+    console.error('[FATAL] PodCore-Instanzsperre konnte nicht eingerichtet werden:', error?.message || error);
+    process.exit(1);
+  }
+}
+
+acquireInstanceLock();
 getDb();
 
 // ============================================================

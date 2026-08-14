@@ -14,6 +14,7 @@ SQLite erlaubt pro Datenbankdatei nur einen gleichzeitigen Schreibvorgang. In be
 | **Busy-Timeout von 10 Sekunden** | Kurzzeitige Schreibsperren werden abgewartet, statt den Login sofort abzubrechen. |
 | **Fallback-Fehlerlog** | Bei einer gesperrten Datenbank wird der Fehler nicht erneut in SQLite geschrieben; das verhindert eine Fehlerkaskade. |
 | **Klare 503-Rückmeldung** | Bei einer länger anhaltenden externen Sperre erhält der Client eine verständliche Meldung statt eines allgemeinen 500-Fehlers. |
+| **Single-Instance-Sperre** | Eine zweite PodCore-Serverinstanz mit demselben Datenordner wird vor dem Datenbankzugriff beendet. |
 
 ## Aktualisierung einer bestehenden Installation
 
@@ -26,4 +27,16 @@ SQLite erlaubt pro Datenbankdatei nur einen gleichzeitigen Schreibvorgang. In be
 
 ## Falls die Datenbank weiterhin gesperrt bleibt
 
-Eine dauerhaft bestehende Sperre bedeutet in der Regel, dass eine andere Instanz noch dieselbe Datei geöffnet hält. Beende alle laufenden PodCore-/Node-Prozesse auf dem Rechner und starte nur die aktuelle Installation erneut. Die detaillierte Fallback-Protokollierung befindet sich danach unter `~/.podcore/logs/backend-fallback.log`.
+Eine dauerhaft bestehende Sperre bedeutet in der Regel, dass eine andere Instanz noch dieselbe Datei geöffnet hält. Die neue PodCore-Version verhindert künftig, dass eine zweite Instanz unbemerkt startet. Bei einem Startversuch zeigt sie stattdessen die PID des bereits laufenden Servers an.
+
+Für eine bereits blockierte Installation gehst du auf Linux wie folgt vor:
+
+```bash
+# Prozess ermitteln, der die Datenbank geöffnet hält
+fuser -v ~/.podcore/podcore.db
+
+# Nur den angezeigten alten PodCore-/Node-Prozess kontrolliert beenden
+kill <PID>
+```
+
+Danach startest du PodCore einmal neu. Lösche weder `podcore.db` noch die zugehörigen Datenordner. Die detaillierte Fallback-Protokollierung befindet sich unter `~/.podcore/logs/backend-fallback.log`.
