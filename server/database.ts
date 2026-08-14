@@ -31,10 +31,31 @@ export { DATA_DIR, DB_PATH, ASSETS_DIR, BACKUPS_DIR, LOGS_DIR };
 
 let _db: any = null;
 
+function configureDatabaseConnection(db: any): void {
+  // SQLite erlaubt pro Datenbankdatei nur einen Schreiber. WAL lässt Leser
+  // parallel arbeiten, während busy_timeout konkurrierende Schreibvorgänge
+  // kurz warten lässt statt die Anfrage sofort mit "database is locked" zu
+  // beenden. Die einzelnen PRAGMA-Aufrufe bleiben bewusst fehlertolerant,
+  // damit eine bereits durch ein externes Backup gesperrte Altinstallation
+  // trotzdem sauber starten und nach dessen Ende weiterarbeiten kann.
+  const pragmas = [
+    'PRAGMA journal_mode = WAL',
+    'PRAGMA synchronous = NORMAL',
+    'PRAGMA busy_timeout = 10000',
+    'PRAGMA foreign_keys = ON',
+  ];
+  for (const pragma of pragmas) {
+    try { db.exec(pragma); } catch (error) {
+      console.warn(`[DB] PRAGMA konnte nicht gesetzt werden (${pragma}):`, error instanceof Error ? error.message : error);
+    }
+  }
+}
+
 export function getDb(): any {
   if (!_db) {
     const { Database } = require('node-sqlite3-wasm');
     _db = new Database(DB_PATH);
+    configureDatabaseConnection(_db);
     initializeSchema(_db);
   }
   return _db;

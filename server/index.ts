@@ -9,7 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import http from 'http';
 
-import { getDb, DATA_DIR, ASSETS_DIR } from './database';
+import { getDb, DATA_DIR, ASSETS_DIR, LOGS_DIR } from './database';
 import { verifyToken } from './middleware/auth';
 import { getLocalNetworkIPs } from './storage';
 import authRouter from './routers/auth';
@@ -226,23 +226,55 @@ if (fs.existsSync(publicDir)) {
 // Error Handler
 // ============================================================
 
+function isDatabaseBusyError(error: any): boolean {
+  const message = String(error?.message || error || '');
+  return /database is locked|database is busy|sqlite_busy/i.test(message);
+}
+
+function writeEmergencyErrorLog(error: any, req: express.Request): void {
+  try {
+    const entry = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      category: 'backend',
+      message: error?.message || 'Unknown error',
+      url: req.path,
+      method: req.method,
+    });
+    fs.appendFileSync(path.join(LOGS_DIR, 'backend-fallback.log'), `${entry}\n`, 'utf8');
+  } catch (fallbackError) {
+    console.error('[ERROR] Fallback-Log konnte nicht geschrieben werden:', fallbackError);
+  }
+}
+
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('[ERROR]', err);
+  const databaseBusy = isDatabaseBusyError(err);
 
-  try {
-    const db = getDb();
-    const { v4: uuidv4 } = require('uuid');
-    db.run(
-      `INSERT INTO error_logs (id, level, category, message, details, stack, url) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [uuidv4(), 'error', 'backend', err.message || 'Unknown error', JSON.stringify({ name: err.name }), err.stack || null, req.path]
-    );
-  } catch (logErr) {
-    console.error('[ERROR] Could not log error to database:', logErr);
+  // Eine weitere INSERT-Anweisung auf einer bereits gesperrten DB würde die
+  // Sperre nur verstärken und denselben Fehler erneut auslösen. In diesem Fall
+  // wird ausschließlich in das lokale Fallback-Log geschrieben.
+  if (databaseBusy) {
+    writeEmergencyErrorLog(err, req);
+  } else {
+    try {
+      const db = getDb();
+      const { v4: uuidv4 } = require('uuid');
+      db.run(
+        `INSERT INTO error_logs (id, level, category, message, details, stack, url) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [uuidv4(), 'error', 'backend', err.message || 'Unknown error', JSON.stringify({ name: err.name }), err.stack || null, req.path]
+      );
+    } catch (logErr) {
+      console.error('[ERROR] Could not log error to database:', logErr);
+      writeEmergencyErrorLog(logErr, req);
+    }
   }
 
-  res.status(err.status || 500).json({
+  res.status(databaseBusy ? 503 : (err.status || 500)).json({
     success: false,
-    error: NODE_ENV === 'production' ? 'Interner Serverfehler' : err.message,
+    error: databaseBusy
+      ? 'Die lokale Datenbank ist momentan durch einen anderen Vorgang belegt. Bitte kurz warten und erneut anmelden.'
+      : (NODE_ENV === 'production' ? 'Interner Serverfehler' : err.message),
   });
 });
 
