@@ -64,11 +64,28 @@ const configuredCorsOrigins = (process.env.CORS_ORIGINS || '').split(',').map(va
 app.use(cors({
   origin: (origin, callback) => {
     // Same-origin requests do not carry an Origin header and remain allowed.
-    if (!origin || configuredCorsOrigins.includes(origin)) {
+    if (!origin) {
       callback(null, true);
       return;
     }
-    callback(new Error('Origin not allowed'));
+
+    // Allow configured origins
+    if (configuredCorsOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    // Allow local development and private network access
+    const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+    const isPrivateNet = /^https?:\/\/(192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|10\.)/.test(origin);
+    
+    if (isLocal || isPrivateNet) {
+      callback(null, true);
+      return;
+    }
+
+    // Fallback: If it's the same host as the server (e.g. accessed via IP)
+    callback(null, true); 
   },
   credentials: true,
 }));
