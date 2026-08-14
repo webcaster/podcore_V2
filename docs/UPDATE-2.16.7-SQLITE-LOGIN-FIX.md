@@ -15,6 +15,7 @@ SQLite erlaubt pro Datenbankdatei nur einen gleichzeitigen Schreibvorgang. In be
 | **Fallback-Fehlerlog** | Bei einer gesperrten Datenbank wird der Fehler nicht erneut in SQLite geschrieben; das verhindert eine Fehlerkaskade. |
 | **Klare 503-Rückmeldung** | Bei einer länger anhaltenden externen Sperre erhält der Client eine verständliche Meldung statt eines allgemeinen 500-Fehlers. |
 | **Single-Instance-Sperre** | Eine zweite PodCore-Serverinstanz mit demselben Datenordner wird vor dem Datenbankzugriff beendet. |
+| **SQLite-WASM-Sperrbereinigung** | Ein leeres, verwaistes Verzeichnis `podcore.db.lock` wird unter Linux nur dann automatisch entfernt, wenn kein Prozess die Datenbank geöffnet hält. |
 
 ## Aktualisierung einer bestehenden Installation
 
@@ -39,4 +40,12 @@ fuser -v ~/.podcore/podcore.db
 kill <PID>
 ```
 
-Danach startest du PodCore einmal neu. Lösche weder `podcore.db` noch die zugehörigen Datenordner. Die detaillierte Fallback-Protokollierung befindet sich unter `~/.podcore/logs/backend-fallback.log`.
+Falls `~/.podcore/podcore.db.lock` als **leeres Verzeichnis** vorhanden ist, handelt es sich um einen verwaisten Sperrmarker der SQLite-WASM-Bibliothek. Die neue Version bereinigt ihn automatisch. Bei einer alten, noch nicht aktualisierten Installation darfst du ihn erst entfernen, nachdem PodCore beendet wurde und `fuser` keinen Prozess mehr meldet:
+
+```bash
+rmdir ~/.podcore/podcore.db.lock
+```
+
+> Entferne ausschließlich das leere Verzeichnis `podcore.db.lock`. Lösche **niemals** `podcore.db` oder die zugehörigen Datenordner.
+
+Danach startest du PodCore einmal neu. Die detaillierte Fallback-Protokollierung befindet sich unter `~/.podcore/logs/backend-fallback.log`.

@@ -9,7 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import http from 'http';
 
-import { getDb, DATA_DIR, ASSETS_DIR, LOGS_DIR } from './database';
+import { getDb, DATA_DIR, DB_PATH, ASSETS_DIR, LOGS_DIR } from './database';
 import { verifyToken } from './middleware/auth';
 import { getLocalNetworkIPs } from './storage';
 import authRouter from './routers/auth';
@@ -80,6 +80,62 @@ if (NODE_ENV !== 'test') {
 // ============================================================
 
 const INSTANCE_LOCK_PATH = path.join(DATA_DIR, 'podcore-server.lock');
+const SQLITE_WASM_LOCK_PATH = `${DB_PATH}.lock`;
+
+function findLinuxProcessesUsingFile(targetPath: string): number[] {
+  // node-sqlite3-wasm nutzt ein leeres Verzeichnis <datenbank>.lock als
+  // Sperrmarker. Unter Linux lässt sich vor einer automatischen Bereinigung
+  // sicher feststellen, ob ein anderer Prozess die echte DB-Datei noch offen
+  // hat. Auf anderen Plattformen wird bewusst nichts automatisch entfernt.
+  if (process.platform !== 'linux' || !fs.existsSync('/proc')) return [];
+  const target = path.resolve(targetPath);
+  const holders = new Set<number>();
+  for (const entry of fs.readdirSync('/proc')) {
+    if (!/^\d+$/.test(entry)) continue;
+    const pid = Number(entry);
+    if (pid === process.pid) continue;
+    const fdDirectory = `/proc/${pid}/fd`;
+    try {
+      for (const fd of fs.readdirSync(fdDirectory)) {
+        try {
+          const link = fs.readlinkSync(path.join(fdDirectory, fd)).replace(/ \(deleted\)$/, '');
+          if (path.resolve(link) === target) {
+            holders.add(pid);
+            break;
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+  return [...holders];
+}
+
+function clearStaleSqliteWasmLock(): void {
+  if (!fs.existsSync(SQLITE_WASM_LOCK_PATH)) return;
+  const holders = findLinuxProcessesUsingFile(DB_PATH);
+  if (holders.length > 0) {
+    console.error(`[FATAL] Die Datenbank ${DB_PATH} wird noch von Prozess(en) ${holders.join(', ')} verwendet.`);
+    console.error('[FATAL] Beende diese Instanz(en), bevor du PodCore neu startest.');
+    process.exit(1);
+  }
+  if (process.platform !== 'linux') {
+    console.error(`[FATAL] Verwaistes SQLite-Sperrverzeichnis erkannt: ${SQLITE_WASM_LOCK_PATH}`);
+    console.error('[FATAL] Beende PodCore vollständig und entferne nur dieses leere .lock-Verzeichnis, nicht die Datenbankdatei.');
+    process.exit(1);
+  }
+  try {
+    const entries = fs.readdirSync(SQLITE_WASM_LOCK_PATH);
+    if (entries.length > 0) {
+      console.error(`[FATAL] SQLite-Sperrverzeichnis enthält Dateien und wird nicht automatisch entfernt: ${SQLITE_WASM_LOCK_PATH}`);
+      process.exit(1);
+    }
+    fs.rmdirSync(SQLITE_WASM_LOCK_PATH);
+    console.warn(`[DB] Verwaistes SQLite-WASM-Sperrverzeichnis bereinigt: ${SQLITE_WASM_LOCK_PATH}`);
+  } catch (error: any) {
+    console.error(`[FATAL] SQLite-Sperrverzeichnis konnte nicht sicher bereinigt werden: ${error?.message || error}`);
+    process.exit(1);
+  }
+}
 
 function isProcessRunning(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) return false;
@@ -131,6 +187,7 @@ function acquireInstanceLock(): void {
 }
 
 acquireInstanceLock();
+clearStaleSqliteWasmLock();
 getDb();
 
 // ============================================================
