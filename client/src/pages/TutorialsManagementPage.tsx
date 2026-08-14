@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useScreenshotMode } from '../contexts/ScreenshotModeContext';
 import RoleMenuPreview from '../components/tutorials/RoleMenuPreview';
+import { tutorialCloudApi, TutorialCloudItem, TutorialCloudStatus } from '../lib/api';
 
 // ── TYPES ──────────────────────────────────────────────────────────────────
 interface AnnotationPoint {
@@ -144,11 +145,32 @@ export default function TutorialsManagementPage() {
   const [progressMap, setProgressMap] = useState<Record<string, UserProgress[]>>({});
   const [loadingProgress, setLoadingProgress] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'steps' | 'roles' | 'preview'>('steps');
+  const [tutorialSearch, setTutorialSearch] = useState('');
+  const [tutorialStatus, setTutorialStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [cloudStatus, setCloudStatus] = useState<TutorialCloudStatus | null>(null);
+  const [cloudItems, setCloudItems] = useState<TutorialCloudItem[]>([]);
+  const [cloudLoading, setCloudLoading] = useState(false);
+  const [cloudSaving, setCloudSaving] = useState(false);
+  const [cloudUrl, setCloudUrl] = useState('https://podcore.de/wp-json/app-tutorials/v1');
+  const [cloudEnabled, setCloudEnabled] = useState(false);
+  const [cloudAutoSync, setCloudAutoSync] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Ref to hold the current editTutorial for use inside screenshot callbacks
   const editTutorialRef = useRef<Tutorial | null>(null);
   useEffect(() => { editTutorialRef.current = editTutorial; }, [editTutorial]);
+
+  const visibleTutorials = tutorials.filter((tutorial) => {
+    const query = tutorialSearch.trim().toLocaleLowerCase('de-DE');
+    const haystack = [tutorial.title, tutorial.description, ...(tutorial.roles || [])]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('de-DE');
+    const matchesSearch = !query || haystack.includes(query);
+    const matchesStatus = tutorialStatus === 'all'
+      || (tutorialStatus === 'active' ? tutorial.enabled : !tutorial.enabled);
+    return matchesSearch && matchesStatus;
+  });
 
   // ── RESTORE STATE AFTER SCREENSHOT NAVIGATION ──
   // When the user returns from screenshot mode, restore the tutorial editor state
@@ -220,6 +242,62 @@ export default function TutorialsManagementPage() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { loadData(); }, [loadData]);
+
+  const loadCloudStatus = useCallback(async () => {
+    if (!isDeveloper) return;
+    try {
+      const status = await tutorialCloudApi.getStatus();
+      setCloudStatus(status);
+      setCloudUrl(status.baseUrl);
+      setCloudEnabled(status.enabled);
+      setCloudAutoSync(status.autoSync);
+    } catch {
+      setCloudStatus(null);
+    }
+  }, [isDeveloper]);
+
+  useEffect(() => { loadCloudStatus(); }, [loadCloudStatus]);
+
+  const handleCloudSave = useCallback(async () => {
+    setCloudSaving(true);
+    try {
+      const status = await tutorialCloudApi.saveConfig({ enabled: cloudEnabled, baseUrl: cloudUrl, autoSync: cloudAutoSync });
+      setCloudStatus(status);
+      setSuccess('Tutorial-Cloud-Einstellungen gespeichert');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) {
+      setError(e?.message || 'Cloud-Einstellungen konnten nicht gespeichert werden');
+    } finally {
+      setCloudSaving(false);
+    }
+  }, [cloudEnabled, cloudUrl, cloudAutoSync]);
+
+  const handleCloudCatalog = useCallback(async () => {
+    setCloudLoading(true);
+    try {
+      const result = await tutorialCloudApi.getCatalog();
+      setCloudItems(result.items || []);
+    } catch (e: any) {
+      setError(e?.message || 'Cloud-Katalog konnte nicht geladen werden');
+    } finally {
+      setCloudLoading(false);
+    }
+  }, []);
+
+  const handleCloudSync = useCallback(async () => {
+    setCloudLoading(true);
+    try {
+      const result = await tutorialCloudApi.sync();
+      await loadData();
+      await loadCloudStatus();
+      setSuccess(`${result.imported} Cloud-Tutorial${result.imported === 1 ? '' : 's'} synchronisiert`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) {
+      setError(e?.message || 'Cloud-Synchronisation fehlgeschlagen');
+    } finally {
+      setCloudLoading(false);
+    }
+  }, [loadData, loadCloudStatus]);
 
   // ── PROGRESS ──
   const loadProgress = useCallback(async (tid: string) => {
@@ -615,6 +693,103 @@ export default function TutorialsManagementPage() {
 
       <Notifications />
 
+      {isDeveloper && (
+        <section className="card border border-accent-purple/30 bg-accent-purple/5 space-y-4" aria-labelledby="tutorial-cloud-heading">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="tutorial-cloud-heading" className="font-semibold text-text-primary flex items-center gap-2">
+                <BookOpen size={16} className="text-accent-purple" />
+                Tutorial-Cloud von podcore.de
+              </h2>
+              <p className="text-xs text-text-muted mt-1 max-w-2xl">
+                Veröffentliche Tutorials im WordPress-Wiki und übernimm sie kontrolliert in diese Installation. Lokale Tutorials bleiben unverändert.
+              </p>
+            </div>
+            {cloudStatus && (
+              <span className={`px-2 py-1 rounded-full text-xs ${cloudStatus.enabled ? 'bg-green-500/15 text-green-400' : 'bg-obsidian-700 text-text-muted'}`}>
+                {cloudStatus.enabled ? 'Cloud aktiviert' : 'Cloud deaktiviert'}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 items-end">
+            <div>
+              <label className="form-label" htmlFor="tutorial-cloud-url">WordPress-API-URL</label>
+              <input
+                id="tutorial-cloud-url"
+                className="form-input"
+                value={cloudUrl}
+                onChange={e => setCloudUrl(e.target.value)}
+                placeholder="https://podcore.de/wp-json/app-tutorials/v1"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-text-secondary pb-2">
+              <input type="checkbox" checked={cloudEnabled} onChange={e => setCloudEnabled(e.target.checked)} />
+              Aktiviert
+            </label>
+            <label className="flex items-center gap-2 text-sm text-text-secondary pb-2">
+              <input type="checkbox" checked={cloudAutoSync} onChange={e => setCloudAutoSync(e.target.checked)} />
+              Auto-Sync vormerken
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={handleCloudSave} disabled={cloudSaving} className="btn-primary flex items-center gap-2 text-sm">
+              {cloudSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              Cloud speichern
+            </button>
+            <button onClick={handleCloudCatalog} disabled={cloudLoading || !cloudEnabled} className="btn-secondary flex items-center gap-2 text-sm">
+              {cloudLoading ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
+              Katalog prüfen
+            </button>
+            <button onClick={handleCloudSync} disabled={cloudLoading || !cloudEnabled} className="btn-secondary flex items-center gap-2 text-sm">
+              {cloudLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Cloud-Tutorials synchronisieren
+            </button>
+            {cloudStatus?.lastSyncAt && <span className="text-xs text-text-muted">Letzte Synchronisation: {new Date(cloudStatus.lastSyncAt).toLocaleString('de-DE')}</span>}
+          </div>
+          {cloudStatus?.lastError && <p className="text-xs text-red-400">Letzter Cloud-Fehler: {cloudStatus.lastError}</p>}
+          {cloudItems.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2 border-t border-obsidian-700">
+              {cloudItems.map(item => (
+                <div key={String(item.slug || item.id)} className="rounded-lg bg-obsidian-800/70 p-3">
+                  <p className="text-sm font-medium text-text-primary">{item.title}</p>
+                  <p className="text-xs text-text-muted mt-1">{item.steps?.length || 0} Schritte · {item.slug}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Suche und Filter */}
+      {tutorials.length > 0 && (
+        <div className="card flex flex-col sm:flex-row gap-3">
+          <div className="flex-1">
+            <label htmlFor="tutorial-search" className="sr-only">Tutorials durchsuchen</label>
+            <input
+              id="tutorial-search"
+              type="search"
+              value={tutorialSearch}
+              onChange={e => setTutorialSearch(e.target.value)}
+              className="form-input"
+              placeholder="Titel, Beschreibung oder Rolle durchsuchen …"
+            />
+          </div>
+          <select
+            value={tutorialStatus}
+            onChange={e => setTutorialStatus(e.target.value as 'all' | 'active' | 'inactive')}
+            className="form-input sm:w-44"
+            aria-label="Tutorial-Status filtern"
+          >
+            <option value="all">Alle Status</option>
+            <option value="active">Nur aktive</option>
+            <option value="inactive">Nur inaktive</option>
+          </select>
+          <div className="flex items-center px-2 text-xs text-text-muted whitespace-nowrap">
+            {visibleTutorials.length} von {tutorials.length}
+          </div>
+        </div>
+      )}
+
       {/* Tutorial cards */}
       {tutorials.length === 0 ? (
         <div className="card text-center py-16">
@@ -631,9 +806,15 @@ export default function TutorialsManagementPage() {
             <Plus size={16} />Erstes Tutorial erstellen
           </button>
         </div>
+      ) : visibleTutorials.length === 0 ? (
+        <div className="card text-center py-12">
+          <BookOpen size={34} className="mx-auto mb-3 text-text-muted opacity-40" />
+          <h3 className="text-lg font-semibold text-text-primary mb-2">Keine passenden Tutorials</h3>
+          <p className="text-text-muted text-sm">Passe die Suche oder den Statusfilter an.</p>
+        </div>
       ) : (
         <div className="space-y-4">
-          {tutorials.map(t => (
+          {visibleTutorials.map(t => (
             <div key={t.id} className="card hover:border-accent-purple/30 transition-colors">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -971,6 +1152,28 @@ export default function TutorialsManagementPage() {
             {/* ── TAB: Schritte ── */}
             {activeTab === 'steps' && (
               <div className="space-y-3">
+                {editTutorial.steps.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                    <p className="text-xs text-text-muted">{editTutorial.steps.length} Schritte · Änderungen werden erst mit „Speichern“ übernommen.</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCollapsedSteps(new Set(editTutorial.steps.map(s => s.id)))}
+                        className="text-xs text-text-muted hover:text-text-primary px-2 py-1 rounded hover:bg-obsidian-800"
+                      >
+                        Alle einklappen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCollapsedSteps(new Set())}
+                        className="text-xs text-accent-purple hover:text-accent-purple/80 px-2 py-1 rounded hover:bg-accent-purple/10"
+                      >
+                        Alle ausklappen
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {editTutorial.steps.length === 0 && (
                   <div className="card text-center py-10">
                     <FileText size={32} className="mx-auto mb-3 text-text-muted opacity-40" />

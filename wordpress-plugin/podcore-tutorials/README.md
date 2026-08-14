@@ -109,10 +109,40 @@ Nicht das Element **Raw HTML** verwenden, weil viele Page-Builder darin Shortcod
 
 Nach der Plugin-Aktualisierung unter **The7 → Settings → Performance** den Theme-Cache leeren. Zusätzlich vorhandene Cache-, CDN- und Minify-Caches löschen. Danach die Seite in einem privaten Browserfenster testen.
 
-## Version 2.16.3: Diagnose und The7/WPBakery-Fallback
+## Version 2.16.2: Tutorial-Cloud, Diagnose und The7/WPBakery-Fallback
 
 Unter **PodCore Tutorials → Diagnose** zeigt das Plugin für jedes Tutorial den Veröffentlichungsstatus, ob das JSON erkannt wurde und wie viele Schritte gefunden wurden. Ein Tutorial sollte dort mindestens einen Schritt anzeigen, bevor die Frontend-Seite getestet wird.
 
 Die JSON-Erkennung repariert jetzt Byte-Order-Marks, HTML-Entities, Markdown-Codeblöcke und zusätzlichen Text um den JSON-Export herum. Die Ausgabe wird zusätzlich früh über `wp_body_open` und ersatzweise über `wp_footer` eingebunden, falls The7 oder WPBakery den normalen Inhaltsfilter nicht verwendet.
 
 Für WPBakery ist weiterhin das native Element **PodCore Tutorial** mit dem Slug `erste-schritte` die bevorzugte Methode. Nach jeder Plugin-Aktualisierung müssen The7-Cache, WPBakery-Cache, Cache-Plugin und gegebenenfalls CDN-Cache geleert werden.
+
+## Tutorial-Cloud-REST-API für PodCore
+
+Das Plugin stellt veröffentlichte `PodCore Tutorial`-Beiträge für PodCore-Installationen als öffentliche REST-API bereit:
+
+| Methode | Endpunkt | Zweck |
+|---|---|---|
+| `GET` | `/wp-json/app-tutorials/v1/tutorials` | Katalog veröffentlichter Tutorials |
+| `GET` | `/wp-json/app-tutorials/v1/tutorials/{slug}` | Einzelnes Tutorial per Slug |
+
+Beispiel für die Katalog-URL:
+
+```text
+https://podcore.de/wp-json/app-tutorials/v1/tutorials?per_page=50
+```
+
+Unterstützte optionale Parameter sind `page`, `per_page`, `search` und `topic`. Die API liefert `items`, `total`, `totalPages`, `updatedAt` und `formatVersion`. Ein Tutorial-Element enthält unter anderem `title`, `description`, `roles`, `steps`, `screenshots`, `downloadUrl`, `updatedAt`, `version`, `source` und `formatVersion`. Rollen werden aus dem JSON-Feld `roles` oder dem Backend-Feld **Zielrollen** übernommen. Ohne Angabe wird `*` ausgegeben, also Sichtbarkeit für alle PodCore-Rollen.
+
+### PodCore verbinden
+
+1. Den exklusiven Entwickler-Modus in PodCore durch sieben Klicks auf die Versionsnummer öffnen.
+2. **Tutorial-Verwaltung** und dort **Tutorial-Cloud von podcore.de** aufrufen.
+3. `https://podcore.de/wp-json/app-tutorials/v1` als API-Basis-URL eintragen und **Aktiviert** einschalten.
+4. **Cloud speichern**, danach **Katalog prüfen** und schließlich **Cloud-Tutorials synchronisieren** wählen.
+
+Die Synchronisation übernimmt nur veröffentlichte Tutorials, legt neue Einträge an und aktualisiert bereits bekannte Cloud-Einträge. Lokale Tutorials werden nicht gelöscht. Wenn WordPress HTTP 404 für den Endpunkt liefert, ist das Plugin auf der Website noch nicht aktiviert oder die Website verwendet noch eine ältere Plugin-Datei. Danach Permalinks speichern und Cache/CDN leeren.
+
+## Release-Hinweis v2.16.2
+
+Die App und das Plugin werden für den gemeinsamen Release **v2.16.2** ausgeliefert. Die REST-Antwort verwendet `formatVersion: 1.0`; zukünftige inkompatible Änderungen müssen über eine neue Formatversion kenntlich gemacht werden.

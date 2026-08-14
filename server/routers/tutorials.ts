@@ -80,7 +80,7 @@ router.get('/tutorials', requireAuth, async (req: AuthRequest, res: Response) =>
     const filtered = all.filter(t => {
       try {
         const roles = JSON.parse(t.roles || `["${t.role}"]`);
-        return Array.isArray(roles) ? roles.includes(user.role) : roles === user.role;
+        return Array.isArray(roles) ? (roles.includes('*') || roles.includes(user.role)) : roles === user.role;
       } catch { return t.role === user.role; }
     });
     res.json(filtered.map(parseTutorial));

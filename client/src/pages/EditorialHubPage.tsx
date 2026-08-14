@@ -736,6 +736,10 @@ function InterviewsTab() {
   const [sendForm, setSendForm] = useState({ subject: '', customMessage: '', episodeId: '' });
   const [showPdfDialog, setShowPdfDialog] = useState(false);
   const [pdfCustomMessage, setPdfCustomMessage] = useState('');
+  const [pdfLayoutId, setPdfLayoutId] = useState('');
+  const [pdfFileName, setPdfFileName] = useState('');
+  const [pdfDocTitle, setPdfDocTitle] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
 
   const loadPartners = async () => {
     setIsLoading(true);
@@ -851,11 +855,36 @@ function InterviewsTab() {
     } catch (err: any) { showError(err.message); }
   };
 
+  const handleExportPDF = async () => {
+    if (!selectedPartner) return;
+    setIsExporting(true);
+    try {
+      const blob = await editorialApi.exportPartnerPdf(selectedPartner.id, {
+        customMessage: pdfCustomMessage,
+        layoutId: pdfLayoutId,
+        documentTitle: pdfDocTitle,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const defaultName = `interview-${selectedPartner.name?.replace(/\s+/g, '-').toLowerCase()}`;
+      a.download = `${pdfFileName || defaultName}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      setShowPdfDialog(false);
+      showSuccess('Interview-PDF wurde erstellt');
+    } catch (err: any) { showError(err.message); }
+    finally { setIsExporting(false); }
+  };
+
   const handleOpenSummary = () => {
     if (!selectedPartner) return;
-    // Export PDF instead of opening HTML summary
-    const url = `/api/editorial/interviews/partners/${selectedPartner.id}/export-pdf?documentName=Interview-${selectedPartner.name?.replace(/\s+/g, '-')}`;
-    window.open(url, '_blank');
+    setPdfCustomMessage(selectedPartner.guestIntro || `Liebe/r ${selectedPartner.name},\n\nvielen Dank, dass Sie sich die Zeit nehmen, bei unserem Podcast als Gast dabei zu sein. Hier sind die Interview-Fragen zur Vorbereitung:`);
+    setPdfDocTitle(`Interview-Vorbereitung: ${selectedPartner.name}`);
+    setPdfFileName(`interview-${selectedPartner.name?.replace(/\s+/g, '-').toLowerCase()}`);
+    setShowPdfDialog(true);
   };
 
   const handleSendEmail = async (e: React.FormEvent) => {
@@ -1211,46 +1240,70 @@ function InterviewsTab() {
       </Modal>
 
       {showPdfDialog && selectedPartner && (
-        <Modal isOpen={showPdfDialog} onClose={() => setShowPdfDialog(false)} title="Interview-Fragen als PDF exportieren" size="lg">
+        <Modal isOpen={showPdfDialog} onClose={() => !isExporting && setShowPdfDialog(false)} title="Interview-Fragen als PDF exportieren" size="lg">
           <div className="space-y-4">
             <p className="text-text-secondary text-sm">Erstelle ein persönliches Dokument mit Anschreiben und allen Fragen für <strong>{selectedPartner.name}</strong>.</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label text-xs">Dokumententitel</label>
+                <input
+                  type="text"
+                  value={pdfDocTitle}
+                  onChange={e => setPdfDocTitle(e.target.value)}
+                  className="input text-sm"
+                  placeholder={`Interview: ${selectedPartner.name}`}
+                  title="Dokumententitel im PDF (oben links unter dem Podcast-Namen)"
+                />
+              </div>
+              <div>
+                <label className="label text-xs">Dateiname</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={pdfFileName}
+                    onChange={e => setPdfFileName(e.target.value)}
+                    className="input text-sm"
+                    placeholder={`interview-${selectedPartner.name.replace(/\s+/g, '-').toLowerCase()}`}
+                    title="Eigener Dateiname für den PDF-Export"
+                  />
+                  <span className="text-text-muted text-xs">.pdf</span>
+                </div>
+              </div>
+            </div>
+
             <div>
-              <label className="label">Persönliches Anschreiben</label>
+              <label className="label text-xs">PDF-Layout</label>
+              <PdfLayoutPicker exportType="interview_partner" value={pdfLayoutId} onChange={setPdfLayoutId} />
+            </div>
+
+            <div>
+              <label className="label text-xs">Persönliches Anschreiben</label>
               <textarea
                 className="textarea w-full font-mono text-sm"
-                rows={8}
+                rows={6}
                 value={pdfCustomMessage}
                 onChange={e => setPdfCustomMessage(e.target.value)}
                 placeholder="Liebe/r Gast..."
               />
             </div>
+
             <div className="bg-surface-overlay rounded-lg p-4">
               <h4 className="font-medium text-text-primary mb-2 text-sm">Enthaltene Fragen ({questions.length}):</h4>
               <ol className="list-decimal list-inside text-sm text-text-secondary space-y-1">
                 {questions.map((q: any) => <li key={q.id} className="line-clamp-1">{q.question}</li>)}
               </ol>
             </div>
+
             <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => setShowPdfDialog(false)} className="btn-secondary">Abbrechen</button>
+              <button onClick={() => setShowPdfDialog(false)} disabled={isExporting} className="btn-secondary">Abbrechen</button>
               <button
-                onClick={async () => {
-                  try {
-                    const blob = await editorialApi.exportPartnerPdf(selectedPartner.id, pdfCustomMessage);
-                    const url = window.URL.createObjectURL(blob);
-                    const anchor = document.createElement('a');
-                    anchor.href = url;
-                    anchor.download = `Interview-Fragen-${selectedPartner.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-                    document.body.appendChild(anchor);
-                    anchor.click();
-                    window.URL.revokeObjectURL(url);
-                    anchor.remove();
-                    setShowPdfDialog(false);
-                    showSuccess('Interview-PDF wurde erstellt');
-                  } catch (err: any) { showError(err.message || 'Fehler beim PDF-Export'); }
-                }}
+                onClick={handleExportPDF}
+                disabled={isExporting}
                 className="btn-primary flex items-center gap-2"
               >
-                <Download size={16} /> PDF herunterladen
+                {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                <span>{isExporting ? 'Wird erstellt...' : 'PDF herunterladen'}</span>
               </button>
             </div>
           </div>

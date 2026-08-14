@@ -48,9 +48,19 @@ export const TutorialOverlay: React.FC = () => {
       return;
     }
 
-    // Try to find element by data-tutorial-id
-    const element = document.querySelector(`[data-tutorial-id="${step.target}"]`);
+    // Prefer the stable tutorial ID, but also support legacy CSS selectors
+    // and direct element IDs for tutorials created in older versions.
+    let element: Element | null = document.querySelector(`[data-tutorial-id="${CSS.escape(step.target)}"]`);
+    if (!element && /^(#|\.|\[)/.test(step.target)) {
+      try { element = document.querySelector(step.target); } catch { element = null; }
+    }
+    if (!element) element = document.getElementById(step.target);
+
     if (element) {
+      const initialRect = element.getBoundingClientRect();
+      if (initialRect.top < 24 || initialRect.bottom > window.innerHeight - 24) {
+        element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+      }
       const rect = element.getBoundingClientRect();
       setPosition({
         top: rect.top + window.scrollY,
@@ -97,14 +107,17 @@ export const TutorialOverlay: React.FC = () => {
   useEffect(() => {
     if (!activeTutorial) return;
     
-    // Initial delay to allow page rendering/navigation
+    // Initial delay to allow page rendering/navigation. A second pass handles
+    // lazy-rendered pages and navigation transitions reliably.
     const timer = setTimeout(updatePosition, 300);
+    const retryTimer = setTimeout(updatePosition, 900);
     
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition);
 
     return () => {
       clearTimeout(timer);
+      clearTimeout(retryTimer);
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition);
     };

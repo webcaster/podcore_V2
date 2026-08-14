@@ -87,7 +87,8 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       
       if (response.ok) {
         const data = await response.json();
-        setTutorials(data);
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+        setTutorials(list);
       }
     } catch (error) {
       console.error('Error loading tutorials:', error);
@@ -104,24 +105,29 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Start a tutorial
   const startTutorial = async (tutorialId: string) => {
     const tutorial = tutorials.find(t => t.id === tutorialId);
-    if (!tutorial) return;
+    if (!tutorial || !tutorial.enabled || !tutorial.steps?.length) return;
+
+    // Always open the tutorial, even when progress loading fails. A temporary
+    // network problem must never prevent the user from reading the help.
+    setProgress(null);
+    setCurrentStep(0);
+    setActiveTutorial(tutorial);
+    setWikiOpen(false);
 
     try {
-      // Fetch or create progress
       const progressResponse = await fetch(`/api/tutorials/${tutorialId}/progress`, {
         credentials: 'include',
       });
+      if (!progressResponse.ok) return;
 
-      if (progressResponse.ok) {
-        const progressData = await progressResponse.json();
-        setProgress(progressData);
-        setCurrentStep(progressData.currentStep || 0);
-      }
-
-      setActiveTutorial(tutorial);
-      setWikiOpen(false);
+      const progressData = await progressResponse.json();
+      const safeStep = Number.isInteger(progressData?.currentStep)
+        ? Math.max(0, Math.min(progressData.currentStep, tutorial.steps.length - 1))
+        : 0;
+      setProgress(progressData);
+      setCurrentStep(safeStep);
     } catch (error) {
-      console.error('Error starting tutorial:', error);
+      console.warn('Tutorial-Fortschritt konnte nicht geladen werden:', error);
     }
   };
 

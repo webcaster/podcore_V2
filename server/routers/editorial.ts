@@ -1719,8 +1719,10 @@ router.get('/interviews/partners/:partnerId/export-pdf', requirePermission('canV
   const podcastName = appSettings?.branding?.podcastName || appSettings?.general?.podcastName || 'PodCore';
 
   const PDFDocument = require('pdfkit');
-  const { getDefaultLayoutForType, renderPdfHeader, renderPdfFooter, preparePdfDocument } = require('../pdfLayouts');
-  const layout = getDefaultLayoutForType('episode');
+  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, preparePdfDocument } = require('../pdfLayouts');
+  const layoutId = req.query.layoutId as string | undefined;
+  const layout = layoutId ? getLayoutById(layoutId) : getDefaultLayoutForType('interview_partner');
+
   const m = layout.pageMargin;
   const typography = layout.typography;
   const colors = layout.colors;
@@ -1736,12 +1738,16 @@ router.get('/interviews/partners/:partnerId/export-pdf', requirePermission('canV
   doc.on('data', buffers.push.bind(buffers));
   doc.on('end', () => {
     const pdfData = Buffer.concat(buffers);
+    const filename = customDocumentName
+      ? `${customDocumentName.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`
+      : `Interview-Fragen-${partner.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Interview-Fragen-${partner.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfData);
   });
 
-  const documentTitle = `Interview-Vorbereitung: ${partner.name}`;
+  const documentTitle = req.query.documentTitle as string || `Interview-Vorbereitung: ${partner.name}`;
   const renderHeader = () => renderPdfHeader(doc, layout, {
     podcastName,
     documentTitle,

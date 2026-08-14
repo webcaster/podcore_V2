@@ -271,8 +271,13 @@ export const editorialApi = {
     const qs = episodeId ? `?episodeId=${episodeId}` : '';
     return `/api/editorial/interviews/partners/${partnerId}/send-summary${qs}`;
   },
-  exportPartnerPdf: async (partnerId: string, customMessage?: string, episodeId?: string): Promise<Blob> => {
-    const query = buildQs({ customMessage: customMessage || undefined, episodeId });
+  exportPartnerPdf: async (partnerId: string, params?: { customMessage?: string; episodeId?: string; layoutId?: string; documentTitle?: string }): Promise<Blob> => {
+    const query = buildQs({
+      customMessage: params?.customMessage || undefined,
+      episodeId: params?.episodeId,
+      layoutId: params?.layoutId,
+      documentTitle: params?.documentTitle,
+    });
     const response = await fetch(`/api/editorial/interviews/partners/${partnerId}/export-pdf${query}`, { credentials: 'include' });
     if (!response.ok) {
       let message = 'Interview-PDF konnte nicht erzeugt werden';
@@ -752,4 +757,37 @@ export const licenseApi = {
     api.post<LicenseStatus>('/license/activate', data),
   validate: () => api.post<LicenseStatus>('/license/validate', {}),
   deactivate: () => api.post<LicenseStatus>('/license/deactivate', {}),
+};
+
+
+// ============================================================
+// Tutorial Cloud API (WordPress)
+// ============================================================
+export interface TutorialCloudStatus {
+  enabled: boolean;
+  baseUrl: string;
+  autoSync: boolean;
+  lastSyncAt: string | null;
+  lastSyncCount: number;
+  lastError: string | null;
+}
+
+export interface TutorialCloudItem {
+  id: string | number;
+  slug: string;
+  title: string;
+  description?: string;
+  roles?: string[];
+  steps?: any[];
+  screenshots?: Array<{ id?: number; url: string }>;
+  downloadUrl?: string;
+  updatedAt?: string;
+}
+
+export const tutorialCloudApi = {
+  getStatus: () => api.get<TutorialCloudStatus>('/tutorial-cloud/status'),
+  saveConfig: (data: { enabled: boolean; baseUrl: string; autoSync: boolean }) =>
+    api.put<TutorialCloudStatus>('/tutorial-cloud/config', data),
+  getCatalog: () => api.get<{ items: TutorialCloudItem[]; source: string; fetchedAt: string }>('/tutorial-cloud/catalog'),
+  sync: () => api.post<{ imported: number; syncedAt: string }>('/tutorial-cloud/sync', {}),
 };

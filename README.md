@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.15.7**
+**Aktuelle Version: 2.16.2**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -78,6 +78,17 @@
 - Kompakte und übersichtliche Versionshistorie
 
 ---
+
+## 🆕 Neue Features in v2.16.2
+
+### ☁️ Tutorial-Cloud mit WordPress-Wiki
+Die Tutorial-Verwaltung kann im exklusiven Entwickler-Modus mit dem WordPress-Plugin auf podcore.de verbunden werden. Unter **Tutorial-Verwaltung → Tutorial-Cloud von podcore.de** lassen sich Katalog, API-Status und Synchronisation kontrollieren. Veröffentliche Tutorials werden rollenbasiert oder global (`*`) in die lokale Anwendung übernommen; lokale Tutorials werden bei der Synchronisation nicht gelöscht. Die vollständige Einrichtung steht in [`docs/RELEASE-2.16.2.md`](docs/RELEASE-2.16.2.md) und in [`wordpress-plugin/podcore-tutorials/README.md`](wordpress-plugin/podcore-tutorials/README.md).
+
+### 🎓 Tutorial-Führung und Wiki
+Tutorials starten nicht automatisch. Nach dem Login erscheint nur ein Hinweis, wenn Tutorials für die aktuelle Rolle verfügbar sind. Das Wiki bleibt als Nachschlagewerk geöffnet, während die eigentliche Führung mit sichtbaren Zielmarkierungen, Screenshots, nummerierten Annotationen, Fortschrittsanzeige und Navigation arbeitet.
+
+### 🎧 Audio-Editor und persönliche Partnerfragen-PDFs
+Der Audio-Editor bietet Waveform, Wiedergabegeschwindigkeit, Loop-Modus, Marker, zeitbezogene Kommentare und Schnittplan-Export. Der Exporttyp `interview_partner` ist in der PDF-Layout-Auswahl berücksichtigt, sodass das persönliche Partnerfragen-PDF als eigenes Layout bearbeitet und verwendet werden kann.
 
 ## 🆕 Neue Features in v2.15.x
 

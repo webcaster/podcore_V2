@@ -3,7 +3,7 @@
  * Plugin Name: PodCore Tutorial Hub
  * Plugin URI: https://github.com/webcaster/podcore_V2
  * Description: Zeigt PodCore-Tutorials mit Schritten, Screenshots und Annotationen auf einer WordPress-Seite an und bietet kompatible JSON-Downloads.
- * Version: 2.16.3
+ * Version: 2.16.2
  * Author: PodCore / Max
  * License: GPLv2 or later
  */
@@ -179,7 +179,7 @@ function podcore_tutorial_diagnostics_page() {
     ?>
     <div class="wrap">
         <h1>PodCore Tutorial-Diagnose</h1>
-        <p>Diese Prüfung zeigt, ob WordPress das JSON-Feld und das <code>steps</code>-Array erkennt. WordPress <?php echo esc_html(get_bloginfo('version')); ?> · Plugin 2.16.3.</p>
+        <p>Diese Prüfung zeigt, ob WordPress das JSON-Feld und das <code>steps</code>-Array erkennt. WordPress <?php echo esc_html(get_bloginfo('version')); ?> · Plugin 2.16.2.</p>
         <table class="widefat striped">
             <thead><tr><th>Tutorial</th><th>Status</th><th>JSON</th><th>Schritte</th><th>Aktion</th></tr></thead>
             <tbody>
@@ -287,6 +287,159 @@ function podcore_tutorial_steps($decoded) {
     }
     // Unterstützt auch einen Export, der direkt nur ein Schritte-Array enthält.
     return array_values($decoded) === $decoded ? $decoded : array();
+}
+
+/**
+ * Öffentliche Tutorial-Cloud-API für PodCore-Installationen.
+ * Es werden ausschließlich veröffentlichte podcore_tutorial-Beiträge ausgeliefert.
+ */
+define('PODCORE_TUTORIAL_VERSION', '2.16.2');
+define('PODCORE_TUTORIAL_REST_NAMESPACE', 'app-tutorials/v1');
+
+function podcore_tutorial_rest_roles($post_id, $decoded) {
+    $roles = isset($decoded['roles']) && is_array($decoded['roles']) ? $decoded['roles'] : array();
+    if (empty($roles)) {
+        $roles_raw = get_post_meta($post_id, '_podcore_tutorial_roles', true);
+        $roles = array_filter(array_map('trim', explode(',', (string) $roles_raw)));
+    }
+    $roles = array_values(array_filter(array_map('sanitize_text_field', $roles)));
+    return !empty($roles) ? $roles : array('*');
+}
+
+function podcore_tutorial_rest_step($step, $index) {
+    if (!is_array($step)) {
+        return array(
+            'id' => 'cloud-step-' . ($index + 1),
+            'title' => 'Schritt ' . ($index + 1),
+            'description' => '',
+        );
+    }
+    $image = podcore_tutorial_image($step);
+    $result = array(
+        'id' => sanitize_key($step['id'] ?? ('cloud-step-' . ($index + 1))),
+        'title' => sanitize_text_field($step['title'] ?? ($step['name'] ?? ('Schritt ' . ($index + 1)))),
+        'description' => wp_strip_all_tags(podcore_tutorial_step_text($step)),
+        'target' => isset($step['target']) ? sanitize_text_field($step['target']) : '',
+        'position' => isset($step['position']) && in_array($step['position'], array('top', 'bottom', 'left', 'right'), true) ? $step['position'] : '',
+        'image' => $image,
+        'annotations' => isset($step['annotations']) && is_array($step['annotations']) ? array_values($step['annotations']) : array(),
+        'highlightColor' => isset($step['highlightColor']) ? sanitize_text_field($step['highlightColor']) : '',
+        'allowSkip' => isset($step['allowSkip']) ? (bool) $step['allowSkip'] : true,
+        'action' => isset($step['action']) ? sanitize_text_field($step['action']) : '',
+    );
+    return $result;
+}
+
+function podcore_tutorial_rest_topics($decoded) {
+    $topics = array();
+    foreach (array('category', 'topic', 'group', 'section') as $key) {
+        if (empty($decoded[$key])) continue;
+        $values = is_array($decoded[$key]) ? $decoded[$key] : array($decoded[$key]);
+        foreach ($values as $value) {
+            $name = sanitize_text_field((string) $value);
+            if ($name !== '') $topics[] = array('slug' => sanitize_title($name), 'name' => $name);
+        }
+    }
+    return $topics;
+}
+
+function podcore_tutorial_rest_serialize($post) {
+    $post_id = (int) $post->ID;
+    $decoded = podcore_tutorial_post_data($post_id);
+    $raw_steps = podcore_tutorial_steps($decoded);
+    $steps = array();
+    $screenshots = array();
+    foreach (array_slice($raw_steps, 0, 200) as $index => $step) {
+        $normalized = podcore_tutorial_rest_step($step, $index);
+        $steps[] = $normalized;
+        if (!empty($normalized['image'])) {
+            $screenshots[] = array('step' => $index + 1, 'url' => esc_url_raw($normalized['image']));
+        }
+    }
+    $description = !empty($decoded['description']) ? wp_strip_all_tags((string) $decoded['description']) : wp_strip_all_tags(get_post_field('post_excerpt', $post_id));
+    if ($description === '') $description = wp_strip_all_tags(get_post_field('post_content', $post_id));
+    $version = !empty($decoded['version']) ? sanitize_text_field((string) $decoded['version']) : PODCORE_TUTORIAL_VERSION;
+    return array(
+        'id' => $post_id,
+        'slug' => $post->post_name,
+        'title' => get_the_title($post_id),
+        'description' => $description,
+        'content' => apply_filters('the_content', get_post_field('post_content', $post_id)),
+        'topics' => podcore_tutorial_rest_topics($decoded),
+        'roles' => podcore_tutorial_rest_roles($post_id, $decoded),
+        'steps' => $steps,
+        'screenshots' => $screenshots,
+        'featuredImage' => get_the_post_thumbnail_url($post_id, 'large') ?: null,
+        'downloadUrl' => esc_url_raw(add_query_arg('download_podcore_tutorial', $post_id, get_permalink($post_id))),
+        'updatedAt' => get_post_field('post_modified_gmt', $post_id),
+        'version' => $version,
+        'source' => 'podcore.de',
+        'formatVersion' => '1.0',
+    );
+}
+
+function podcore_tutorial_rest_register_routes() {
+    register_rest_route(PODCORE_TUTORIAL_REST_NAMESPACE, '/tutorials', array(
+        'methods' => WP_REST_Server::READABLE,
+        'callback' => 'podcore_tutorial_rest_list',
+        'permission_callback' => '__return_true',
+        'args' => array(
+            'page' => array('default' => 1, 'sanitize_callback' => 'absint'),
+            'per_page' => array('default' => 50, 'sanitize_callback' => 'absint'),
+            'search' => array('default' => '', 'sanitize_callback' => 'sanitize_text_field'),
+            'topic' => array('default' => '', 'sanitize_callback' => 'sanitize_title'),
+        ),
+    ));
+    register_rest_route(PODCORE_TUTORIAL_REST_NAMESPACE, '/tutorials/(?P<slug>[a-zA-Z0-9-]+)', array(
+        'methods' => WP_REST_Server::READABLE,
+        'callback' => 'podcore_tutorial_rest_get',
+        'permission_callback' => '__return_true',
+        'args' => array('slug' => array('sanitize_callback' => 'sanitize_title')),
+    ));
+}
+add_action('rest_api_init', 'podcore_tutorial_rest_register_routes');
+
+function podcore_tutorial_rest_list(WP_REST_Request $request) {
+    $page = max(1, (int) $request->get_param('page'));
+    $per_page = min(100, max(1, (int) $request->get_param('per_page')));
+    $search = sanitize_text_field((string) $request->get_param('search'));
+    $topic = sanitize_title((string) $request->get_param('topic'));
+    $query = new WP_Query(array(
+        'post_type' => 'podcore_tutorial',
+        'post_status' => 'publish',
+        'posts_per_page' => -1,
+        'orderby' => 'modified',
+        'order' => 'DESC',
+        's' => $search,
+    ));
+    $items = array_map('podcore_tutorial_rest_serialize', $query->posts);
+    if ($topic !== '') {
+        $items = array_values(array_filter($items, function ($item) use ($topic) {
+            foreach ($item['topics'] as $entry) if ($entry['slug'] === $topic) return true;
+            return false;
+        }));
+    }
+    $total = count($items);
+    $offset = ($page - 1) * $per_page;
+    $items = array_slice($items, $offset, $per_page);
+    return rest_ensure_response(array(
+        'formatVersion' => '1.0',
+        'items' => $items,
+        'page' => $page,
+        'perPage' => $per_page,
+        'total' => $total,
+        'totalPages' => $total > 0 ? (int) ceil($total / $per_page) : 0,
+        'updatedAt' => gmdate('c'),
+    ));
+}
+
+function podcore_tutorial_rest_get(WP_REST_Request $request) {
+    $slug = sanitize_title((string) $request->get_param('slug'));
+    $post = get_page_by_path($slug, OBJECT, 'podcore_tutorial');
+    if (!$post || $post->post_status !== 'publish') {
+        return new WP_Error('podcore_tutorial_not_found', 'Tutorial nicht gefunden.', array('status' => 404));
+    }
+    return rest_ensure_response(podcore_tutorial_rest_serialize($post));
 }
 
 function podcore_tutorial_image($step) {

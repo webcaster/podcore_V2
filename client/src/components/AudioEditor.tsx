@@ -3,7 +3,7 @@ import WaveSurfer from 'wavesurfer.js';
 import {
   Play, Pause, Square, Scissors, MessageSquare, Trash2,
   Save, SkipBack, SkipForward, Volume2, VolumeX,
-  Flag, Loader2, Clock, ChevronDown, ChevronUp, X
+  Flag, Loader2, Clock, ChevronDown, ChevronUp, X, Repeat, Copy, Download, AlertCircle
 } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -67,6 +67,10 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
   const [duration, setDuration] = useState(asset.duration || 0);
   const [volume, setVolume] = useState(0.8);
   const [zoom, setZoom] = useState(50);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [isLooping, setIsLooping] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const loopRef = useRef(false);
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [timedComments, setTimedComments] = useState<TimedComment[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -123,7 +127,14 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
     ws.on('seeking', (t: number) => setCurrentTime(t));
     ws.on('play', () => setIsPlaying(true));
     ws.on('pause', () => setIsPlaying(false));
-    ws.on('finish', () => setIsPlaying(false));
+    ws.on('finish', () => {
+      if (loopRef.current) {
+        ws.seekTo(0);
+        ws.play();
+      } else {
+        setIsPlaying(false);
+      }
+    });
     ws.on('error', (err: any) => {
       setLoadError(`Fehler beim Laden: ${err?.message || err}`);
       setIsLoading(false);
@@ -151,6 +162,17 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
       wsRef.current.zoom(zoom);
     }
   }, [zoom, isReady]);
+
+  // Sync playback rate and keep the loop state available to WaveSurfer events.
+  useEffect(() => {
+    loopRef.current = isLooping;
+  }, [isLooping]);
+
+  useEffect(() => {
+    if (wsRef.current && isReady) {
+      wsRef.current.setPlaybackRate(playbackRate);
+    }
+  }, [playbackRate, isReady]);
 
   const togglePlay = useCallback(() => {
     if (!wsRef.current || !isReady) return;
@@ -229,12 +251,51 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
 
   const saveAll = async () => {
     setIsSaving(true);
+    setSaveError(null);
     try {
       await api.post(`/media/${asset.id}/markers`, { markers });
       onSaved?.();
+    } catch (e: any) {
+      setSaveError(e?.message || 'Die Marker konnten nicht gespeichert werden.');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const copyCurrentTime = async () => {
+    const value = formatTime(currentTime);
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+  };
+
+  const exportEditDecisionList = () => {
+    const payload = {
+      format: 'podcore-audio-edit-list',
+      version: 1,
+      asset: { id: asset.id, name: asset.name, filename: asset.filename, duration },
+      markers: [...markers].sort((a, b) => a.time - b.time),
+      timedComments: [...timedComments].sort((a, b) => (a.time ?? 0) - (b.time ?? 0)),
+      exportedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${asset.name.replace(/[^a-z0-9_-]+/gi, '_')}_Schnittplan.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -255,6 +316,13 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={exportEditDecisionList}
+              className="btn-secondary text-sm flex items-center gap-1.5"
+              title="Marker und Kommentare als Schnittplan exportieren"
+            >
+              <Download size={14} /> Schnittplan
+            </button>
+            <button
               onClick={saveAll}
               disabled={isSaving}
               className="btn-primary text-sm flex items-center gap-1.5"
@@ -271,6 +339,13 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
         <div className="p-4 space-y-4">
           {/* Waveform */}
           <div className="bg-obsidian-900 rounded-xl p-4 border border-obsidian-600">
+            {saveError && (
+              <div className="flex items-center gap-2 mb-3 p-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 text-xs">
+                <AlertCircle size={14} />
+                <span className="flex-1">{saveError}</span>
+                <button onClick={() => setSaveError(null)} aria-label="Meldung schließen"><X size={13} /></button>
+              </div>
+            )}
             {isLoading && (
               <div className="flex items-center justify-center h-24 gap-2 text-text-muted">
                 <Loader2 size={18} className="animate-spin" />
@@ -321,8 +396,15 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
             )}
 
             {/* Zeitanzeige */}
-            <div className="flex justify-between text-xs text-text-muted mt-2">
-              <span>{formatTime(currentTime)}</span>
+            <div className="flex items-center justify-between text-xs text-text-muted mt-2">
+              <button
+                type="button"
+                onClick={copyCurrentTime}
+                className="inline-flex items-center gap-1 hover:text-text-primary transition-colors"
+                title="Aktuellen Timecode kopieren"
+              >
+                <span>{formatTime(currentTime)}</span><Copy size={11} />
+              </button>
               <span>{formatTime(duration)}</span>
             </div>
           </div>
@@ -359,6 +441,28 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
                 onChange={e => { setVolume(parseFloat(e.target.value)); setIsMuted(false); }}
                 className="w-20 accent-accent-purple"
               />
+            </div>
+
+            {/* Wiedergabe */}
+            <div className="flex items-center gap-2">
+              <label htmlFor={`audio-speed-${asset.id}`} className="text-xs text-text-muted">Tempo</label>
+              <select
+                id={`audio-speed-${asset.id}`}
+                value={playbackRate}
+                onChange={e => setPlaybackRate(parseFloat(e.target.value))}
+                className="input text-xs py-1 px-2 w-20"
+              >
+                {[0.5, 0.75, 1, 1.25, 1.5, 2].map(rate => <option key={rate} value={rate}>{rate}×</option>)}
+              </select>
+              <button
+                type="button"
+                onClick={() => setIsLooping(p => !p)}
+                className={`p-1.5 rounded-lg transition-colors ${isLooping ? 'text-accent-purple bg-accent-purple/15' : 'text-text-muted hover:text-text-primary hover:bg-obsidian-700'}`}
+                title={isLooping ? 'Loop deaktivieren' : 'Loop aktivieren'}
+                aria-pressed={isLooping}
+              >
+                <Repeat size={15} />
+              </button>
             </div>
 
             {/* Zoom */}
