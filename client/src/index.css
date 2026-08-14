@@ -66,6 +66,10 @@
     scrollbar-gutter: stable;
   }
 
+  .scrollbar-gutter-stable {
+    scrollbar-gutter: stable;
+  }
+
   body {
     @apply bg-obsidian-900 text-text-primary;
     margin: 0;

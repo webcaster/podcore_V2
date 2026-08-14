@@ -220,7 +220,7 @@ export default function Layout() {
           </p>
         </div>
       )}
-      <nav data-tutorial-id="sidebar-nav" className="flex-1 p-3 space-y-0.5 overflow-y-auto scrollbar-gutter-stable">
+      <nav data-tutorial-id="sidebar-nav" className="flex-1 p-3 space-y-0.5 overflow-y-auto overflow-x-hidden scrollbar-gutter-stable">
         {(screenshotActive ? screenshotFilteredItems : visibleItems).map((item) => (
           <React.Fragment key={item.to}>
             {item.dividerBefore && !collapsed && (
