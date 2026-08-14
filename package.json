@@ -1,6 +1,6 @@
 {
   "name": "podcore",
-  "version": "2.16.6",
+  "version": "2.16.7",
   "description": "PodCore - Professionelles Podcast Management System",
   "private": true,
   "scripts": {
