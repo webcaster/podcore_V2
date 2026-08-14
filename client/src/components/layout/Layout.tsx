@@ -179,7 +179,7 @@ export default function Layout() {
     <aside
       data-tutorial-id={mobile ? 'sidebar-mobile' : 'sidebar'}
       className={`
-      flex flex-col h-full bg-obsidian-800 border-r border-surface-border
+      flex flex-col h-full min-h-0 bg-obsidian-800 border-r border-surface-border
       ${mobile ? 'w-72' : collapsed ? 'w-16' : 'w-64'}
       transition-all duration-300
     `}>
@@ -222,10 +222,10 @@ export default function Layout() {
       )}
       <nav 
         data-tutorial-id="sidebar-nav" 
-        className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-gutter-stable"
-        style={{ scrollbarWidth: 'thin' }}
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-gutter-stable"
+        style={{ scrollbarWidth: 'thin', WebkitOverflowScrolling: 'touch' }}
       >
-        <div className="p-3 space-y-0.5">
+        <div className="px-3 py-2 space-y-0.5">
           {(screenshotActive ? screenshotFilteredItems : visibleItems).map((item) => (
             <React.Fragment key={item.to}>
               {item.dividerBefore && !collapsed && (
@@ -375,7 +375,7 @@ export default function Layout() {
           </div>
         </div>
       )}
-    <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Desktop Sidebar */}
       <div className="hidden md:flex flex-shrink-0">
         <Sidebar />
