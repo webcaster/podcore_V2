@@ -220,30 +220,36 @@ export default function Layout() {
           </p>
         </div>
       )}
-      <nav data-tutorial-id="sidebar-nav" className="flex-1 p-3 space-y-0.5 overflow-y-auto overflow-x-hidden scrollbar-gutter-stable">
-        {(screenshotActive ? screenshotFilteredItems : visibleItems).map((item) => (
-          <React.Fragment key={item.to}>
-            {item.dividerBefore && !collapsed && (
-              <div className="my-2 border-t border-surface-border/50" />
-            )}
-            {item.dividerBefore && collapsed && <div className="my-1" />}
-            <NavLink
-              to={item.to}
-              end={item.exact}
-              onClick={() => mobile && setMobileOpen(false)}
-              className={({ isActive }) =>
-                isActive
-                  ? `nav-item-active ${collapsed && !mobile ? 'justify-center px-0' : ''}`
-                  : `nav-item ${collapsed && !mobile ? 'justify-center px-0' : ''}`
-              }
-              title={collapsed && !mobile ? item.label : undefined}
-              data-tutorial-id={item.tutorialId}
-            >
-              <span className="flex-shrink-0">{item.icon}</span>
-              {(!collapsed || mobile) && <span className="text-sm">{item.label}</span>}
-            </NavLink>
-          </React.Fragment>
-        ))}
+      <nav 
+        data-tutorial-id="sidebar-nav" 
+        className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-gutter-stable"
+        style={{ scrollbarWidth: 'thin' }}
+      >
+        <div className="p-3 space-y-0.5">
+          {(screenshotActive ? screenshotFilteredItems : visibleItems).map((item) => (
+            <React.Fragment key={item.to}>
+              {item.dividerBefore && !collapsed && (
+                <div className="my-2 border-t border-surface-border/50" />
+              )}
+              {item.dividerBefore && collapsed && <div className="my-1" />}
+              <NavLink
+                to={item.to}
+                end={item.exact}
+                onClick={() => mobile && setMobileOpen(false)}
+                className={({ isActive }) =>
+                  isActive
+                    ? `nav-item-active ${collapsed && !mobile ? 'justify-center px-0' : ''}`
+                    : `nav-item ${collapsed && !mobile ? 'justify-center px-0' : ''}`
+                }
+                title={collapsed && !mobile ? item.label : undefined}
+                data-tutorial-id={item.tutorialId}
+              >
+                <span className="flex-shrink-0">{item.icon}</span>
+                {(!collapsed || mobile) && <span className="text-sm">{item.label}</span>}
+              </NavLink>
+            </React.Fragment>
+          ))}
+        </div>
       </nav>
 
       {/* User info */}

@@ -68,6 +68,17 @@
 
   .scrollbar-gutter-stable {
     scrollbar-gutter: stable;
+    /* Verhindert horizontales Zittern bei minimalem Überlauf */
+    overflow-x: hidden !important;
+  }
+  
+  /* Webkit-spezifische Stabilisierung */
+  .scrollbar-gutter-stable::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-gutter-stable::-webkit-scrollbar-track {
+    background: transparent;
   }
 
   body {
