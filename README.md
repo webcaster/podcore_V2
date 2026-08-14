@@ -186,6 +186,16 @@ Nach dem Klonen kann PodCore einschließlich aller Root-, Client- und Server-Abh
 
 Die Anwendung ist nun unter `http://localhost:3001` erreichbar.
 
+### Optional: Demo-Content „Der Podcast“ importieren
+
+Für eine gefüllte Test- und Präsentationsumgebung enthält PodCore den idempotenten Importer `seed-der-podcast-demo.mjs`. Er erzeugt Inhalte für den fiktiven Podcast **„Der Podcast“**, ohne vorhandene Nutzer oder eigene Inhalte zu löschen. Beende PodCore vor dem Import und führe im Projektordner aus:
+
+```bash
+node seed-der-podcast-demo.mjs
+```
+
+Der vollständige Inhalt und sichere Bereinigungsweg sind unter [`docs/DEMO-DER-PODCAST.md`](docs/DEMO-DER-PODCAST.md) dokumentiert.
+
 ### Start-Skripte
 
 Die Startskripte starten ausschließlich den vorhandenen Produktions-Build. Sie installieren keine Pakete im Hintergrund. Fehlen `server/node_modules`, `server/dist/index.js` oder `server/dist/public`, verweisen sie auf den passenden Installer.
