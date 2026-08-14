@@ -1,7 +1,7 @@
 import express, { Response, Router } from 'express';
 import { getDb } from '../database';
 import { v4 as uuidv4 } from 'uuid';
-import { requireAuth, AuthRequest } from '../middleware/auth';
+import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
 const router: Router = express.Router();
 
@@ -55,6 +55,68 @@ const parseTutorial = (t: any) => ({
   updatedAt: t.updated_at,
   createdBy: t.created_by,
 });
+
+function extractImportedTutorials(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.tutorials)) return payload.tutorials;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.items)) return payload.data.items;
+  return payload && typeof payload === 'object' ? [payload] : [];
+}
+
+function normalizeImportedRoles(value: any): string[] {
+  const raw = Array.isArray(value) ? value : (value ? [value] : []);
+  const roles = raw
+    .map(role => String(role).trim().slice(0, 100))
+    .filter(Boolean)
+    .slice(0, 30);
+  return roles.length > 0 ? roles : ['*'];
+}
+
+async function cacheImportedImage(value: unknown): Promise<string | undefined> {
+  if (typeof value !== 'string' || !value) return undefined;
+  if (value.startsWith('data:image/')) return value.slice(0, 2_000_000);
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { return undefined; }
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname))) return undefined;
+  try {
+    const response = await fetch(parsed, { signal: AbortSignal.timeout(7000) });
+    if (!response.ok) return undefined;
+    const length = Number(response.headers.get('content-length') || 0);
+    if (length > 2_000_000) return undefined;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > 2_000_000) return undefined;
+    const contentType = response.headers.get('content-type') || 'image/png';
+    if (!contentType.toLowerCase().startsWith('image/')) return undefined;
+    return `data:${contentType};base64,${buffer.toString('base64')}`;
+  } catch (error) {
+    console.warn('[tutorial-import] Bild konnte nicht lokal gespeichert werden:', error);
+    return undefined;
+  }
+}
+
+async function cacheImportedSteps(value: any): Promise<TutorialStep[]> {
+  if (!Array.isArray(value)) return [];
+  const result: TutorialStep[] = [];
+  for (const [index, raw] of value.slice(0, 200).entries()) {
+    if (!raw || typeof raw !== 'object') continue;
+    const image = await cacheImportedImage(raw.image || raw.imageUrl || raw.screenshotUrl || raw.screenshot || raw.imageData);
+    result.push({
+      id: String(raw.id || `imported-step-${index + 1}`).slice(0, 120),
+      title: String(raw.title || raw.name || `Schritt ${index + 1}`).slice(0, 300),
+      description: String(raw.description || raw.content || raw.text || '').slice(0, 20_000),
+      target: raw.target ? String(raw.target).slice(0, 500) : undefined,
+      position: ['top', 'bottom', 'left', 'right'].includes(raw.position) ? raw.position : undefined,
+      image,
+      annotations: Array.isArray(raw.annotations) ? raw.annotations.slice(0, 100) : [],
+      highlightColor: raw.highlightColor ? String(raw.highlightColor).slice(0, 30) : undefined,
+      allowSkip: raw.allowSkip !== false,
+      action: raw.action ? String(raw.action).slice(0, 500) : undefined,
+    });
+  }
+  return result;
+}
 
 // ── MIGRATION: add roles column if missing ─────────────────────────────────
 function ensureRolesColumn() {
@@ -133,6 +195,73 @@ router.post('/tutorials', requireAuth, requireDeveloper as any, async (req: Auth
   } catch (error) {
     console.error('Error creating tutorial:', error);
     res.status(500).json({ error: 'Fehler beim Erstellen des Tutorials' });
+  }
+});
+
+// ── ENDNUTZER-IMPORT (BERECHTIGUNG CANIMPORTTUTORIALS) ─────────────────────
+// Importierte Website-Tutorials werden als lokale Kopie gespeichert. Externe
+// Screenshots werden beim Import in Data-URLs umgewandelt und funktionieren
+// danach ohne Internetzugriff weiter.
+async function persistImportedTutorials(payload: any, userId: string) {
+  const db = getDb();
+  const items = extractImportedTutorials(payload).slice(0, 50);
+  if (items.length === 0) throw new Error('Keine gültigen Tutorials gefunden');
+
+  const imported: any[] = [];
+  const skipped: Array<{ title: string; reason: string }> = [];
+  for (const item of items) {
+    const title = String(item?.title || item?.name || '').trim().slice(0, 300);
+    const steps = await cacheImportedSteps(item?.steps);
+    if (!title || steps.length === 0) {
+      skipped.push({ title: title || 'Ohne Titel', reason: 'Titel oder steps-Array fehlt' });
+      continue;
+    }
+    const roles = normalizeImportedRoles(item?.roles || item?.role);
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    db.run(
+      `INSERT INTO tutorials (id, role, roles, title, description, enabled, steps, created_at, updated_at, created_by)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+      [id, roles[0], JSON.stringify(roles), title, String(item?.description || '').slice(0, 20_000), JSON.stringify(steps), now, now, userId]
+    );
+    const created = db.get('SELECT * FROM tutorials WHERE id = ?', [id]) as any;
+    imported.push(parseTutorial(created));
+  }
+  return { imported, count: imported.length, skipped, offlineReady: true };
+}
+
+router.post('/tutorials/import', requireAuth, requirePermission('canImportTutorials') as any, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await persistImportedTutorials(req.body, req.user!.id);
+    res.status(result.count > 0 ? 201 : 422).json({ success: result.count > 0, data: result });
+  } catch (error: any) {
+    const status = error?.message === 'Keine gültigen Tutorials gefunden' ? 400 : 500;
+    if (status === 500) console.error('Error importing tutorials:', error);
+    res.status(status).json({ success: false, error: error?.message || 'Fehler beim Importieren der Tutorials' });
+  }
+});
+
+router.post('/tutorials/import-url', requireAuth, requirePermission('canImportTutorials') as any, async (req: AuthRequest, res: Response) => {
+  try {
+    const rawUrl = String(req.body?.url || '').trim();
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname))) {
+      return res.status(400).json({ success: false, error: 'Nur HTTPS-Webseiten oder lokale Testadressen sind erlaubt' });
+    }
+    const response = await fetch(parsed, {
+      headers: { Accept: 'application/json', 'User-Agent': 'PodCore-Tutorial-Importer/1.0' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return res.status(502).json({ success: false, error: `Webseite antwortete mit HTTP ${response.status}` });
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    if (contentLength > 50_000_000) return res.status(413).json({ success: false, error: 'Tutorial-Datei ist zu groß' });
+    const payload = await response.json();
+    const result = await persistImportedTutorials(payload, req.user!.id);
+    res.status(result.count > 0 ? 201 : 422).json({ success: result.count > 0, sourceUrl: parsed.toString(), ...result });
+  } catch (error: any) {
+    const status = error?.name === 'TypeError' || error?.name === 'SyntaxError' ? 400 : 502;
+    console.error('Error importing tutorial URL:', error);
+    res.status(status).json({ success: false, error: 'Tutorial-Webseite konnte nicht als gültiges JSON geladen werden' });
   }
 });
 

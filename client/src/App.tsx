@@ -42,6 +42,7 @@ const EpisodesDashboardPage = lazy(() => import('./pages/EpisodesDashboardPage')
 const EpisodeSchedulePage = lazy(() => import('./pages/EpisodeSchedulePage'));
 const PdfLayoutManagerPage = lazy(() => import('./pages/PdfLayoutManagerPage'));
 const TutorialsManagementPage = lazy(() => import('./pages/TutorialsManagementPage'));
+const TutorialImportPage = lazy(() => import('./pages/TutorialImportPage'));
 
 function LoadingSpinner() {
   return (
@@ -118,6 +119,7 @@ function AppRoutes() {
         <Route path="pdf-layouts" element={<Suspense fallback={<LoadingSpinner />}><PdfLayoutManagerPage /></Suspense>} />
         <Route path="admin/tutorials" element={<Suspense fallback={<LoadingSpinner />}><TutorialsManagementPage /></Suspense>} />
         <Route path="admin/tutorials/edit" element={<Suspense fallback={<LoadingSpinner />}><TutorialsManagementPage /></Suspense>} />
+        <Route path="tutorials/import" element={<Suspense fallback={<LoadingSpinner />}><TutorialImportPage /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -791,3 +791,18 @@ export const tutorialCloudApi = {
   getCatalog: () => api.get<{ items: TutorialCloudItem[]; source: string; fetchedAt: string }>('/tutorial-cloud/catalog'),
   sync: () => api.post<{ imported: number; syncedAt: string }>('/tutorial-cloud/sync', {}),
 };
+
+export interface TutorialImportResult {
+  success: boolean;
+  count: number;
+  imported: any[];
+  skipped: Array<{ title: string; reason: string }>;
+  offlineReady: boolean;
+  sourceUrl?: string;
+}
+
+export const tutorialsApi = {
+  list: () => api.get<any[]>('/tutorials'),
+  importJson: (payload: any) => api.post<TutorialImportResult>('/tutorials/import', payload),
+  importUrl: (url: string) => api.post<TutorialImportResult>('/tutorials/import-url', { url }),
+};

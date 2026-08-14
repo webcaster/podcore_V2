@@ -77,6 +77,7 @@ const ALL_PERMISSIONS = [
   { key: 'canViewSponsorOffers', label: 'Angebote ansehen', group: 'Sponsoring' },
   // Tutorial-System & Wiki (v2.15.8)
   { key: 'canViewTutorials', label: 'Tutorials / Wiki ansehen', group: 'Tutorial & Wiki' },
+  { key: 'canImportTutorials', label: 'Tutorials von Webseite/JSON importieren', group: 'Tutorial & Wiki' },
   { key: 'canManageTutorials', label: 'Tutorials erstellen & verwalten', group: 'Tutorial & Wiki' },
   { key: 'canExportTutorialPdf', label: 'Tutorial als PDF exportieren', group: 'Tutorial & Wiki' },
   { key: 'canResetTutorials', label: 'Tutorials für Nutzer neu starten', group: 'Tutorial & Wiki' },

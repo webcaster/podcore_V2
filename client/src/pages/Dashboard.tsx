@@ -5,9 +5,9 @@ import {
   BarChart2, Radio, Save, X, RefreshCw,
   Download, Eye, Headphones, MapPin, Smartphone, ChevronLeft, ChevronRight,
   BookOpen, Settings2, GripVertical, EyeOff, Edit2, Users,
-  CheckCircle, XCircle, AlertTriangle, Globe, Info, ShieldCheck,
+  CheckCircle, XCircle, AlertTriangle, Globe, Info, ShieldCheck, WifiOff,
 } from 'lucide-react';
-import { episodesApi, editorialApi, adminApi, podigeeApi, authApi } from '../lib/api';
+import { episodesApi, editorialApi, adminApi, podigeeApi, authApi, tutorialCloudApi, TutorialCloudStatus } from '../lib/api';
 import { useApp, useOnlineUsers } from '../contexts/AppContext';
 import { useTutorialAutoInit } from '../hooks/useTutorialAutoInit';
 
@@ -41,9 +41,10 @@ export default function Dashboard() {
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [approvalsLoading, setApprovalsLoading] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [tutorialCloudStatus, setTutorialCloudStatus] = useState<TutorialCloudStatus | null>(null);
 
   // Dashboard-Anpassung
-  const DEFAULT_WIDGETS = ['stats', 'approvals', 'online_users', 'podcast_episodes', 'podigee', 'editorial', 'quickactions'];
+  const DEFAULT_WIDGETS = ['stats', 'approvals', 'online_users', 'podcast_episodes', 'podigee', 'editorial', 'quickactions', 'tutorial_cloud'];
   const WIDGET_LABELS: Record<string, string> = {
     stats: 'Statistik-Kacheln',
     approvals: 'Freigabe-Anfragen',
@@ -52,6 +53,7 @@ export default function Dashboard() {
     podigee: 'Podcast-Statistiken (Podigee)',
     editorial: 'Redaktionsplan',
     quickactions: 'Schnellzugriff',
+    tutorial_cloud: 'Tutorial-Cloud & Offline-Status',
   };
   const [widgetOrder, setWidgetOrder] = useState<string[]>(DEFAULT_WIDGETS);
   const [isCustomizing, setIsCustomizing] = useState(false);
@@ -61,13 +63,13 @@ export default function Dashboard() {
   // Layout aus Benutzerprofil laden
   useEffect(() => {
     if (user?.dashboardLayout && Array.isArray(user.dashboardLayout) && user.dashboardLayout.length > 0) {
-      // Sicherstellen dass 'approvals' im Layout vorhanden ist (Migration)
-      const layout = user.dashboardLayout;
-      if (!layout.includes('approvals')) {
-        setWidgetOrder(['approvals', ...layout]);
-      } else {
-        setWidgetOrder(layout);
-      }
+      // Neue Widgets werden ergänzt, ohne persönliche Reihenfolge oder
+      // ausgeblendete Widgets der bestehenden Installation zu überschreiben.
+      const layout = [...user.dashboardLayout];
+      DEFAULT_WIDGETS.forEach(widget => {
+        if (!layout.includes(widget) && (widget !== 'tutorial_cloud' || can('canManageTutorials'))) layout.push(widget);
+      });
+      setWidgetOrder(layout);
     }
   }, [user?.dashboardLayout]);
 
@@ -174,6 +176,10 @@ export default function Dashboard() {
         if (can('canViewEpisodes')) {
           const epData = await episodesApi.list({ pageSize: 5 });
           setRecentEpisodes(epData.items || []);
+        }
+        if (can('canManageTutorials')) {
+          const cloudStatus = await tutorialCloudApi.getStatus().catch(() => null);
+          setTutorialCloudStatus(cloudStatus);
         }
       } catch (err) {
         console.error('Dashboard load error:', err);
@@ -932,6 +938,34 @@ export default function Dashboard() {
     </div>
   );
 
+  // ─── Widget: Tutorial-Cloud & Offline-Status ─────────────────────────────
+  const renderTutorialCloud = () => {
+    if (!can('canManageTutorials')) return null;
+    const enabled = tutorialCloudStatus?.enabled === true;
+    return (
+      <div className="card border-accent-purple/20">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="section-title mb-0 flex items-center gap-2"><Globe size={16} className="text-accent-purple" /> Tutorial-Cloud</h2>
+          <span className={`text-[10px] px-2 py-1 rounded-full ${enabled ? 'bg-accent-green/15 text-accent-green' : 'bg-accent-blue/15 text-accent-blue'}`}>
+            {enabled ? 'Synchronisation aktiv' : 'Lokaler Speicher aktiv'}
+          </span>
+        </div>
+        <div className="flex items-start gap-3 p-3 bg-obsidian-800 rounded-lg border border-surface-border">
+          <WifiOff size={17} className="text-accent-green mt-0.5 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-text-primary">Offline verfügbar</p>
+            <p className="text-xs text-text-muted mt-1">Importierte Tutorials und gecachte Screenshots bleiben auch ohne Internet nutzbar.</p>
+            {tutorialCloudStatus?.lastSyncAt && <p className="text-[11px] text-text-muted mt-2">Letzte Synchronisation: {new Date(tutorialCloudStatus.lastSyncAt).toLocaleString('de-DE')}</p>}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-4">
+          <Link to="/tutorials/import" className="btn-secondary text-xs">Tutorial laden/importieren</Link>
+          {user?.developerMode && <Link to="/admin/tutorials" className="btn-ghost text-xs">Cloud verwalten</Link>}
+        </div>
+      </div>
+    );
+  };
+
   // ─── Widget-Map ───────────────────────────────────────────────────────────
   const widgetRenderers: Record<string, () => React.ReactNode> = {
     stats: renderStats,
@@ -941,11 +975,13 @@ export default function Dashboard() {
     podigee: renderPodigee,
     editorial: renderEditorial,
     quickactions: renderQuickActions,
+    tutorial_cloud: renderTutorialCloud,
   };
 
   // Sichtbare Widgets (nur die, die für den aktuellen Nutzer relevant sind)
   const visibleWidgets = widgetOrder.filter(w => {
     if (w === 'approvals' && !can('canApproveEpisodes') && !can('canRequestApproval')) return false;
+    if (w === 'tutorial_cloud' && !can('canManageTutorials')) return false;
     return true;
   });
 
@@ -959,6 +995,7 @@ export default function Dashboard() {
           </h1>
           <p className="text-text-secondary mt-1">
             {branding?.podcastName ? `Willkommen zurück bei ${branding.podcastName}` : 'Willkommen zurück in PodCore'}
+            <span className="inline-flex items-center gap-1.5 ml-2 text-xs text-text-muted"><ShieldCheck size={12} /> Rolle: {user?.role || 'Benutzer'}</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1014,7 +1051,7 @@ export default function Dashboard() {
           </div>
           <p className="text-text-muted text-sm mb-4">Ziehe die Blöcke um die Reihenfolge zu ändern. Klicke auf das Auge um einen Block aus- oder einzublenden.</p>
           <div className="space-y-2">
-            {DEFAULT_WIDGETS.map(widget => {
+            {DEFAULT_WIDGETS.filter(widget => widget !== 'tutorial_cloud' || can('canManageTutorials')).map(widget => {
               const isVisible = widgetOrder.includes(widget);
               const pos = widgetOrder.indexOf(widget);
               return (

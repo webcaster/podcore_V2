@@ -97,9 +97,13 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
-  // Load tutorials on mount and when user changes
+  // Load tutorials on mount and when user changes. A successful import emits
+  // a local event so Wiki and tutorial hints refresh without re-login.
   useEffect(() => {
     loadTutorials();
+    const handleTutorialUpdate = () => { void loadTutorials(); };
+    window.addEventListener('podcore-tutorials-updated', handleTutorialUpdate);
+    return () => window.removeEventListener('podcore-tutorials-updated', handleTutorialUpdate);
   }, [user?.id]);
 
   // Start a tutorial

@@ -1331,6 +1331,7 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
     canViewSponsorOffers: false,
     // Tutorial-System & Wiki (v2.15.8)
     canViewTutorials: false,
+    canImportTutorials: false,
     canManageTutorials: false,
     canExportTutorialPdf: false,
     canResetTutorials: false,
@@ -1374,6 +1375,7 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canManageSponsorOffers: true,
         // Tutorial-System & Wiki (v2.15.8)
         canViewTutorials: true,
+        canImportTutorials: true,
         canExportTutorialPdf: true,
         canTakeScreenshots: true,
       };
@@ -1411,6 +1413,7 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canManageSponsorOffers: true,
         // Tutorial-System & Wiki (v2.15.8)
         canViewTutorials: true,
+        canImportTutorials: true,
         canExportTutorialPdf: true,
         canTakeScreenshots: true,
       };
@@ -1441,6 +1444,7 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
         canViewSponsorOffers: true,
         // Tutorial-System & Wiki (v2.15.8)
         canViewTutorials: true,
+        canImportTutorials: true,
         canExportTutorialPdf: true,
         canTakeScreenshots: true,
       };

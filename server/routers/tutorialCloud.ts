@@ -94,19 +94,47 @@ async function fetchCatalog(baseUrl: string): Promise<any[]> {
   const url = `${normalizeBaseUrl(baseUrl)}/tutorials?per_page=${MAX_TUTORIALS_PER_SYNC}`;
   const response = await fetch(url, {
     headers: { Accept: 'application/json', 'User-Agent': 'PodCore-Tutorial-Cloud/1.0' },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) throw new Error(`WordPress antwortete mit HTTP ${response.status}`);
   const payload = await response.json();
   return extractItems(payload).filter((item: any) => item && (item.slug || item.id));
 }
 
-function upsertCloudTutorial(item: any, actorId: string): void {
+/**
+ * Lädt ein Bild von einer URL herunter und wandelt es in einen Base64-String um.
+ * Dies stellt sicher, dass Tutorials auch offline vollständig funktionieren.
+ */
+async function downloadAsBase64(url: string): Promise<string | null> {
+  if (!url || !url.startsWith('http')) return null;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return null;
+    const buffer = await response.arrayBuffer();
+    const contentType = response.headers.get('content-type') || 'image/png';
+    return `data:${contentType};base64,${Buffer.from(buffer).toString('base64')}`;
+  } catch (error) {
+    console.warn(`[tutorial-cloud] Bild-Download fehlgeschlagen (${url}):`, error);
+    return null;
+  }
+}
+
+async function upsertCloudTutorial(item: any, actorId: string): Promise<void> {
   const db = getDb();
   const slug = String(item.slug || item.id || '').trim().toLowerCase();
   const title = String(item.title || item.name || slug || 'Cloud-Tutorial').trim().slice(0, 300);
   const description = String(item.description || '').slice(0, 20000);
-  const steps = sanitizeSteps(item.steps);
+  
+  // Schritte verarbeiten und Bilder für Offline-Nutzung "backen"
+  const rawSteps = sanitizeSteps(item.steps);
+  const steps = await Promise.all(rawSteps.map(async (step) => {
+    if (step.image && step.image.startsWith('http')) {
+      const base64 = await downloadAsBase64(step.image);
+      if (base64) return { ...step, image: base64 };
+    }
+    return step;
+  }));
+
   const roles = Array.isArray(item.roles) && item.roles.length > 0 ? item.roles.map((role: any) => String(role)) : ['*'];
   const id = stableTutorialId(slug);
   const now = new Date().toISOString();
@@ -190,7 +218,11 @@ router.post('/sync', requireAuth, requirePermission('canManageTutorials') as any
   if (!settings.enabled) return res.status(409).json({ success: false, error: 'Tutorial-Cloud ist nicht aktiviert' });
   try {
     const items = await fetchCatalog(settings.baseUrl);
-    for (const item of items) upsertCloudTutorial(item, req.user!.id);
+    // Parallelisierte Verarbeitung mit Limitierung oder sequentielle Verarbeitung
+    // Wir nutzen sequentielle Verarbeitung für Stabilität bei Bild-Downloads
+    for (const item of items) {
+      await upsertCloudTutorial(item, req.user!.id);
+    }
     const next = { ...settings, lastSyncAt: new Date().toISOString(), lastSyncCount: items.length, lastError: null };
     writeCloudSettings(next);
     res.json({ success: true, data: { imported: items.length, syncedAt: next.lastSyncAt } });

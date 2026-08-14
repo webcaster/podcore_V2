@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
-  Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle, Info,
+  Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle, Info, Download,
   Layers, Archive, BarChart2, Calendar, MessageSquare, Radio, CheckCircle
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
@@ -99,6 +99,7 @@ export default function Layout() {
     { to: '/branding', icon: <Image size={18} />, label: 'Branding', permission: 'canManageSettings', tutorialId: 'nav-branding' },
     { to: '/admin', icon: <Shield size={18} />, label: 'Administration', permission: 'canManageUsers', dividerBefore: true, tutorialId: 'nav-admin' },
     { to: '/admin/tutorials', icon: <Info size={18} />, label: 'Tutorial-Verwaltung', permission: 'canManageSettings', tutorialId: 'nav-tutorials' },
+    { to: '/tutorials/import', icon: <Download size={18} />, label: 'Tutorials importieren', permission: 'canImportTutorials', tutorialId: 'nav-tutorial-import' },
     { to: '/pdf-layouts', icon: <FileText size={18} />, label: 'PDF-Layouts', permission: 'canManageSettings', tutorialId: 'nav-pdf-layouts' },
     { to: '/settings', icon: <Settings size={18} />, label: 'Einstellungen', permission: 'canManageSettings', tutorialId: 'nav-settings' },
   ];
@@ -107,7 +108,8 @@ export default function Layout() {
   const featureFilteredItems = navItems.filter(item => {
     // Zuerst Berechtigungen prüfen
     if (item.permission && !can(item.permission)) return false;
-    // Tutorial-Erstellung und Import/Export bleiben im exklusiven Entwickler-Modus verborgen.
+    // Nur die Tutorial-Erstellung bleibt im exklusiven Entwickler-Modus verborgen.
+    // Der getrennte Import-Eintrag ist für die dafür berechtigten Endnutzer sichtbar.
     if (item.to === '/admin/tutorials' && !user?.developerMode) return false;
     // Dann Feature-Flags prüfen
     const path = item.to;
