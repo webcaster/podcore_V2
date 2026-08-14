@@ -3,7 +3,7 @@
  * Plugin Name: PodCore Tutorial Hub
  * Plugin URI: https://github.com/webcaster/podcore_V2
  * Description: Zeigt PodCore-Tutorials mit Schritten, Screenshots und Annotationen auf einer WordPress-Seite an und bietet kompatible JSON-Downloads.
- * Version: 2.16.3
+ * Version: 2.16.4
  * Author: PodCore / Max
  * License: GPLv2 or later
  */
@@ -179,7 +179,7 @@ function podcore_tutorial_diagnostics_page() {
     ?>
     <div class="wrap">
         <h1>PodCore Tutorial-Diagnose</h1>
-        <p>Diese Prüfung zeigt, ob WordPress das JSON-Feld und das <code>steps</code>-Array erkennt. WordPress <?php echo esc_html(get_bloginfo('version')); ?> · Plugin 2.16.2.</p>
+        <p>Diese Prüfung zeigt, ob WordPress das JSON-Feld und das <code>steps</code>-Array erkennt. WordPress <?php echo esc_html(get_bloginfo('version')); ?> · Plugin 2.16.4.</p>
         <table class="widefat striped">
             <thead><tr><th>Tutorial</th><th>Status</th><th>JSON</th><th>Schritte</th><th>Aktion</th></tr></thead>
             <tbody>
@@ -293,7 +293,7 @@ function podcore_tutorial_steps($decoded) {
  * Öffentliche Tutorial-Cloud-API für PodCore-Installationen.
  * Es werden ausschließlich veröffentlichte podcore_tutorial-Beiträge ausgeliefert.
  */
-define('PODCORE_TUTORIAL_VERSION', '2.16.2');
+define('PODCORE_TUTORIAL_VERSION', '2.16.4');
 define('PODCORE_TUTORIAL_REST_NAMESPACE', 'app-tutorials/v1');
 
 function podcore_tutorial_rest_roles($post_id, $decoded) {

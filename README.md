@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.2**
+**Aktuelle Version: 2.16.4**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -38,6 +38,8 @@
 - Einheitliche Interview-Blöcke für Ideenmappen- und manuelle Folgen mit Partnerauswahl, Fragenübernahme und editierbaren manuellen Fragen
 - Partnerspezifische Fragen-Sortierung, zentrale Speicherung manueller Fragen und direkt anforderbare Fragenfreigabe
 - Abschluss-Check für Interview-Partner, Fragen und verpflichtende Fragenfreigaben vor der Episodenfreigabe
+- **Live-Kollaboration**: Anzeige aktiver Teammitglieder pro Episode und im Redaktions-Hub über den authentifizierten WebSocket-Kanal
+- **Skript-Block-Sperren**: Ein Block wird während der Bearbeitung temporär gesperrt, erhält eine TTL-Erneuerung und wird nach Freigabe oder Verbindungsabbruch automatisch freigegeben
 
 ### 💰 Sponsoren & Monetarisierung (v2)
 - CRM für Sponsoren und Werbepartner
@@ -70,6 +72,8 @@
 - Granulare Rechte für jeden Bereich der App, einschließlich getrenntem Lesen, Bearbeiten, PDF-Export und Editorübergang in der Staffelplanung
 - Freigabe-Workflows für Episoden und gespeicherte Interview-Fragen mit nachvollziehbaren Anforderungs- und Statusübergängen
 - Integrierter Team-Chat
+- Live-Presence im Redaktions-Hub: Teammitglieder sehen, wer gerade im Ideenpool, in der Planung oder in Recherche arbeitet
+- Rollen- und benutzerbezogene Bearbeitung bleibt durch bestehende Berechtigungen geschützt
 
 ### 📚 In-App-Handbuch
 - Durchsuchbares Endnutzer-Nachschlagewerk für sämtliche Hauptbereiche

@@ -8,7 +8,7 @@ import {
   AlertTriangle, Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle,
   Search, Star, CheckSquare, Square, BookOpen, UserCheck, Layers, ExternalLink, X,
   MessageSquare, HelpCircle, FileEdit, StickyNote, Target, Timer, Timer as TimerIcon,
-  RotateCcw, FolderOpen, RefreshCw, Eye, MessageCircle, History
+  RotateCcw, FolderOpen, RefreshCw, Eye, MessageCircle, History, Lock, Wifi, WifiOff
 } from 'lucide-react';
 import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi, episodeWorkflowApi, type EditorialTextBlock, type TopicWorkshopDraft } from '../lib/api';
 import { sponsorsV2Api, episodeTemplatesApi } from '../lib/api-v2';
@@ -16,6 +16,7 @@ import Modal from '../components/ui/Modal';
 import IdeaImportModal from '../components/ui/IdeaImportModal';
 import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
 import { useApp } from '../contexts/AppContext';
+import { useEpisodeCollaboration } from '../hooks/useEpisodeCollaboration';
 import EditableField from '../components/episodes/EditableField';
 import PreviewPane from '../components/episodes/PreviewPane';
 import SponsoringQuickBook from '../components/episodes/SponsoringQuickBook';
@@ -153,7 +154,8 @@ function RichTextEditor({
 export default function EpisodeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { can, showSuccess, showError } = useApp();
+  const { can, showSuccess, showError, user } = useApp();
+  const { otherUsers, locks, connectionStatus, lockMessage, beginEditing, isLockedByOther, getBlockCollaborators, clearLockMessage } = useEpisodeCollaboration(id, user?.id);
   const [episode, setEpisode] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -1319,6 +1321,24 @@ export default function EpisodeDetailPage() {
         <div className="lg:col-span-2 space-y-4">
           {activeTab === 'script' && (
             <div className="card">
+              <div className="mb-4 rounded-lg border border-accent-purple/20 bg-accent-purple/5 px-3 py-2.5">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {connectionStatus === 'connected' ? <Wifi size={14} className="text-accent-green" /> : <WifiOff size={14} className="text-text-muted" />}
+                  <span className={connectionStatus === 'connected' ? 'text-accent-green' : 'text-text-muted'}>
+                    {connectionStatus === 'connected' ? 'Live-Zusammenarbeit aktiv' : 'Zusammenarbeit wird verbunden …'}
+                  </span>
+                  {otherUsers.length > 0 ? (
+                    <span className="text-text-secondary">· {otherUsers.map(collaborator => collaborator.displayName).join(', ')} online</span>
+                  ) : (
+                    <span className="text-text-muted">· Keine weiteren Bearbeiter in dieser Episode</span>
+                  )}
+                </div>
+                {lockMessage && (
+                  <button onClick={clearLockMessage} className="mt-2 flex items-center gap-1.5 text-[11px] text-accent-orange hover:underline">
+                    <Lock size={12} /> {lockMessage} (Hinweis schließen)
+                  </button>
+                )}
+              </div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-text-primary">Episode-Script (Pro)</h2>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -1391,8 +1411,10 @@ export default function EpisodeDetailPage() {
                   const isCollapsed = !!collapsedBlocks[block.id];
                   const wordCount = getSpeakerWordCount(block.content || '');
                   const dirCount = getDirectionCount(block.content || '');
+                  const blockLocked = isLockedByOther(block.id);
+                  const blockEditors = getBlockCollaborators(block.id);
                   return (
-                    <div key={block.id} className={`border rounded-xl overflow-hidden group transition-all ${isCollapsed ? 'border-surface-border/60' : 'border-surface-border'}`}>
+                    <div key={block.id} className={`border rounded-xl overflow-hidden group transition-all ${blockLocked ? 'border-accent-orange/50 shadow-[0_0_0_1px_rgba(249,115,22,0.12)]' : (isCollapsed ? 'border-surface-border/60' : 'border-surface-border')}`}>
                       {/* Block-Header */}
                       <div className={`flex items-center gap-3 px-4 py-3 ${bt.bg} ${isCollapsed ? 'rounded-xl' : ''}`}>
                         <GripVertical size={14} className="text-text-muted cursor-grab shrink-0" />
@@ -1400,10 +1422,18 @@ export default function EpisodeDetailPage() {
                         <input
                           type="text"
                           value={block.title}
+                          disabled={blockLocked}
+                          onFocus={() => beginEditing(block.id)}
                           onChange={e => updateBlock(block.id, 'title', e.target.value)}
                           className="flex-1 bg-transparent text-text-primary text-sm font-medium focus:outline-none min-w-0"
                           placeholder="Titel..."
                         />
+                        {blockEditors.length > 0 && (
+                          <div className="flex items-center gap-1 shrink-0" title="Bearbeiter in diesem Block">
+                            {blockEditors.slice(0, 3).map(collaborator => <span key={collaborator.userId} className="inline-flex items-center gap-1 rounded-full bg-accent-purple/15 px-1.5 py-0.5 text-[10px] text-accent-purple"><span className="h-1.5 w-1.5 rounded-full bg-accent-purple" />{collaborator.displayName}</span>)}
+                          </div>
+                        )}
+                        {blockLocked && <span className="inline-flex items-center gap-1 rounded-full bg-accent-orange/15 px-1.5 py-0.5 text-[10px] text-accent-orange" title={`Gesperrt von ${locks[block.id]?.displayName || 'anderem Nutzer'}`}><Lock size={10} /> {locks[block.id]?.displayName || 'in Bearbeitung'}</span>}
                         {/* Wort-/Regieanweisungs-Info (nur wenn nicht collapsed) */}
                         {!isCollapsed && block.content && (
                           <div className="flex items-center gap-2 shrink-0">
@@ -1426,6 +1456,8 @@ export default function EpisodeDetailPage() {
                             <input
                               type="number"
                               value={block.duration || ''}
+                              disabled={blockLocked}
+                              onFocus={() => beginEditing(block.id)}
                               onChange={e => {
                                 updateBlock(block.id, 'duration', e.target.value ? parseInt(e.target.value) : 0);
                                 updateBlock(block.id, 'manualDuration', true);
@@ -1446,16 +1478,16 @@ export default function EpisodeDetailPage() {
                           </button>
                           {/* Reihenfolge + Löschen */}
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => moveBlock(block.id, 'up')} disabled={idx === 0} className="p-1 text-text-muted hover:text-text-primary disabled:opacity-30" title="Nach oben"><ChevronUp size={14} /></button>
-                            <button onClick={() => moveBlock(block.id, 'down')} disabled={idx === blocks.length - 1} className="p-1 text-text-muted hover:text-text-primary disabled:opacity-30" title="Nach unten"><ChevronDown size={14} /></button>
-                            <button onClick={() => removeBlock(block.id)} className="p-1 text-text-muted hover:text-accent-red" title="Block löschen"><Trash2 size={14} /></button>
+                            <button onClick={() => moveBlock(block.id, 'up')} disabled={blockLocked || idx === 0} className="p-1 text-text-muted hover:text-text-primary disabled:opacity-30" title="Nach oben"><ChevronUp size={14} /></button>
+                            <button onClick={() => moveBlock(block.id, 'down')} disabled={blockLocked || idx === blocks.length - 1} className="p-1 text-text-muted hover:text-text-primary disabled:opacity-30" title="Nach unten"><ChevronDown size={14} /></button>
+                            <button onClick={() => removeBlock(block.id)} disabled={blockLocked} className="p-1 text-text-muted hover:text-accent-red disabled:opacity-30" title="Block löschen"><Trash2 size={14} /></button>
                           </div>
                         </div>
                       </div>
 
                       {/* Block-Body (ausklappbar) */}
                       {!isCollapsed && (
-                        <div className="bg-obsidian-900 p-1">
+                        <div className="bg-obsidian-900 p-1" onMouseDown={() => beginEditing(block.id)}>
                           {/* ── interview_questions: Strukturierter Fragen-Block ── */}
                           {block.type === 'interview_questions' ? (
                             <div className="p-3 space-y-3">
@@ -1524,6 +1556,8 @@ export default function EpisodeDetailPage() {
                                         <div className="flex-1 min-w-0 space-y-2">
                                           <textarea
                                             value={q.question || ''}
+                                            disabled={blockLocked}
+                                            onFocus={() => beginEditing(block.id)}
                                             onChange={(event) => updateInterviewBlockQuestion(block, qIdx, { question: event.target.value })}
                                             placeholder="Interview-Frage eingeben …"
                                             rows={2}
@@ -1533,6 +1567,8 @@ export default function EpisodeDetailPage() {
                                             <input
                                               type="text"
                                               value={q.category || ''}
+                                              disabled={blockLocked}
+                                              onFocus={() => beginEditing(block.id)}
                                               onChange={(event) => updateInterviewBlockQuestion(block, qIdx, { category: event.target.value })}
                                               placeholder="Kategorie (optional)"
                                               className="w-40 max-w-full bg-obsidian-900 border border-surface-border rounded px-2 py-1 text-[11px] text-text-secondary placeholder:text-text-muted/60 focus:outline-none focus:border-accent-purple"
@@ -1563,11 +1599,12 @@ export default function EpisodeDetailPage() {
                                             <span className="text-[9px] text-text-muted">s</span>
                                           </div>
                                           <div className="flex items-center gap-1">
-                                            <button onClick={() => moveInterviewBlockQuestion(block, qIdx, -1)} disabled={qIdx === 0} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Frage nach oben"><ArrowUp size={12} /></button>
-                                            <button onClick={() => moveInterviewBlockQuestion(block, qIdx, 1)} disabled={qIdx === (block.questions || []).length - 1} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Frage nach unten"><ArrowDown size={12} /></button>
+                                            <button onClick={() => moveInterviewBlockQuestion(block, qIdx, -1)} disabled={blockLocked || qIdx === 0} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Frage nach oben"><ArrowUp size={12} /></button>
+                                            <button onClick={() => moveInterviewBlockQuestion(block, qIdx, 1)} disabled={blockLocked || qIdx === (block.questions || []).length - 1} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Frage nach unten"><ArrowDown size={12} /></button>
                                             {!q.sourceQuestionId && can('canEditInterviews') && <button onClick={() => saveManualInterviewQuestionToHub(block, qIdx)} className="p-1 text-text-muted hover:text-accent-cyan" title="Im Redaktionshub speichern"><Save size={12} /></button>}
                                             {q.sourceQuestionId && can('canRequestApproval') && !q.approved && q.approvalStatus !== 'angefragt' && <button onClick={() => requestInterviewBlockQuestionApproval(block, qIdx)} className="p-1 text-text-muted hover:text-accent-orange" title="Freigabe anfordern"><UserCheck size={12} /></button>}
                                             <button
+                                              disabled={blockLocked}
                                               onClick={() => updateBlock(block.id, 'questions', (block.questions || []).filter((_: any, index: number) => index !== qIdx))}
                                               className="p-1 text-text-muted hover:text-accent-red"
                                               title="Frage entfernen"
@@ -1579,6 +1616,8 @@ export default function EpisodeDetailPage() {
                                         <input
                                           type="text"
                                           value={q.notes || ''}
+                                          disabled={blockLocked}
+                                          onFocus={() => beginEditing(block.id)}
                                           onChange={event => updateInterviewBlockQuestion(block, qIdx, { notes: event.target.value })}
                                           placeholder="Moderations-Notiz (intern, nicht im PDF) …"
                                           className="w-full bg-transparent text-xs text-text-muted focus:outline-none focus:text-text-primary placeholder:text-text-muted/50"
@@ -1589,6 +1628,7 @@ export default function EpisodeDetailPage() {
                                 </div>
                               )}
                               <button
+                                disabled={blockLocked}
                                 onClick={() => addManualInterviewQuestion(block)}
                                 className="w-full py-2 border border-dashed border-accent-purple/30 rounded-lg text-xs text-accent-purple hover:bg-accent-purple/5 transition-colors flex items-center justify-center gap-1"
                               >
@@ -1633,6 +1673,7 @@ export default function EpisodeDetailPage() {
                                       <label className="text-[10px] text-text-muted uppercase mb-1 block">Position</label>
                                       <select
                                         value={block.adPosition || 'mid-roll'}
+                                        disabled={blockLocked}
                                         onChange={e => updateBlock(block.id, 'adPosition', e.target.value)}
                                         className="input text-xs py-1"
                                       >
@@ -1646,6 +1687,7 @@ export default function EpisodeDetailPage() {
                                       <label className="text-[10px] text-text-muted uppercase mb-1 block">Sponsor verlinken <span className="normal-case text-text-muted/60">(optional)</span></label>
                                       <select
                                         value={block.linkedSponsorId || ''}
+                                        disabled={blockLocked}
                                         onChange={e => updateBlock(block.id, 'linkedSponsorId', e.target.value)}
                                         className="input text-xs py-1"
                                       >
@@ -1683,13 +1725,14 @@ export default function EpisodeDetailPage() {
                                       <span>Platzhalter: {block.title} ({block.duration}s)</span>
                                     )}
                                   </div>
-                                  <button onClick={() => openMediaPicker(block.id)} className="text-[10px] text-accent-purple hover:underline">Datei wählen</button>
+                                  <button disabled={blockLocked} onClick={() => openMediaPicker(block.id)} className="text-[10px] text-accent-purple hover:underline disabled:opacity-40">Datei wählen</button>
                                 </div>
                               )}
                               <RichTextEditor
                                 value={block.content || ''}
                                 onChange={html => updateBlock(block.id, 'content', html)}
                                 placeholder="Script-Inhalt… Regieanweisungen in [eckigen Klammern] einfügen, z.B. [Pause 3s] oder [Einspieler starten]"
+                                disabled={blockLocked}
                                 minHeight={80}
                               />
                               {/* Regieanweisungs-Vorschau */}

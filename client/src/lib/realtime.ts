@@ -60,6 +60,36 @@ class RealtimeClient {
     };
   }
 
+  send(type: string, payload?: any): boolean {
+    if (this.socket?.readyState !== WebSocket.OPEN) return false;
+    this.socket.send(JSON.stringify({ type, payload }));
+    return true;
+  }
+
+  joinResource(resourceType: 'episode' | 'idea' | 'editorial', resourceId: string): boolean {
+    return this.send('collaboration.join', { resourceType, resourceId });
+  }
+
+  leaveResource(): boolean {
+    return this.send('collaboration.leave');
+  }
+
+  updatePresence(payload: { blockId?: string; status?: 'viewing' | 'editing' }): boolean {
+    return this.send('collaboration.presence.update', payload);
+  }
+
+  acquireLock(blockId: string): boolean {
+    return this.send('collaboration.lock.acquire', { blockId });
+  }
+
+  releaseLock(blockId: string): boolean {
+    return this.send('collaboration.lock.release', { blockId });
+  }
+
+  refreshLock(blockId: string): boolean {
+    return this.send('collaboration.lock.refresh', { blockId });
+  }
+
   disconnect(): void {
     this.closedIntentionally = true;
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);

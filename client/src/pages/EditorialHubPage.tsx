@@ -12,6 +12,7 @@ import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
 import PdfLayoutPicker from '../components/ui/PdfLayoutPicker';
 import SeasonPlanningTab from '../components/editorial/SeasonPlanningTab';
+import CollaborationPresenceBar from '../components/collaboration/CollaborationPresenceBar';
 
 type HubTab = 'ideas' | 'season-planning' | 'plan' | 'interviews' | 'notes' | 'research';
 
@@ -85,6 +86,9 @@ export default function EditorialHubPage() {
         <p className="text-text-secondary text-sm mt-1">
           Vorbereitung, Recherche und Ideensammlung für Podcast-Folgen
         </p>
+        <div className="mt-3 rounded-lg border border-accent-purple/20 bg-accent-purple/5 px-3 py-2">
+          <CollaborationPresenceBar resourceType="editorial" resourceId="hub" context={activeTab} />
+        </div>
       </div>
 
       {/* Tabs */}
