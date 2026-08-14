@@ -1,0 +1,14 @@
+[DB] Roles permissions migration checked (v2.12.11)
+[DB] Database initialized at: /home/ubuntu/.podcore/podcore.db
+
+╔══════════════════════════════════════════════╗
+║           PodCore v2.16.4 Server             ║
+╠══════════════════════════════════════════════╣
+║  Lokal:   http://localhost:3105               ║
+║  Netzwerk: http://169.254.0.21:3105          ║
+║  Modus:   test                               ║
+║  Daten:   /home/ubuntu/.podcore              ║
+╚══════════════════════════════════════════════╝
+
+  Standard-Login: admin / admin123
+
