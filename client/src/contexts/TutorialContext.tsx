@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useApp } from './AppContext';
 
 export interface AnnotationPoint {
@@ -76,15 +76,18 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   const closeWiki = () => setWikiOpen(false);
 
   // Load tutorials for user's role
-  const loadTutorials = async () => {
-    if (!user) return;
-    
+  const loadTutorials = useCallback(async () => {
+    if (!user?.id) {
+      setTutorials([]);
+      return;
+    }
+
     try {
       setIsLoading(true);
       const response = await fetch('/api/tutorials', {
         credentials: 'include',
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
@@ -95,16 +98,16 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.id]);
 
   // Load tutorials on mount and when user changes. A successful import emits
   // a local event so Wiki and tutorial hints refresh without re-login.
   useEffect(() => {
-    loadTutorials();
+    void loadTutorials();
     const handleTutorialUpdate = () => { void loadTutorials(); };
     window.addEventListener('podcore-tutorials-updated', handleTutorialUpdate);
     return () => window.removeEventListener('podcore-tutorials-updated', handleTutorialUpdate);
-  }, [user?.id]);
+  }, [loadTutorials]);
 
   // Start a tutorial
   const startTutorial = async (tutorialId: string) => {

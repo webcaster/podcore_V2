@@ -8,26 +8,12 @@ import { useTutorial } from '../contexts/TutorialContext';
  */
 export const useTutorialAutoInit = () => {
   const { user } = useApp();
-  const { tutorials, loadTutorials, openWiki } = useTutorial();
+  const { tutorials } = useTutorial();
   const hintShownRef = useRef(false);
 
   useEffect(() => {
-    if (!user) {
-      hintShownRef.current = false;
-      return;
-    }
-
-    // Load tutorials for user's role
-    const initTutorials = async () => {
-      try {
-        await loadTutorials();
-      } catch (error) {
-        console.error('Error loading tutorials on login:', error);
-      }
-    };
-
-    initTutorials();
-  }, [user?.id, loadTutorials]);
+    if (!user) hintShownRef.current = false;
+  }, [user?.id]);
 
   // Show hint if tutorials available (but don't auto-start)
   useEffect(() => {

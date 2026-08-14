@@ -21,6 +21,31 @@ function normalize(item: any) {
   };
 }
 
+// Das Center kann bei einem initialen Layoutwechsel kurzzeitig neu eingehängt
+// werden. Der gemeinsame Cache verhindert doppelte Abrufe und bewahrt die
+// Sidebar während des Starts vor unnötigen Re-Renders.
+const NOTIFICATION_CACHE_TTL_MS = 30_000;
+let notificationCache: { items: any[]; fetchedAt: number } | null = null;
+let notificationRequest: Promise<any[]> | null = null;
+
+async function getNotifications(force = false): Promise<any[]> {
+  const now = Date.now();
+  if (!force && notificationCache && now - notificationCache.fetchedAt < NOTIFICATION_CACHE_TTL_MS) {
+    return notificationCache.items;
+  }
+  if (notificationRequest) return notificationRequest;
+
+  notificationRequest = episodeWorkflowApi.getNotifications(40)
+    .then(result => {
+      const items = Array.isArray(result) ? result.map(normalize) : [];
+      notificationCache = { items, fetchedAt: Date.now() };
+      return items;
+    })
+    .finally(() => { notificationRequest = null; });
+
+  return notificationRequest;
+}
+
 export default function NotificationCenter({ compact = false }: NotificationCenterProps) {
   const navigate = useNavigate();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -29,11 +54,10 @@ export default function NotificationCenter({ compact = false }: NotificationCent
   const [loading, setLoading] = useState(true);
   const [connection, setConnection] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setLoading(true);
     try {
-      const result = await episodeWorkflowApi.getNotifications(40);
-      setItems(result.map(normalize));
+      setItems(await getNotifications(force));
     } finally {
       setLoading(false);
     }
@@ -69,7 +93,7 @@ export default function NotificationCenter({ compact = false }: NotificationCent
         <Bell size={16} />{!compact && <span>Benachrichtigungen</span>}{unread > 0 && <span className={`${compact ? 'absolute -right-1 -top-1' : 'ml-auto'} flex min-w-4 items-center justify-center rounded-full bg-accent-red px-1 text-[9px] font-bold leading-4 text-white`}>{unread > 99 ? '99+' : unread}</span>}
       </button>
       {open && <div className={`fixed inset-x-3 top-16 z-[70] max-h-[75vh] overflow-hidden rounded-xl border border-surface-border bg-obsidian-800 shadow-2xl md:absolute md:bottom-0 md:left-full md:right-auto md:top-auto md:ml-3 md:w-96`}>
-        <div className="flex items-center justify-between border-b border-surface-border p-3"><div><h3 className="text-sm font-semibold text-text-primary">Benachrichtigungen</h3><div className="mt-0.5 flex items-center gap-1 text-[10px] text-text-muted"><Radio size={9} className={connection === 'connected' ? 'text-accent-green' : connection === 'connecting' ? 'text-accent-amber' : 'text-accent-red'} /> {connection === 'connected' ? 'Live verbunden' : connection === 'connecting' ? 'Verbindung wird aufgebaut' : 'Offline – Wiederverbindung aktiv'}</div></div><div className="flex items-center gap-1"><button type="button" onClick={() => void load()} className="btn-ghost p-1.5" title="Neu laden"><RefreshCw size={12} className={loading ? 'animate-spin' : ''} /></button><button type="button" onClick={() => setOpen(false)} className="btn-ghost p-1.5" title="Schließen"><X size={12} /></button></div></div>
+        <div className="flex items-center justify-between border-b border-surface-border p-3"><div><h3 className="text-sm font-semibold text-text-primary">Benachrichtigungen</h3><div className="mt-0.5 flex items-center gap-1 text-[10px] text-text-muted"><Radio size={9} className={connection === 'connected' ? 'text-accent-green' : connection === 'connecting' ? 'text-accent-amber' : 'text-accent-red'} /> {connection === 'connected' ? 'Live verbunden' : connection === 'connecting' ? 'Verbindung wird aufgebaut' : 'Offline – Wiederverbindung aktiv'}</div></div><div className="flex items-center gap-1"><button type="button" onClick={() => void load(true)} className="btn-ghost p-1.5" title="Neu laden"><RefreshCw size={12} className={loading ? 'animate-spin' : ''} /></button><button type="button" onClick={() => setOpen(false)} className="btn-ghost p-1.5" title="Schließen"><X size={12} /></button></div></div>
         <div className="max-h-[58vh] overflow-y-auto">{loading && items.length === 0 ? <div className="flex items-center justify-center gap-2 py-10 text-xs text-text-muted"><Loader2 size={14} className="animate-spin" /> Feed wird geladen…</div> : items.length === 0 ? <div className="py-10 text-center text-xs text-text-muted">Keine Benachrichtigungen vorhanden.</div> : items.map(item => <button type="button" key={item.id} onClick={() => void openItem(item)} className={`flex w-full items-start gap-3 border-b border-surface-border/60 p-3 text-left transition-colors hover:bg-surface-overlay/70 ${item.isRead ? 'opacity-65' : 'bg-accent-purple/5'}`}><div className={`mt-0.5 rounded-full p-1.5 ${item.type === 'mention' ? 'bg-accent-blue/15 text-accent-blue' : 'bg-accent-purple/15 text-accent-purple'}`}>{item.type === 'mention' ? <MessageSquare size={12} /> : <Bell size={12} />}</div><div className="min-w-0 flex-1"><div className="flex items-start gap-2"><p className="flex-1 text-xs font-medium text-text-primary">{item.title}</p>{!item.isRead && <Circle size={7} className="mt-1 fill-accent-blue text-accent-blue" />}</div><p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.message}</p><p className="mt-1 text-[9px] text-text-muted">{new Date(item.createdAt).toLocaleString('de-DE')}</p></div></button>)}</div>
         {items.length > 0 && <button type="button" onClick={() => void markRead()} className="flex w-full items-center justify-center gap-1 border-t border-surface-border p-2 text-xs text-accent-blue hover:bg-surface-overlay"><CheckCheck size={13} /> Alle als gelesen markieren</button>}
       </div>}

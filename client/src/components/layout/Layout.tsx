@@ -36,9 +36,23 @@ export default function Layout() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const developerUnlockRef = useRef({ count: 0, startedAt: 0 });
+
+  // Nur die sichtbare Desktop- oder Mobilansicht darf das Benachrichtigungs-
+  // Center einhängen. Tailwind blendet Varianten nur per CSS aus; ohne diese
+  // Abfrage würden beide Instanzen ihre Daten gleichzeitig laden.
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const updateViewport = () => setIsMobileViewport(query.matches);
+    updateViewport();
+    query.addEventListener('change', updateViewport);
+    return () => query.removeEventListener('change', updateViewport);
+  }, []);
 
   // Check server version periodically
   useEffect(() => {
@@ -175,7 +189,7 @@ export default function Layout() {
       })
     : visibleItems;
 
-  const Sidebar = ({ mobile = false }) => (
+  const Sidebar = ({ mobile = false, showNotifications = true }: { mobile?: boolean; showNotifications?: boolean }) => (
     <aside
       data-tutorial-id={mobile ? 'sidebar-mobile' : 'sidebar'}
       className={`
@@ -298,9 +312,11 @@ export default function Layout() {
             </div>
           )
         )}
-        <div className={`mb-1 ${collapsed && !mobile ? '' : 'px-0'}`}>
-          <NotificationCenter compact={collapsed && !mobile} />
-        </div>
+        {showNotifications && (
+          <div className={`mb-1 ${collapsed && !mobile ? '' : 'px-0'}`}>
+            <NotificationCenter compact={collapsed && !mobile} />
+          </div>
+        )}
         <button
           onClick={handleLogout}
           className={`flex items-center gap-2 text-text-muted hover:text-accent-red transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-accent-red/10 ${collapsed && !mobile ? 'justify-center px-0' : ''}`}
@@ -378,7 +394,7 @@ export default function Layout() {
     <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Desktop Sidebar */}
       <div className="hidden md:flex flex-shrink-0">
-        <Sidebar />
+        <Sidebar showNotifications={!isMobileViewport} />
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -386,7 +402,7 @@ export default function Layout() {
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="fixed inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
           <div className="relative z-10 flex">
-            <Sidebar mobile />
+            <Sidebar mobile showNotifications={false} />
           </div>
         </div>
       )}
@@ -418,7 +434,7 @@ export default function Layout() {
               {branding.podcastName || 'PodCore'}
             </span>
           </div>
-          <NotificationCenter compact />
+          {isMobileViewport && <NotificationCenter compact />}
         </div>
 
         {/* Page Content */}
