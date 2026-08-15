@@ -28,6 +28,11 @@ const ACCENT_PRESETS = [
 
 const PODCORE_PURCHASE_URL = 'https://podcore.de';
 
+// Stabilitätsmodus: Bis zum ausdrücklich geplanten Lizenz-Release bleibt PodCore
+// vollständig kostenlos. Die bestehende DLM-Anbindung bleibt im Code, wird aber
+// nicht in der App-Oberfläche angeboten.
+const LICENSING_ENABLED = false;
+
 const SIDEBAR_PRESETS = [
   { label: 'Obsidian (Standard)', value: '#0f0f13' },
   { label: 'Dunkelblau', value: '#0f172a' },
@@ -125,7 +130,7 @@ export default function SettingsPage() {
   }, [showError]);
 
   useEffect(() => {
-    if (activeTab === 'license') loadLicenseStatus();
+    if (LICENSING_ENABLED && activeTab === 'license') loadLicenseStatus();
   }, [activeTab, loadLicenseStatus]);
 
   const handleLicenseActivate = async (e: React.FormEvent) => {
@@ -562,7 +567,7 @@ export default function SettingsPage() {
       { key: 'technical' as TabKey, label: 'Technische Daten', icon: <Sliders size={15} />, adminOnly: true },
       { key: 'app' as TabKey, label: 'App-Einstellungen', icon: <Settings size={15} />, adminOnly: true },
       { key: 'update' as TabKey, label: 'App-Update', icon: <Download size={15} />, adminOnly: true },
-      { key: 'license' as TabKey, label: 'Lizenzierung', icon: <KeyRound size={15} />, adminOnly: true },
+      ...(LICENSING_ENABLED ? [{ key: 'license' as TabKey, label: 'Lizenzierung', icon: <KeyRound size={15} />, adminOnly: true }] : []),
     ] : []),
   ];
 
@@ -1321,7 +1326,7 @@ export default function SettingsPage() {
         </form>
       )}
       {/* ── LICENSE TAB ─────────────────────────────────────────────────────────── */}
-      {activeTab === 'license' && can('canManageSettings') && (
+      {LICENSING_ENABLED && activeTab === 'license' && can('canManageSettings') && (
         <div className="max-w-2xl space-y-6">
           <div className="card">
             <h3 className="font-semibold text-text-primary mb-2 flex items-center gap-2">

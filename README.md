@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.4**
+**Aktuelle Version: 2.16.9**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -93,6 +93,9 @@ Tutorials starten nicht automatisch. Nach dem Login erscheint nur ein Hinweis, w
 
 ### 🎧 Audio-Editor und persönliche Partnerfragen-PDFs
 Der Audio-Editor bietet Waveform, Wiedergabegeschwindigkeit, Loop-Modus, Marker, zeitbezogene Kommentare und Schnittplan-Export. Der Exporttyp `interview_partner` ist in der PDF-Layout-Auswahl berücksichtigt, sodass das persönliche Partnerfragen-PDF als eigenes Layout bearbeitet und verwendet werden kann.
+
+### 🟢 Kostenloser Stabilitätsmodus in v2.16.9
+PodCore ist bis zu einem ausdrücklich angekündigten Stabilitäts-Update vollständig kostenlos nutzbar. Die Lizenzverwaltung ist in der App-Oberfläche ausgeblendet, damit keine Aktivierung oder Funktionseinschränkung erfolgt. Die technische DLM-Vorbereitung bleibt erhalten und wird erst nach der Stabilisierung erneut geprüft und aktiviert. Details stehen in [`docs/FREE-STABILITY-MODE.md`](docs/FREE-STABILITY-MODE.md).
 
 ## 🆕 Neue Features in v2.15.x
 
