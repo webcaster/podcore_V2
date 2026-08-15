@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Headphones, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AppContext';
 import { authApi } from '../lib/api';
 import { useTutorial } from '../contexts/TutorialContext';
@@ -48,11 +48,9 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-accent-purple rounded-2xl mb-4 shadow-glow-purple">
-            <Headphones size={28} className="text-white" />
-          </div>
+          <img src="/podcore-logo.svg" alt="PodCore" className="inline-block w-16 h-16 mb-4 drop-shadow-[0_10px_24px_rgba(124,58,237,0.35)]" />
           <h1 className="text-3xl font-bold text-text-primary">PodCore</h1>
-          <p className="text-text-secondary mt-1">Podcast Management System</p>
+          <p className="text-accent-purple font-medium mt-1">Dein Podcast. Dein Workflow.</p>
           <p className="text-text-muted text-xs mt-1">v{APP_VERSION}</p>
         </div>
 

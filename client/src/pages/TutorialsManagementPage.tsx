@@ -16,7 +16,7 @@ import {
   Camera, Download, Eye, Users, BookOpen, Edit3,
   X, Check, AlertCircle, Loader2, ArrowLeft,
   ToggleLeft, ToggleRight, GripVertical, Image as ImageIcon,
-  FileText, Settings as SettingsIcon, ChevronRight, RefreshCw,
+  FileText, Settings as SettingsIcon, ChevronRight, RefreshCw, Copy,
 } from 'lucide-react';
 import { useScreenshotMode } from '../contexts/ScreenshotModeContext';
 import RoleMenuPreview from '../components/tutorials/RoleMenuPreview';
@@ -155,6 +155,7 @@ export default function TutorialsManagementPage() {
   const [cloudEnabled, setCloudEnabled] = useState(false);
   const [cloudAutoSync, setCloudAutoSync] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const screenshotRestoreAppliedRef = useRef(false);
 
   // Ref to hold the current editTutorial for use inside screenshot callbacks
   const editTutorialRef = useRef<Tutorial | null>(null);
@@ -173,12 +174,26 @@ export default function TutorialsManagementPage() {
   });
 
   // ── RESTORE STATE AFTER SCREENSHOT NAVIGATION ──
-  // When the user returns from screenshot mode, restore the tutorial editor state
-  // and apply any pending screenshot from sessionStorage
+  // The complete editor snapshot is written before navigating away. This prevents
+  // a React route transition from dropping the confirmed screenshot or its points.
   useEffect(() => {
-    if (persistedState?.editTutorial) {
-      let restoredTutorial = persistedState.editTutorial as Tutorial;
-      const stepId = persistedState.stepId;
+    if (screenshotRestoreAppliedRef.current) return;
+
+    let storedRestore: { editTutorial?: Tutorial; stepId?: string } | null = null;
+    try {
+      const raw = sessionStorage.getItem('podcore_screenshot_editor_restore');
+      storedRestore = raw ? JSON.parse(raw) : null;
+    } catch {
+      storedRestore = null;
+    }
+
+    const restoreState = storedRestore?.editTutorial
+      ? storedRestore
+      : persistedState;
+
+    if (restoreState?.editTutorial) {
+      let restoredTutorial = restoreState.editTutorial as Tutorial;
+      const stepId = restoreState.stepId;
 
       // Check if there's a pending screenshot in sessionStorage
       const pendingRaw = sessionStorage.getItem('podcore_screenshot_pending');
@@ -207,10 +222,11 @@ export default function TutorialsManagementPage() {
       setEditTutorial(restoredTutorial);
       setView('edit');
       setActiveTab('steps');
+      screenshotRestoreAppliedRef.current = true;
+      sessionStorage.removeItem('podcore_screenshot_editor_restore');
       clearPersistedState();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [persistedState, clearPersistedState]);
 
   // ── LOAD ──
   const loadData = useCallback(async () => {
@@ -487,28 +503,28 @@ export default function TutorialsManagementPage() {
       return step && (r.tutorialId === step.target || r.path === step.target);
     });
 
-    // Persist current tutorial state so it survives the navigation
-    const tutorialWithCapture = {
-      ...current,
-      // We'll apply the image after capture via persistedState
-      _pendingScreenshotStepId: stepId,
-    };
-
     startScreenshotMode({
       role: firstRole || 'unbekannt',
       permissions: roleObj?.permissions || {},
       persistedState: { editTutorial: current, stepId },
       onCapture: ({ dataUrl, annotations }) => {
-        // Apply the screenshot to the correct step using the persisted state
-        // The persistedState will be read on remount and the image applied via a separate effect
-        // We store the result in sessionStorage for the remount to pick up
-        const pending = sessionStorage.getItem('podcore_screenshot_pending');
-        const pendingData = pending ? JSON.parse(pending) : {};
-        pendingData[stepId] = { dataUrl, annotations };
-        sessionStorage.setItem('podcore_screenshot_pending', JSON.stringify(pendingData));
+        const restoredTutorial: Tutorial = {
+          ...current,
+          steps: current.steps.map((step: TutorialStep) =>
+            step.id === stepId ? { ...step, image: dataUrl, annotations } : step
+          ),
+        };
+        sessionStorage.setItem('podcore_screenshot_editor_restore', JSON.stringify({
+          editTutorial: restoredTutorial,
+          stepId,
+        }));
         navigate('/admin/tutorials/edit');
       },
       onCancel: () => {
+        sessionStorage.setItem('podcore_screenshot_editor_restore', JSON.stringify({
+          editTutorial: current,
+          stepId,
+        }));
         navigate('/admin/tutorials/edit');
       },
     });
@@ -539,6 +555,24 @@ export default function TutorialsManagementPage() {
     if (ni < 0 || ni >= p.steps.length) return p;
     const steps = [...p.steps];
     [steps[idx], steps[ni]] = [steps[ni], steps[idx]];
+    return { ...p, steps };
+  });
+  const duplicateStep = (id: string) => setEditTutorial(p => {
+    if (!p) return p;
+    const index = p.steps.findIndex(step => step.id === id);
+    if (index < 0) return p;
+    const source = p.steps[index];
+    const duplicate: TutorialStep = {
+      ...source,
+      id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title: source.title ? `${source.title} (Kopie)` : '',
+      annotations: (source.annotations || []).map((annotation, annotationIndex) => ({
+        ...annotation,
+        id: `annotation-${Date.now()}-${annotationIndex}-${Math.random().toString(36).slice(2, 6)}`,
+      })),
+    };
+    const steps = [...p.steps];
+    steps.splice(index + 1, 0, duplicate);
     return { ...p, steps };
   });
   const toggleRole = (name: string) => setEditTutorial(p => {
@@ -987,6 +1021,11 @@ export default function TutorialsManagementPage() {
       editTutorial.roles.length > 0 &&
       (r.name === editTutorial.roles[0] || r.id === editTutorial.roles[0])
     );
+    const readiness = {
+      info: Boolean(editTutorial.title.trim() && editTutorial.roles.length > 0),
+      steps: editTutorial.steps.length > 0 && editTutorial.steps.every(step => step.title.trim() && step.description.trim()),
+      preview: editTutorial.steps.some(step => Boolean(step.image)),
+    };
 
     return (
       <div className="space-y-0 animate-fade-in h-full flex flex-col">
@@ -1026,7 +1065,26 @@ export default function TutorialsManagementPage() {
           </div>
         </div>
 
-        <Notifications />
+          <Notifications />
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-5">
+            {[
+              { id: 'roles', number: '01', title: 'Rollen & Info', ready: readiness.info, text: 'Zielgruppe und Einstieg festlegen' },
+              { id: 'steps', number: '02', title: 'Schritte bauen', ready: readiness.steps, text: 'Erklärung, Ziel und Screenshot ergänzen' },
+              { id: 'preview', number: '03', title: 'Vorschau prüfen', ready: readiness.preview, text: 'Ablauf vor dem Speichern kontrollieren' },
+            ].map(item => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveTab(item.id as typeof activeTab)}
+                className={`text-left rounded-xl border p-3 transition-colors ${activeTab === item.id ? 'border-accent-purple bg-accent-purple/10' : 'border-obsidian-700 bg-obsidian-800 hover:border-obsidian-600'}`}
+              >
+                <span className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-text-muted"><span>{item.number}</span>{item.ready && <Check size={14} className="text-green-400" />}</span>
+                <span className="block mt-1 text-sm font-semibold text-text-primary">{item.title}</span>
+                <span className="block mt-1 text-xs text-text-muted">{item.text}</span>
+              </button>
+            ))}
+          </div>
 
         {/* ── Main layout: left editor + right sidebar ── */}
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 flex-1">
@@ -1035,10 +1093,11 @@ export default function TutorialsManagementPage() {
           <div className="space-y-4">
             {/* Tab bar */}
             <div className="flex items-center gap-1 bg-obsidian-800 rounded-xl p-1 w-fit">
-              {([
-                { id: 'steps', label: 'Schritte', icon: FileText },
-                { id: 'roles', label: 'Rollen & Info', icon: Users },
-              ] as const).map(tab => (
+                {([
+                  { id: 'steps', label: 'Schritte', icon: FileText },
+                  { id: 'roles', label: 'Rollen & Info', icon: Users },
+                  { id: 'preview', label: 'Vorschau', icon: Eye },
+                ] as const).map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
@@ -1146,6 +1205,52 @@ export default function TutorialsManagementPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* ── TAB: Ergebnis-Vorschau ── */}
+            {activeTab === 'preview' && (
+              <div className="space-y-4">
+                <div className="card border border-accent-purple/25 bg-accent-purple/5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-accent-purple">Nutzeransicht</p>
+                      <h2 className="mt-1 text-xl font-semibold text-text-primary">{editTutorial.title || 'Titel des Tutorials'}</h2>
+                      <p className="mt-2 text-sm text-text-muted">{editTutorial.description || 'Eine kurze Einleitung hilft Nutzern beim Einstieg in das Tutorial.'}</p>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${editTutorial.enabled ? 'bg-green-500/15 text-green-400' : 'bg-obsidian-700 text-text-muted'}`}>
+                      {editTutorial.enabled ? 'Wird angezeigt' : 'Noch deaktiviert'}
+                    </span>
+                  </div>
+                </div>
+
+                {editTutorial.steps.map((step, index) => (
+                  <article key={step.id} className="card border border-obsidian-700">
+                    <div className="flex items-start gap-3">
+                      <span className="w-7 h-7 rounded-full bg-accent-purple/20 border border-accent-purple/40 text-accent-purple text-xs font-bold grid place-items-center shrink-0">{index + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-text-primary">{step.title || `Schritt ${index + 1}`}</h3>
+                        <p className="mt-1 text-sm text-text-muted whitespace-pre-wrap">{step.description || 'Noch keine Beschreibung hinterlegt.'}</p>
+                      </div>
+                    </div>
+                    {step.image ? (
+                      <div className="relative mt-4 overflow-hidden rounded-xl border border-obsidian-700">
+                        <img src={step.image} alt={`Vorschau zu Schritt ${index + 1}`} className="w-full max-h-72 object-cover object-top" />
+                        {(step.annotations || []).map((annotation, annotationIndex) => (
+                          <span
+                            key={annotation.id}
+                            className="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full border-2 border-white/80 text-white text-xs font-bold grid place-items-center shadow-lg"
+                            style={{ left: `${annotation.x}%`, top: `${annotation.y}%`, backgroundColor: ANN_COLORS[annotationIndex % ANN_COLORS.length] }}
+                          >
+                            {annotation.label}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-amber-300">Für diesen Schritt ist noch kein Screenshot hinterlegt.</p>
+                    )}
+                  </article>
+                ))}
               </div>
             )}
 

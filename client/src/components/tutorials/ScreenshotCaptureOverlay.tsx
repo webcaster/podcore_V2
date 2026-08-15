@@ -17,6 +17,16 @@ const POINT_COLORS = [
   '#0891b2', '#65a30d', '#ea580c', '#9333ea', '#0d9488',
 ];
 
+// `crypto.randomUUID()` ist in einigen Browsern über lokale IP-Adressen ohne
+// HTTPS nicht verfügbar. Tutorials werden häufig genau so im Studio-Netzwerk
+// erstellt; deshalb muss die Markierung auch ohne Secure Context funktionieren.
+const createAnnotationId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `annotation-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
 export default function ScreenshotCaptureOverlay() {
   const { active, simulatedRole, onCapture, onCancel, endScreenshotMode } = useScreenshotMode();
   const navigate = useNavigate();
@@ -104,14 +114,19 @@ export default function ScreenshotCaptureOverlay() {
     }
   }, []);
 
-  const handleImageClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const handleImagePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (phase !== 'annotate' || !imgRef.current) return;
+    // Die Annotationsfläche übernimmt Maus-, Touch- und Stifteingaben gleich.
+    // Dadurch verhindert kein Browser-Drag oder Image-Handler mehr das Setzen.
+    e.preventDefault();
     const rect = imgRef.current.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     const newPoint: AnnotationPoint = {
-      id: crypto.randomUUID(),
-      x, y,
+      id: createAnnotationId(),
+      x: Math.min(100, Math.max(0, x)),
+      y: Math.min(100, Math.max(0, y)),
       label: String(annotations.length + 1),
       description: '',
     };
@@ -221,8 +236,8 @@ export default function ScreenshotCaptureOverlay() {
                 <Camera size={18} className="text-accent-purple" />
                 Screenshot annotieren
               </h2>
-              <p className="text-text-muted text-xs mt-0.5">
-                Klicke auf das Bild um nummerierte Punkte zu setzen · Beschreibe jeden Punkt rechts
+                  <p className="text-text-muted text-xs mt-0.5">
+                    Klicke oder tippe auf das Bild, um nummerierte Punkte zu setzen · Beschreibe jeden Punkt rechts
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -255,21 +270,38 @@ export default function ScreenshotCaptureOverlay() {
             <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-obsidian-950">
               <div
                 ref={imgRef}
-                className="relative cursor-crosshair select-none max-w-full"
-                onClick={handleImageClick}
-                style={{ display: 'inline-block' }}
+                className="relative cursor-crosshair select-none max-w-full touch-none"
+                onPointerDown={handleImagePointerDown}
+                role="button"
+                tabIndex={0}
+                aria-label="Screenshot: Punkt für die Tutorial-Anleitung setzen"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const syntheticPoint: AnnotationPoint = {
+                      id: createAnnotationId(), x: 50, y: 50,
+                      label: String(annotations.length + 1), description: '',
+                    };
+                    if (rect.width && rect.height) {
+                      setAnnotations(prev => [...prev, syntheticPoint]);
+                      setActivePointId(syntheticPoint.id);
+                    }
+                  }
+                }}
+                style={{ display: 'inline-block', touchAction: 'none' }}
               >
                 <img
                   src={capturedImage}
                   alt="Screenshot"
-                  className="max-w-full rounded-lg shadow-2xl border border-obsidian-700"
+                  className="max-w-full rounded-lg shadow-2xl border border-obsidian-700 pointer-events-none"
                   draggable={false}
                 />
                 {/* Annotation points */}
                 {annotations.map((pt, idx) => (
                   <button
                     key={pt.id}
-                    onClick={(e) => { e.stopPropagation(); setActivePointId(pt.id); }}
+                    onPointerDown={(e) => { e.stopPropagation(); setActivePointId(pt.id); }}
                     className="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full
                                flex items-center justify-center text-white text-xs font-bold
                                shadow-lg border-2 border-white/80 transition-transform hover:scale-110 z-10"
@@ -329,7 +361,7 @@ export default function ScreenshotCaptureOverlay() {
                         <span className="text-xs font-medium text-text-primary">Punkt {pt.label}</span>
                       </div>
                       <button
-                        onClick={(e) => { e.stopPropagation(); removePoint(pt.id); }}
+                    onPointerDown={(e) => { e.stopPropagation(); removePoint(pt.id); }}
                         className="p-1 text-text-muted hover:text-red-400 transition-colors rounded"
                       >
                         <Trash2 size={12} />
@@ -338,7 +370,7 @@ export default function ScreenshotCaptureOverlay() {
                     <textarea
                       value={pt.description}
                       onChange={(e) => updateDescription(pt.id, e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
                       placeholder={`Beschreibung für Punkt ${pt.label}...`}
                       rows={3}
                       className="w-full bg-obsidian-700 border border-obsidian-600 rounded-lg px-3 py-2

@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
-  Shield, Menu, X, Headphones, TrendingUp, Image, FileText, HelpCircle, Info, Download,
+  Shield, Menu, X, TrendingUp, Image, FileText, HelpCircle, Info, Download,
   Layers, Archive, BarChart2, Calendar, MessageSquare, Radio, CheckCircle
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
@@ -157,11 +157,7 @@ export default function Layout() {
         />
       );
     }
-    return (
-      <div className="w-8 h-8 bg-accent-purple rounded-lg flex items-center justify-center flex-shrink-0">
-        <Headphones size={16} className="text-white" />
-      </div>
-    );
+    return <img src="/podcore-logo.svg" alt="PodCore" className="w-8 h-8 flex-shrink-0" />;
   };
 
   const { openWiki, tutorials } = useTutorial();
@@ -205,6 +201,7 @@ export default function Layout() {
             <h1 className="text-text-primary font-bold text-sm leading-tight truncate">
               {branding.podcastName || 'PodCore'}
             </h1>
+            <p className="text-[10px] leading-tight text-accent-purple/90 truncate">Dein Podcast. Dein Workflow.</p>
             <button
               type="button"
               onClick={handleVersionClick}
@@ -426,13 +423,12 @@ export default function Layout() {
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
             ) : (
-              <div className="w-6 h-6 bg-accent-purple rounded flex items-center justify-center">
-                <Headphones size={12} className="text-white" />
-              </div>
+              <img src="/podcore-logo.svg" alt="PodCore" className="w-6 h-6 flex-shrink-0" />
             )}
-            <span className="font-bold text-text-primary truncate max-w-[160px]">
-              {branding.podcastName || 'PodCore'}
-            </span>
+            <div className="min-w-0 leading-tight">
+              <span className="block font-bold text-text-primary truncate max-w-[160px]">{branding.podcastName || 'PodCore'}</span>
+              <span className="block text-[9px] text-accent-purple truncate max-w-[160px]">Dein Podcast. Dein Workflow.</span>
+            </div>
           </div>
           {isMobileViewport && <NotificationCenter compact />}
         </div>
