@@ -308,13 +308,6 @@ export default function SettingsPage() {
     externalHintText: '',
   });
 
-  // ── PDF CI colors form ───────────────────────────────────────────────────────
-  const [pdfForm, setPdfForm] = useState({
-    primaryColor: '#7c3aed',
-    accentColor: '#2563eb',
-    headerBg: '#1a1a2e',
-  });
-
   // ── Workflow settings form ───────────────────────────────────────────────────
   const [workflowForm, setWorkflowForm] = useState({
     episodeApprovalRequired: false,
@@ -392,13 +385,6 @@ export default function SettingsPage() {
         explicit: p.explicit || false,
         feedUrl: p.feedUrl || '',
         podcastId: p.podcastId || '',
-      });
-      // PDF CI colors
-      const pdf = data.pdf || {};
-      setPdfForm({
-        primaryColor: pdf.primaryColor || '#7c3aed',
-        accentColor: pdf.accentColor || '#2563eb',
-        headerBg: pdf.headerBg || '#1a1a2e',
       });
       // Workflow settings
       const wf = data.workflow || {};
@@ -493,28 +479,27 @@ export default function SettingsPage() {
   const handleSaveTheme = async () => {
     setIsSaving(true);
     try {
+      const themeToSave = { ...themeForm, mode };
       // Theme zuerst anwenden (sofortiges visuelles Feedback)
-      applyThemePreview(themeForm);
-      await authApi.updateProfile({ theme: themeForm });
-      // refreshUser NACH dem Speichern aufrufen, damit applyUserTheme das neue Theme aus der DB lädt
-      // Kurze Verzögerung damit die DB-Änderung propagiert ist
-      await new Promise(r => setTimeout(r, 100));
+      applyThemePreview(themeToSave);
+      await authApi.updateProfile({ theme: themeToSave });
+      // Der Server liefert den aktuellen Benutzer direkt zurück; refreshUser wendet
+      // die vollständig persistierten Tokens auch nach einem Seitenwechsel wieder an.
       await refreshUser();
-      // Theme nochmals anwenden falls refreshUser es überschrieben hat
-      applyThemePreview(themeForm);
+      applyThemePreview(themeToSave);
       showSuccess('Design-Einstellungen gespeichert');
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
   };
 
   const handleResetTheme = async () => {
-    const defaultTheme = { accentColor: '#7c3aed', sidebarColor: '#0f0f13', fontScale: 1.0 };
+    const defaultTheme = { accentColor: '#7c3aed', sidebarColor: '#0f0f13', fontScale: 1.0, mode: 'dark' as const };
     setThemeForm(defaultTheme);
+    setMode('dark');
     applyThemePreview(defaultTheme);
     setIsSaving(true);
     try {
       await authApi.updateProfile({ theme: defaultTheme });
-      await new Promise(r => setTimeout(r, 100));
       await refreshUser();
       applyThemePreview(defaultTheme);
       showSuccess('Design zurückgesetzt');
@@ -549,7 +534,7 @@ export default function SettingsPage() {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const payload: any = { ...appForm, pdf: pdfForm, workflow: workflowForm, invoiceSchema: invoiceForm, sponsoring: { ...(settings?.sponsoring || {}), offerNumbering: offerNumberForm } };
+      const payload: any = { ...appForm, workflow: workflowForm, invoiceSchema: invoiceForm, sponsoring: { ...(settings?.sponsoring || {}), offerNumbering: offerNumberForm } };
       if (!payload.sessionSecret) delete payload.sessionSecret;
       await adminApi.updateSettings(payload);
       showSuccess('Einstellungen gespeichert');
@@ -1105,69 +1090,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* PDF CI Colors */}
-              <div className="card">
-                <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
-                  <Palette size={16} /> PDF CI-Farben
-                </h3>
-                <p className="text-text-muted text-sm mb-4">Diese Farben werden in allen PDF-Exporten (Episoden, Sponsoring-Abrechnung) verwendet.</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="label">Primärfarbe</label>
-                    <div className="flex items-center gap-3">
-                      <input type="color" value={pdfForm.primaryColor} onChange={e => setPdfForm(p => ({ ...p, primaryColor: e.target.value }))} className="w-10 h-10 rounded-lg border border-surface-border cursor-pointer bg-transparent" />
-                      <input type="text" value={pdfForm.primaryColor} onChange={e => setPdfForm(p => ({ ...p, primaryColor: e.target.value }))} className="input font-mono text-sm" placeholder="#7c3aed" />
-                    </div>
-                    <div className="flex gap-1 mt-2 flex-wrap">
-                      {ACCENT_PRESETS.map(c => (
-                        <button key={c.value} type="button" onClick={() => setPdfForm(p => ({ ...p, primaryColor: c.value }))} title={c.label}
-                          className={`w-6 h-6 rounded-full transition-all ${pdfForm.primaryColor === c.value ? 'ring-2 ring-white ring-offset-1 ring-offset-obsidian-900' : ''}`}
-                          style={{ backgroundColor: c.value }} />
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label">Akzentfarbe</label>
-                    <div className="flex items-center gap-3">
-                      <input type="color" value={pdfForm.accentColor} onChange={e => setPdfForm(p => ({ ...p, accentColor: e.target.value }))} className="w-10 h-10 rounded-lg border border-surface-border cursor-pointer bg-transparent" />
-                      <input type="text" value={pdfForm.accentColor} onChange={e => setPdfForm(p => ({ ...p, accentColor: e.target.value }))} className="input font-mono text-sm" placeholder="#2563eb" />
-                    </div>
-                    <div className="flex gap-1 mt-2 flex-wrap">
-                      {ACCENT_PRESETS.map(c => (
-                        <button key={c.value} type="button" onClick={() => setPdfForm(p => ({ ...p, accentColor: c.value }))} title={c.label}
-                          className={`w-6 h-6 rounded-full transition-all ${pdfForm.accentColor === c.value ? 'ring-2 ring-white ring-offset-1 ring-offset-obsidian-900' : ''}`}
-                          style={{ backgroundColor: c.value }} />
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label">Header-Hintergrund</label>
-                    <div className="flex items-center gap-3">
-                      <input type="color" value={pdfForm.headerBg} onChange={e => setPdfForm(p => ({ ...p, headerBg: e.target.value }))} className="w-10 h-10 rounded-lg border border-surface-border cursor-pointer bg-transparent" />
-                      <input type="text" value={pdfForm.headerBg} onChange={e => setPdfForm(p => ({ ...p, headerBg: e.target.value }))} className="input font-mono text-sm" placeholder="#1a1a2e" />
-                    </div>
-                    <div className="flex gap-1 mt-2 flex-wrap">
-                      {SIDEBAR_PRESETS.map(c => (
-                        <button key={c.value} type="button" onClick={() => setPdfForm(p => ({ ...p, headerBg: c.value }))} title={c.label}
-                          className={`w-6 h-6 rounded-full transition-all ${pdfForm.headerBg === c.value ? 'ring-2 ring-white ring-offset-1 ring-offset-obsidian-900' : ''}`}
-                          style={{ backgroundColor: c.value }} />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                {/* Preview */}
-                <div className="mt-4 rounded-lg overflow-hidden border border-surface-border">
-                  <div className="h-12 flex items-center px-4" style={{ backgroundColor: pdfForm.headerBg }}>
-                    <span className="font-bold text-sm" style={{ color: pdfForm.primaryColor }}>Podcast-Name</span>
-                    <span className="ml-auto text-xs text-gray-400">PDF-Vorschau</span>
-                  </div>
-                  <div className="p-3 bg-white">
-                    <div className="h-1 rounded" style={{ backgroundColor: pdfForm.accentColor }} />
-                    <div className="mt-2 text-xs text-gray-500">Episode-Inhalt mit Akzentfarbe</div>
-                  </div>
-                </div>
-              </div>
-
               {/* Invoice Number Schema */}
               <div className="card">
                 <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
@@ -1442,8 +1364,59 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ── UPDATE TAB ──────────────────────────────────────────────────────────── */}
+      {/* ── UPDATE TAB: sicherer Release-Hinweis ─────────────────────────────── */}
       {activeTab === 'update' && can('canManageSettings') && (
+        <div className="max-w-2xl space-y-6">
+          <div className="card border border-accent-purple/30 bg-accent-purple/5">
+            <h3 className="font-semibold text-text-primary flex items-center gap-2">
+              <Download size={17} className="text-accent-purple" /> Neue Versionen sicher installieren
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-text-secondary">
+              PodCore installiert Updates bewusst nicht mehr innerhalb der laufenden Anwendung. So bleiben Datenbank und aktive Arbeitsumgebung geschützt.
+              Prüfe neue Releases, lade das App-Paket herunter und ersetze die Programmdateien nach dem vollständigen Beenden von PodCore.
+            </p>
+            <ol className="mt-4 list-decimal space-y-1 pl-5 text-xs leading-relaxed text-text-muted">
+              <li>Neues Release auf GitHub öffnen und das App-ZIP herunterladen.</li>
+              <li>PodCore vollständig beenden.</li>
+              <li>Nur Programmdateien ersetzen – den Datenordner und <code>podcore.db</code> beibehalten.</li>
+              <li>PodCore einmal neu starten.</li>
+            </ol>
+          </div>
+
+          <div className="card">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-text-primary flex items-center gap-2"><Package size={16} /> Installierte Version</h3>
+                <p className="mt-1 font-mono text-2xl font-bold text-accent-purple">v{updateStatus?.currentVersion || '2.16.10'}</p>
+                <p className="mt-1 text-xs text-text-muted">Versionshinweis und Downloads stammen aus dem offiziellen GitHub-Release.</p>
+              </div>
+              <button onClick={handleCheckGithub} disabled={isCheckingGithub} className="btn-secondary">
+                {isCheckingGithub ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                {isCheckingGithub ? 'Prüfe...' : 'Auf Updates prüfen'}
+              </button>
+            </div>
+
+            {githubCheck && (
+              <div className={`mt-5 rounded-xl border p-4 ${githubCheck.hasUpdate ? 'border-amber-500/35 bg-amber-500/10' : 'border-green-500/35 bg-green-500/10'}`}>
+                <div className="flex items-start gap-3">
+                  {githubCheck.hasUpdate ? <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-400" /> : <CheckCircle size={18} className="mt-0.5 shrink-0 text-green-400" />}
+                  <div className="min-w-0 flex-1">
+                    <p className={`font-semibold text-sm ${githubCheck.hasUpdate ? 'text-amber-300' : 'text-green-300'}`}>{githubCheck.message}</p>
+                    {githubCheck.latestVersion && <p className="mt-1 text-xs text-text-secondary">Installiert: <span className="font-mono">v{githubCheck.currentVersion}</span> · Neueste Version: <span className="font-mono">v{githubCheck.latestVersion}</span></p>}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <a href={githubCheck.releaseUrl || 'https://github.com/webcaster/podcore_V2/releases'} target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs py-1.5 px-3"><Download size={12} /> GitHub-Release öffnen</a>
+                      {githubCheck.downloadUrl && <a href={githubCheck.downloadUrl} target="_blank" rel="noopener noreferrer" className="btn-primary text-xs py-1.5 px-3"><Download size={12} /> App-ZIP herunterladen</a>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* In-App-Upload und automatisches Anwenden bleiben aus Sicherheitsgründen deaktiviert. */}
+      {false && activeTab === 'update' && can('canManageSettings') && (
         <div className="max-w-2xl space-y-6">
           {/* System-Info */}
           <div className="card">

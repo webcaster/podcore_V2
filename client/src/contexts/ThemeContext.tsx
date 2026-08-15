@@ -79,6 +79,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } else {
       root.style.setProperty('color-scheme', 'dark');
     }
+
+    // Der AppContext legt anschließend die kontoabhängigen Akzent-, Sidebar- und
+    // Schriftgrößenwerte wieder über die Grundpalette. So überschreibt ein
+    // Farbschemawechsel nicht mehr unbemerkt das persönliche Design.
+    window.dispatchEvent(new CustomEvent('podcore-base-theme-applied', { detail: { mode: themeMode } }));
   }, []);
 
   // Load theme from localStorage on mount

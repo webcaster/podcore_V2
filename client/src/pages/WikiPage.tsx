@@ -758,14 +758,14 @@ const wikiData: WikiCategory[] = [
       {
         id: 'app-einstellungen',
         title: 'App-Einstellungen',
-        summary: 'Allgemeine Vorgaben, Uploads, CI-Farben, Nummernkreise, Sicherheit und Freigabeworkflow konfigurieren.',
+        summary: 'Allgemeine Vorgaben, Uploads, Nummernkreise, Sicherheit und Freigabeworkflow konfigurieren.',
         icon: <Wrench size={18} />,
         tags: ['app', 'einstellungen', 'sicherheit', 'nummernkreis', 'workflow'],
         adminOnly: true,
         content: [
           {
             heading: 'Zentrale Vorgaben',
-            text: 'Administratoren verwalten allgemeine Anwendungseinstellungen, Upload-Verzeichnis, PDF-CI-Farben, Rechnungs- und Angebotsnummern sowie Sicherheits- und Freigabeoptionen.',
+            text: 'Administratoren verwalten allgemeine Anwendungseinstellungen, Upload-Verzeichnis, Rechnungs- und Angebotsnummern sowie Sicherheits- und Freigabeoptionen. Farben, Schriften und weitere Gestaltungselemente für PDFs werden ausschließlich im jeweiligen PDF-Layout gepflegt.',
           },
           {
             heading: 'Änderungen planen',
@@ -776,22 +776,18 @@ const wikiData: WikiCategory[] = [
       {
         id: 'update',
         title: 'PodCore aktualisieren',
-        summary: 'Updates per ZIP oder GitHub-Prüfung sicher vorbereiten, anwenden und kontrollieren.',
+        summary: 'Neue Releases auf GitHub prüfen, das App-ZIP herunterladen und kontrolliert manuell installieren.',
         icon: <Download size={18} />,
         tags: ['update', 'zip', 'github', 'version', 'rollback'],
         adminOnly: true,
         content: [
           {
-            heading: 'Einmaliger Übergang aus 2.14.2 oder älter',
-            text: 'Installieren Sie 2.14.3 einmalig manuell nach der mitgelieferten Update- beziehungsweise Ubuntu-Anleitung. Der alte ZIP-Handler kann Erfolg melden, obwohl die laufende Anwendung nicht ersetzt wurde. Verwenden Sie den integrierten ZIP-Weg erst, wenn PodCore bereits Version 2.14.3 oder neuer meldet.',
-          },
-          {
             heading: 'Vor dem Update',
             text: 'Erstellen und laden Sie ein aktuelles Vollbackup herunter. Prüfen Sie freien Speicherplatz, Versionshinweise und die zum Paket gehörende Prüfsumme.',
           },
           {
-            heading: 'ZIP-Update ab Version 2.14.3',
-            text: 'Wenn PodCore bereits 2.14.3 oder neuer ausführt, öffnen Sie Einstellungen > App-Update, laden das offizielle PodCore-ZIP hoch und starten zunächst die Prüfung. PodCore entpackt und baut das Paket vor der Übernahme in einem Staging-Bereich. Wenden Sie das Update erst an, wenn Paketstruktur, Zielversion und Vorabprüfung akzeptiert wurden.',
+            heading: 'Manuelle Installation',
+            text: 'Öffnen Sie Einstellungen > App-Update und prüfen Sie das offizielle GitHub-Release. Beenden Sie PodCore vollständig, laden Sie das App-ZIP herunter und ersetzen Sie ausschließlich die Programmdateien. Den Datenordner sowie podcore.db behalten Sie unverändert bei. Starten Sie PodCore anschließend einmal neu.',
           },
           {
             heading: 'GitHub-Prüfung',

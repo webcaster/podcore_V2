@@ -16,3 +16,10 @@
 - [ ] Vektor-Branding, Subline und die The7-/WPBakery-CSS gemeinsam mit den Tutorial-Korrekturen als v2.16.10-Release prüfen und bereitstellen.
 - [ ] WordPress-Entwürfe für Impressum und DSGVO-Datenschutz mit den tatsächlichen Unternehmens-, Hosting-, Zahlungs- und Kontaktangaben vor Veröffentlichung final prüfen.
 - [ ] Lizenzshop und Add-on-Marktplatz nach dem Stabilitäts-Release als getrennte Shop- und API-Architektur planen.
+
+## Stabilisierung v2.16.10
+
+- [ ] Eigenes Update-Anwenden, Staging-Upload und Sicherheits-Token aus der sichtbaren App-Einstellung entfernen; nur einen Hinweis auf GitHub-Release und ZIP-Download anzeigen.
+- [ ] „PDF CI-Farben“ aus den App-Einstellungen entfernen, weil Farbgebung vollständig in den PDF-Layouts gepflegt wird.
+- [ ] Speichern und Anwenden aller „Mein Design“-Einstellungen mit einer vollständigen Reinitialisierung der Design-Tokens prüfen und korrigieren.
+- [ ] Add-on-System als spätere, lizenzierte Modularchitektur dokumentieren; erst nach dem Stabilitäts- und Lizenz-Release aktivieren.

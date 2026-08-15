@@ -290,6 +290,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [user]);
 
+  // ThemeContext setzt die helle/dunkle Grundpalette. Persönliche Tokens werden
+  // danach erneut angelegt, damit Sidebar, Akzent und Schriftgröße stabil bleiben.
+  useEffect(() => {
+    const restoreUserTheme = () => applyUserTheme(user?.theme || null);
+    window.addEventListener('podcore-base-theme-applied', restoreUserTheme);
+    return () => window.removeEventListener('podcore-base-theme-applied', restoreUserTheme);
+  }, [user?.theme]);
+
   // Heartbeat: alle 60 Sekunden eigene Session als aktiv markieren + Online-Nutzer laden
   useEffect(() => {
     if (!user) return;
@@ -430,11 +438,15 @@ export function applyUserTheme(theme: UserTheme | null | undefined) {
 
   // Apply light/dark mode if specified in user theme
   if (theme.mode === 'light' || theme.mode === 'dark') {
+    const modeChanged = root.getAttribute('data-theme') !== theme.mode;
     localStorage.setItem('podcore-theme', theme.mode);
     root.setAttribute('data-theme', theme.mode);
     root.style.setProperty('color-scheme', theme.mode);
-    // Dispatch event so ThemeContext can react
-    window.dispatchEvent(new CustomEvent('podcore-theme-change', { detail: { mode: theme.mode } }));
+    // ThemeContext muss die Grundpalette nur bei einem echten Moduswechsel neu setzen.
+    // Die Wiederherstellung persönlicher Tokens nach der Grundpalette löst so keine Schleife aus.
+    if (modeChanged) {
+      window.dispatchEvent(new CustomEvent('podcore-theme-change', { detail: { mode: theme.mode } }));
+    }
   }
 }
 
