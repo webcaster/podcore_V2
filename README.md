@@ -100,6 +100,9 @@ PodCore ist bis zu einem ausdrücklich angekündigten Stabilitäts-Update vollst
 ### ✦ Vektor-Branding und Subline in v2.16.10
 PodCore verwendet ein eigenes skalierbares SVG-Signet als Favicon und als integriertes Standardlogo für Login, Desktop- und Mobilnavigation. Die Marken-Subline lautet **„Dein Podcast. Dein Workflow.“**. Die separate The7-/WPBakery-CSS für podcore.de sowie die Einbauhinweise stehen im Branding-Paket und sind in [`docs/BRANDING-2.16.10.md`](docs/BRANDING-2.16.10.md) dokumentiert.
 
+### 🔎 WordPress-SEO für podcore.de
+Für die Vermarktung der App enthält [`docs/wordpress/SEO-EINBAU-WORDPRESS.md`](docs/wordpress/SEO-EINBAU-WORDPRESS.md) eine Schritt-für-Schritt-Anleitung für Meta-Daten, strukturiertes `SoftwareApplication`-Markup, Search Console und Sitemap. Der direkt einsetzbare JSON-LD-Block liegt unter [`docs/wordpress/podcore-schema-organisation-softwareapplication.html`](docs/wordpress/podcore-schema-organisation-softwareapplication.html).
+
 ## 🆕 Neue Features in v2.15.x
 
 ### 🎨 Light/Dark Mode

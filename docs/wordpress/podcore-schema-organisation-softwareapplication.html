@@ -1,0 +1,39 @@
+<!-- Nur in einem Header-/Schema-Plugin auf der PodCore-Startseite einfügen, nicht in WPBakery Raw HTML. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://podcore.de/#organization",
+      "name": "PodCore",
+      "url": "https://podcore.de/",
+      "logo": "https://podcore.de/wp-content/uploads/2026/08/podcore-logo-mark.png"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://podcore.de/#website",
+      "url": "https://podcore.de/",
+      "name": "PodCore",
+      "inLanguage": "de-DE",
+      "publisher": { "@id": "https://podcore.de/#organization" }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "PodCore",
+      "url": "https://podcore.de/",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Windows, macOS, Linux",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EUR",
+        "availability": "https://schema.org/InStock",
+        "url": "https://github.com/webcaster/podcore_V2/releases/latest"
+      },
+      "featureList": "Podcast Redaktions-Hub, Episodenplanung, Skript-Editor, Sponsoring-Verwaltung, PDF-Layouts, lokale Backups, Tutorial-System"
+    }
+  ]
+}
+</script>

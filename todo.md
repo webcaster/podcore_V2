@@ -23,3 +23,18 @@
 - [ ] „PDF CI-Farben“ aus den App-Einstellungen entfernen, weil Farbgebung vollständig in den PDF-Layouts gepflegt wird.
 - [ ] Speichern und Anwenden aller „Mein Design“-Einstellungen mit einer vollständigen Reinitialisierung der Design-Tokens prüfen und korrigieren.
 - [ ] Add-on-System als spätere, lizenzierte Modularchitektur dokumentieren; erst nach dem Stabilitäts- und Lizenz-Release aktivieren.
+
+## WordPress-Einbettung
+
+- [ ] WordPress-Startseite ohne eigenes Seitenlogo verwenden, wenn The7 den PodCore-Header mit Logo bereits ausgibt.
+- [ ] WordPress-Startseite in The7/WPBakery ohne äußeren Containerrahmen und über die verfügbare Seitenbreite ausgeben.
+- [ ] Full-Width-Startseite mit großzügigem, responsive sicherem Innenabstand für Text und einer weiter außen platzierten Signalspur verwenden.
+- [ ] WordPress-Raw-HTML ohne CSS-Funktionssyntax verwenden, wenn WPBakery oder ein Cache-Optimierer „Unexpected Token“ meldet.
+- [ ] Verifizierte podcore.de-Medien-URLs direkt in die WPBakery-kompatible Startseite einsetzen, damit keine Platzhalter ersetzt werden müssen.
+- [ ] Nicht zuverlässig sichtbare Unicode-Icons in der WordPress-Startseite durch eingebettete SVG-Symbole ersetzen.
+- [ ] PodCore-Promovideo direkt als HTML5-Player in der WordPress-Startseite abspielen statt in einem neuen Browser-Tab zu öffnen.
+
+## Vermarktung und Sichtbarkeit
+
+- [ ] SEO-Grundlage für podcore.de mit Keyword-Map, optimierten PodCore-Landingpages, Meta-Daten, Schema-Markup und Search-Console-Messung einführen.
+- [ ] Meta-Daten über das gewählte WordPress-SEO-Plugin und Produkt-Schema als Codeblock außerhalb der WPBakery-Inhaltszeile einbinden.
