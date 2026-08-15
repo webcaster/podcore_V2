@@ -24,5 +24,5 @@
 
 ## Repository- und Release-Bereinigung
 
-- [ ] Öffentlichen PodCore-GitHub-Branch von websitefremden Dateien bereinigen; nur app-relevante Quellen und Dokumentation behalten.
-- [ ] GitHub-Releases so bereinigen, dass ausschließlich die geprüfte Endnutzer-App-ZIP ohne Zusatzpakete und Promo-Medien angeboten wird.
+- [x] Öffentlichen PodCore-GitHub-Branch von websitefremden Dateien bereinigen; nur app-relevante Quellen und Dokumentation behalten.
+- [x] GitHub-Releases bereinigt: Es wird ausschließlich die geprüfte Endnutzer-App-ZIP v2.16.10 ohne Zusatzpakete und Promo-Medien angeboten.
