@@ -43,7 +43,7 @@ PodCore unterstützt drei DLM-Produkte:
 - **PodCore jährlich**: 365-Tage-Lizenz.
 - **Lifetime**: lebenslange Lizenz ohne Ablaufdatum für exklusive oder Sonderkunden.
 
-Die Tarifanzeige wird aus Produktname, DLM-Laufzeit und Ablaufdatum abgeleitet. Für den produktiven Betrieb sollte die Lifetime-Erkennung zusätzlich an eine feste DLM-Produkt-ID gebunden werden, sobald diese aus dem WordPress-System vorliegt.
+Die Tarifanzeige wird aus Produktname, DLM-Laufzeit und Ablaufdatum abgeleitet. Für den produktiven Betrieb sollte die Lifetime-Erkennung zusätzlich an eine feste Lizenzprodukt-ID der vorgesehenen Lizenzverwaltung gebunden werden.
 
 ## Funktionsvorschläge mit hohem Nutzen
 
@@ -61,4 +61,4 @@ Die Tarifanzeige wird aus Produktname, DLM-Laufzeit und Ablaufdatum abgeleitet. 
 
 Vor v2.16.0 müssen TypeScript, Client-Build, Server-Build, Auth-Smoke-Tests, Backup-Import/Export, Papierkorb-Kaskaden, Lizenzstatus und alle geschützten Tutorial-Routen erneut geprüft werden.
 
-> Wichtig: Die aktuelle Lifetime-Erkennung ist bewusst auf Produktbezeichnungen und Laufzeitdaten ausgelegt. Für eine manipulationsresistente Produktionslizenz sollte die WordPress-DLM-Produkt-ID als verbindliche Quelle ergänzt werden.
+> Wichtig: Die aktuelle Lifetime-Erkennung ist bewusst auf Produktbezeichnungen und Laufzeitdaten ausgelegt. Für eine manipulationsresistente Produktionslizenz sollte eine feste Lizenzprodukt-ID als verbindliche Quelle ergänzt werden.

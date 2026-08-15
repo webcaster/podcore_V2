@@ -24,7 +24,7 @@ Jedes Paket benötigt ein Manifest mit Add-on-ID, Titel, kompatibler PodCore-Min
 
 ## Spätere Lizenz- und Shop-Anbindung
 
-Der WordPress-Shop übermittelt nach Kauf eine Add-on-Berechtigung zur Installation. PodCore speichert diese Berechtigung lokal und prüft sie mit derselben späteren Lizenzinfrastruktur. Offline-Nutzung bleibt möglich; Add-ons werden wie die Hauptlizenz mit einem klar kommunizierten lokalen Übergangszeitraum behandelt.
+Eine vorgesehene Lizenzverwaltung übermittelt nach Kauf eine Add-on-Berechtigung zur Installation. PodCore speichert diese Berechtigung lokal und prüft sie mit derselben späteren Lizenzinfrastruktur. Offline-Nutzung bleibt möglich; Add-ons werden wie die Hauptlizenz mit einem klar kommunizierten lokalen Übergangszeitraum behandelt.
 
 Ein künftiger Administrationsbereich zeigt verfügbare, installierte und aktualisierbare Add-ons getrennt. Nutzer sehen nur Funktionen, für die ihre Rolle und die Installation berechtigt sind.
 

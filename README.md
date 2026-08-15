@@ -85,8 +85,8 @@
 
 ## 🆕 Neue Features in v2.16.2
 
-### ☁️ Tutorial-Cloud mit WordPress-Wiki
-Die Tutorial-Verwaltung kann im exklusiven Entwickler-Modus mit dem WordPress-Plugin auf podcore.de verbunden werden. Unter **Tutorial-Verwaltung → Tutorial-Cloud von podcore.de** lassen sich Katalog, API-Status und Synchronisation kontrollieren. Veröffentliche Tutorials werden rollenbasiert oder global (`*`) in die lokale Anwendung übernommen; lokale Tutorials werden bei der Synchronisation nicht gelöscht. Die vollständige Einrichtung steht in [`docs/RELEASE-2.16.2.md`](docs/RELEASE-2.16.2.md) und in [`wordpress-plugin/podcore-tutorials/README.md`](wordpress-plugin/podcore-tutorials/README.md).
+### ☁️ Tutorial-Cloud und Endnutzer-Import
+Die Tutorial-Verwaltung ist über den exklusiven Entwickler-Modus erreichbar. Endnutzer können freigegebene Tutorials aus einem Online-Katalog laden oder `.json`-Tutorials manuell importieren. Tutorial-Screenshots werden lokal verfügbar gehalten; vorhandene lokale Tutorials bleiben bei einer Synchronisation erhalten.
 
 ### 🎓 Tutorial-Führung und Wiki
 Tutorials starten nicht automatisch. Nach dem Login erscheint nur ein Hinweis, wenn Tutorials für die aktuelle Rolle verfügbar sind. Das Wiki bleibt als Nachschlagewerk geöffnet, während die eigentliche Führung mit sichtbaren Zielmarkierungen, Screenshots, nummerierten Annotationen, Fortschrittsanzeige und Navigation arbeitet.
@@ -98,10 +98,7 @@ Der Audio-Editor bietet Waveform, Wiedergabegeschwindigkeit, Loop-Modus, Marker,
 PodCore ist bis zu einem ausdrücklich angekündigten Stabilitäts-Update vollständig kostenlos nutzbar. Die Lizenzverwaltung ist in der App-Oberfläche ausgeblendet, damit keine Aktivierung oder Funktionseinschränkung erfolgt. Die technische DLM-Vorbereitung bleibt erhalten und wird erst nach der Stabilisierung erneut geprüft und aktiviert. Details stehen in [`docs/FREE-STABILITY-MODE.md`](docs/FREE-STABILITY-MODE.md).
 
 ### ✦ Vektor-Branding und Subline in v2.16.10
-PodCore verwendet ein eigenes skalierbares SVG-Signet als Favicon und als integriertes Standardlogo für Login, Desktop- und Mobilnavigation. Die Marken-Subline lautet **„Dein Podcast. Dein Workflow.“**. Die separate The7-/WPBakery-CSS für podcore.de sowie die Einbauhinweise stehen im Branding-Paket und sind in [`docs/BRANDING-2.16.10.md`](docs/BRANDING-2.16.10.md) dokumentiert.
-
-### 🔎 WordPress-SEO für podcore.de
-Für die Vermarktung der App enthält [`docs/wordpress/SEO-EINBAU-WORDPRESS.md`](docs/wordpress/SEO-EINBAU-WORDPRESS.md) eine Schritt-für-Schritt-Anleitung für Meta-Daten, strukturiertes `SoftwareApplication`-Markup, Search Console und Sitemap. Der direkt einsetzbare JSON-LD-Block liegt unter [`docs/wordpress/podcore-schema-organisation-softwareapplication.html`](docs/wordpress/podcore-schema-organisation-softwareapplication.html).
+PodCore verwendet ein eigenes skalierbares SVG-Signet als Favicon und als integriertes Standardlogo für Login, Desktop- und Mobilnavigation. Die Marken-Subline lautet **„Dein Podcast. Dein Workflow.“**. App-spezifische Branding-Hinweise sind in [`docs/BRANDING-2.16.10.md`](docs/BRANDING-2.16.10.md) dokumentiert.
 
 ## 🆕 Neue Features in v2.15.x
 
