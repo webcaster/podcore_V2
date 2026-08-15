@@ -224,6 +224,7 @@ function initializeSchema(db: any): void {
       description TEXT,
       notes TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
+      interests TEXT NOT NULL DEFAULT '[]',
       total_budget REAL,
       currency TEXT NOT NULL DEFAULT 'EUR',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -1189,6 +1190,7 @@ function initializeSchema(db: any): void {
 
   // Zusätzliche, optionale Targeting-Felder für nachvollziehbares Sponsor-Matching.
   try { db.exec("ALTER TABLE sponsors ADD COLUMN target_tags TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}
+  try { db.exec("ALTER TABLE sponsors ADD COLUMN interests TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}
   try { db.exec("ALTER TABLE sponsors ADD COLUMN target_categories TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}
   try { db.exec('ALTER TABLE sponsors ADD COLUMN target_audience TEXT DEFAULT NULL'); } catch (_) {}
   try { db.exec("ALTER TABLE sponsors ADD COLUMN preferred_formats TEXT NOT NULL DEFAULT '[]'"); } catch (_) {}

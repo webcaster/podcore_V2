@@ -15,7 +15,15 @@ export interface CurrentUser {
   developerMode?: boolean;
   avatarColor?: string;
   theme?: UserTheme | null;
-  dashboardLayout?: string[] | null;
+  dashboardLayout?: DashboardLayout | string[] | null;
+}
+
+export interface DashboardLayout {
+  version: 2;
+  widgetOrder: string[];
+  hiddenWidgets: string[];
+  density: 'comfortable' | 'compact';
+  showWelcome: boolean;
 }
 
 export interface UserTheme {

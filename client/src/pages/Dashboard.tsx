@@ -5,7 +5,7 @@ import {
   BarChart2, Radio, Save, X, RefreshCw,
   Download, Eye, Headphones, MapPin, Smartphone, ChevronLeft, ChevronRight,
   BookOpen, Settings2, GripVertical, EyeOff, Edit2, Users,
-  CheckCircle, XCircle, AlertTriangle, Globe, Info, ShieldCheck, WifiOff,
+  CheckCircle, XCircle, AlertTriangle, Globe, Info, ShieldCheck, WifiOff, HardDrive,
 } from 'lucide-react';
 import { episodesApi, editorialApi, adminApi, podigeeApi, authApi, tutorialCloudApi, TutorialCloudStatus } from '../lib/api';
 import { useApp, useOnlineUsers } from '../contexts/AppContext';
@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [approvalsLoading, setApprovalsLoading] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [tutorialCloudStatus, setTutorialCloudStatus] = useState<TutorialCloudStatus | null>(null);
+  const [storageSetupRequired, setStorageSetupRequired] = useState(false);
 
   // Dashboard-Anpassung
   const DEFAULT_WIDGETS = ['stats', 'approvals', 'online_users', 'podcast_episodes', 'podigee', 'editorial', 'quickactions', 'tutorial_cloud'];
@@ -56,27 +57,35 @@ export default function Dashboard() {
     tutorial_cloud: 'Tutorial-Cloud & Offline-Status',
   };
   const [widgetOrder, setWidgetOrder] = useState<string[]>(DEFAULT_WIDGETS);
+  const [hiddenWidgets, setHiddenWidgets] = useState<string[]>([]);
+  const [dashboardDensity, setDashboardDensity] = useState<'comfortable' | 'compact'>('comfortable');
+  const [showWelcome, setShowWelcome] = useState(true);
   const [isCustomizing, setIsCustomizing] = useState(false);
   const [isSavingLayout, setIsSavingLayout] = useState(false);
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null);
 
-  // Layout aus Benutzerprofil laden
+  // Layout aus dem individuellen Benutzerprofil laden. Alte Array-Layouts
+  // bleiben lesbar, neue Einstellungen trennen Reihenfolge und Sichtbarkeit.
   useEffect(() => {
-    if (user?.dashboardLayout && Array.isArray(user.dashboardLayout) && user.dashboardLayout.length > 0) {
-      // Neue Widgets werden ergänzt, ohne persönliche Reihenfolge oder
-      // ausgeblendete Widgets der bestehenden Installation zu überschreiben.
-      const layout = [...user.dashboardLayout];
-      DEFAULT_WIDGETS.forEach(widget => {
-        if (!layout.includes(widget) && (widget !== 'tutorial_cloud' || can('canManageTutorials'))) layout.push(widget);
-      });
-      setWidgetOrder(layout);
-    }
-  }, [user?.dashboardLayout]);
+    const storedLayout = user?.dashboardLayout;
+    const isLegacyLayout = Array.isArray(storedLayout);
+    const legacyLayout = isLegacyLayout ? storedLayout : [];
+    const structuredLayout = !isLegacyLayout ? storedLayout : null;
+    const storedOrder = isLegacyLayout ? legacyLayout : structuredLayout?.widgetOrder;
+    const layout = Array.isArray(storedOrder) && storedOrder.length > 0 ? [...storedOrder] : [...DEFAULT_WIDGETS];
+    DEFAULT_WIDGETS.forEach(widget => { if (!layout.includes(widget)) layout.push(widget); });
+    setWidgetOrder(layout);
+    setHiddenWidgets(isLegacyLayout ? DEFAULT_WIDGETS.filter(widget => !legacyLayout.includes(widget)) : (structuredLayout?.hiddenWidgets || []).filter((widget: string) => DEFAULT_WIDGETS.includes(widget)));
+    setDashboardDensity(structuredLayout?.density === 'compact' ? 'compact' : 'comfortable');
+    setShowWelcome(structuredLayout?.showWelcome !== false);
+  }, [user?.id, user?.dashboardLayout]);
 
-  const saveDashboardLayout = async (layout: string[]) => {
+  const saveDashboardLayout = async () => {
     setIsSavingLayout(true);
     try {
-      await authApi.updateProfile({ dashboardLayout: layout });
+      await authApi.updateProfile({
+        dashboardLayout: { version: 2, widgetOrder, hiddenWidgets, density: dashboardDensity, showWelcome },
+      });
       await refreshUser();
       showSuccess('Dashboard-Layout gespeichert');
       setIsCustomizing(false);
@@ -102,9 +111,8 @@ export default function Dashboard() {
   const handleDragEnd = () => setDraggedWidget(null);
 
   const toggleWidget = (widget: string) => {
-    setWidgetOrder(prev =>
-      prev.includes(widget) ? prev.filter(w => w !== widget) : [...prev, widget]
-    );
+    setHiddenWidgets(prev => prev.includes(widget) ? prev.filter(w => w !== widget) : [...prev, widget]);
+    setWidgetOrder(prev => prev.includes(widget) ? prev : [...prev, widget]);
   };
 
   // Freigabe-Anfragen laden
@@ -124,6 +132,15 @@ export default function Dashboard() {
   useEffect(() => {
     loadPendingApprovals();
   }, [loadPendingApprovals]);
+
+  // Die erste Speicherentscheidung wird nach einer sicheren Anmeldung nur dem
+  // berechtigten Administrator angeboten; sie bleibt später jederzeit änderbar.
+  useEffect(() => {
+    if (!can('canManageSettings')) { setStorageSetupRequired(false); return; }
+    adminApi.getSettings()
+      .then((current: any) => setStorageSetupRequired(current?.storage?.setupCompleted !== true))
+      .catch(() => setStorageSetupRequired(false));
+  }, [can, user?.id]);
 
   // Episode freigeben
   const handleApprove = async (episodeId: string) => {
@@ -980,18 +997,19 @@ export default function Dashboard() {
 
   // Sichtbare Widgets (nur die, die für den aktuellen Nutzer relevant sind)
   const visibleWidgets = widgetOrder.filter(w => {
+    if (hiddenWidgets.includes(w)) return false;
     if (w === 'approvals' && !can('canApproveEpisodes') && !can('canRequestApproval')) return false;
     if (w === 'tutorial_cloud' && !can('canManageTutorials')) return false;
     return true;
   });
 
   return (
-    <div data-tutorial-id="page-dashboard" className="space-y-6 animate-fade-in">
+    <div data-tutorial-id="page-dashboard" className={`${dashboardDensity === 'compact' ? 'space-y-4' : 'space-y-6'} animate-fade-in`}>
       {/* Header */}
       <div data-tutorial-id="dashboard-header" className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">
-            {greeting()}, {user?.displayName?.split(' ')[0] || user?.username}! 👋
+            {showWelcome ? `${greeting()}, ${user?.displayName?.split(' ')[0] || user?.username}!` : 'Persönliches Dashboard'}
           </h1>
           <p className="text-text-secondary mt-1">
             {branding?.podcastName ? `Willkommen zurück bei ${branding.podcastName}` : 'Willkommen zurück in PodCore'}
@@ -1026,6 +1044,13 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {storageSetupRequired && can('canManageSettings') && (
+        <div className="flex flex-col gap-3 rounded-xl border border-accent-purple/35 bg-accent-purple/10 p-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-3"><HardDrive size={19} className="mt-0.5 shrink-0 text-accent-purple" /><div><p className="font-semibold text-text-primary">Ersteinstellungen für Speicher & Backup</p><p className="mt-1 text-sm text-text-secondary">Lege jetzt die lokale Datenführung und deinen kontrollierten Cloud-Backup-Export fest. PodCore bleibt dabei vollständig offlinefähig.</p></div></div>
+          <Link to="/settings?tab=storage" className="btn-primary shrink-0 text-sm">Einrichtung starten</Link>
+        </div>
+      )}
+
       {/* Dashboard-Anpassung Panel */}
       {isCustomizing && (
         <div className="card border-accent-purple/30">
@@ -1034,11 +1059,11 @@ export default function Dashboard() {
               <Settings2 size={16} className="text-accent-purple" /> Dashboard anpassen
             </h2>
             <div className="flex items-center gap-2">
-              <button onClick={() => setWidgetOrder(DEFAULT_WIDGETS)} className="btn-ghost text-xs">
+              <button onClick={() => { setWidgetOrder(DEFAULT_WIDGETS); setHiddenWidgets([]); setDashboardDensity('comfortable'); setShowWelcome(true); }} className="btn-ghost text-xs">
                 Zurücksetzen
               </button>
               <button
-                onClick={() => saveDashboardLayout(widgetOrder)}
+                onClick={saveDashboardLayout}
                 disabled={isSavingLayout}
                 className="btn-primary text-xs flex items-center gap-1"
               >
@@ -1049,10 +1074,23 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
-          <p className="text-text-muted text-sm mb-4">Ziehe die Blöcke um die Reihenfolge zu ändern. Klicke auf das Auge um einen Block aus- oder einzublenden.</p>
+          <p className="text-text-muted text-sm mb-4">Jedes Benutzerkonto speichert seine eigene Reihenfolge, Sichtbarkeit und Darstellung. Ziehe sichtbare Blöcke zur Sortierung und nutze das Auge zum Aus- oder Einblenden.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            <label className="rounded-lg border border-surface-border bg-obsidian-800 p-3 text-sm text-text-secondary">
+              <span className="block text-xs text-text-muted mb-2">Abstand zwischen Widgets</span>
+              <select value={dashboardDensity} onChange={event => setDashboardDensity(event.target.value === 'compact' ? 'compact' : 'comfortable')} className="input w-full text-sm">
+                <option value="comfortable">Komfortabel</option>
+                <option value="compact">Kompakt</option>
+              </select>
+            </label>
+            <label className="rounded-lg border border-surface-border bg-obsidian-800 p-3 flex items-center justify-between gap-3 text-sm text-text-secondary">
+              <span><span className="block text-xs text-text-muted mb-1">Kopfbereich</span>Persönliche Begrüßung anzeigen</span>
+              <input type="checkbox" checked={showWelcome} onChange={event => setShowWelcome(event.target.checked)} className="accent-accent-purple h-4 w-4" />
+            </label>
+          </div>
           <div className="space-y-2">
             {DEFAULT_WIDGETS.filter(widget => widget !== 'tutorial_cloud' || can('canManageTutorials')).map(widget => {
-              const isVisible = widgetOrder.includes(widget);
+              const isVisible = !hiddenWidgets.includes(widget);
               const pos = widgetOrder.indexOf(widget);
               return (
                 <div

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Settings, User, FolderOpen, Save, Eye, EyeOff, Loader2, Mic2,
+  Settings, User, FolderOpen, Save, Eye, EyeOff, Loader2, Mic2, HardDrive, Cloud,
   Palette, Radio, Sliders, Globe, Clock, Tag, Info, Download, Sun, Moon,
   Upload, CheckCircle, XCircle, AlertTriangle, RefreshCw, Package, KeyRound, ShieldAlert
 } from 'lucide-react';
-import { adminApi, authApi, updateApi, licenseApi, LicenseStatus } from '../lib/api';
+import { adminApi, authApi, backupApi, updateApi, licenseApi, LicenseStatus } from '../lib/api';
 import { useTheme } from '../contexts/ThemeContext';
 import { useApp, applyUserTheme } from '../contexts/AppContext';
 
@@ -47,9 +47,11 @@ export default function SettingsPage() {
   const { user, can, showSuccess, showError, refreshUser, refreshPodcastProfile } = useApp();
   const { mode, setMode } = useTheme();
 
-  type TabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'app' | 'update' | 'license';
+  type TabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'storage' | 'app' | 'update' | 'license';
   const [activeTab, setActiveTab] = useState<TabKey>(() =>
-    new URLSearchParams(window.location.search).get('tab') === 'update' ? 'update' : 'profile'
+    (['update', 'storage'].includes(new URLSearchParams(window.location.search).get('tab') || '')
+      ? new URLSearchParams(window.location.search).get('tab') as TabKey
+      : 'profile')
   );
   const [isSaving, setIsSaving] = useState(false);
   const [developerControlsUnlocked, setDeveloperControlsUnlocked] = useState(() => {
@@ -308,6 +310,18 @@ export default function SettingsPage() {
     externalHintText: '',
   });
 
+  // Lokale Daten bleiben die führende Arbeitsquelle. Für Online-Speicher wird
+  // eine vollständige, vom Nutzer kontrolliert abgelegte Backup-Datei erstellt.
+  const [storageForm, setStorageForm] = useState({
+    workingMode: 'local',
+    backupDelivery: 'manual_cloud_file',
+    backupLabel: 'PodCore-Vollsicherung',
+    includeFiles: true,
+    setupCompleted: false,
+    lastBackupAt: '',
+  });
+  const [isCreatingStorageBackup, setIsCreatingStorageBackup] = useState(false);
+
   // ── Workflow settings form ───────────────────────────────────────────────────
   const [workflowForm, setWorkflowForm] = useState({
     episodeApprovalRequired: false,
@@ -368,6 +382,15 @@ export default function SettingsPage() {
         port: data.port || 3001,
         appName: data.appName || 'PodCore',
         externalHintText: data.externalHintText || '',
+      });
+      const storage = data.storage || {};
+      setStorageForm({
+        workingMode: 'local',
+        backupDelivery: 'manual_cloud_file',
+        backupLabel: storage.backupLabel || 'PodCore-Vollsicherung',
+        includeFiles: storage.includeFiles !== false,
+        setupCompleted: storage.setupCompleted === true,
+        lastBackupAt: storage.lastBackupAt || '',
       });
       // Podcast profile
       const p = data.podcast || {};
@@ -542,6 +565,39 @@ export default function SettingsPage() {
     finally { setIsSaving(false); }
   };
 
+  const handleSaveStorage = async (markSetupCompleted = true) => {
+    setIsSaving(true);
+    try {
+      const storage = { ...storageForm, workingMode: 'local', setupCompleted: markSetupCompleted || storageForm.setupCompleted };
+      await adminApi.updateSettings({ storage });
+      setStorageForm(storage);
+      setSettings((current: any) => ({ ...(current || {}), storage }));
+      showSuccess('Speicherstrategie gespeichert. Lokale Daten bleiben die Arbeitsquelle.');
+    } catch (err: any) { showError(err.message || 'Speicherstrategie konnte nicht gespeichert werden'); }
+    finally { setIsSaving(false); }
+  };
+
+  const handleCreateCloudBackup = async () => {
+    setIsCreatingStorageBackup(true);
+    try {
+      const data = await backupApi.export('full');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      link.href = url;
+      link.download = `${storageForm.backupLabel.replace(/[^a-z0-9_-]+/gi, '-') || 'podcore-backup'}-${timestamp}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      const storage = { ...storageForm, lastBackupAt: new Date().toISOString(), setupCompleted: true };
+      await adminApi.updateSettings({ storage });
+      setStorageForm(storage);
+      setSettings((current: any) => ({ ...(current || {}), storage }));
+      showSuccess('Vollständige Backup-Datei erstellt. Lege sie jetzt in deinem gewünschten Cloud-Ordner ab.');
+    } catch (err: any) { showError(err.message || 'Backup-Datei konnte nicht erstellt werden'); }
+    finally { setIsCreatingStorageBackup(false); }
+  };
+
   const initials = user?.displayName?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || user?.username?.[0]?.toUpperCase() || '?';
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
@@ -550,6 +606,7 @@ export default function SettingsPage() {
     ...(can('canManageSettings') ? [
       { key: 'podcast' as TabKey, label: 'Podcast-Profil', icon: <Mic2 size={15} />, adminOnly: true },
       { key: 'technical' as TabKey, label: 'Technische Daten', icon: <Sliders size={15} />, adminOnly: true },
+      { key: 'storage' as TabKey, label: 'Speicher & Backup', icon: <HardDrive size={15} />, adminOnly: true },
       { key: 'app' as TabKey, label: 'App-Einstellungen', icon: <Settings size={15} />, adminOnly: true },
       { key: 'update' as TabKey, label: 'App-Update', icon: <Download size={15} />, adminOnly: true },
       ...(LICENSING_ENABLED ? [{ key: 'license' as TabKey, label: 'Lizenzierung', icon: <KeyRound size={15} />, adminOnly: true }] : []),
@@ -1035,6 +1092,32 @@ export default function SettingsPage() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* ── STORAGE & CLOUD BACKUP TAB ─────────────────────────────────────── */}
+      {activeTab === 'storage' && can('canManageSettings') && (
+        <div className="max-w-2xl space-y-6">
+          {isLoadingSettings ? <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" /></div> : <>
+            {!storageForm.setupCompleted && (
+              <div className="rounded-xl border border-accent-purple/40 bg-accent-purple/10 p-4">
+                <h3 className="font-semibold text-text-primary">Ersteinstellungen: Speicherstrategie</h3>
+                <p className="mt-1 text-sm text-text-secondary">Lege fest, wie PodCore arbeitet und wie du eine vollständige Sicherung für deinen eigenen Online-Speicher erzeugst. Diese Wahl kannst du später jederzeit ändern.</p>
+              </div>
+            )}
+            <div className="card space-y-5">
+              <div className="flex items-start gap-3"><HardDrive size={18} className="mt-0.5 text-accent-green" /><div><h3 className="font-semibold text-text-primary">Arbeitsdatenbank</h3><p className="mt-1 text-sm text-text-secondary">PodCore arbeitet lokal und offlinefähig. Die lokale Datenbank bleibt die führende Quelle, damit keine Internetverbindung für die tägliche Arbeit erforderlich ist.</p></div></div>
+              <div className="rounded-lg border border-accent-green/25 bg-accent-green/5 p-3 text-sm text-text-secondary"><strong className="text-accent-green">Aktiv: Lokaler Arbeitsmodus</strong><br />Online-Speicher wird für die sichere Ablage einer erzeugten Backup-Datei genutzt, nicht als unkontrollierter Ersatz für die Arbeitsdatenbank.</div>
+            </div>
+            <div className="card space-y-4">
+              <div className="flex items-start gap-3"><Cloud size={18} className="mt-0.5 text-accent-blue" /><div><h3 className="font-semibold text-text-primary">Cloud-Backup-Datei</h3><p className="mt-1 text-sm text-text-secondary">PodCore erstellt eine vollständige JSON-Sicherung inklusive vorhandener eingebetteter Dateien. Du entscheidest danach selbst, in welchen Cloud-Ordner du die Datei verschiebst.</p></div></div>
+              <div><label className="label">Dateiname für Sicherungen</label><input className="input" value={storageForm.backupLabel} onChange={event => setStorageForm(current => ({ ...current, backupLabel: event.target.value }))} placeholder="PodCore-Vollsicherung" /></div>
+              <label className="flex items-center gap-3 rounded-lg border border-surface-border p-3 text-sm text-text-secondary"><input type="checkbox" checked={storageForm.includeFiles} onChange={event => setStorageForm(current => ({ ...current, includeFiles: event.target.checked }))} className="h-4 w-4 accent-accent-purple" /><span><strong className="text-text-primary">Verknüpfte Dateien einbeziehen</strong><br /><span className="text-xs text-text-muted">Dateien innerhalb der bestehenden Backup-Grenzen werden in die Sicherung aufgenommen.</span></span></label>
+              <div className="flex flex-wrap gap-3"><button onClick={() => void handleSaveStorage()} disabled={isSaving} className="btn-secondary">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Speichervorgabe sichern</button><button onClick={() => void handleCreateCloudBackup()} disabled={isCreatingStorageBackup} className="btn-primary">{isCreatingStorageBackup ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Vollbackup für Cloud erstellen</button></div>
+              {storageForm.lastBackupAt && <p className="text-xs text-text-muted">Letzter erfolgreicher Backup-Export: {new Date(storageForm.lastBackupAt).toLocaleString('de-DE')}</p>}
+            </div>
+            <div className="card border-accent-orange/30 bg-accent-orange/5"><h3 className="font-semibold text-text-primary flex items-center gap-2"><AlertTriangle size={16} className="text-accent-orange" /> Wechsel und Fallback</h3><p className="mt-2 text-sm text-text-secondary">Bei einer späteren Online-Datenbank wird PodCore vor dem Wechsel eine lokale Vorsicherung, Datenvorschau und Integritätsprüfung verlangen. Bei Verbindungsfehlern bleibt der letzte bestätigte lokale Stand verfügbar; ein stilles Überschreiben findet nicht statt.</p></div>
+          </>}
         </div>
       )}
 

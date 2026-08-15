@@ -5,7 +5,7 @@ import {
   Building2, CalendarRange, CheckCircle, AlertCircle, Megaphone,
   FileText, Download, FileSpreadsheet, Info, Receipt, Files,
   X, ChevronDown, ChevronUp, BookOpen, Star, Send, ClipboardList,
-  Tag, Percent, Users, Hash, Clock, ExternalLink, Archive, Upload, Image as ImageIcon
+  Tag, Percent, Users, Hash, Clock, ExternalLink, Archive, Upload, Image as ImageIcon, Target
 } from 'lucide-react';
 import { sponsorsApi } from '../lib/api';
 import { sponsorsV2Api } from '../lib/api-v2';
@@ -2225,12 +2225,26 @@ function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (d
     totalBudget: sponsor.total_budget || sponsor.totalBudget || '',
     contractStart: sponsor.contract_start || sponsor.contractStart || '',
     contractEnd: sponsor.contract_end || sponsor.contractEnd || '',
+    interestsText: (sponsor.interests || []).join(', '),
+    targetTagsText: (sponsor.targetTags || sponsor.target_tags || []).join(', '),
+    targetAudience: sponsor.targetAudience || sponsor.target_audience || '',
+    preferredFormatsText: (sponsor.preferredFormats || sponsor.preferred_formats || []).join(', '),
+    minEpisodeDuration: sponsor.minEpisodeDuration || sponsor.min_episode_duration || '',
+    maxEpisodeDuration: sponsor.maxEpisodeDuration || sponsor.max_episode_duration || '',
   });
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await sponsorsApi.update(sponsor.id, form);
+      const listFromText = (value: string) => value.split(',').map(item => item.trim()).filter(Boolean);
+      await sponsorsApi.update(sponsor.id, {
+        ...form,
+        interests: listFromText(form.interestsText),
+        targetTags: listFromText(form.targetTagsText),
+        preferredFormats: listFromText(form.preferredFormatsText),
+        minEpisodeDuration: form.minEpisodeDuration ? Number(form.minEpisodeDuration) : null,
+        maxEpisodeDuration: form.maxEpisodeDuration ? Number(form.maxEpisodeDuration) : null,
+      });
       onSaved(form);
       showSuccess('Stammdaten erfolgreich gespeichert');
     } catch { showError('Fehler beim Speichern der Stammdaten'); }
@@ -2357,6 +2371,23 @@ function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (d
           <div><label className={labelClass}>E-Mail</label><input className={inputClass} type="email" value={form.contactEmail} onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))} placeholder="kontakt@firma.de" /></div>
           <div><label className={labelClass}>Telefon</label><input className={inputClass} value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} placeholder="+49 ..." /></div>
           <div><label className={labelClass}>Kontakt-Hinweis</label><input className={inputClass} value={form.contactHint} onChange={e => setForm(p => ({ ...p, contactHint: e.target.value }))} placeholder="z.B. Nur per E-Mail" /></div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-purple-900/50 bg-purple-950/20 p-4">
+        <div className="mb-4 flex items-start gap-3">
+          <Target size={18} className="mt-0.5 text-purple-400" />
+          <div>
+            <h3 className="text-sm font-semibold text-purple-100">Matching-Profil</h3>
+            <p className="mt-1 text-xs text-purple-200/70">Diese Angaben verbessern die Vorschläge in Episoden. Interessen und Themen werden transparent als Match-Grund angezeigt.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="md:col-span-2"><label className={labelClass}>Kundeninteressen</label><input className={inputClass} value={form.interestsText} onChange={e => setForm(p => ({ ...p, interestsText: e.target.value }))} placeholder="z.B. Nachhaltigkeit, Outdoor, regionale Kultur" /><p className="mt-1 text-[11px] text-gray-500">Mit Komma trennen. Diese Begriffe erhalten beim Matching die höchste Gewichtung.</p></div>
+          <div><label className={labelClass}>Passende Themen / Tags</label><input className={inputClass} value={form.targetTagsText} onChange={e => setForm(p => ({ ...p, targetTagsText: e.target.value }))} placeholder="z.B. Technik, Gesundheit, Interview" /></div>
+          <div><label className={labelClass}>Gewünschte Zielgruppe</label><input className={inputClass} value={form.targetAudience} onChange={e => setForm(p => ({ ...p, targetAudience: e.target.value }))} placeholder="z.B. Berufstätige 30–55, Einsteiger" /></div>
+          <div><label className={labelClass}>Bevorzugte Formate</label><input className={inputClass} value={form.preferredFormatsText} onChange={e => setForm(p => ({ ...p, preferredFormatsText: e.target.value }))} placeholder="z.B. Interview, Solo, Panel" /></div>
+          <div className="grid grid-cols-2 gap-3"><div><label className={labelClass}>Min. Länge (Min.)</label><input type="number" min="0" className={inputClass} value={form.minEpisodeDuration} onChange={e => setForm(p => ({ ...p, minEpisodeDuration: e.target.value }))} placeholder="15" /></div><div><label className={labelClass}>Max. Länge (Min.)</label><input type="number" min="0" className={inputClass} value={form.maxEpisodeDuration} onChange={e => setForm(p => ({ ...p, maxEpisodeDuration: e.target.value }))} placeholder="90" /></div></div>
         </div>
       </div>
 

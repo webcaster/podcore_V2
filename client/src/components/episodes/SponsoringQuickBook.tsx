@@ -59,7 +59,7 @@ export default function SponsoringQuickBook({ episodeId, onBooked }: SponsoringQ
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="flex items-center gap-2 font-semibold text-text-primary"><Sparkles size={16} className="text-accent-orange" /> Intelligente Sponsoring-Empfehlungen</h3>
-          <p className="mt-1 text-xs text-text-muted">Tags, Zielgruppe, Episodenlänge und verfügbare Werbeplätze werden gewichtet abgeglichen.</p>
+          <p className="mt-1 text-xs text-text-muted">Kundeninteressen, Tags, Zielgruppe, Episodenlänge und verfügbare Werbeplätze werden nachvollziehbar gewichtet abgeglichen.</p>
         </div>
         <button type="button" onClick={() => void load()} className="btn-ghost flex items-center gap-1 text-xs" disabled={loading}><RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Neu berechnen</button>
       </div>
@@ -80,6 +80,8 @@ export default function SponsoringQuickBook({ episodeId, onBooked }: SponsoringQ
                 <div>
                   <div className="flex items-center gap-2"><Target size={14} className="text-accent-purple" /><h4 className="font-medium text-text-primary">{recommendation.sponsor.name}</h4><span className="badge bg-accent-purple/15 text-accent-purple">{recommendation.score}% Match</span></div>
                   <div className="mt-2 flex flex-wrap gap-1.5">{recommendation.reasons.map((reason: string) => <span key={reason} className="rounded-full bg-surface-overlay px-2 py-1 text-[10px] text-text-muted">{reason}</span>)}</div>
+                  {recommendation.matchedInterests?.length > 0 && <p className="mt-2 text-xs text-accent-purple">Interessen-Treffer: <strong>{recommendation.matchedInterests.join(', ')}</strong></p>}
+                  {recommendation.scoreBreakdown && <p className="mt-2 text-[10px] text-text-muted">Bewertung: Interessen {recommendation.scoreBreakdown.interessen || 0} · Tags {recommendation.scoreBreakdown.tags || 0} · Zielgruppe {recommendation.scoreBreakdown.zielgruppe || 0} · Länge {recommendation.scoreBreakdown.laenge || 0} · Werbeplätze {recommendation.scoreBreakdown.werbeplaetze || 0} Punkte</p>}
                 </div>
               </div>
               <div className="mt-3 grid gap-2 md:grid-cols-2">

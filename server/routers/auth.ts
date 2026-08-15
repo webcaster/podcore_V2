@@ -56,6 +56,35 @@ function resolveUserPermissions(user: any): Record<string, boolean> {
   return {};
 }
 
+const DASHBOARD_WIDGET_IDS = ['stats', 'approvals', 'online_users', 'podcast_episodes', 'podigee', 'editorial', 'quickactions', 'tutorial_cloud'];
+
+function parseStoredJson(value: unknown, fallback: any = null): any {
+  if (value === null || value === undefined || value === '') return fallback;
+  try { return typeof value === 'string' ? JSON.parse(value) : value; } catch (_) { return fallback; }
+}
+
+function normalizeDashboardLayout(value: unknown): any {
+  const source = parseStoredJson(value, null);
+  const uniqueKnownWidgets = (items: unknown) => Array.isArray(items)
+    ? Array.from(new Set(items.filter(item => typeof item === 'string' && DASHBOARD_WIDGET_IDS.includes(item))))
+    : [];
+  // Version 1 war nur ein Array mit sichtbaren Widgets. Dieses Format bleibt
+  // lesbar und wird beim nächsten Speichern automatisch in Version 2 überführt.
+  if (Array.isArray(source)) {
+    return { version: 2, widgetOrder: uniqueKnownWidgets(source), hiddenWidgets: [], density: 'comfortable', showWelcome: true };
+  }
+  if (!source || typeof source !== 'object') return null;
+  const widgetOrder = uniqueKnownWidgets(source.widgetOrder);
+  const hiddenWidgets = uniqueKnownWidgets(source.hiddenWidgets).filter(widget => !widgetOrder.includes(widget) || true);
+  return {
+    version: 2,
+    widgetOrder,
+    hiddenWidgets,
+    density: source.density === 'compact' ? 'compact' : 'comfortable',
+    showWelcome: source.showWelcome !== false,
+  };
+}
+
 function formatUser(user: any) {
   return {
     id: user.id,
@@ -66,8 +95,8 @@ function formatUser(user: any) {
     permissions: resolveUserPermissions(user),
     developerMode: user.developer_mode === 1,
     avatarColor: user.avatar_color,
-    theme: user.theme ? JSON.parse(user.theme) : null,
-    dashboardLayout: user.dashboard_layout ? JSON.parse(user.dashboard_layout) : null,
+    theme: parseStoredJson(user.theme, null),
+    dashboardLayout: normalizeDashboardLayout(user.dashboard_layout),
   };
 }
 
@@ -187,7 +216,8 @@ router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
   const newEmail = email !== undefined ? email : user.email;
   const newAvatarColor = avatarColor !== undefined ? avatarColor : user.avatar_color;
   const newTheme = theme !== undefined ? JSON.stringify(theme) : user.theme;
-  const newDashboardLayout = dashboardLayout !== undefined ? JSON.stringify(dashboardLayout) : user.dashboard_layout;
+  const normalizedDashboardLayout = dashboardLayout !== undefined ? normalizeDashboardLayout(dashboardLayout) : undefined;
+  const newDashboardLayout = normalizedDashboardLayout !== undefined ? JSON.stringify(normalizedDashboardLayout) : user.dashboard_layout;
   // Only administrators may switch developer mode for their own account.
   const newDeveloperMode = user.role === 'admin' && typeof developerMode === 'boolean'
     ? (developerMode ? 1 : 0)

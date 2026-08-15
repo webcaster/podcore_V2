@@ -70,9 +70,19 @@ function generateInvoiceNumber(db: any): string {
 
 function parseSponsor(row: any) {
   if (!row) return null;
+  const parseList = (value: any) => {
+    try { return Array.isArray(value) ? value : JSON.parse(value || '[]'); } catch (_) { return []; }
+  };
   return {
     ...row,
-    tags: JSON.parse(row.tags || '[]'),
+    tags: parseList(row.tags),
+    interests: parseList(row.interests),
+    targetTags: parseList(row.target_tags),
+    targetCategories: parseList(row.target_categories),
+    preferredFormats: parseList(row.preferred_formats),
+    targetAudience: row.target_audience || '',
+    minEpisodeDuration: row.min_episode_duration,
+    maxEpisodeDuration: row.max_episode_duration,
     adSlots: [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -1421,7 +1431,7 @@ router.delete('/:id/logo', requirePermission('canEditSponsors') as any, (req: Au
 router.post('/', requirePermission('canCreateSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const id = uuidv4();
-  const { name, company, address, contactName, contactEmail, contactPhone, website, logo, status = 'interessent', description, notes, tags = [], totalBudget, currency = 'EUR', customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
+  const { name, company, address, contactName, contactEmail, contactPhone, website, logo, status = 'interessent', description, notes, tags = [], interests = [], targetTags = [], targetCategories = [], targetAudience, preferredFormats = [], minEpisodeDuration, maxEpisodeDuration, totalBudget, currency = 'EUR', customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
 
   if (!name || !company) return res.status(400).json({ success: false, error: 'Name und Firma erforderlich' });
   if ((contractStart && !contractEnd) || (!contractStart && contractEnd)) {
@@ -1434,8 +1444,8 @@ router.post('/', requirePermission('canCreateSponsors') as any, (req: AuthReques
   let initialContract: any = null;
   try {
     db.exec('BEGIN IMMEDIATE');
-    db.run('INSERT INTO sponsors (id, name, company, address, contact_name, contact_email, contact_phone, website, logo, status, description, notes, tags, total_budget, currency, customer_number, contract_start, contract_end, contact_hint, ad_delivery, color, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, name, company, address || null, contactName || null, contactEmail || null, contactPhone || null, website || null, logo || null, status, description || null, notes || null, JSON.stringify(tags), totalBudget || null, currency, customerNumber || null, contractStart || null, contractEnd || null, contactHint || null, adDelivery || 'self', color || null, req.user!.id]);
+    db.run('INSERT INTO sponsors (id, name, company, address, contact_name, contact_email, contact_phone, website, logo, status, description, notes, tags, interests, target_tags, target_categories, target_audience, preferred_formats, min_episode_duration, max_episode_duration, total_budget, currency, customer_number, contract_start, contract_end, contact_hint, ad_delivery, color, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, name, company, address || null, contactName || null, contactEmail || null, contactPhone || null, website || null, logo || null, status, description || null, notes || null, JSON.stringify(tags), JSON.stringify(interests), JSON.stringify(targetTags), JSON.stringify(targetCategories), targetAudience || null, JSON.stringify(preferredFormats), minEpisodeDuration || null, maxEpisodeDuration || null, totalBudget || null, currency, customerNumber || null, contractStart || null, contractEnd || null, contactHint || null, adDelivery || 'self', color || null, req.user!.id]);
 
     if (contractStart && contractEnd) {
       const contractId = uuidv4();
@@ -1465,10 +1475,10 @@ router.post('/', requirePermission('canCreateSponsors') as any, (req: AuthReques
 
 router.put('/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { name, company, address, contactName, contactEmail, contactPhone, website, logo, status, description, notes, tags, totalBudget, currency, customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
+  const { name, company, address, contactName, contactEmail, contactPhone, website, logo, status, description, notes, tags, interests, targetTags, targetCategories, targetAudience, preferredFormats, minEpisodeDuration, maxEpisodeDuration, totalBudget, currency, customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
 
-  db.run(`UPDATE sponsors SET name = COALESCE(?, name), company = COALESCE(?, company), address = ?, contact_name = ?, contact_email = ?, contact_phone = ?, website = ?, logo = COALESCE(?, logo), status = COALESCE(?, status), description = ?, notes = ?, tags = COALESCE(?, tags), total_budget = ?, currency = COALESCE(?, currency), customer_number = ?, contract_start = ?, contract_end = ?, contact_hint = ?, ad_delivery = COALESCE(?, ad_delivery), color = COALESCE(?, color), updated_at = datetime('now') WHERE id = ?`,
-    [name ?? null, company ?? null, address ?? null, contactName ?? null, contactEmail ?? null, contactPhone ?? null, website ?? null, logo ?? null, status ?? null, description ?? null, notes ?? null, tags ? JSON.stringify(tags) : null, totalBudget ?? null, currency ?? null, customerNumber ?? null, contractStart ?? null, contractEnd ?? null, contactHint ?? null, adDelivery ?? null, color ?? null, req.params.id]);
+  db.run(`UPDATE sponsors SET name = COALESCE(?, name), company = COALESCE(?, company), address = ?, contact_name = ?, contact_email = ?, contact_phone = ?, website = ?, logo = COALESCE(?, logo), status = COALESCE(?, status), description = ?, notes = ?, tags = COALESCE(?, tags), interests = COALESCE(?, interests), target_tags = COALESCE(?, target_tags), target_categories = COALESCE(?, target_categories), target_audience = ?, preferred_formats = COALESCE(?, preferred_formats), min_episode_duration = ?, max_episode_duration = ?, total_budget = ?, currency = COALESCE(?, currency), customer_number = ?, contract_start = ?, contract_end = ?, contact_hint = ?, ad_delivery = COALESCE(?, ad_delivery), color = COALESCE(?, color), updated_at = datetime('now') WHERE id = ?`,
+    [name ?? null, company ?? null, address ?? null, contactName ?? null, contactEmail ?? null, contactPhone ?? null, website ?? null, logo ?? null, status ?? null, description ?? null, notes ?? null, tags !== undefined ? JSON.stringify(tags || []) : null, interests !== undefined ? JSON.stringify(interests || []) : null, targetTags !== undefined ? JSON.stringify(targetTags || []) : null, targetCategories !== undefined ? JSON.stringify(targetCategories || []) : null, targetAudience ?? null, preferredFormats !== undefined ? JSON.stringify(preferredFormats || []) : null, minEpisodeDuration ?? null, maxEpisodeDuration ?? null, totalBudget ?? null, currency ?? null, customerNumber ?? null, contractStart ?? null, contractEnd ?? null, contactHint ?? null, adDelivery ?? null, color ?? null, req.params.id]);
 
   const row = db.get('SELECT * FROM sponsors WHERE id = ?', [req.params.id]) as any;
   if (!row) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });

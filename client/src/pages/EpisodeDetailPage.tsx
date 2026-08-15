@@ -268,6 +268,9 @@ export default function EpisodeDetailPage() {
     introOutroMusic: '',
     additionalNotes: '',
   });
+  const [technicalDefaultsForEpisode, setTechnicalDefaultsForEpisode] = useState<Record<string, string>>({});
+  const [technicalProfiles, setTechnicalProfiles] = useState<Array<{ id: string; name: string; values: Record<string, string> }>>([]);
+  const [selectedTechnicalProfileId, setSelectedTechnicalProfileId] = useState('global-standard');
   const [altDuration, setAltDuration] = useState<string>('');
 
   const [allSponsors, setAllSponsors] = useState<any[]>([]);
@@ -782,7 +785,18 @@ export default function EpisodeDetailPage() {
         if (ep.ideaId) setLinkedIdeaId(ep.ideaId);
         loadAdBookings();
         loadV2Bookings();
-        const globalTech = settings?.technicalDefaults || {};
+        const sourceTech = settings?.technicalDefaults || {};
+        const globalTech = {
+          sampleRate: sourceTech.sampleRate || '', bitrate: sourceTech.bitrate || '', format: sourceTech.format || '', channels: sourceTech.channels || '',
+          microphone: sourceTech.microphone || sourceTech.micModel || '', interface: sourceTech.interface || sourceTech.interfaceModel || '',
+          daw: sourceTech.daw || sourceTech.recordingSoftware || '', additionalNotes: sourceTech.additionalNotes || sourceTech.notes || '',
+        };
+        const configuredProfiles = Array.isArray(settings?.technicalProfiles) ? settings.technicalProfiles : [];
+        setTechnicalDefaultsForEpisode(globalTech);
+        setTechnicalProfiles([
+          { id: 'global-standard', name: 'Globale Technik-Standards', values: globalTech },
+          ...configuredProfiles.filter((profile: any) => profile?.id && profile?.name && profile?.values),
+        ]);
         const episodeTech = (ep.technicalData && typeof ep.technicalData === 'object') ? ep.technicalData : {};
         setTechnicalData(prev => ({ ...prev, ...globalTech, ...episodeTech }));
       })
@@ -888,6 +902,21 @@ export default function EpisodeDetailPage() {
   const updateTechnical = (key: string, value: string) => {
     setTechnicalData(prev => ({ ...prev, [key]: value }));
     markDirty();
+  };
+
+  const applyTechnicalProfile = () => {
+    const profile = technicalProfiles.find(item => item.id === selectedTechnicalProfileId);
+    if (!profile) return;
+    setTechnicalData(previous => ({ ...previous, ...profile.values }));
+    markDirty();
+    showSuccess(`Technik-Profil „${profile.name}“ übernommen`);
+  };
+
+  const resetTechnicalToGlobalStandard = () => {
+    setTechnicalData(previous => ({ ...previous, ...technicalDefaultsForEpisode }));
+    setSelectedTechnicalProfileId('global-standard');
+    markDirty();
+    showSuccess('Technikwerte auf den globalen Standard zurückgesetzt');
   };
 
   const handleSave = async () => {
@@ -1876,6 +1905,14 @@ export default function EpisodeDetailPage() {
           {activeTab === 'technical' && (
             <div className="card space-y-6">
               <h2 className="font-semibold text-text-primary">Technische Details</h2>
+              <div className="rounded-xl border border-accent-purple/25 bg-accent-purple/5 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                  <div className="flex-1"><label className="label">Wiederkehrendes Technik-Setup</label><select value={selectedTechnicalProfileId} onChange={event => setSelectedTechnicalProfileId(event.target.value)} className="input"><option value="global-standard">Globale Technik-Standards</option>{technicalProfiles.filter(profile => profile.id !== 'global-standard').map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></div>
+                  <button type="button" onClick={applyTechnicalProfile} className="btn-primary text-sm">Profil übernehmen</button>
+                  <button type="button" onClick={resetTechnicalToGlobalStandard} className="btn-secondary text-sm"><RotateCcw size={14} /> Auf Standard zurücksetzen</button>
+                </div>
+                <p className="mt-3 text-xs text-text-muted">Der globale Standard beschleunigt gleichbleibende Produktionen. Änderungen in dieser Episode bleiben eine nachvollziehbare Abweichung und überschreiben den Standard nicht.</p>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <h3 className="text-xs font-bold text-text-muted uppercase">Audio-Spezifikationen</h3>

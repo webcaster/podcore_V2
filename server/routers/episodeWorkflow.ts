@@ -311,7 +311,10 @@ router.get('/:episodeId/sponsoring/recommendations', requirePermission('canViewS
   const sponsors = db.all("SELECT * FROM sponsors WHERE status NOT IN ('inaktiv', 'abgelehnt') ORDER BY name") as any[];
 
   const recommendations = sponsors.map(sponsor => {
-    const sponsorTags = [...parseJson<string[]>(sponsor.tags, []), ...parseJson<string[]>(sponsor.target_tags, [])].map(tag => String(tag).toLowerCase());
+    const normalizeTerms = (values: any[]) => values.map(value => String(value).trim().toLowerCase()).filter(Boolean);
+    const interests = normalizeTerms(parseJson<string[]>(sponsor.interests, []));
+    const sponsorTags = normalizeTerms([...parseJson<string[]>(sponsor.tags, []), ...parseJson<string[]>(sponsor.target_tags, [])]);
+    const interestMatches = Array.from(new Set(interests.filter(interest => episodeTags.includes(interest) || haystack.includes(interest))));
     const overlap = Array.from(new Set(episodeTags.filter(tag => sponsorTags.includes(tag))));
     const audienceWords = String(sponsor.target_audience || sponsor.description || '').toLowerCase().split(/[^a-z0-9äöüß]+/).filter((word: string) => word.length >= 4);
     const audienceMatches = audienceWords.filter((word: string) => haystack.includes(word)).slice(0, 5);
@@ -320,15 +323,17 @@ router.get('/:episodeId/sponsoring/recommendations', requirePermission('canViewS
        FROM ad_slots s LEFT JOIN ad_categories c ON c.id = s.category_id
        WHERE s.sponsor_id = ? AND s.status IN ('aktiv', 'bestätigt', 'verfügbar')`, [sponsor.id]
     ) as any[];
-    let score = 15;
+    let score = 10;
     const reasons: string[] = ['Aktiver Sponsorenkontakt'];
-    if (overlap.length) { score += Math.min(45, overlap.length * 15); reasons.push(`Tag-Match: ${overlap.join(', ')}`); }
-    if (audienceMatches.length) { score += Math.min(20, audienceMatches.length * 5); reasons.push(`Zielgruppenbezug: ${audienceMatches.join(', ')}`); }
+    const scoreBreakdown: Record<string, number> = { basis: 10, interessen: 0, tags: 0, zielgruppe: 0, laenge: 0, werbeplaetze: 0 };
+    if (interestMatches.length) { scoreBreakdown.interessen = Math.min(40, interestMatches.length * 20); score += scoreBreakdown.interessen; reasons.push(`Interessen-Match: ${interestMatches.join(', ')}`); }
+    if (overlap.length) { scoreBreakdown.tags = Math.min(25, overlap.length * 10); score += scoreBreakdown.tags; reasons.push(`Tag-Match: ${overlap.join(', ')}`); }
+    if (audienceMatches.length) { scoreBreakdown.zielgruppe = Math.min(15, audienceMatches.length * 5); score += scoreBreakdown.zielgruppe; reasons.push(`Zielgruppenbezug: ${audienceMatches.join(', ')}`); }
     const duration = Number(episode.duration || episode.alt_duration || 0);
     const durationFits = (!sponsor.min_episode_duration || duration >= sponsor.min_episode_duration) && (!sponsor.max_episode_duration || duration <= sponsor.max_episode_duration);
-    if (durationFits) { score += 10; reasons.push('Episodenlänge passt'); }
-    if (slots.length) { score += 10; reasons.push(`${slots.length} verfügbarer Werbeplatz` + (slots.length === 1 ? '' : 'e')); }
-    return { sponsor: { ...sponsor, tags: parseJson(sponsor.tags, []), targetTags: parseJson(sponsor.target_tags, []), targetCategories: parseJson(sponsor.target_categories, []) }, score: Math.min(score, 100), reasons, slots };
+    if (durationFits) { scoreBreakdown.laenge = 10; score += scoreBreakdown.laenge; reasons.push('Episodenlänge passt'); }
+    if (slots.length) { scoreBreakdown.werbeplaetze = 10; score += scoreBreakdown.werbeplaetze; reasons.push(`${slots.length} verfügbarer Werbeplatz` + (slots.length === 1 ? '' : 'e')); }
+    return { sponsor: { ...sponsor, tags: parseJson(sponsor.tags, []), interests, targetTags: parseJson(sponsor.target_tags, []), targetCategories: parseJson(sponsor.target_categories, []), preferredFormats: parseJson(sponsor.preferred_formats, []) }, score: Math.min(score, 100), reasons, matchedInterests: interestMatches, matchedTags: overlap, matchedAudienceTerms: audienceMatches, scoreBreakdown, slots };
   }).sort((a, b) => b.score - a.score);
 
   return res.json({ success: true, data: recommendations });

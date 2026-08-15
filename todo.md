@@ -26,3 +26,29 @@
 
 - [x] Öffentlichen PodCore-GitHub-Branch von websitefremden Dateien bereinigen; nur app-relevante Quellen und Dokumentation behalten.
 - [x] GitHub-Releases bereinigt: Es wird ausschließlich die geprüfte Endnutzer-App-ZIP v2.16.10 ohne Zusatzpakete und Promo-Medien angeboten.
+
+## Persönliches Dashboard
+
+- [x] Dashboard-Anpassungen pro Benutzerkonto dauerhaft speichern: Widget-Auswahl, Widget-Reihenfolge, sichtbare Bereiche und Layout-Präferenzen werden strukturiert im Benutzerprofil gesichert.
+
+## Episoden-Skript und Export
+
+- [x] Fehlerhafte Sonderzeichen im Episoden-Skript sowie in der PDF-Ausgabe bereinigen: Zeichenstabile Tabellenüberschriften und zentrale UTF-8-Normalisierung sind aktiv.
+- [x] Seitennummerierung des Episoden-Skript-PDFs vereinheitlichen: Footer, Wasserzeichen und Gesamtseitenzahl werden erst nach allen Seitenumbrüchen über die tatsächlichen PDF-Seiten verteilt.
+
+## Sponsoring-Matching v2.16.11
+
+- [x] Interessen und Themenpräferenzen pro Sponsor erfassen, dauerhaft speichern und für nachvollziehbare Matching-Vorschläge mit Episoden, Ideen und Zielgruppen auswerten.
+- [x] Matching-Ansicht um Interessentreffer, Match-Begründungen und transparente Gewichtung erweitern.
+
+## Episoden-Editor v2.16.11 – Freigabe erforderlich
+
+- [x] Technik-Standard im Episoden-Editor als wiederverwendbares Profil mit Übernehmen- und Zurücksetzen-Aktionen ergänzen; episodenbezogene Abweichungen bleiben separat.
+
+## Speicherwahl und Cloud-Anbindung v2.16.11
+
+- [x] Appweite Speicherstrategie konfigurieren: Lokale PodCore-Daten bleiben führend; vollständige Sicherungen werden als klar erzeugte Cloud-Backup-Datei exportiert, ohne automatische Verschiebung lokaler Originaldaten.
+- [x] Speicherort, Verfügbarkeit und Wiederherstellungsweg appweit transparent anzeigen; Cloud-Backup-Export bleibt fehlertolerant und lässt lokale Daten unangetastet.
+- [x] Nutzeroberfläche für Speicherentscheidungen ergänzen: Arbeitsdatenbank, Sicherungsinhalt, Zeitpunkt des Backups, letzter erfolgreicher Export und Anleitung zur eigenen Online-Ablage klar darstellen.
+- [x] Für eine spätere Online-Datenbank einen sicheren Online-zu-Lokal-Fallback vorsehen: lokale Vorsicherung, Datenvorschau, Integritätsprüfung und bestätigter Wechsel ohne stilles Überschreiben.
+- [x] Ersteinstellungen nach der ersten sicheren Administrator-Anmeldung ergänzen: lokale Datenführung, Backup-Erstellung, Online-Ablage-Hinweis und spätere Änderbarkeit werden auf dem Dashboard angezeigt.

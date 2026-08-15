@@ -558,7 +558,7 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
   const fs = require('fs');
   const path = require('path');
   const { DATA_DIR } = require('../database');
-  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderSectionHeading, renderWatermark, getLineSpacingFactor, preparePdfDocument } = require('../pdfLayouts');
+  const { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderSectionHeading, getLineSpacingFactor, preparePdfDocument, renderPdfPageDecorations } = require('../pdfLayouts');
 
   // Layout auswählen
   const layoutId = req.query.layoutId as string | undefined;
@@ -657,20 +657,6 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
   });
   doc.pipe(res);
 
-  let pageNum = 1;
-
-  // ─── Hilfsfunktion: Footer auf aktueller Seite ───────────────────────────
-  function addFooter(pNum: number) {
-    const pageW = doc.page.width;
-    const footerY = doc.page.height - 25;
-    doc.moveTo(m, footerY - 4).lineTo(pageW - m, footerY - 4)
-      .strokeColor(layout.colors.accent || '#cccccc').lineWidth(0.4).stroke();
-    doc.fontSize(7).font('Helvetica').fillColor(layout.colors.muted || '#888888')
-      .text(documentTitle || podcastName, m, footerY, { width: (pageW - m * 2) * 0.6, align: 'left' });
-    doc.fontSize(7).font('Helvetica').fillColor(layout.colors.muted || '#888888')
-      .text(`Seite ${pNum}`, m, footerY, { width: pageW - m * 2, align: 'right' });
-  }
-
   if (useScriptLayout) {
     // ═══════════════════════════════════════════════════════════════════════
     // TABELLEN-SKRIPT-LAYOUT (nutzt PDF-Layout CI-Farben & Schriften)
@@ -751,23 +737,15 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
     doc.rect(m, tableY, contentW, ROW_H_HEADER).fill(headerBg);
 
     // Header-Text
-    const headerLabels = [
-      { x: COL_X[0], w: COL_BLOCK,  text: '🎙 Sprechtext / Inhalt (Stichpunkte)' },
-      { x: COL_X[1], w: COL_TEXT,   text: '' },
-      { x: COL_X[2], w: COL_DETAIL, text: 'Details & Regieanweisung' },
-      { x: COL_X[3], w: COL_DUR,    text: 'Dauer' },
-    ];
-
     // Kombinierter Header: Spalte 1+2 zusammen
     doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
-      .text('🎙 Sprechtext / Inhalt (Stichpunkte)', COL_X[0] + 3, tableY + 5,
+      .text('Sprechtext / Inhalt (Stichpunkte)', COL_X[0] + 3, tableY + 5,
         { width: COL_BLOCK + COL_TEXT - 6, align: 'left' });
     doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
       .text('Details & Regieanweisung', COL_X[2] + 3, tableY + 5,
         { width: COL_DETAIL - 6, align: 'left' });
-    // Uhr-Symbol + Dauer
     doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
-      .text('⏱ Dauer', COL_X[3] + 2, tableY + 5,
+      .text('Dauer', COL_X[3] + 2, tableY + 5,
         { width: COL_DUR - 4, align: 'center' });
 
     // Vertikale Trennlinien im Header
@@ -828,21 +806,19 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
 
       // Seitenumbruch prüfen
       if (tableY + rowH + FOOTER_RESERVE > pageH) {
-        addFooter(pageNum);
         doc.addPage();
-        pageNum++;
         tableY = m;
 
         // Tabellen-Header wiederholen
         doc.rect(m, tableY, contentW, ROW_H_HEADER).fill(headerBg);
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
-          .text('🎙 Sprechtext / Inhalt (Stichpunkte)', COL_X[0] + 3, tableY + 5,
+          .text('Sprechtext / Inhalt (Stichpunkte)', COL_X[0] + 3, tableY + 5,
             { width: COL_BLOCK + COL_TEXT - 6, align: 'left' });
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
           .text('Details & Regieanweisung', COL_X[2] + 3, tableY + 5,
             { width: COL_DETAIL - 6, align: 'left' });
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
-          .text('⏱ Dauer', COL_X[3] + 2, tableY + 5,
+          .text('Dauer', COL_X[3] + 2, tableY + 5,
             { width: COL_DUR - 4, align: 'center' });
         doc.moveTo(COL_X[2], tableY).lineTo(COL_X[2], tableY + ROW_H_HEADER)
           .strokeColor('#ffffff').lineWidth(0.5).stroke();
@@ -913,10 +889,6 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
         .text(`Gesamtdauer: ${formatDur(totalDur)}`, m, tableY, { align: 'right', width: contentW });
     }
 
-    // Wasserzeichen
-    renderWatermark(doc, layout);
-    addFooter(pageNum);
-
   } else {
     // ═══════════════════════════════════════════════════════════════════════
     // KLASSISCHES LAYOUT (unveränderter Code)
@@ -971,7 +943,7 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
         const bColor = blockColors[block.type] || '#6b7280';
         const blockLabel = block.title || block.type;
         const durText = block.duration ? ` (${formatDur(block.duration)})` : '';
-        if (doc.y > doc.page.height - 80) { doc.addPage(); pageNum++; }
+        if (doc.y > doc.page.height - 80) { doc.addPage(); }
         doc.fontSize(layout.typography.bodySize + 1).font(`${layout.typography.fontFamily}-Bold`)
           .fillColor(bColor).text(`${blockLabel}${durText}`);
         doc.fillColor(layout.colors.text);
@@ -1002,14 +974,11 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
       }
       doc.moveDown(0.3);
     }
-    renderWatermark(doc, layout);
-    renderPdfFooter(doc, layout, { podcastName, pageNum });
   }
 
   // ── Optionale Notizseite ──────────────────────────────────────────────────
   if (addNotesPage) {
     doc.addPage();
-    pageNum++;
     const pageW2 = doc.page.width;
     const pageH2 = doc.page.height;
     const contentW2 = pageW2 - 2 * m;
@@ -1035,9 +1004,12 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
         .strokeColor('#e0e0e0').lineWidth(0.4).stroke();
     }
 
-    // Footer
-    addFooter(pageNum);
   }
+
+  // Erst nach Abschluss aller automatischen und manuellen Seitenumbrüche
+  // werden Wasserzeichen und Footer exakt über den tatsächlichen Seitenbereich
+  // verteilt. Dadurch stimmen Nummerierung und Gesamtseitenzahl immer.
+  renderPdfPageDecorations(doc, layout, { podcastName, includeWatermark: true });
 
   doc.end();
 });

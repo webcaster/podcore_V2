@@ -1295,7 +1295,7 @@ export function renderPdfHeader(
   }
 }
 
-export function renderPdfFooter(doc: any, layout: PdfLayout, opts: { podcastName: string; pageNum?: number }): void {
+export function renderPdfFooter(doc: any, layout: PdfLayout, opts: { podcastName: string; pageNum?: number; totalPages?: number }): void {
   preparePdfDocument(doc);
   const { colors, typography, footer, pageMargin } = layout;
   const pageWidth = doc.page.width;
@@ -1305,7 +1305,10 @@ export function renderPdfFooter(doc: any, layout: PdfLayout, opts: { podcastName
   if (footer.showPodcastName && opts.podcastName) parts.push(normalizePdfText(opts.podcastName));
   if (footer.customText) parts.push(normalizePdfText(footer.customText));
   if (footer.showDate) parts.push(new Date().toLocaleDateString('de-DE'));
-  if (footer.showPageNumbers && opts.pageNum != null) parts.push(`Seite ${opts.pageNum}`);
+  if (footer.showPageNumbers && opts.pageNum != null) {
+    const totalSuffix = opts.totalPages && opts.totalPages > 0 ? ` von ${opts.totalPages}` : '';
+    parts.push(`Seite ${opts.pageNum}${totalSuffix}`);
+  }
 
   if (parts.length > 0) {
     // PDFKit erzwingt standardmäßig einen Seitenumbruch, wenn Text unterhalb
@@ -1321,6 +1324,34 @@ export function renderPdfFooter(doc: any, layout: PdfLayout, opts: { podcastName
       });
     doc.page.margins.bottom = originalBottomMargin;
   }
+}
+
+/**
+ * Zeichnet Wasserzeichen und Footer nach Abschluss des Dokumentinhalts auf jede
+ * tatsächlich erzeugte Seite. Das verhindert falsche Seitenzahlen bei
+ * automatischen PDFKit-Seitenumbrüchen.
+ */
+export function renderPdfPageDecorations(
+  doc: any,
+  layout: PdfLayout,
+  opts: { podcastName: string; includeWatermark?: boolean }
+): void {
+  preparePdfDocument(doc);
+  if (!doc || typeof doc.bufferedPageRange !== 'function' || typeof doc.switchToPage !== 'function') return;
+  const range = doc.bufferedPageRange();
+  if (!range || !range.count) return;
+  const totalPages = range.count;
+  for (let offset = 0; offset < totalPages; offset += 1) {
+    const pageIndex = range.start + offset;
+    doc.switchToPage(pageIndex);
+    if (opts.includeWatermark !== false) renderWatermark(doc, layout);
+    renderPdfFooter(doc, layout, {
+      podcastName: opts.podcastName,
+      pageNum: offset + 1,
+      totalPages,
+    });
+  }
+  doc.switchToPage(range.start + totalPages - 1);
 }
 
 export function getLineSpacingFactor(layout: PdfLayout): number {
