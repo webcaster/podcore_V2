@@ -561,9 +561,15 @@ export const adminApi = {
 
   // Database Migration
   getDbStatus: () => api.get<any>('/admin/db/status'),
+  runDbMaintenance: () => api.post<any>('/admin/db/maintenance', {}),
   testMysql: (data: any) => api.post<any>('/admin/db/test-mysql', data),
   migrateToMysql: (data: any) => api.post<any>('/admin/db/migrate-to-mysql', data),
   getMigrationLog: () => api.get<any>('/admin/db/migration-log'),
+
+  // Zentraler Papierkorb
+  listTrash: (type?: string) => api.get<any[]>(`/admin/trash${type ? `?type=${encodeURIComponent(type)}` : ''}`),
+  restoreTrash: (entryId: string) => api.post<any>(`/admin/trash/${entryId}/restore`, {}),
+  purgeTrash: (entryId: string) => api.delete<any>(`/admin/trash/${entryId}`, { confirm: true }),
 };
 
 // ============================================================

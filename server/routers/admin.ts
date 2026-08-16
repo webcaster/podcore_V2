@@ -6,7 +6,7 @@ import * as path from 'path';
 import { execFileSync, spawn } from 'child_process';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { DATA_DIR as DATABASE_DATA_DIR, DB_PATH, getDb, getDefaultPermissions } from '../database';
+import { DATA_DIR as DATABASE_DATA_DIR, DB_PATH, getDatabaseHealth, getDb, getDefaultPermissions, runDatabaseMaintenance } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 import {
   UpdateBackupManifest,
@@ -984,6 +984,7 @@ router.get('/db/status', requirePermission('canManageSettings') as any, (req: Au
         databasePath: DB_PATH,
         dataDirectory: DATABASE_DATA_DIR,
         databaseBytes: fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0,
+        health: getDatabaseHealth(db),
       },
       storage: {
         type: storage.type || 'local',
@@ -1004,6 +1005,15 @@ router.get('/db/status', requirePermission('canManageSettings') as any, (req: Au
       stats,
     },
   });
+});
+
+// POST /api/admin/db/maintenance — sichere SQLite-Wartung ohne Datenverlust
+router.post('/db/maintenance', requirePermission('canManageSettings') as any, (_req: AuthRequest, res: Response) => {
+  try {
+    return res.json({ success: true, data: runDatabaseMaintenance(getDb()) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error?.message || 'Datenbankwartung fehlgeschlagen' });
+  }
 });
 
 // POST /api/admin/db/test-mysql — MySQL-Verbindung testen

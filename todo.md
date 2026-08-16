@@ -74,3 +74,12 @@
 - [ ] Gemeinsame Payload-Validierung für Episoden, Buchungen und Angebote ergänzen.
 - [ ] Authentifizierungs-Rate-Limit mit Ablaufbereinigung und vertrauenswürdiger Proxy-Konfiguration robust gestalten.
 - [ ] Sponsor-Detailseite und PDF-Exporte in testbare Unterkomponenten beziehungsweise Dienste aufteilen.
+
+## Datenbank-Stabilisierung
+
+- [x] Lokale SQLite-Datenbank hinsichtlich Migrationen, Sperren, Integritätsprüfung, Sicherung, Wiederherstellung und Diagnose verbessern.
+
+## Papierkorb und Berechtigungen
+
+- [x] Zentralen Admin-Papierkorb für versehentlich gelöschte Inhalte mit Wiederherstellung, nachvollziehbarer Herkunft und kontrollierter endgültiger Bereinigung implementieren.
+- [x] Rollen und Berechtigungen für Löschen, Wiederherstellen und endgültiges Bereinigen prüfen und konsistent durchsetzen.

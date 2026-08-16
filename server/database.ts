@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { randomUUID } from 'crypto';
 
 // ============================================================
 // Data directories
@@ -49,6 +50,49 @@ function configureDatabaseConnection(db: any): void {
       console.warn(`[DB] PRAGMA konnte nicht gesetzt werden (${pragma}):`, error instanceof Error ? error.message : error);
     }
   }
+}
+
+function readPragmaRows(db: any, statement: string): any[] {
+  try { return db.all(statement, []) as any[]; } catch (_) { return []; }
+}
+
+function pragmaResultIsOk(rows: any[]): boolean {
+  if (!rows.length) return false;
+  return rows.every(row => Object.values(row || {}).some(value => String(value).toLowerCase() === 'ok'));
+}
+
+/** Liefert einen nicht destruktiven Zustandsbericht für die aktive lokale SQLite-Datenbank. */
+export function getDatabaseHealth(db: any = getDb()) {
+  const integrityRows = readPragmaRows(db, 'PRAGMA integrity_check');
+  const foreignKeyRows = readPragmaRows(db, 'PRAGMA foreign_key_check');
+  const journalRows = readPragmaRows(db, 'PRAGMA journal_mode');
+  const fileSize = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
+  const walPath = `${DB_PATH}-wal`;
+  const shmPath = `${DB_PATH}-shm`;
+  return {
+    checkedAt: new Date().toISOString(),
+    databasePath: DB_PATH,
+    databaseBytes: fileSize,
+    walBytes: fs.existsSync(walPath) ? fs.statSync(walPath).size : 0,
+    shmBytes: fs.existsSync(shmPath) ? fs.statSync(shmPath).size : 0,
+    journalMode: String(Object.values(journalRows[0] || {})[0] || 'unknown').toLowerCase(),
+    integrity: { ok: pragmaResultIsOk(integrityRows), details: integrityRows },
+    foreignKeys: { ok: foreignKeyRows.length === 0, violations: foreignKeyRows },
+  };
+}
+
+/** Führt nur sichere, nicht destruktive SQLite-Wartung aus. */
+export function runDatabaseMaintenance(db: any = getDb()) {
+  const actions: Array<{ action: string; ok: boolean; error?: string }> = [];
+  for (const statement of ['PRAGMA wal_checkpoint(PASSIVE)', 'PRAGMA optimize']) {
+    try {
+      db.exec(statement);
+      actions.push({ action: statement, ok: true });
+    } catch (error: any) {
+      actions.push({ action: statement, ok: false, error: error?.message || String(error) });
+    }
+  }
+  return { actions, health: getDatabaseHealth(db) };
 }
 
 export function getDb(): any {
@@ -1324,6 +1368,44 @@ function initializeSchema(db: any): void {
     console.warn('[DB] Tutorial-Migration konnte nicht vollständig abgeschlossen werden:', error instanceof Error ? error.message : error);
   }
 
+  // Zentraler Papierkorb: Kerninhalte bleiben nach dem Löschen wiederherstellbar.
+  // Die eigentlichen Tabellen behalten ihre Daten; trash_entries hält Kontext und
+  // Verknüpfungs-Snapshots für eine sichere Wiederherstellung vor.
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS trash_entries (
+      id TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      title TEXT,
+      deleted_at TEXT NOT NULL DEFAULT (datetime('now')),
+      deleted_by TEXT,
+      snapshot TEXT NOT NULL DEFAULT '{}',
+      retention_until TEXT,
+      restored_at TEXT,
+      restored_by TEXT,
+      purged_at TEXT,
+      purged_by TEXT
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_trash_entries_active ON trash_entries(entity_type, deleted_at)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_trash_entries_entity ON trash_entries(entity_type, entity_id)');
+    for (const table of ['episodes', 'sponsors', 'assets']) {
+      const columns = (db.all(`PRAGMA table_info(${table})`, []) as any[]).map((column: any) => column.name);
+      if (!columns.includes('deleted_at')) db.run(`ALTER TABLE ${table} ADD COLUMN deleted_at TEXT DEFAULT NULL`);
+      if (!columns.includes('deleted_by')) db.run(`ALTER TABLE ${table} ADD COLUMN deleted_by TEXT DEFAULT NULL`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_${table}_deleted_at ON ${table}(deleted_at)`);
+    }
+    const deletedIdeas = db.all(`SELECT id, title, deleted_at, deleted_by FROM ideas WHERE deleted_at IS NOT NULL`, []) as any[];
+    for (const idea of deletedIdeas) {
+      const existing = db.get(`SELECT id FROM trash_entries WHERE entity_type = 'idea' AND entity_id = ? AND restored_at IS NULL AND purged_at IS NULL`, [idea.id]) as any;
+      if (!existing) {
+        db.run(`INSERT INTO trash_entries (id, entity_type, entity_id, title, deleted_at, deleted_by, snapshot, retention_until)
+          VALUES (?, 'idea', ?, ?, ?, ?, '{}', datetime(?, '+30 days'))`, [randomUUID(), idea.id, idea.title || 'Idee', idea.deleted_at, idea.deleted_by || null, idea.deleted_at]);
+      }
+    }
+  } catch (error) {
+    console.warn('[DB] Papierkorb-Migration konnte nicht vollständig abgeschlossen werden:', error instanceof Error ? error.message : error);
+  }
+
   console.log('[DB] Database initialized at:', DB_PATH);
 }
 
@@ -1339,7 +1421,7 @@ export function getDefaultPermissions(role: string): Record<string, boolean> {
     canViewMedia: false, canUploadMedia: false, canDeleteMedia: false, canCommentMedia: false,
     canViewSponsors: false, canCreateSponsors: false, canEditSponsors: false, canDeleteSponsors: false,
     canViewSponsorReports: false,
-    canManageUsers: false, canViewErrorLogs: false, canExport: false, canManageSettings: false,
+    canManageUsers: false, canViewErrorLogs: false, canExport: false, canManageSettings: false, canManageTrash: false,
     canApproveEpisodes: false, canRequestApproval: false,
     canApproveInterviewQuestions: false,
     // Sponsoring-Erweiterungen (v2.7.x)

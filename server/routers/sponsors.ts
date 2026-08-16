@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb, DATA_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
+import { createTrashEntry } from './trash';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -169,7 +170,7 @@ function parsePlacement(row: any) {
 router.get('/', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const { status, search } = req.query;
-  let query = 'SELECT * FROM sponsors WHERE 1=1';
+  let query = 'SELECT * FROM sponsors WHERE deleted_at IS NULL';
   const params: any[] = [];
 
   if (status) { query += ' AND status = ?'; params.push(status); }
@@ -1401,7 +1402,7 @@ export default router;
 
 router.get('/:id', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const row = db.get('SELECT * FROM sponsors WHERE id = ?', [req.params.id]) as any;
+  const row = db.get('SELECT * FROM sponsors WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
   if (!row) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
 
   const sponsor = parseSponsor(row);
@@ -1427,7 +1428,7 @@ router.get('/:id', requirePermission('canViewSponsors') as any, (req: AuthReques
 
 router.get('/:id/logo-file', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const sponsor = db.get('SELECT id, logo FROM sponsors WHERE id = ?', [req.params.id]) as any;
+  const sponsor = db.get('SELECT id, logo FROM sponsors WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
   if (!sponsor?.logo) return res.status(404).json({ success: false, error: 'Kein Sponsor-Logo vorhanden' });
   const filename = fs.existsSync(sponsorLogoDir)
     ? fs.readdirSync(sponsorLogoDir).find((entry) => entry.startsWith(`${req.params.id}.`))
@@ -1524,19 +1525,21 @@ router.put('/:id', requirePermission('canEditSponsors') as any, (req: AuthReques
 
 router.delete('/:id', requirePermission('canDeleteSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Aktiver Sponsor nicht gefunden' });
   try {
-    // FK-sichere Reihenfolge: erst alle abhängigen Daten löschen
-    db.run('PRAGMA foreign_keys = OFF');
-    db.run('DELETE FROM ad_bookings WHERE sponsor_id = ?', [req.params.id]);
-    db.run('DELETE FROM sponsor_contracts WHERE sponsor_id = ?', [req.params.id]);
-    db.run('DELETE FROM ad_slots WHERE sponsor_id = ?', [req.params.id]);
-    db.run('DELETE FROM episode_ad_bookings WHERE sponsor_id = ?', [req.params.id]);
-    db.run('DELETE FROM sponsors WHERE id = ?', [req.params.id]);
-    removeSponsorLogoFiles(req.params.id);
-    db.run('PRAGMA foreign_keys = ON');
-    return res.json({ success: true, message: 'Sponsor gelöscht' });
+    db.exec('BEGIN IMMEDIATE');
+    const counts = {
+      contracts: Number((db.get('SELECT COUNT(*) as count FROM sponsor_contracts WHERE sponsor_id = ?', [req.params.id]) as any)?.count || 0),
+      bookings: Number((db.get('SELECT COUNT(*) as count FROM ad_bookings WHERE sponsor_id = ?', [req.params.id]) as any)?.count || 0),
+      slots: Number((db.get('SELECT COUNT(*) as count FROM ad_slots WHERE sponsor_id = ?', [req.params.id]) as any)?.count || 0),
+    };
+    createTrashEntry(db, 'sponsor', sponsor.id, sponsor.name || sponsor.company || 'Sponsor', req.user!.id, { counts, logoRetained: true });
+    db.run(`UPDATE sponsors SET deleted_at = datetime('now'), deleted_by = ?, updated_at = datetime('now') WHERE id = ?`, [req.user!.id, req.params.id]);
+    db.exec('COMMIT');
+    return res.json({ success: true, message: 'Sponsor in den Papierkorb verschoben. Verträge, Buchungen und Logo bleiben bis zur endgültigen Bereinigung erhalten.' });
   } catch (err: any) {
-    db.run('PRAGMA foreign_keys = ON');
+    try { db.exec('ROLLBACK'); } catch (_) {}
     return res.status(500).json({ success: false, message: err.message || 'Fehler beim Löschen' });
   }
 });

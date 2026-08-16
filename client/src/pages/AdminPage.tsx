@@ -41,6 +41,7 @@ const ALL_PERMISSIONS = [
   { key: 'canViewSponsorReports', label: 'Auswertungen ansehen', group: 'Sponsoring' },
   { key: 'canManageUsers', label: 'Benutzer verwalten', group: 'Administration' },
   { key: 'canManageSettings', label: 'Einstellungen verwalten', group: 'Administration' },
+  { key: 'canManageTrash', label: 'Papierkorb verwalten und Inhalte wiederherstellen', group: 'Administration' },
   { key: 'canViewErrorLogs', label: 'Logs ansehen', group: 'Administration' },
   { key: 'canExport', label: 'Daten exportieren', group: 'Administration' },
   { key: 'canManagePdfLayouts', label: 'PDF-Layouts verwalten', group: 'Administration' },
@@ -94,7 +95,7 @@ export default function AdminPage() {
   const [roles, setRoles] = useState<any[]>([]);
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'modules' | 'system' | 'database' | 'tutorials' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'modules' | 'system' | 'database' | 'trash' | 'tutorials' | 'logs'>('users');
 
   // Database Migration State
   const [dbStatus, setDbStatus] = useState<any>(null);
@@ -104,6 +105,9 @@ export default function AdminPage() {
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationLog, setMigrationLog] = useState<string[]>([]);
   const [migrationDone, setMigrationDone] = useState(false);
+  const [trashEntries, setTrashEntries] = useState<any[]>([]);
+  const [isTrashLoading, setIsTrashLoading] = useState(false);
+  const [isTrashMutating, setIsTrashMutating] = useState<string | null>(null);
   const { features } = useFeatures();
   const [featureForm, setFeatureForm] = useState<Record<string, boolean>>({});
   const [isSavingFeatures, setIsSavingFeatures] = useState(false);
@@ -249,8 +253,41 @@ export default function AdminPage() {
     } catch (err: any) { showError(err.message); }
   };
 
+  const loadTrash = async () => {
+    setIsTrashLoading(true);
+    try {
+      const data = await adminApi.listTrash();
+      setTrashEntries(data || []);
+    } catch (err: any) { showError(err.message || 'Papierkorb konnte nicht geladen werden'); }
+    finally { setIsTrashLoading(false); }
+  };
+
+  const restoreTrashEntry = async (entry: any) => {
+    setIsTrashMutating(entry.id);
+    try {
+      await adminApi.restoreTrash(entry.id);
+      showSuccess(`„${entry.title}“ wurde wiederhergestellt`);
+      await loadTrash();
+    } catch (err: any) { showError(err.message || 'Wiederherstellung fehlgeschlagen'); }
+    finally { setIsTrashMutating(null); }
+  };
+
+  const purgeTrashEntry = async (entry: any) => {
+    if (!window.confirm(`„${entry.title}“ endgültig entfernen? Dieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+    setIsTrashMutating(entry.id);
+    try {
+      await adminApi.purgeTrash(entry.id);
+      showSuccess(`„${entry.title}“ wurde endgültig entfernt`);
+      await loadTrash();
+    } catch (err: any) { showError(err.message || 'Endgültige Bereinigung fehlgeschlagen'); }
+    finally { setIsTrashMutating(null); }
+  };
+
   useEffect(() => { load(); }, []);
-  useEffect(() => { if (activeTab === 'logs') loadLogs(); }, [activeTab]);
+  useEffect(() => {
+    if (activeTab === 'logs') loadLogs();
+    if (activeTab === 'trash') loadTrash();
+  }, [activeTab]);
 
   // ── User CRUD ──────────────────────────────────────────────
   const handleSaveUser = async (e: React.FormEvent) => {
@@ -440,6 +477,7 @@ export default function AdminPage() {
           { key: 'modules', label: 'Module', icon: <Layers size={14} /> },
           { key: 'system', label: 'System', icon: <Server size={14} /> },
           { key: 'database', label: 'Datenbank', icon: <Database size={14} /> },
+          { key: 'trash', label: 'Papierkorb', icon: <Trash2 size={14} /> },
           { key: 'tutorials', label: 'Tutorials', icon: <HelpCircle size={14} /> },
           { key: 'logs', label: 'Logs', icon: <Activity size={14} /> },
         ].map(tab => (
@@ -503,6 +541,47 @@ export default function AdminPage() {
                     </div>
                   </div>
                 );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TRASH TAB ──────────────────────────────────────── */}
+      {activeTab === 'trash' && (
+        <div className="space-y-4">
+          <div className="card border border-accent-orange/30 bg-accent-orange/5">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={20} className="text-accent-orange mt-0.5 shrink-0" />
+              <div>
+                <h2 className="font-semibold text-text-primary">Wiederherstellbare Inhalte</h2>
+                <p className="text-sm text-text-secondary mt-1">Reguläres Löschen verschiebt Episoden, Ideen, Sponsoren und Medien zunächst in den Papierkorb. Nur Nutzer mit dieser Administrationsberechtigung können Inhalte wiederherstellen oder endgültig bereinigen.</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-text-secondary">{trashEntries.length} wiederherstellbare Einträge</p>
+            <button onClick={loadTrash} className="btn-secondary text-sm"><RefreshCw size={14} />Aktualisieren</button>
+          </div>
+          {isTrashLoading ? (
+            <div className="flex justify-center py-12"><Loader2 className="animate-spin text-accent-purple" size={28} /></div>
+          ) : trashEntries.length === 0 ? (
+            <div className="card text-center py-12 text-text-muted"><Trash2 size={32} className="mx-auto mb-3 opacity-40" /><p>Der Papierkorb ist leer.</p></div>
+          ) : (
+            <div className="space-y-2">
+              {trashEntries.map(entry => {
+                const busy = isTrashMutating === entry.id;
+                const label = ({ idea: 'Idee', episode: 'Episode', sponsor: 'Sponsor', asset: 'Medium' } as Record<string, string>)[entry.entityType] || entry.entityType;
+                return <div key={entry.id} className="card flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap"><span className="badge bg-accent-purple/15 text-accent-purple text-xs">{label}</span><span className="font-medium text-text-primary truncate">{entry.title}</span></div>
+                    <p className="text-xs text-text-muted mt-1">Gelöscht am {entry.deletedAt ? new Date(entry.deletedAt).toLocaleString('de-DE') : 'unbekannt'} von {entry.deletedByName || 'Unbekannt'} · Aufbewahrung bis {entry.retentionUntil ? new Date(entry.retentionUntil).toLocaleDateString('de-DE') : 'unbegrenzt'}</p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button disabled={busy} onClick={() => restoreTrashEntry(entry)} className="btn-secondary text-sm"><RotateCcw size={14} />Wiederherstellen</button>
+                    <button disabled={busy} onClick={() => purgeTrashEntry(entry)} className="btn-danger text-sm"><Trash2 size={14} />Endgültig löschen</button>
+                  </div>
+                </div>;
               })}
             </div>
           )}
@@ -1028,6 +1107,18 @@ export default function AdminPage() {
               >
                 <RefreshCw size={14} /> Status laden
               </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const result = await adminApi.runDbMaintenance();
+                    setDbStatus((current: any) => current ? { ...current, runtime: { ...current.runtime, health: result.health } } : current);
+                    showSuccess(result.health?.integrity?.ok && result.health?.foreignKeys?.ok ? 'Datenbank geprüft und sicher gewartet' : 'Wartung abgeschlossen – bitte Integritätsstatus prüfen');
+                  } catch (err: any) { showError(err.message || 'Datenbankwartung fehlgeschlagen'); }
+                }}
+                className="btn-secondary"
+              >
+                <Activity size={14} /> Integrität prüfen & warten
+              </button>
             </div>
             {dbStatus && (
               <div className="space-y-3">
@@ -1057,6 +1148,23 @@ export default function AdminPage() {
                     <div className="bg-obsidian-800 rounded-lg p-3 border border-surface-border">
                       <p className="text-text-muted text-xs mb-1">Lokale Medienablage</p>
                       <p className="text-text-primary font-mono text-xs break-all">{dbStatus.storage?.localMediaPath || 'Wird ermittelt …'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {dbStatus.runtime?.health && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    <div className={`rounded-lg p-3 border ${dbStatus.runtime.health.integrity?.ok ? 'bg-accent-green/10 border-accent-green/30' : 'bg-accent-red/10 border-accent-red/30'}`}>
+                      <p className="text-text-muted text-xs mb-1">SQLite-Integrität</p>
+                      <p className={dbStatus.runtime.health.integrity?.ok ? 'text-accent-green font-medium' : 'text-accent-red font-medium'}>{dbStatus.runtime.health.integrity?.ok ? 'Geprüft: in Ordnung' : 'Prüfung meldet Auffälligkeiten'}</p>
+                    </div>
+                    <div className={`rounded-lg p-3 border ${dbStatus.runtime.health.foreignKeys?.ok ? 'bg-accent-green/10 border-accent-green/30' : 'bg-accent-red/10 border-accent-red/30'}`}>
+                      <p className="text-text-muted text-xs mb-1">Datenbeziehungen</p>
+                      <p className={dbStatus.runtime.health.foreignKeys?.ok ? 'text-accent-green font-medium' : 'text-accent-red font-medium'}>{dbStatus.runtime.health.foreignKeys?.ok ? 'Keine Fremdschlüsselverletzung' : `${dbStatus.runtime.health.foreignKeys?.violations?.length || 0} Auffälligkeit(en)`}</p>
+                    </div>
+                    <div className="bg-obsidian-800 rounded-lg p-3 border border-surface-border">
+                      <p className="text-text-muted text-xs mb-1">WAL-Zwischendatei</p>
+                      <p className="text-text-primary font-medium">{Math.round((dbStatus.runtime.health.walBytes || 0) / 1024)} KB · {dbStatus.runtime.health.journalMode || 'unbekannt'}</p>
                     </div>
                   </div>
                 )}

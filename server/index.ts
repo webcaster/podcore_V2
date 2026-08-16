@@ -32,6 +32,7 @@ import episodeWorkflowRouter from './routers/episodeWorkflow';
 import tutorialsRouter from './routers/tutorials';
 import tutorialCloudRouter from './routers/tutorialCloud';
 import licenseRouter from './routers/license';
+import trashRouter from './routers/trash';
 import { initializeRealtime } from './services/realtime';
 
 const app: import("express").Express = express();
@@ -256,6 +257,7 @@ app.get('/api/media/stream/:filename', (req: any, res: any) => {
 
 app.use('/api/media', mediaRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/admin/trash', trashRouter);
 app.use('/api/podigee', podigeeRouter);
 app.use('/api/backup', backupRouter);
 app.use('/api/storage', storageRouter);

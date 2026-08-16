@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { getDb, ASSETS_DIR, DATA_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
+import { createTrashEntry } from './trash';
 
 const router: import("express").Router = Router();
 router.use(requireAuth as any);
@@ -209,7 +210,7 @@ router.delete('/branding/:type', requirePermission('canManageSettings') as any, 
 router.get('/', requirePermission('canViewMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const { type, search, folderId } = req.query;
-  let query = 'SELECT * FROM assets WHERE 1=1';
+  let query = 'SELECT * FROM assets WHERE deleted_at IS NULL';
   const params: any[] = [];
 
   if (type) { query += ' AND type = ?'; params.push(type); }
@@ -493,15 +494,23 @@ router.put('/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest
 
 router.delete('/:id', requirePermission('canDeleteMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
-  if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
-
-  if (asset.filepath && fs.existsSync(asset.filepath)) {
-    try { fs.unlinkSync(asset.filepath); } catch (e) { /* ignore */ }
+  const asset = db.get('SELECT * FROM assets WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
+  if (!asset) return res.status(404).json({ success: false, error: 'Aktives Asset nicht gefunden' });
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    createTrashEntry(db, 'asset', asset.id, asset.name || asset.filename || 'Medium', req.user!.id, {
+      filepath: asset.filepath || null,
+      filename: asset.filename || null,
+      type: asset.type || null,
+      retainedFile: true,
+    });
+    db.run(`UPDATE assets SET deleted_at = datetime('now'), deleted_by = ?, updated_at = datetime('now') WHERE id = ?`, [req.user!.id, req.params.id]);
+    db.exec('COMMIT');
+    return res.json({ success: true, message: 'Asset in den Papierkorb verschoben. Die Datei bleibt bis zur endgültigen Admin-Bereinigung erhalten.' });
+  } catch (error: any) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    return res.status(500).json({ success: false, error: error?.message || 'Asset konnte nicht in den Papierkorb verschoben werden' });
   }
-
-  db.run('DELETE FROM assets WHERE id = ?', [req.params.id]);
-  return res.json({ success: true, message: 'Asset gelöscht' });
 });
 
 router.post('/:id/comments', requirePermission('canCommentMedia') as any, (req: AuthRequest, res: Response) => {

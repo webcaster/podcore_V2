@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../database';
+import { createTrashEntry } from './trash';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
 const router: import("express").Router = Router();
@@ -44,8 +45,8 @@ router.get('/', requirePermission('canViewEpisodes') as any, (req: AuthRequest, 
   const db = getDb();
   const { status, search, page = '1', pageSize = '20', archived, limit } = req.query;
 
-  let query = 'SELECT * FROM episodes WHERE 1=1';
-  let countQuery = 'SELECT COUNT(*) as count FROM episodes WHERE 1=1';
+  let query = 'SELECT * FROM episodes WHERE deleted_at IS NULL';
+  let countQuery = 'SELECT COUNT(*) as count FROM episodes WHERE deleted_at IS NULL';
   const params: any[] = [];
   const countParams: any[] = [];
 
@@ -101,7 +102,7 @@ router.get('/', requirePermission('canViewEpisodes') as any, (req: AuthRequest, 
 router.get('/pending-approval', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const episodes = db.all(
-    `SELECT * FROM episodes WHERE approval_status = 'angefragt' ORDER BY approval_requested_at ASC`,
+    `SELECT * FROM episodes WHERE deleted_at IS NULL AND approval_status = 'angefragt' ORDER BY approval_requested_at ASC`,
     []
   ).map(parseEpisode);
   return res.json({ success: true, data: episodes });
@@ -487,7 +488,7 @@ router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthReques
 // DELETE /api/episodes/:id
 router.delete('/:id', requirePermission('canDeleteEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const existing = db.get('SELECT id FROM episodes WHERE id = ?', [req.params.id]);
+  const existing = db.get('SELECT * FROM episodes WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
 
   if (!existing) {
     return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
@@ -495,6 +496,13 @@ router.delete('/:id', requirePermission('canDeleteEpisodes') as any, (req: AuthR
 
   try {
     db.exec('BEGIN IMMEDIATE');
+    const seasonPlanItems = db.all('SELECT id, status FROM season_plan_items WHERE episode_id = ?', [req.params.id]) as any[];
+    const linkedIdeas = db.all('SELECT id FROM ideas WHERE episode_id = ?', [req.params.id]) as any[];
+    createTrashEntry(db, 'episode', req.params.id, existing.title || `Episode ${existing.number || ''}`.trim(), req.user!.id, {
+      seasonPlanItems,
+      ideas: linkedIdeas,
+      originalStatus: existing.status,
+    });
     // Eine Staffelplan-Position bleibt als Planungsgrundlage bestehen, darf nach
     // dem Löschen der Episode aber nicht mehr durch eine verwaiste Verknüpfung gesperrt sein.
     db.run(
@@ -509,9 +517,9 @@ router.delete('/:id', requirePermission('canDeleteEpisodes') as any, (req: AuthR
       "UPDATE ideas SET episode_id = NULL, updated_at = datetime('now') WHERE episode_id = ?",
       [req.params.id]
     );
-    db.run('DELETE FROM episodes WHERE id = ?', [req.params.id]);
+    db.run(`UPDATE episodes SET deleted_at = datetime('now'), deleted_by = ?, updated_at = datetime('now') WHERE id = ?`, [req.user!.id, req.params.id]);
     db.exec('COMMIT');
-    return res.json({ success: true, message: 'Episode gelöscht. Verknüpfte Staffelplan-Positionen wurden wieder freigegeben.' });
+    return res.json({ success: true, message: 'Episode in den Papierkorb verschoben. Verknüpfte Staffelplan-Positionen wurden wieder freigegeben.' });
   } catch (err: any) {
     try { db.exec('ROLLBACK'); } catch (_) {}
     return res.status(500).json({ success: false, error: err.message || 'Episode konnte nicht vollständig gelöscht werden' });

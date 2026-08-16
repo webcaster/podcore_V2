@@ -169,6 +169,18 @@ function buildFileManifest(tableRows: Record<string, any[]>, includeFiles: boole
   return { files, embeddedBytes };
 }
 
+function backupDataHash(data: any): string {
+  return crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
+}
+
+function writeBackupAtomically(filename: string, backup: any): string {
+  const target = path.join(BACKUPS_DIR, filename);
+  const temporary = `${target}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(backup, null, 2), { encoding: 'utf8' });
+  fs.renameSync(temporary, target);
+  return target;
+}
+
 function createFullBackup(db: any, exportedBy: string, includeFiles = true) {
   const tables: Record<string, any[]> = {};
   const tableManifest: Record<string, any> = {};
@@ -177,6 +189,7 @@ function createFullBackup(db: any, exportedBy: string, includeFiles = true) {
     tableManifest[table] = { rows: tables[table].length, columns: tableColumns(db, table) };
   }
   const fileManifest = buildFileManifest(tables, includeFiles);
+  const data = { tables, files: fileManifest.files };
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
@@ -190,8 +203,16 @@ function createFullBackup(db: any, exportedBy: string, includeFiles = true) {
       embeddedFileBytes: fileManifest.embeddedBytes,
       excludedTables: ['sessions', 'error_logs'],
     },
-    data: { tables, files: fileManifest.files },
+    integrity: { algorithm: 'sha256', dataHash: backupDataHash(data) },
+    data,
   };
+}
+
+function validateBackupIntegrity(importData: any): void {
+  const expected = importData?.integrity?.dataHash;
+  if (!expected) return; // Ältere Sicherungen bleiben weiterhin importierbar.
+  const actual = backupDataHash(importData?.data || {});
+  if (actual !== expected) throw new Error('Backup-Prüfsumme stimmt nicht. Die Sicherung wurde verändert oder ist beschädigt.');
 }
 
 function normalizeLegacyRow(table: string, source: any): any {
@@ -282,7 +303,14 @@ function restoreEmbeddedFiles(importData: any) {
     try {
       const target = path.join(DATA_DIR, relative);
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, Buffer.from(file.contentBase64, 'base64'));
+      const content = Buffer.from(file.contentBase64, 'base64');
+      if (file.sha256) {
+        const actualHash = crypto.createHash('sha256').update(content).digest('hex');
+        if (actualHash !== file.sha256) { result.failed++; continue; }
+      }
+      const temporary = `${target}.${process.pid}.${Date.now()}.tmp`;
+      fs.writeFileSync(temporary, content);
+      fs.renameSync(temporary, target);
       result.restored++;
     } catch (_) { result.failed++; }
   }
@@ -349,7 +377,7 @@ router.get('/export/full', requirePermission('canManageSettings') as any, (req: 
   const includeFiles = req.query.includeFiles !== '0' && req.query.includeFiles !== 'false';
   const backup = createFullBackup(getDb(), req.user!.username, includeFiles);
   const filename = `full-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-  fs.writeFileSync(path.join(BACKUPS_DIR, filename), JSON.stringify(backup, null, 2));
+  writeBackupAtomically(filename, backup);
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', `attachment; filename="podcore-full-backup-${new Date().toISOString().slice(0, 10)}.json"`);
   return res.json(backup);
@@ -363,6 +391,7 @@ router.post('/import/episodes', requirePermission('canManageSettings') as any, u
   if (!req.file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
   try {
     const importData = parseUploadedBackup(req.file);
+    validateBackupIntegrity(importData);
     if (importData.type !== 'episodes' && importData.type !== 'full') return res.status(400).json({ success: false, error: 'Ungültiges Backup-Format' });
     const stats = upsertTableRows(getDb(), 'episodes', getImportTables(importData).episodes || [], 'merge', req, new Map());
     return res.json({ success: true, data: { ...stats, imported: stats.imported, total: (getImportTables(importData).episodes || []).length } });
@@ -375,6 +404,7 @@ router.post('/import/ideas', requirePermission('canManageSettings') as any, uplo
   if (!req.file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
   try {
     const importData = parseUploadedBackup(req.file);
+    validateBackupIntegrity(importData);
     if (importData.type !== 'editorial' && importData.type !== 'full') return res.status(400).json({ success: false, error: 'Ungültiges Backup-Format' });
     const db = getDb();
     const tables = getImportTables(importData);
@@ -399,6 +429,7 @@ router.post('/import/preview', requirePermission('canManageSettings') as any, up
   if (!req.file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
   try {
     const importData = parseUploadedBackup(req.file);
+    validateBackupIntegrity(importData);
     if (!['full', 'episodes', 'editorial'].includes(importData.type)) return res.status(400).json({ success: false, error: `Unbekannter Backup-Typ: "${importData.type}"` });
     const tables = getImportTables(importData);
     const files = Array.isArray(importData?.data?.files) ? importData.data.files : [];
@@ -428,11 +459,12 @@ router.post('/import/full', requirePermission('canManageSettings') as any, uploa
   let preImportBackup = '';
   try {
     const importData = parseUploadedBackup(req.file);
+    validateBackupIntegrity(importData);
     if (!['full', 'episodes', 'editorial'].includes(importData.type)) return res.status(400).json({ success: false, error: `Unbekannter Backup-Typ: "${importData.type}"` });
 
     const preImport = createFullBackup(db, 'system (pre-import-backup)', false);
     preImportBackup = `pre-import-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-    fs.writeFileSync(path.join(BACKUPS_DIR, preImportBackup), JSON.stringify(preImport, null, 2));
+    writeBackupAtomically(preImportBackup, preImport);
 
     const sourceTables = getImportTables(importData);
     const orderedTables = FULL_TABLES.filter(table => Array.isArray(sourceTables[table]));

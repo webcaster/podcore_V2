@@ -190,7 +190,7 @@ router.get('/ideas', requirePermission('canViewIdeas') as any, (req: AuthRequest
 });
 
 // Permanentes Leeren des Papierkorbs
-router.delete('/ideas/trash/empty', requirePermission('canDeleteIdeas') as any, (req: AuthRequest, res: Response) => {
+router.delete('/ideas/trash/empty', requirePermission('canManageTrash') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   if (req.body?.confirm !== true) return res.status(400).json({ success: false, error: 'Explizite Löschbestätigung erforderlich' });
   const deletedIdeas = db.all('SELECT id FROM ideas WHERE deleted_at IS NOT NULL', []) as any[];
@@ -265,9 +265,14 @@ router.put('/ideas/:id', requirePermission('canEditIdeas') as any, (req: AuthReq
 
 router.delete('/ideas/:id', requirePermission('canDeleteIdeas') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const idea = db.get('SELECT id FROM ideas WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
+  const idea = db.get('SELECT * FROM ideas WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
   if (!idea) return res.status(404).json({ success: false, error: 'Aktive Idee nicht gefunden' });
 
+  const existingTrash = db.get(`SELECT id FROM trash_entries WHERE entity_type = 'idea' AND entity_id = ? AND restored_at IS NULL AND purged_at IS NULL`, [req.params.id]) as any;
+  if (!existingTrash) {
+    db.run(`INSERT INTO trash_entries (id, entity_type, entity_id, title, deleted_by, snapshot, retention_until)
+      VALUES (?, 'idea', ?, ?, ?, ?, datetime('now', '+30 days'))`, [uuidv4(), req.params.id, idea.title || 'Idee', req.user!.id, JSON.stringify({ status: idea.status, priority: idea.priority })]);
+  }
   db.run(
     `UPDATE ideas SET deleted_at = datetime('now'), deleted_by = ?, updated_at = datetime('now') WHERE id = ?`,
     [req.user!.id, req.params.id]
@@ -277,7 +282,7 @@ router.delete('/ideas/:id', requirePermission('canDeleteIdeas') as any, (req: Au
 });
 
 // Permanentes Löschen einer aktiven Idee mit expliziter Bestätigung.
-router.delete('/ideas/:id/permanent', requirePermission('canDeleteIdeas') as any, (req: AuthRequest, res: Response) => {
+router.delete('/ideas/:id/permanent', requirePermission('canManageTrash') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   if (req.body?.confirm !== true) return res.status(400).json({ success: false, error: 'Explizite Löschbestätigung erforderlich' });
   const idea = db.get('SELECT id FROM ideas WHERE id = ?', [req.params.id]) as any;
@@ -301,6 +306,8 @@ router.post('/ideas/:id/restore', requirePermission('canEditIdeas') as any, (req
     `UPDATE ideas SET deleted_at = NULL, deleted_by = NULL, updated_at = datetime('now') WHERE id = ?`,
     [req.params.id]
   );
+  db.run(`UPDATE trash_entries SET restored_at = datetime('now'), restored_by = ?
+    WHERE entity_type = 'idea' AND entity_id = ? AND restored_at IS NULL AND purged_at IS NULL`, [req.user!.id, req.params.id]);
   const restored = db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id]) as any;
   broadcastIdeaUpdated(db, req.params.id, req, 'idea-restored');
   return res.json({
@@ -319,7 +326,7 @@ router.post('/ideas/:id/restore', requirePermission('canEditIdeas') as any, (req
 });
 
 // Permanentes Löschen einer gelöschten Idee aus dem Papierkorb.
-router.delete('/ideas/:id/trash/delete', requirePermission('canDeleteIdeas') as any, (req: AuthRequest, res: Response) => {
+router.delete('/ideas/:id/trash/delete', requirePermission('canManageTrash') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   if (req.body?.confirm !== true) return res.status(400).json({ success: false, error: 'Explizite Löschbestätigung erforderlich' });
   const idea = db.get('SELECT id FROM ideas WHERE id = ? AND deleted_at IS NOT NULL', [req.params.id]) as any;
@@ -2098,4 +2105,3 @@ router.delete('/text-blocks/:id', requirePermission('canEditIdeas') as any, (req
 });
 
 export default router;
-
