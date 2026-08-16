@@ -1,6 +1,6 @@
 {
   "name": "podcore-client",
-  "version": "2.16.11",
+  "version": "2.16.12",
   "description": "PodCore Frontend",
   "type": "module",
   "scripts": {

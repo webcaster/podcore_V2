@@ -130,12 +130,13 @@ export default function SponsorDetailPageV2() {
         sponsorsV2Api.listOffers(id).catch(() => []),
         sponsorsApi.listCategories().catch(() => []),
       ]);
-      setSponsor(spData);
-      setContracts(contractsData || []);
-      setBookings(bookingsData || []);
-      setSlots(slotsData || []);
-      setOffers(offersData || []);
-      setAdCategories(categoriesData || []);
+      const asArray = (value: any) => Array.isArray(value) ? value : Array.isArray(value?.data) ? value.data : [];
+      setSponsor(spData && typeof spData === 'object' ? spData : null);
+      setContracts(asArray(contractsData));
+      setBookings(asArray(bookingsData));
+      setSlots(asArray(slotsData));
+      setOffers(asArray(offersData));
+      setAdCategories(asArray(categoriesData));
       if (spData.lastPerformanceExport) setLastExportTime(spData.lastPerformanceExport);
     } catch (err: any) {
       showError(err.message);
@@ -2208,6 +2209,15 @@ function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (d
   const { showSuccess, showError } = useApp();
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdatingLogo, setIsUpdatingLogo] = useState(false);
+  const normalizeList = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.map(item => String(item).trim()).filter(Boolean);
+    if (typeof value !== 'string') return [];
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(item => String(item).trim()).filter(Boolean);
+    } catch (_) { /* Ältere Komma-getrennte Daten werden unten verarbeitet. */ }
+    return value.split(',').map(item => item.trim()).filter(Boolean);
+  };
   const [form, setForm] = useState({
     name: sponsor.name || '',
     company: sponsor.company || '',
@@ -2225,10 +2235,10 @@ function SponsorStammdatenForm({ sponsor, onSaved }: { sponsor: any; onSaved: (d
     totalBudget: sponsor.total_budget || sponsor.totalBudget || '',
     contractStart: sponsor.contract_start || sponsor.contractStart || '',
     contractEnd: sponsor.contract_end || sponsor.contractEnd || '',
-    interestsText: (sponsor.interests || []).join(', '),
-    targetTagsText: (sponsor.targetTags || sponsor.target_tags || []).join(', '),
+    interestsText: normalizeList(sponsor.interests).join(', '),
+    targetTagsText: normalizeList(sponsor.targetTags ?? sponsor.target_tags).join(', '),
     targetAudience: sponsor.targetAudience || sponsor.target_audience || '',
-    preferredFormatsText: (sponsor.preferredFormats || sponsor.preferred_formats || []).join(', '),
+    preferredFormatsText: normalizeList(sponsor.preferredFormats ?? sponsor.preferred_formats).join(', '),
     minEpisodeDuration: sponsor.minEpisodeDuration || sponsor.min_episode_duration || '',
     maxEpisodeDuration: sponsor.maxEpisodeDuration || sponsor.max_episode_duration || '',
   });

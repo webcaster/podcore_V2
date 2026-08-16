@@ -52,3 +52,7 @@
 - [x] Nutzeroberfläche für Speicherentscheidungen ergänzen: Arbeitsdatenbank, Sicherungsinhalt, Zeitpunkt des Backups, letzter erfolgreicher Export und Anleitung zur eigenen Online-Ablage klar darstellen.
 - [x] Für eine spätere Online-Datenbank einen sicheren Online-zu-Lokal-Fallback vorsehen: lokale Vorsicherung, Datenvorschau, Integritätsprüfung und bestätigter Wechsel ohne stilles Überschreiben.
 - [x] Ersteinstellungen nach der ersten sicheren Administrator-Anmeldung ergänzen: lokale Datenführung, Backup-Erstellung, Online-Ablage-Hinweis und spätere Änderbarkeit werden auf dem Dashboard angezeigt.
+
+## Hotfix v2.16.11
+
+- [x] Schwarze Seite beim Öffnen einer Sponsor-Detailansicht durch fehlertolerante Normalisierung historischer und aktueller Sponsor-Daten behoben; korrigiertes Endnutzer-Release v2.16.12 bereitstellen.
