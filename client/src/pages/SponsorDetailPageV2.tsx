@@ -200,25 +200,14 @@ export default function SponsorDetailPageV2() {
       const discountType = bookingForm.discountType;
       const listenerCount = parseInt(bookingForm.listenerCount) || null;
       const totalEpisodes = parseInt(bookingForm.totalEpisodes) || null;
-      // Endpreis berechnen: Grundpreis + Preisanpassung + Hörerbeteiligung - Rabatt
-      let baseForCalc = rawPrice + priceAdjustment + listenerFee;
-      if (bookingForm.priceModel === 'cpm' && listenerCount) {
-        baseForCalc = (rawPrice / 1000) * listenerCount + priceAdjustment + listenerFee;
-      }
-      let finalPrice = baseForCalc;
-      if (discount > 0) {
-        finalPrice = discountType === 'percent'
-          ? baseForCalc * (1 - discount / 100)
-          : baseForCalc - discount;
-      }
       const payload = {
         slotId: bookingForm.slotId,
         bookingDate: bookingForm.bookingDate,
         bookingEndDate: bookingForm.bookingEndDate || null,
         price: rawPrice,
+        priceModel: bookingForm.priceModel,
         priceAdjustment,
         listenerFee,
-        finalPrice: Math.max(0, finalPrice),
         notes: bookingForm.notes || null,
         invoiceStatus: bookingForm.invoiceStatus,
         status: bookingForm.status,
@@ -231,11 +220,11 @@ export default function SponsorDetailPageV2() {
         listenerCount,
       };
       if (editingBooking) {
-        await sponsorsV2Api.updateBooking(editingBooking.id, payload);
-        showSuccess('Buchung aktualisiert');
+        const saved: any = await sponsorsV2Api.updateBooking(editingBooking.id, payload);
+        showSuccess(saved?.conflicts?.length ? 'Buchung aktualisiert – Überschneidung wurde als Hinweis erkannt' : 'Buchung aktualisiert');
       } else {
-        await sponsorsV2Api.createBooking(id, payload);
-        showSuccess('Buchung erstellt');
+        const saved: any = await sponsorsV2Api.createBooking(id, payload);
+        showSuccess(saved?.conflicts?.length ? 'Buchung erstellt – Überschneidung wurde als Hinweis erkannt' : 'Buchung erstellt');
       }
       setShowBookingModal(false);
       setEditingBooking(null);
@@ -327,6 +316,38 @@ export default function SponsorDetailPageV2() {
     }
     return [];
   };
+
+  const safeJsonArray = (value: any): any[] => {
+    if (Array.isArray(value)) return value;
+    if (typeof value !== 'string' || !value.trim()) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  };
+
+  const bookingPricePreview = (() => {
+    const unitPrice = Math.max(0, parseFloat(bookingForm.price) || 0);
+    const placements = Math.max(1, parseInt(bookingForm.placementCount) || 1);
+    const listenerCount = Math.max(0, parseInt(bookingForm.listenerCount) || 0);
+    const refs = parseEpisodeRefs(bookingForm.episodeRefs);
+    const episodes = Math.max(1, parseInt(bookingForm.totalEpisodes) || refs.reduce((total, item) => total + Math.max(1, item.count || 1), 0) || 1);
+    const gross = bookingForm.priceModel === 'per_episode'
+      ? unitPrice * episodes * placements
+      : bookingForm.priceModel === 'cpm'
+        ? unitPrice * (listenerCount / 1000) * episodes
+        : unitPrice;
+    const adjustment = parseFloat(bookingForm.priceAdjustment) || 0;
+    const listenerFee = Math.max(0, parseFloat(bookingForm.listenerFee) || 0) * (listenerCount / 1000);
+    const subtotal = Math.max(0, gross + adjustment + listenerFee);
+    const rawDiscount = Math.max(0, parseFloat(bookingForm.discount) || 0);
+    const discountAmount = bookingForm.discountType === 'percent'
+      ? subtotal * Math.min(100, rawDiscount) / 100
+      : Math.min(subtotal, rawDiscount);
+    return { unitPrice, episodes, placements, gross, adjustment, listenerFee, subtotal, discountAmount, finalPrice: Math.max(0, subtotal - discountAmount) };
+  })();
 
   // ── Billing Exports ───────────────────────────────────────────────────────
   const filteredBookings = bookings
@@ -793,7 +814,7 @@ export default function SponsorDetailPageV2() {
                                 bookingDate: booking.bookingDate?.split('T')[0] || '',
                                 bookingEndDate: booking.bookingEndDate?.split('T')[0] || '',
                                 price: String(booking.price ?? ''),
-                                priceModel: booking.pricePerEpisode ? 'per_episode' : booking.pricePer1000 ? 'cpm' : 'base',
+                                priceModel: booking.priceModel || (booking.pricePerEpisode ? 'per_episode' : booking.pricePer1000 ? 'cpm' : 'base'),
                                 notes: booking.notes || '',
                                 invoiceStatus: booking.invoiceStatus || 'offen',
                                 status: booking.status || 'geplant',
@@ -1250,7 +1271,7 @@ export default function SponsorDetailPageV2() {
                             {offer.offerOptions && offer.offerOptions.length > 0 ? (
                               <span className="flex items-center gap-1 text-purple-300"><Hash size={10} /> {offer.offerOptions.length} Varianten</span>
                             ) : (
-                              <span className="flex items-center gap-1"><Hash size={10} /> {(offer.positions ? JSON.parse(typeof offer.positions === 'string' ? offer.positions : JSON.stringify(offer.positions)) : []).length} Positionen</span>
+                              <span className="flex items-center gap-1"><Hash size={10} /> {safeJsonArray(offer.positions).length} Positionen</span>
                             )}
                             <span className="font-medium text-white">{(Number(offer.totalPrice) || 0).toFixed(2)} €</span>
                           </div>
@@ -1282,13 +1303,10 @@ export default function SponsorDetailPageV2() {
                           ><FileText size={13} /></a>
                           <button
                             onClick={() => {
-                              const positions = typeof offer.positions === 'string' ? JSON.parse(offer.positions) : (offer.positions || []);
+                              const positions = safeJsonArray(offer.positions);
                               setEditingOffer(offer);
-                              const offerOptions = offer.offerOptions || offer.offer_options
-                                ? (typeof (offer.offerOptions || offer.offer_options) === 'string'
-                                    ? JSON.parse(offer.offerOptions || offer.offer_options)
-                                    : (offer.offerOptions || offer.offer_options))
-                                : null;
+                              const offerOptionsSource = offer.offerOptions ?? offer.offer_options;
+                              const offerOptions = offerOptionsSource ? safeJsonArray(offerOptionsSource) : null;
                               setActiveOptionTab(0);
                               setOfferForm({
                                 title: offer.title || '',
@@ -1672,14 +1690,17 @@ export default function SponsorDetailPageV2() {
                 <option value="percent">%</option>
               </select>
             </div>
-            {parseFloat(bookingForm.discount) > 0 && parseFloat(bookingForm.price) > 0 && (
-              <p className="text-xs text-green-400 mt-1">
-                Endpreis: {Math.max(0, bookingForm.discountType === 'percent'
-                  ? parseFloat(bookingForm.price) * (1 - parseFloat(bookingForm.discount) / 100)
-                  : parseFloat(bookingForm.price) - parseFloat(bookingForm.discount)
-                ).toFixed(2)} EUR
-              </p>
-            )}
+          </div>
+
+          <div className="rounded-xl border border-purple-500/30 bg-purple-950/30 p-4">
+            <div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-purple-100">Preisvorschau</h3><p className="mt-0.5 text-xs text-purple-200/70">Die Berechnung wird beim Speichern nochmals serverseitig geprüft.</p></div><span className="text-xl font-bold text-white">{bookingPricePreview.finalPrice.toFixed(2)} EUR</span></div>
+            <div className="mt-3 space-y-1.5 text-xs text-gray-300">
+              <div className="flex justify-between"><span>{bookingForm.priceModel === 'per_episode' ? `${bookingPricePreview.episodes} Folgen × ${bookingPricePreview.placements} Platzierung(en)` : bookingForm.priceModel === 'cpm' ? `${bookingForm.listenerCount || 0} Hörer / 1.000 × ${bookingPricePreview.episodes} Folgen` : 'Pauschalpreis'}</span><span>{bookingPricePreview.gross.toFixed(2)} EUR</span></div>
+              {bookingPricePreview.adjustment !== 0 && <div className="flex justify-between"><span>Preisanpassung</span><span>{bookingPricePreview.adjustment >= 0 ? '+' : ''}{bookingPricePreview.adjustment.toFixed(2)} EUR</span></div>}
+              {bookingPricePreview.listenerFee > 0 && <div className="flex justify-between"><span>Hörerbeteiligung</span><span>+{bookingPricePreview.listenerFee.toFixed(2)} EUR</span></div>}
+              {bookingPricePreview.discountAmount > 0 && <div className="flex justify-between text-green-300"><span>Rabatt</span><span>−{bookingPricePreview.discountAmount.toFixed(2)} EUR</span></div>}
+              <div className="mt-2 flex justify-between border-t border-purple-400/20 pt-2 font-semibold text-white"><span>Gesamtpreis</span><span>{bookingPricePreview.finalPrice.toFixed(2)} EUR</span></div>
+            </div>
           </div>
 
           {/* Status */}

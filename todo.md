@@ -56,3 +56,21 @@
 ## Hotfix v2.16.11
 
 - [x] Schwarze Seite beim Öffnen einer Sponsor-Detailansicht durch fehlertolerante Normalisierung historischer und aktueller Sponsor-Daten behoben; korrigiertes Endnutzer-Release v2.16.12 bereitstellen.
+
+## Sponsorenbuchungen und Preise
+
+- [x] Buchungsablauf, Preisbestandteile, Rabatte, Laufzeiten und Konfliktprüfungen im Sponsoring vereinheitlichen und verständlicher darstellen.
+- [x] Buchungsvorschau mit nachvollziehbarer Preisberechnung, Leistungsumfang und Abrechnungsdaten vor dem Speichern ergänzen.
+- [x] Preislisten-PDF so erweitern, dass pro Werbe-Position sämtliche hinterlegten Daten vollständig und mehrseitig ausgegeben werden.
+
+## Qualitätsprüfung und Weiterentwicklung
+
+- [x] PodCore nach dem Sponsoring-Update auf TypeScript-, Build-, Datenmigrations-, Export- und zentrale Nutzerwegfehler prüfen; Ergebnisse in `docs/QUALITAETSPRUEFUNG-2.16.13.md` festhalten.
+- [x] Anwenderorientierten Verbesserungsplan mit Prioritäten, Nutzen und Abhängigkeiten für die nächsten PodCore-Versionen erstellen.
+
+## Priorisierte Weiterentwicklung nach v2.16.13
+
+- [ ] Episoden-Speichern und automatische Werbeplatz-Zuweisung atomar in einer Datenbanktransaktion ausführen.
+- [ ] Gemeinsame Payload-Validierung für Episoden, Buchungen und Angebote ergänzen.
+- [ ] Authentifizierungs-Rate-Limit mit Ablaufbereinigung und vertrauenswürdiger Proxy-Konfiguration robust gestalten.
+- [ ] Sponsor-Detailseite und PDF-Exporte in testbare Unterkomponenten beziehungsweise Dienste aufteilen.

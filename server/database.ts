@@ -874,6 +874,8 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE ad_bookings ADD COLUMN price_adjustment REAL DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE ad_bookings ADD COLUMN listener_fee REAL DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE ad_bookings ADD COLUMN total_episodes INTEGER DEFAULT NULL'); } catch (_) {}
+  // v2.16.13: Preisart für transparente, serverseitige Buchungsberechnung.
+  try { db.exec("ALTER TABLE ad_bookings ADD COLUMN price_model TEXT DEFAULT 'base'"); } catch (_) {}
   // v2.12.8: sponsor_offers – Angebots-Funktion
   try {
     db.exec(`CREATE TABLE IF NOT EXISTS sponsor_offers (

@@ -127,6 +127,7 @@ function mapBookingRow(b: any) {
     bookingDate: b.booking_date,
     bookingEndDate: b.booking_end_date,
     price: b.price,
+    priceModel: b.price_model || 'base',
     priceAdjustment: b.price_adjustment,
     listenerFee: b.listener_fee,
     finalPrice: b.final_price,
@@ -149,6 +150,48 @@ function mapBookingRow(b: any) {
     createdAt: b.created_at,
     updatedAt: b.updated_at,
   };
+}
+
+type BookingPriceModel = 'base' | 'per_episode' | 'cpm';
+
+function money(value: any) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? Math.round((amount + Number.EPSILON) * 100) / 100 : 0;
+}
+
+function calculateBookingPrice(input: any) {
+  const priceModel: BookingPriceModel = ['base', 'per_episode', 'cpm'].includes(input.priceModel) ? input.priceModel : 'base';
+  const unitPrice = Math.max(0, money(input.price));
+  const placementCount = Math.max(1, Math.min(10, Math.floor(Number(input.placementCount || 1))));
+  const listenerCount = Math.max(0, Math.floor(Number(input.listenerCount || 0)));
+  const totalEpisodes = Math.max(1, Math.floor(Number(input.totalEpisodes || 0)) || (Array.isArray(input.episodeRefs) ? input.episodeRefs.reduce((sum: number, item: any) => sum + Math.max(1, Number(item?.count || 1)), 0) : 0) || 1);
+  const priceAdjustment = money(input.priceAdjustment);
+  const listenerFee = Math.max(0, money(input.listenerFee));
+  const gross = money(priceModel === 'per_episode'
+    ? unitPrice * totalEpisodes * placementCount
+    : priceModel === 'cpm'
+      ? unitPrice * (listenerCount / 1000) * totalEpisodes
+      : unitPrice);
+  const listenerFeeTotal = money(listenerFee * (listenerCount / 1000));
+  const subtotal = money(Math.max(0, gross + priceAdjustment + listenerFeeTotal));
+  const discountType = input.discountType === 'percent' ? 'percent' : 'absolute';
+  const requestedDiscount = Math.max(0, money(input.discount));
+  const discount = discountType === 'percent' ? Math.min(100, requestedDiscount) : Math.min(subtotal, requestedDiscount);
+  const discountAmount = money(discountType === 'percent' ? subtotal * discount / 100 : discount);
+  const finalPrice = money(Math.max(0, subtotal - discountAmount));
+  return { priceModel, unitPrice, placementCount, listenerCount, totalEpisodes, priceAdjustment, listenerFee, gross, listenerFeeTotal, subtotal, discount, discountType, discountAmount, finalPrice };
+}
+
+function getBookingConflicts(db: any, slotId: string, bookingDate: string, bookingEndDate?: string | null, excludeBookingId?: string) {
+  if (!slotId || !bookingDate) return [];
+  const rangeEnd = bookingEndDate || bookingDate;
+  let query = `SELECT ab.id, ab.booking_date, ab.booking_end_date, ab.status, sp.name AS sponsor_name
+    FROM ad_bookings ab JOIN sponsors sp ON sp.id = ab.sponsor_id
+    WHERE ab.slot_id = ? AND ab.status NOT IN ('storniert', 'abgeschlossen')
+      AND COALESCE(ab.booking_end_date, ab.booking_date) >= ? AND ab.booking_date <= ?`;
+  const params: any[] = [slotId, bookingDate, rangeEnd];
+  if (excludeBookingId) { query += ' AND ab.id != ?'; params.push(excludeBookingId); }
+  return (db.all(query, params) as any[]).map(row => ({ id: row.id, sponsorName: row.sponsor_name, bookingDate: row.booking_date, bookingEndDate: row.booking_end_date, status: row.status }));
 }
 
 function getMappedBooking(db: any, bookingId: string) {
@@ -179,20 +222,22 @@ router.get('/:sponsorId/bookings', requirePermission('canViewSponsors') as any, 
 
 router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const { slotId, bookingDate, bookingEndDate, price = 0, priceAdjustment = 0, listenerFee = 0, notes, invoiceStatus, status, contractId, placementCount, episodeRefs, discount = 0, discountType = 'absolute', listenerCount, totalEpisodes } = req.body;
+  const { slotId, bookingDate, bookingEndDate, notes, invoiceStatus, status, contractId, episodeRefs } = req.body;
   if (!slotId || !bookingDate) return res.status(400).json({ success: false, error: 'Werbe-Slot und Laufzeitbeginn sind erforderlich' });
+  if (bookingEndDate && bookingEndDate < bookingDate) return res.status(400).json({ success: false, error: 'Das Laufzeitende darf nicht vor dem Laufzeitbeginn liegen' });
+  if (contractId) {
+    const contract = db.get('SELECT contract_start, contract_end FROM sponsor_contracts WHERE id = ? AND sponsor_id = ?', [contractId, req.params.sponsorId]) as any;
+    if (!contract) return res.status(400).json({ success: false, error: 'Der ausgewählte Vertrag gehört nicht zu diesem Sponsor' });
+    if (bookingDate < contract.contract_start || (bookingEndDate && bookingEndDate > contract.contract_end)) return res.status(400).json({ success: false, error: 'Die Buchung liegt außerhalb der gewählten Vertragslaufzeit' });
+  }
   const id = uuidv4();
-  const basePrice = Number(price || 0) + Number(priceAdjustment || 0) + Number(listenerFee || 0);
-  const discountAmount = discountType === 'percent' ? basePrice * Number(discount || 0) / 100 : Number(discount || 0);
-  const requestedFinalPrice = Number(req.body.finalPrice);
-  const finalPrice = Number.isFinite(requestedFinalPrice)
-    ? Math.max(0, requestedFinalPrice)
-    : Math.max(0, basePrice - discountAmount);
+  const pricing = calculateBookingPrice({ ...req.body, episodeRefs });
+  const conflicts = getBookingConflicts(db, slotId, bookingDate, bookingEndDate || null);
   db.run(
-    `INSERT INTO ad_bookings (id, slot_id, sponsor_id, booking_date, booking_end_date, price, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs, discount, discount_type, listener_count, total_episodes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, slotId, req.params.sponsorId, bookingDate, bookingEndDate || null, price, priceAdjustment || 0, listenerFee || 0, finalPrice, status || 'geplant', invoiceStatus || 'offen', notes || null, contractId || null, placementCount || 1, JSON.stringify(episodeRefs || []), discount || 0, discountType || 'absolute', listenerCount || null, totalEpisodes || null],
+    `INSERT INTO ad_bookings (id, slot_id, sponsor_id, booking_date, booking_end_date, price, price_model, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs, discount, discount_type, listener_count, total_episodes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, slotId, req.params.sponsorId, bookingDate, bookingEndDate || null, pricing.unitPrice, pricing.priceModel, pricing.priceAdjustment, pricing.listenerFee, pricing.finalPrice, status || 'geplant', invoiceStatus || 'offen', notes || null, contractId || null, pricing.placementCount, JSON.stringify(episodeRefs || []), pricing.discount, pricing.discountType, pricing.listenerCount || null, pricing.totalEpisodes || null],
   );
-  return res.status(201).json({ success: true, data: getMappedBooking(db, id) });
+  return res.status(201).json({ success: true, data: { ...getMappedBooking(db, id), priceBreakdown: pricing, conflicts } });
 });
 
 router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
@@ -205,48 +250,49 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
   const slotId = b.slotId !== undefined ? b.slotId : existing.slot_id;
   const bookingDate = b.bookingDate !== undefined ? b.bookingDate : existing.booking_date;
   const bookingEndDate = b.bookingEndDate !== undefined ? (b.bookingEndDate || null) : existing.booking_end_date;
-  const price = b.price !== undefined ? Number(b.price || 0) : Number(existing.price || 0);
-  const priceAdjustment = b.priceAdjustment !== undefined ? Number(b.priceAdjustment || 0) : Number(existing.price_adjustment || 0);
-  const listenerFee = b.listenerFee !== undefined ? Number(b.listenerFee || 0) : Number(existing.listener_fee || 0);
-  const discount = b.discount !== undefined ? Number(b.discount || 0) : Number(existing.discount || 0);
-  const discountType = b.discountType !== undefined ? b.discountType : (existing.discount_type || 'absolute');
-  const requestedFinalPrice = Number(b.finalPrice);
-  const priceChanged = ['price', 'priceAdjustment', 'listenerFee', 'discount', 'discountType'].some(key => b[key] !== undefined);
-  const basePrice = price + priceAdjustment + listenerFee;
-  const discountAmount = discountType === 'percent' ? basePrice * discount / 100 : discount;
-  const finalPrice = b.finalPrice !== undefined && Number.isFinite(requestedFinalPrice)
-    ? Math.max(0, requestedFinalPrice)
-    : priceChanged
-      ? Math.max(0, basePrice - discountAmount)
-      : Number(existing.final_price || 0);
   const episodeRefs = b.episodeRefs !== undefined
     ? JSON.stringify(Array.isArray(b.episodeRefs) ? b.episodeRefs : [])
     : existing.episode_refs;
+  const decodedEpisodeRefs = typeof episodeRefs === 'string' ? JSON.parse(episodeRefs || '[]') : episodeRefs;
+  const pricing = calculateBookingPrice({
+    price: b.price !== undefined ? b.price : existing.price,
+    priceModel: b.priceModel !== undefined ? b.priceModel : existing.price_model,
+    priceAdjustment: b.priceAdjustment !== undefined ? b.priceAdjustment : existing.price_adjustment,
+    listenerFee: b.listenerFee !== undefined ? b.listenerFee : existing.listener_fee,
+    discount: b.discount !== undefined ? b.discount : existing.discount,
+    discountType: b.discountType !== undefined ? b.discountType : existing.discount_type,
+    placementCount: b.placementCount !== undefined ? b.placementCount : existing.placement_count,
+    listenerCount: b.listenerCount !== undefined ? b.listenerCount : existing.listener_count,
+    totalEpisodes: b.totalEpisodes !== undefined ? b.totalEpisodes : existing.total_episodes,
+    episodeRefs: decodedEpisodeRefs,
+  });
+  const conflicts = getBookingConflicts(db, slotId, bookingDate, bookingEndDate || null, bookingId);
 
   db.run(
-    `UPDATE ad_bookings SET slot_id = ?, booking_date = ?, booking_end_date = ?, price = ?, price_adjustment = ?, listener_fee = ?, final_price = ?, status = ?, invoice_status = ?, notes = ?, contract_id = ?, placement_count = ?, episode_refs = ?, discount = ?, discount_type = ?, listener_count = ?, total_episodes = ?, updated_at = datetime('now') WHERE id = ?`,
+    `UPDATE ad_bookings SET slot_id = ?, booking_date = ?, booking_end_date = ?, price = ?, price_model = ?, price_adjustment = ?, listener_fee = ?, final_price = ?, status = ?, invoice_status = ?, notes = ?, contract_id = ?, placement_count = ?, episode_refs = ?, discount = ?, discount_type = ?, listener_count = ?, total_episodes = ?, updated_at = datetime('now') WHERE id = ?`,
     [
       slotId,
       bookingDate,
       bookingEndDate,
-      price,
-      priceAdjustment,
-      listenerFee,
-      finalPrice,
+      pricing.unitPrice,
+      pricing.priceModel,
+      pricing.priceAdjustment,
+      pricing.listenerFee,
+      pricing.finalPrice,
       b.status !== undefined ? b.status : existing.status,
       b.invoiceStatus !== undefined ? b.invoiceStatus : existing.invoice_status,
       b.notes !== undefined ? (b.notes || null) : existing.notes,
       b.contractId !== undefined ? (b.contractId || null) : existing.contract_id,
-      b.placementCount !== undefined ? (Number(b.placementCount) || 1) : existing.placement_count,
+      pricing.placementCount,
       episodeRefs,
-      discount,
-      discountType,
-      b.listenerCount !== undefined ? (b.listenerCount || null) : existing.listener_count,
-      b.totalEpisodes !== undefined ? (b.totalEpisodes || null) : existing.total_episodes,
+      pricing.discount,
+      pricing.discountType,
+      pricing.listenerCount || null,
+      pricing.totalEpisodes || null,
       bookingId,
     ],
   );
-  return res.json({ success: true, data: getMappedBooking(db, bookingId) });
+  return res.json({ success: true, data: { ...getMappedBooking(db, bookingId), priceBreakdown: pricing, conflicts } });
 });
 
 router.delete('/bookings/:bookingId', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {

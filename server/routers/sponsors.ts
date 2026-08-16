@@ -715,8 +715,6 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
 
   const layoutId = req.query.layoutId as string | undefined;
   const layout = layoutId ? (getLayoutById(layoutId) || getDefaultLayoutForType('invoice')) : getDefaultLayoutForType('invoice');
-  const showDescriptions = layout.sections?.showPricelistDescriptions !== false;
-  const showExclusive = layout.sections?.showPricelistExclusive !== false;
   const m = layout.pageMargin;
 
   const customDocTitle = req.query.documentTitle as string | undefined;
@@ -740,65 +738,101 @@ router.get('/price-list-pdf', requirePermission('canViewSponsors') as any, (req:
   res.setHeader('Content-Disposition', 'attachment; filename="preisliste-werbung.pdf"');
   doc.pipe(res);
 
-  renderPdfHeader(doc, layout, { podcastName, documentTitle, logoPath });
-
-  const tblW = doc.page.width - m * 2;
   const positionLabels: Record<string, string> = {
     'pre-roll': 'Pre-Roll', 'mid-roll': 'Mid-Roll', 'post-roll': 'Post-Roll', 'host-read': 'Host-Read',
   };
+  const contentWidth = doc.page.width - m * 2;
+  const formatPrice = (value: any, currency = 'EUR') => value === null || value === undefined || value === ''
+    ? 'Nicht hinterlegt'
+    : `${Number(value || 0).toFixed(2)} ${currency}`;
+  const safeText = (value: any) => String(value || '').trim();
+  let pageNumber = 1;
+  const closePage = () => {
+    renderWatermark(doc, layout);
+    renderPdfFooter(doc, layout, { podcastName, pageNum: pageNumber });
+  };
+  const drawPageIntro = (continued = false) => {
+    renderPdfHeader(doc, layout, { podcastName, documentTitle: continued ? `${documentTitle} – Fortsetzung` : documentTitle, logoPath });
+    doc.fontSize(layout.typography.smallSize).font(layout.typography.fontFamily).fillColor(layout.colors.muted)
+      .text('Vollständige Leistungs- und Preisangaben je Werbe-Position. Nicht hinterlegte Werte werden ausdrücklich ausgewiesen.', m, doc.y + 4, { width: contentWidth });
+    doc.moveDown(1);
+  };
+  const nextPage = () => {
+    closePage();
+    doc.addPage();
+    pageNumber += 1;
+    drawPageIntro(true);
+  };
+
+  drawPageIntro();
 
   if (categories.length === 0) {
     doc.fontSize(layout.typography.bodySize).fillColor(layout.colors.muted)
       .text('Keine Werbekategorien vorhanden.', m, doc.y + 10);
   } else {
-    doc.fontSize(layout.typography.smallSize).font(`${layout.typography.fontFamily}-Bold`);
-    doc.rect(m, doc.y, tblW, 20).fill(layout.colors.secondary);
-    const tableY = doc.y - 20;
-    const c1 = m + 5, c2 = m + tblW * 0.30, c3 = m + tblW * 0.46, c4 = m + tblW * 0.58, c5 = m + tblW * 0.72, c6 = m + tblW * 0.86;
-    doc.fillColor('#ffffff');
-    doc.text('Kategorie', c1, tableY + 6, { width: tblW * 0.27 });
-    doc.text('Position', c2, tableY + 6, { width: tblW * 0.14 });
-    doc.text('Dauer', c3, tableY + 6, { width: tblW * 0.10 });
-    doc.text('Basispreis', c4, tableY + 6, { width: tblW * 0.12 });
-    doc.text('Preis/Folge', c5, tableY + 6, { width: tblW * 0.12 });
-    doc.text('Exklusiv', c6, tableY + 6, { width: tblW * 0.12 });
-    doc.moveDown(0.5);
+    const pageBottom = doc.page.height - m - 40;
+    categories.forEach((cat: any, index: number) => {
+      const description = safeText(cat.description);
+      const presentationTemplate = safeText(cat.presentation_template);
+      doc.font(layout.typography.fontFamily).fontSize(layout.typography.smallSize);
+      const descriptionHeight = description ? doc.heightOfString(description, { width: contentWidth - 28 }) + 10 : 0;
+      const templateHeight = presentationTemplate ? doc.heightOfString(presentationTemplate, { width: contentWidth - 28 }) + 18 : 0;
+      const cardHeight = 106 + descriptionHeight + templateHeight;
+      if (doc.y + cardHeight > pageBottom) nextPage();
 
-    let rowY = doc.y;
-    const maxY = doc.page.height - m - 60;
-    categories.forEach((cat: any, i: number) => {
-      if (rowY > maxY) { doc.addPage(); rowY = m; }
-      const bg = i % 2 === 0 ? '#f8f9fa' : '#ffffff';
-      doc.rect(m, rowY, tblW, 22).fill(bg);
-      doc.fillColor(layout.colors.text).fontSize(layout.typography.smallSize).font(layout.typography.fontFamily);
-      if (cat.color) { doc.circle(c1 + 5, rowY + 11, 4).fill(cat.color); }
-      const nameX = cat.color ? c1 + 14 : c1;
-      doc.fillColor(layout.colors.text);
-      doc.text(cat.name || '-', nameX, rowY + 7, { width: tblW * 0.25 });
-      doc.text(positionLabels[cat.default_position] || cat.default_position || '-', c2, rowY + 7, { width: tblW * 0.14 });
-      doc.text(cat.default_duration ? `${cat.default_duration}s` : '-', c3, rowY + 7, { width: tblW * 0.10 });
-      const bp = cat.base_price != null ? `${parseFloat(cat.base_price).toFixed(2)} ${cat.currency || 'EUR'}` : '-';
-      const pp = cat.price_per_episode != null ? `${parseFloat(cat.price_per_episode).toFixed(2)} ${cat.currency || 'EUR'}` : '-';
-      doc.text(bp, c4, rowY + 7, { width: tblW * 0.12 });
-      doc.text(pp, c5, rowY + 7, { width: tblW * 0.12 });
-      if (showExclusive) { doc.text(cat.is_exclusive ? 'Ja' : 'Nein', c6, rowY + 7, { width: tblW * 0.12 }); }
-      if (showDescriptions && cat.description) {
-        rowY += 22;
-        if (rowY > maxY) { doc.addPage(); rowY = m; }
-        doc.fillColor(layout.colors.muted).fontSize(layout.typography.smallSize - 1)
-          .text(cat.description.length > 80 ? cat.description.substring(0, 78) + '\u2026' : cat.description, c1 + 14, rowY + 3, { width: tblW - 20 });
-        rowY += 16;
-      } else { rowY += 22; }
+      const cardY = doc.y;
+      doc.roundedRect(m, cardY, contentWidth, cardHeight, 6).fill('#f8f9fa');
+      doc.roundedRect(m, cardY, 7, cardHeight, 3).fill(cat.color || layout.colors.accent);
+      doc.fillColor(layout.colors.text).font(`${layout.typography.fontFamily}-Bold`).fontSize(layout.typography.bodySize)
+        .text(`${index + 1}. ${cat.name || 'Unbenannte Werbe-Position'}`, m + 16, cardY + 12, { width: contentWidth - 32 });
+      const metadata = [
+        `Position: ${positionLabels[cat.default_position] || cat.default_position || 'Nicht hinterlegt'}`,
+        `Dauer: ${cat.default_duration ? `${cat.default_duration} Sekunden` : 'Nicht hinterlegt'}`,
+        `Exklusivität: ${cat.is_exclusive ? 'Exklusiv' : 'Nicht exklusiv'}`,
+        `Status: ${cat.is_active ? 'Aktiv' : 'Inaktiv'}`,
+      ].join('   |   ');
+      doc.font(layout.typography.fontFamily).fontSize(layout.typography.smallSize).fillColor(layout.colors.muted)
+        .text(metadata, m + 16, cardY + 34, { width: contentWidth - 32 });
+
+      const priceY = cardY + 56;
+      const priceBlocks = [
+        ['Basispreis', formatPrice(cat.base_price, cat.currency || 'EUR')],
+        ['Preis pro Folge', formatPrice(cat.price_per_episode, cat.currency || 'EUR')],
+        ['CPM / 1.000 Hörer', formatPrice(cat.price_per_1000_listens, cat.currency || 'EUR')],
+      ];
+      priceBlocks.forEach(([label, value], priceIndex) => {
+        const blockX = m + 16 + priceIndex * ((contentWidth - 32) / 3);
+        doc.font(`${layout.typography.fontFamily}-Bold`).fontSize(layout.typography.smallSize - 1).fillColor(layout.colors.muted)
+          .text(label, blockX, priceY, { width: (contentWidth - 32) / 3 - 8 });
+        doc.font(layout.typography.fontFamily).fontSize(layout.typography.bodySize).fillColor(layout.colors.text)
+          .text(value, blockX, priceY + 13, { width: (contentWidth - 32) / 3 - 8 });
+      });
+
+      let detailY = priceY + 38;
+      if (description) {
+        doc.font(`${layout.typography.fontFamily}-Bold`).fontSize(layout.typography.smallSize - 1).fillColor(layout.colors.muted)
+          .text('Beschreibung', m + 16, detailY, { width: contentWidth - 32 });
+        detailY += 11;
+        doc.font(layout.typography.fontFamily).fontSize(layout.typography.smallSize).fillColor(layout.colors.text)
+          .text(description, m + 16, detailY, { width: contentWidth - 32 });
+        detailY += descriptionHeight - 2;
+      }
+      if (presentationTemplate) {
+        doc.font(`${layout.typography.fontFamily}-Bold`).fontSize(layout.typography.smallSize - 1).fillColor(layout.colors.muted)
+          .text('Moderations- / Standardtext', m + 16, detailY, { width: contentWidth - 32 });
+        detailY += 11;
+        doc.font(layout.typography.fontFamily).fontSize(layout.typography.smallSize).fillColor(layout.colors.text)
+          .text(presentationTemplate, m + 16, detailY, { width: contentWidth - 32 });
+      }
+      doc.y = cardY + cardHeight + 12;
     });
-    doc.moveDown(1);
     doc.moveTo(m, doc.y).lineTo(doc.page.width - m, doc.y).strokeColor(layout.colors.accent).lineWidth(1).stroke();
     doc.moveDown(0.5);
     doc.fontSize(layout.typography.smallSize).font(layout.typography.fontFamily).fillColor(layout.colors.muted)
-      .text(`${categories.length} Kategorie${categories.length !== 1 ? 'n' : ''} | Stand: ${new Date().toLocaleDateString('de-DE')}`, m, doc.y);
+      .text(`${categories.length} Werbe-Position${categories.length !== 1 ? 'en' : ''} vollständig ausgegeben | Stand: ${new Date().toLocaleDateString('de-DE')}`, m, doc.y);
   }
 
-  renderWatermark(doc, layout);
-  renderPdfFooter(doc, layout, { podcastName, pageNum: 1 });
+  closePage();
   doc.end();
 });
 
