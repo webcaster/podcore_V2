@@ -105,6 +105,30 @@
   color: #cbd5e1;
 }
 
+.tutorial-action-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(167, 139, 250, 0.55);
+  border-radius: 12px;
+  background: rgba(124, 58, 237, 0.14);
+  color: #ede9fe;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tutorial-action-hint__pulse {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: #a78bfa;
+  box-shadow: 0 0 0 5px rgba(167, 139, 250, 0.16);
+}
+
 .tutorial-annotations-list {
   padding: 16px 24px;
   background: rgba(20, 20, 32, 0.5);

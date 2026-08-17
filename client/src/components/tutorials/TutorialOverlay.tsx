@@ -128,6 +128,9 @@ export const TutorialOverlay: React.FC = () => {
   const step = activeTutorial.steps[currentStep];
   const isLastStep = currentStep === activeTutorial.steps.length - 1;
   const highlightColor = step.highlightColor || 'rgba(124, 58, 237, 0.15)';
+  const targetLabel = step.target && TARGET_ROUTES[step.target]
+    ? Object.entries(TARGET_ROUTES).find(([target]) => target === step.target)?.[0]?.replace('nav-', '').replace(/-/g, ' ')
+    : null;
 
   return (
     <>
@@ -205,6 +208,12 @@ export const TutorialOverlay: React.FC = () => {
 
           {/* Description */}
           <div className="tutorial-body">
+            {step.target && (
+              <div className="tutorial-action-hint" role="status">
+                <span className="tutorial-action-hint__pulse" aria-hidden="true" />
+                <span><strong>Nächste Aktion:</strong> Klicke auf den violett hervorgehobenen Bereich{targetLabel ? ` (${targetLabel})` : ''}.</span>
+              </div>
+            )}
             <p className="text-base text-text-secondary leading-relaxed whitespace-pre-wrap">
               {step.description}
             </p>

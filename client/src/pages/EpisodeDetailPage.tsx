@@ -2013,10 +2013,18 @@ export default function EpisodeDetailPage() {
                     <Loader2 size={18} className="animate-spin text-accent-purple" />
                   </div>
                 ) : v2Bookings.length === 0 ? (
-                  <div className="text-center py-8 border border-dashed border-purple-700/30 rounded-xl">
-                    <Megaphone size={28} className="mx-auto mb-2 text-purple-600 opacity-40" />
-                    <p className="text-text-muted text-sm">Keine v2-Buchungen für diese Episode</p>
-                    <p className="text-text-muted text-xs mt-1">Buchungen werden über die Sponsor-Detailseite oder hier erstellt.</p>
+                  <div className="text-center py-8 px-4 border border-dashed border-purple-700/30 rounded-xl bg-obsidian-900/20">
+                    <Megaphone size={28} className="mx-auto mb-2 text-purple-500 opacity-70" />
+                    <p className="text-text-primary text-sm font-medium">Noch keine Werbeplatzbuchung</p>
+                    <p className="text-text-muted text-xs mt-1 max-w-md mx-auto">Lege einen Werbeplatz für diese Episode an, damit Laufzeit, Preis und Abrechnung direkt der Folge zugeordnet sind.</p>
+                    {can('canEditSponsors') && (
+                      <button
+                        onClick={() => { setV2BookingForm({ slotId: '', price: '', notes: '' }); setShowV2BookingModal(true); }}
+                        className="btn-primary text-xs mt-4"
+                      >
+                        <Plus size={14} /> Werbeplatz buchen
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">

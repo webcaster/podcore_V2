@@ -21,6 +21,9 @@
 - [x] Nutzertest-Analyse WaveSurfer-Audio-Editor: Ladeverhalten, Wiedergabe, Wellenform, Marker, Kommentare, Loop, Tastatursteuerung, Schnittplan-Export und Fehlermeldungen analysiert.
 - [x] Nutzertest-Patch WaveSurfer-Audio-Editor: Markierungen, Regionen, zeitbezogene Kommentare und Dateimetadaten als übersichtliche PDF-Schnittliste exportieren.
 - [x] Nutzertest-Analyse WaveSurfer-Audio-Editor: Adobe-Audition-Importweg für PodCore-Schnittlisten geprüft und als CSV-Export plus Anleitung ergänzt.
+- [ ] Kritischer WordPress-Tutorial-Patch: JSON-Import übernimmt Schritttexte, Beschreibungen, Bildverknüpfungen und Marker vollständig; Frontend zeigt pro Schritt eine lesbare, nummerierte Screenshot-Annotation inklusive Erklärung.
+- [ ] Tutorial-Führung in der App: Schritte navigieren bei Bedarf zur Zielseite, markieren das konfigurierte Menü oder Bedienelement sichtbar, führen den nächsten Klick kontextbezogen und speichern den Fortschritt pro Benutzer.
+- [ ] Episoden-Editor: Technischen Hinweis zu fehlenden v2-Buchungen durch eine klare Leeransicht für Werbeplatzbuchungen mit direkter Anlegen- oder Auswahlaktion ersetzen.
 
 ## Branding
 
