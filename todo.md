@@ -3,6 +3,24 @@
 - [ ] Lizenzsystem nach Abschluss der Stabilisierung bewusst aktivieren: 14 Tage Volltest, 14 Tage Offline-Grace-Period und anschließender Nur-Lese-Modus.
 - [ ] Lizenzverwaltung erst im Stabilitäts-Release wieder sichtbar schalten und vor der Veröffentlichung mit DLM auf podcore.de testen.
 - [ ] Lizenzstufen Basis, Studio und Lifetime vor Aktivierung final mit den geplanten Lizenzprodukten und Lizenzschlüsseln abgleichen.
+- [ ] Separate lokale Entwickler-Testversion erstellen: Lizenzoberfläche und Testaktivierung sichtbar, klar als Nicht-Produktivmodus markiert, ohne GitHub-Upload.
+- [ ] Lokale Entwicklerwerkzeuge ergänzen: Systemdiagnose, kontrollierte Testdaten, lokale Fehlerprotokolle, Funktionsstatus und sichere Entwicklungsaktionen ohne Produktivdaten zu verändern.
+- [x] WordPress-Tutorial-Plugin für PodCore überarbeitet: JSON-Import, Screenshot-Verarbeitung, The7/WPBakery-kompatible Grid-Ausgabe, Download und sichere Fehlerbehandlung geprüft und als separates lokales ZIP bereitgestellt.
+- [x] Nutzertest-Patch Sponsoring: Abrechnungsablauf mit Verträgen, Buchungen und Leistungsübersicht fachlich geprüft und korrigiert.
+- [x] Kritischer Nutzertest-Patch Sponsoring: Buchungen beim Sponsor speichern, nach Neuladen anzeigen und bearbeiten; API-, Datenbank- und UI-Pfad gemeinsam abgesichert.
+- [x] Kritischer Nutzertest-Patch Tutorials: Einzelnes Tutorial als vollständige JSON-Datei herunterladen; Detailansicht, Download-Handler, Rollen, Screenshots und Re-Import geprüft.
+- [x] Nutzertest-Patch Papierkorb: Löschen, Wiederherstellen und endgültige Bereinigung für Episoden, Ideen, Sponsoren und Medien erneut geprüft.
+- [x] Nutzertest-Patch Papierkorb: Direkte Papierkorb-Zugriffe in den Bereichen mit Löschfunktionen ergänzt und den aktuellen Bereich beim Öffnen vorgefiltert.
+- [x] Nutzertest-Patch Papierkorb: Endgültiges Löschen ausschließlich für `canManageTrash` mit deutlicher Sicherheitsfrage, Objektname und nicht umkehrbarer Bestätigung umgesetzt.
+- [x] Patch v2.16.15: Alle nach abgeschlossenem Nutzertest bestätigten Sponsoring-, Tutorial-, Episoden-, Audio- und Papierkorbkorrekturen gebündelt, geprüft und dokumentiert.
+- [x] Patch v2.16.15 WordPress-Workflow: Tutorial-Plugin und App-Austausch für Einzel-JSON-Downloads, Screenshot-Übernahme, Katalog-Metadaten, Kompatibilitätsprüfung, Importstatus und verständliche Fehlerhinweise verbessert.
+- [x] Nutzertest-Patch Sponsoring: Feldgrößen, Zahlenfelder und Währungsauswahl in der Werbeplatzbuchung konsistent und responsiv ausgerichtet.
+- [x] Nutzertest-Patch Episoden-Editor: Bezeichnung „Buchungen v2 v2.12.0“ in „Werbeplatzbuchungen“ geändert und die nicht benötigte Live-Vorschau entfernt.
+- [x] Nutzertest-Patch Tutorials: Abgeschlossene Tutorialschritte und bereits angesehene Tutorials pro Benutzer dauerhaft speichern und korrekt wiederherstellen.
+- [x] Nutzertest-Analyse Episoden-Editor: Bearbeitungsfluss, Blockverwaltung, technische Standardprofile, Werbeplatzbuchungen, Freigaben und Fehlerrobustheit analysiert.
+- [x] Nutzertest-Analyse WaveSurfer-Audio-Editor: Ladeverhalten, Wiedergabe, Wellenform, Marker, Kommentare, Loop, Tastatursteuerung, Schnittplan-Export und Fehlermeldungen analysiert.
+- [x] Nutzertest-Patch WaveSurfer-Audio-Editor: Markierungen, Regionen, zeitbezogene Kommentare und Dateimetadaten als übersichtliche PDF-Schnittliste exportieren.
+- [x] Nutzertest-Analyse WaveSurfer-Audio-Editor: Adobe-Audition-Importweg für PodCore-Schnittlisten geprüft und als CSV-Export plus Anleitung ergänzt.
 
 ## Branding
 

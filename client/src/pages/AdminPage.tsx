@@ -88,6 +88,11 @@ const ALL_PERMISSIONS = [
 const PERMISSION_GROUPS = [...new Set(ALL_PERMISSIONS.map(p => p.group))];
 
 const emptyPermissions = () => Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, false]));
+type TrashEntityType = 'all' | 'idea' | 'episode' | 'sponsor' | 'asset';
+const readInitialTrashType = (): TrashEntityType => {
+  const type = new URLSearchParams(window.location.search).get('type');
+  return ['idea', 'episode', 'sponsor', 'asset'].includes(type || '') ? type as TrashEntityType : 'all';
+};
 
 export default function AdminPage() {
   const { can, user: currentUser, showSuccess, showError, refreshUser } = useApp();
@@ -95,7 +100,9 @@ export default function AdminPage() {
   const [roles, setRoles] = useState<any[]>([]);
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'modules' | 'system' | 'database' | 'trash' | 'tutorials' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'modules' | 'system' | 'database' | 'trash' | 'tutorials' | 'logs'>(() =>
+    new URLSearchParams(window.location.search).get('tab') === 'trash' ? 'trash' : 'users'
+  );
 
   // Database Migration State
   const [dbStatus, setDbStatus] = useState<any>(null);
@@ -108,6 +115,7 @@ export default function AdminPage() {
   const [trashEntries, setTrashEntries] = useState<any[]>([]);
   const [isTrashLoading, setIsTrashLoading] = useState(false);
   const [isTrashMutating, setIsTrashMutating] = useState<string | null>(null);
+  const [trashTypeFilter, setTrashTypeFilter] = useState<TrashEntityType>(readInitialTrashType);
   const { features } = useFeatures();
   const [featureForm, setFeatureForm] = useState<Record<string, boolean>>({});
   const [isSavingFeatures, setIsSavingFeatures] = useState(false);
@@ -273,7 +281,12 @@ export default function AdminPage() {
   };
 
   const purgeTrashEntry = async (entry: any) => {
-    if (!window.confirm(`„${entry.title}“ endgültig entfernen? Dieser Vorgang kann nicht rückgängig gemacht werden.`)) return;
+    const confirmation = window.prompt(`„${entry.title}“ endgültig entfernen? Dieser Vorgang kann nicht rückgängig gemacht werden.\n\nTippe den Namen des Elements exakt ein, um fortzufahren:`);
+    if (confirmation === null) return;
+    if (confirmation.trim() !== String(entry.title || '').trim()) {
+      showError('Der eingegebene Name stimmt nicht überein. Die endgültige Löschung wurde abgebrochen.');
+      return;
+    }
     setIsTrashMutating(entry.id);
     try {
       await adminApi.purgeTrash(entry.id);
@@ -288,6 +301,10 @@ export default function AdminPage() {
     if (activeTab === 'logs') loadLogs();
     if (activeTab === 'trash') loadTrash();
   }, [activeTab]);
+
+  const visibleTrashEntries = trashTypeFilter === 'all'
+    ? trashEntries
+    : trashEntries.filter(entry => entry.entityType === trashTypeFilter);
 
   // ── User CRUD ──────────────────────────────────────────────
   const handleSaveUser = async (e: React.FormEvent) => {
@@ -559,17 +576,24 @@ export default function AdminPage() {
               </div>
             </div>
           </div>
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-text-secondary">{trashEntries.length} wiederherstellbare Einträge</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+            <div className="flex flex-wrap gap-2">
+              {([
+                ['all', 'Alle'], ['episode', 'Episoden'], ['idea', 'Ideen'], ['sponsor', 'Sponsoren'], ['asset', 'Medien'],
+              ] as Array<[TrashEntityType, string]>).map(([type, label]) => (
+                <button key={type} onClick={() => setTrashTypeFilter(type)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${trashTypeFilter === type ? 'bg-accent-purple text-white' : 'bg-obsidian-800 text-text-secondary hover:text-text-primary'}`}>{label}</button>
+              ))}
+            </div>
+            <p className="text-sm text-text-secondary">{visibleTrashEntries.length} wiederherstellbare Einträge</p>
             <button onClick={loadTrash} className="btn-secondary text-sm"><RefreshCw size={14} />Aktualisieren</button>
           </div>
           {isTrashLoading ? (
             <div className="flex justify-center py-12"><Loader2 className="animate-spin text-accent-purple" size={28} /></div>
-          ) : trashEntries.length === 0 ? (
-            <div className="card text-center py-12 text-text-muted"><Trash2 size={32} className="mx-auto mb-3 opacity-40" /><p>Der Papierkorb ist leer.</p></div>
+          ) : visibleTrashEntries.length === 0 ? (
+            <div className="card text-center py-12 text-text-muted"><Trash2 size={32} className="mx-auto mb-3 opacity-40" /><p>{trashEntries.length === 0 ? 'Der Papierkorb ist leer.' : 'Für diesen Bereich liegen keine Einträge im Papierkorb.'}</p></div>
           ) : (
             <div className="space-y-2">
-              {trashEntries.map(entry => {
+              {visibleTrashEntries.map(entry => {
                 const busy = isTrashMutating === entry.id;
                 const label = ({ idea: 'Idee', episode: 'Episode', sponsor: 'Sponsor', asset: 'Medium' } as Record<string, string>)[entry.entityType] || entry.entityType;
                 return <div key={entry.id} className="card flex flex-col sm:flex-row sm:items-center gap-3">

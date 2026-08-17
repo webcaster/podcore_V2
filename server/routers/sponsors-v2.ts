@@ -119,6 +119,19 @@ function mapBookingRow(b: any) {
     episodeRefs = Array.isArray(parsed) ? parsed : [];
   } catch (_) {}
 
+  const pricing = calculateBookingPrice({
+    price: b.price,
+    priceModel: b.price_model,
+    priceAdjustment: b.price_adjustment,
+    listenerFee: b.listener_fee,
+    discount: b.discount,
+    discountType: b.discount_type,
+    placementCount: b.placement_count,
+    listenerCount: b.listener_count,
+    totalEpisodes: b.total_episodes,
+    episodeRefs,
+  });
+
   return {
     id: b.id,
     slotId: b.slot_id,
@@ -130,7 +143,11 @@ function mapBookingRow(b: any) {
     priceModel: b.price_model || 'base',
     priceAdjustment: b.price_adjustment,
     listenerFee: b.listener_fee,
-    finalPrice: b.final_price,
+    grossPrice: pricing.gross,
+    subtotal: pricing.subtotal,
+    discountAmount: pricing.discountAmount,
+    listenerFeeTotal: pricing.listenerFeeTotal,
+    finalPrice: b.final_price == null ? pricing.finalPrice : money(b.final_price),
     invoiceStatus: b.invoice_status,
     invoiceNumber: b.invoice_number,
     invoiceDate: b.invoice_date,
@@ -250,6 +267,16 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
   const slotId = b.slotId !== undefined ? b.slotId : existing.slot_id;
   const bookingDate = b.bookingDate !== undefined ? b.bookingDate : existing.booking_date;
   const bookingEndDate = b.bookingEndDate !== undefined ? (b.bookingEndDate || null) : existing.booking_end_date;
+  if (!slotId || !bookingDate) return res.status(400).json({ success: false, error: 'Werbe-Slot und Laufzeitbeginn sind erforderlich' });
+  if (bookingEndDate && bookingEndDate < bookingDate) return res.status(400).json({ success: false, error: 'Das Laufzeitende darf nicht vor dem Laufzeitbeginn liegen' });
+  const contractId = b.contractId !== undefined ? (b.contractId || null) : existing.contract_id;
+  if (contractId) {
+    const contract = db.get('SELECT contract_start, contract_end FROM sponsor_contracts WHERE id = ? AND sponsor_id = ?', [contractId, existing.sponsor_id]) as any;
+    if (!contract) return res.status(400).json({ success: false, error: 'Der ausgewählte Vertrag gehört nicht zu diesem Sponsor' });
+    if (bookingDate < contract.contract_start || (bookingEndDate && bookingEndDate > contract.contract_end)) {
+      return res.status(400).json({ success: false, error: 'Die Buchung liegt außerhalb der gewählten Vertragslaufzeit' });
+    }
+  }
   const episodeRefs = b.episodeRefs !== undefined
     ? JSON.stringify(Array.isArray(b.episodeRefs) ? b.episodeRefs : [])
     : existing.episode_refs;
@@ -282,7 +309,7 @@ router.put('/bookings/:bookingId', requirePermission('canEditSponsors') as any, 
       b.status !== undefined ? b.status : existing.status,
       b.invoiceStatus !== undefined ? b.invoiceStatus : existing.invoice_status,
       b.notes !== undefined ? (b.notes || null) : existing.notes,
-      b.contractId !== undefined ? (b.contractId || null) : existing.contract_id,
+      contractId,
       pricing.placementCount,
       episodeRefs,
       pricing.discount,

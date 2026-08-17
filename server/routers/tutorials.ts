@@ -332,20 +332,30 @@ router.post('/tutorials/:id/progress', requireAuth, async (req: AuthRequest, res
   try {
     const db = getDb();
     const user = req.user!;
-    const { completed, skipped, currentStep } = req.body;
+    const { completed, skipped, currentStep } = req.body || {};
     const now = new Date().toISOString();
+
+    const tutorial = db.get('SELECT id FROM tutorials WHERE id = ?', [req.params.id]) as any;
+    if (!tutorial) return res.status(404).json({ error: 'Tutorial nicht gefunden' });
 
     const existing = db.get(
       'SELECT id FROM user_tutorial_progress WHERE tutorial_id = ? AND user_id = ?',
       [req.params.id, user.id]
     ) as any;
 
+    const previous = existing
+      ? db.get('SELECT completed, skipped, current_step FROM user_tutorial_progress WHERE id = ?', [existing.id]) as any
+      : null;
+    const nextCompleted = typeof completed === 'boolean' ? completed : previous?.completed === 1;
+    const nextSkipped = nextCompleted ? false : (typeof skipped === 'boolean' ? skipped : previous?.skipped === 1);
+    const nextStep = Number.isFinite(Number(currentStep)) ? Math.max(0, Math.floor(Number(currentStep))) : (previous?.current_step || 0);
+
     if (existing) {
       db.run(
         `UPDATE user_tutorial_progress
          SET completed = ?, completed_at = ?, skipped = ?, current_step = ?, updated_at = ?
          WHERE tutorial_id = ? AND user_id = ?`,
-        [completed ? 1 : 0, completed ? now : null, skipped ? 1 : 0, currentStep ?? 0, now,
+        [nextCompleted ? 1 : 0, nextCompleted ? now : null, nextSkipped ? 1 : 0, nextStep, now,
          req.params.id, user.id]
       );
     } else {
@@ -353,11 +363,11 @@ router.post('/tutorials/:id/progress', requireAuth, async (req: AuthRequest, res
         `INSERT INTO user_tutorial_progress
          (id, user_id, tutorial_id, completed, completed_at, skipped, current_step, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [uuidv4(), user.id, req.params.id, completed ? 1 : 0, completed ? now : null,
-         skipped ? 1 : 0, currentStep ?? 0, now, now]
+        [uuidv4(), user.id, req.params.id, nextCompleted ? 1 : 0, nextCompleted ? now : null,
+         nextSkipped ? 1 : 0, nextStep, now, now]
       );
     }
-    res.json({ success: true });
+    res.json({ success: true, data: { completed: nextCompleted, completedAt: nextCompleted ? now : null, skipped: nextSkipped, currentStep: nextStep } });
   } catch (error) {
     console.error('Error updating progress:', error);
     res.status(500).json({ error: 'Fehler beim Speichern des Fortschritts' });

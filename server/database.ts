@@ -1337,6 +1337,7 @@ function initializeSchema(db: any): void {
         user_id TEXT NOT NULL,
         tutorial_id TEXT NOT NULL,
         completed INTEGER NOT NULL DEFAULT 0,
+        completed_at TEXT DEFAULT NULL,
         skipped INTEGER NOT NULL DEFAULT 0,
         current_step INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -1366,6 +1367,15 @@ function initializeSchema(db: any): void {
     if (!columns.includes('cloud_updated_at')) db.run('ALTER TABLE tutorials ADD COLUMN cloud_updated_at TEXT');
   } catch (error) {
     console.warn('[DB] Tutorial-Migration konnte nicht vollständig abgeschlossen werden:', error instanceof Error ? error.message : error);
+  }
+
+  try {
+    const progressColumns = (db.all('PRAGMA table_info(user_tutorial_progress)', []) as any[]).map((column: any) => column.name);
+    if (!progressColumns.includes('completed_at')) {
+      db.run('ALTER TABLE user_tutorial_progress ADD COLUMN completed_at TEXT DEFAULT NULL');
+    }
+  } catch (error) {
+    console.warn('[DB] Tutorial-Fortschrittsmigration konnte nicht vollständig abgeschlossen werden:', error instanceof Error ? error.message : error);
   }
 
   // Zentraler Papierkorb: Kerninhalte bleiben nach dem Löschen wiederherstellbar.

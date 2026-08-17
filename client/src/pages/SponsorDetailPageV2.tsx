@@ -219,17 +219,19 @@ export default function SponsorDetailPageV2() {
         discountType,
         listenerCount,
       };
-      if (editingBooking) {
-        const saved: any = await sponsorsV2Api.updateBooking(editingBooking.id, payload);
-        showSuccess(saved?.conflicts?.length ? 'Buchung aktualisiert – Überschneidung wurde als Hinweis erkannt' : 'Buchung aktualisiert');
-      } else {
-        const saved: any = await sponsorsV2Api.createBooking(id, payload);
-        showSuccess(saved?.conflicts?.length ? 'Buchung erstellt – Überschneidung wurde als Hinweis erkannt' : 'Buchung erstellt');
-      }
+      const saved: any = editingBooking
+        ? await sponsorsV2Api.updateBooking(editingBooking.id, payload)
+        : await sponsorsV2Api.createBooking(id, payload);
+      setBookings(previous => editingBooking
+        ? previous.map(booking => booking.id === saved.id ? saved : booking)
+        : [saved, ...previous]);
+      showSuccess(saved?.conflicts?.length
+        ? (editingBooking ? 'Buchung aktualisiert – Überschneidung wurde als Hinweis erkannt' : 'Buchung erstellt – Überschneidung wurde als Hinweis erkannt')
+        : (editingBooking ? 'Buchung aktualisiert' : 'Buchung erstellt'));
       setShowBookingModal(false);
       setEditingBooking(null);
       setBookingForm(emptyBookingForm);
-      load();
+      await load();
     } catch (err: any) { showError(err.message); }
     finally { setIsSaving(false); }
   };
@@ -364,11 +366,7 @@ export default function SponsorDetailPageV2() {
   const paidCount = bookings.filter(b => b.invoiceStatus === 'bezahlt').length;
   const totalPriceAdjustment = bookings.reduce((s, b) => s + (b.priceAdjustment || 0), 0);
   const totalListenerFee = bookings.reduce((s, b) => s + (b.listenerFee || 0), 0);
-  const totalDiscount = bookings.reduce((s, b) => {
-    if (!b.discount || b.discount === 0) return s;
-    if (b.discountType === 'percent') return s + ((b.price || 0) * b.discount / 100);
-    return s + (b.discount || 0);
-  }, 0);
+  const totalDiscount = bookings.reduce((s, b) => s + (Number(b.discountAmount) || 0), 0);
 
   const handleExportLeistungPdf = async () => {
     if (!id) return;
@@ -553,6 +551,13 @@ export default function SponsorDetailPageV2() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/admin?tab=trash&type=sponsor')}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs rounded-lg border border-gray-700 transition-colors"
+            title="Gelöschte Sponsoren anzeigen und – mit entsprechender Berechtigung – wiederherstellen"
+          >
+            <Trash2 size={13} /> Papierkorb
+          </button>
           <button
             onClick={() => setShowDossierModal(true)}
             className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs rounded-lg border border-gray-700 transition-colors"
@@ -1436,7 +1441,7 @@ export default function SponsorDetailPageV2() {
 
       {/* ── Booking Modal ─────────────────────────────────────────────────── */}
       <Modal isOpen={showBookingModal} onClose={() => setShowBookingModal(false)}
-        title={editingBooking ? 'Buchung bearbeiten' : 'Neue Buchung'}>
+        title={editingBooking ? 'Werbeplatzbuchung bearbeiten' : 'Werbeplatz buchen'} size="xl">
         <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
 
           {/* Werbe-Slot */}
@@ -1577,15 +1582,15 @@ export default function SponsorDetailPageV2() {
                 ))}
               </div>
             )}
-            <div className="flex gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_4.25rem_auto] gap-2">
               <input type="text" value={newEpisodeRef.episodeTitle}
                 onChange={e => setNewEpisodeRef({ ...newEpisodeRef, episodeTitle: e.target.value })}
                 placeholder="Folgenname oder -nummer, z.B. Folge #42"
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
+                className="min-w-0 w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500" />
               <input type="number" min="1" max="20" value={newEpisodeRef.count}
                 onChange={e => setNewEpisodeRef({ ...newEpisodeRef, count: parseInt(e.target.value) || 1 })}
                 title="Anzahl Platzierungen in dieser Folge"
-                className="w-16 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500 text-center" />
+                className="w-full min-w-0 px-2 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500 text-center" />
               <button type="button"
                 onClick={() => {
                   if (!newEpisodeRef.episodeTitle.trim()) return;
@@ -1593,7 +1598,7 @@ export default function SponsorDetailPageV2() {
                   setNewEpisodeRef({ episodeTitle: '', count: 1 });
                 }}
                 disabled={!newEpisodeRef.episodeTitle.trim()}
-                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-40">
+                className="shrink-0 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-40">
                 <Plus size={14} />
               </button>
             </div>
@@ -1678,14 +1683,14 @@ export default function SponsorDetailPageV2() {
           {/* Rabatt */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Rabatt</label>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-2">
               <input type="number" min="0" step="0.01" value={bookingForm.discount}
                 onChange={e => setBookingForm({ ...bookingForm, discount: e.target.value })}
                 placeholder="0"
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
+                className="min-w-0 w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500" />
               <select value={bookingForm.discountType}
                 onChange={e => setBookingForm({ ...bookingForm, discountType: e.target.value as 'absolute' | 'percent' })}
-                className="px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500">
+                className="w-full min-w-0 px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500">
                 <option value="absolute">EUR</option>
                 <option value="percent">%</option>
               </select>

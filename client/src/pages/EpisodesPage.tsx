@@ -120,6 +120,12 @@ export default function EpisodesPage() {
           <p className="text-text-secondary text-sm mt-1">{total} Episode{total !== 1 ? 'n' : ''} gesamt</p>
         </div>
         <div className="flex items-center gap-2">
+          {can('canManageTrash') && (
+            <Link to="/admin?tab=trash&type=episode" className="btn-secondary flex items-center gap-2">
+              <Trash2 size={16} />
+              <span className="hidden sm:inline">Papierkorb</span>
+            </Link>
+          )}
           <Link to="/episodes/schedule" className="btn-secondary flex items-center gap-2">
             <LayoutList size={16} />
             <span className="hidden sm:inline">Planungsübersicht</span>

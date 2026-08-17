@@ -298,6 +298,129 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
     URL.revokeObjectURL(url);
   };
 
+  const downloadTextFile = (content: string, filename: string, type: string) => {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const getCutListEntries = () => [
+    ...markers.map(marker => ({
+      time: marker.time,
+      end: marker.time,
+      type: MARKER_TYPES.find(item => item.value === marker.type)?.label || marker.type,
+      label: marker.label || MARKER_TYPES.find(item => item.value === marker.type)?.label || marker.type,
+      description: marker.userName ? `Erstellt von ${marker.userName}` : '',
+    })),
+    ...timedComments.filter(comment => comment.time != null).map(comment => ({
+      time: comment.time || 0,
+      end: comment.time || 0,
+      type: 'Kommentar',
+      label: comment.content || comment.text || 'Kommentar',
+      description: [comment.displayName || comment.userName, comment.createdAt ? new Date(comment.createdAt).toLocaleString('de-DE') : ''].filter(Boolean).join(' · '),
+    })),
+  ].sort((a, b) => a.time - b.time);
+
+  const formatAuditionTime = (seconds: number) => {
+    const safe = Math.max(0, Number(seconds) || 0);
+    const hours = Math.floor(safe / 3600);
+    const minutes = Math.floor((safe % 3600) / 60);
+    const secs = Math.floor(safe % 60);
+    const milliseconds = Math.round((safe - Math.floor(safe)) * 1000);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+  };
+
+  const escapeCsv = (value: string) => `"${String(value || '').replace(/"/g, '""')}"`;
+
+  const exportAuditionMarkers = () => {
+    const entries = getCutListEntries();
+    const csv = [
+      'Name,Start,Duration,Type,Description',
+      ...entries.map(entry => [
+        escapeCsv(entry.label),
+        escapeCsv(formatAuditionTime(entry.time)),
+        escapeCsv(formatAuditionTime(Math.max(0, entry.end - entry.time))),
+        escapeCsv('Cue'),
+        escapeCsv(`[${entry.type}] ${entry.description}`.trim()),
+      ].join(',')),
+    ].join('\r\n');
+    downloadTextFile(`\uFEFF${csv}`, `${asset.name.replace(/[^a-z0-9_-]+/gi, '_')}_Audition-Marker.csv`, 'text/csv;charset=utf-8');
+  };
+
+  const exportCutListPdf = async () => {
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const margin = 15;
+      const width = 210 - margin * 2;
+      let y = margin;
+      const addPageIfNeeded = (height: number) => {
+        if (y + height > 280) {
+          doc.addPage();
+          y = margin;
+        }
+      };
+      const entries = getCutListEntries();
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(45, 35, 70);
+      doc.text('PodCore Schnittliste', margin, y);
+      y += 9;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(85, 85, 95);
+      doc.text(asset.name, margin, y);
+      y += 6;
+      doc.text(`Datei: ${asset.filename} · Dauer: ${formatTime(duration)} · Export: ${new Date().toLocaleString('de-DE')}`, margin, y, { maxWidth: width });
+      y += 9;
+      doc.setDrawColor(124, 58, 237);
+      doc.setLineWidth(0.6);
+      doc.line(margin, y, margin + width, y);
+      y += 7;
+
+      if (entries.length === 0) {
+        doc.setFontSize(11);
+        doc.setTextColor(90, 90, 100);
+        doc.text('Es sind noch keine Marker oder zeitbezogenen Kommentare vorhanden.', margin, y);
+      } else {
+        entries.forEach((entry, index) => {
+          const description = [entry.type, entry.description].filter(Boolean).join(' · ');
+          const titleLines = doc.splitTextToSize(entry.label, width - 31);
+          const descriptionLines = description ? doc.splitTextToSize(description, width - 31) : [];
+          const rowHeight = Math.max(15, 8 + titleLines.length * 4.5 + descriptionLines.length * 3.8);
+          addPageIfNeeded(rowHeight + 3);
+          doc.setFillColor(index % 2 === 0 ? 248 : 245, index % 2 === 0 ? 246 : 241, 255);
+          doc.roundedRect(margin, y, width, rowHeight, 2, 2, 'F');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.setTextColor(91, 33, 182);
+          doc.text(formatTime(entry.time), margin + 4, y + 7);
+          doc.setTextColor(35, 35, 45);
+          doc.text(titleLines, margin + 29, y + 6);
+          if (descriptionLines.length) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(95, 95, 105);
+            doc.text(descriptionLines, margin + 29, y + 7 + titleLines.length * 4.5);
+          }
+          y += rowHeight + 3;
+        });
+      }
+
+      doc.save(`${asset.name.replace(/[^a-z0-9_-]+/gi, '_')}_Schnittliste.pdf`);
+    } catch (error) {
+      console.error('PDF-Schnittliste konnte nicht erstellt werden:', error);
+      setSaveError('Die PDF-Schnittliste konnte nicht erstellt werden.');
+    }
+  };
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -315,6 +438,20 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={exportCutListPdf}
+              className="btn-secondary text-sm flex items-center gap-1.5"
+              title="Marker und Kommentare als PDF-Schnittliste exportieren"
+            >
+              <Download size={14} /> PDF
+            </button>
+            <button
+              onClick={exportAuditionMarkers}
+              className="btn-secondary text-sm flex items-center gap-1.5"
+              title="In Adobe Audition über Datei → Importieren → Marker aus Datei importieren"
+            >
+              <Download size={14} /> Audition CSV
+            </button>
             <button
               onClick={exportEditDecisionList}
               className="btn-secondary text-sm flex items-center gap-1.5"

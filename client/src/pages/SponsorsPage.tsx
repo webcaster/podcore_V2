@@ -232,6 +232,12 @@ export default function SponsorsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {can('canManageTrash') && (
+            <Link to="/admin?tab=trash&type=sponsor" className="btn-secondary">
+              <Trash2 size={16} />
+              <span>Papierkorb</span>
+            </Link>
+          )}
           <button onClick={handleExportSponsors} disabled={isExportingSponsors} className="btn-secondary">
             <FileSpreadsheet size={16} />
             <span>Liste exportieren</span>

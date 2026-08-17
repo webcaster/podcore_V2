@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { X, BookOpen, Play, ChevronRight, ChevronDown, ChevronUp, HelpCircle, Search } from 'lucide-react';
-import { useTutorial, Tutorial, TutorialStep } from '../../contexts/TutorialContext';
+import { X, BookOpen, Play, ChevronRight, ChevronDown, ChevronUp, HelpCircle, Search, CheckCircle2 } from 'lucide-react';
+import { useTutorial, Tutorial, TutorialProgress, TutorialStep } from '../../contexts/TutorialContext';
 
 const ANN_COLORS = [
   '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
@@ -89,7 +89,7 @@ const StepCard = ({ step, index, total }: { step: TutorialStep; index: number; t
 
 // ─── Tutorial Card ────────────────────────────────────────────────────────────
 
-const TutorialCard = ({ tutorial, onStart }: { tutorial: Tutorial; onStart: () => void }) => {
+const TutorialCard = ({ tutorial, progress, onStart }: { tutorial: Tutorial; progress?: TutorialProgress; onStart: () => void }) => {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -107,6 +107,9 @@ const TutorialCard = ({ tutorial, onStart }: { tutorial: Tutorial; onStart: () =
           <p className="text-[10px] text-text-muted mt-2 font-medium">
             {tutorial.steps.length} Schritt{tutorial.steps.length !== 1 ? 'e' : ''} · {tutorial.role || 'Alle'}
           </p>
+          {progress?.completed && (
+            <p className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-green-400"><CheckCircle2 size={12} /> Bereits angesehen</p>
+          )}
         </div>
       </div>
 
@@ -117,7 +120,7 @@ const TutorialCard = ({ tutorial, onStart }: { tutorial: Tutorial; onStart: () =
           className="btn-primary text-xs flex items-center gap-2 flex-1 justify-center py-2"
         >
           <Play size={14} />
-          Starten
+          {progress?.completed ? 'Erneut starten' : 'Starten'}
         </button>
         <button
           onClick={() => setExpanded(p => !p)}
@@ -143,7 +146,7 @@ const TutorialCard = ({ tutorial, onStart }: { tutorial: Tutorial; onStart: () =
 // ─── Main Panel ───────────────────────────────────────────────────────────────
 
 export default function TutorialWikiPanel() {
-  const { wikiOpen, closeWiki, tutorials, startTutorial, isLoading } = useTutorial();
+  const { wikiOpen, closeWiki, tutorials, progressByTutorial, startTutorial, isLoading } = useTutorial();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filter tutorials by search query
@@ -236,6 +239,7 @@ export default function TutorialWikiPanel() {
                 <TutorialCard
                   key={tutorial.id}
                   tutorial={tutorial}
+                  progress={progressByTutorial[tutorial.id]}
                   onStart={() => {
                     startTutorial(tutorial.id);
                     closeWiki();

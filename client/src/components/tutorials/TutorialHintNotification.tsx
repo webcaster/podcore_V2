@@ -3,12 +3,12 @@ import { BookOpen, X } from 'lucide-react';
 import { useTutorial } from '../../contexts/TutorialContext';
 
 export default function TutorialHintNotification() {
-  const { tutorials, openWiki } = useTutorial();
+  const { tutorials, progressByTutorial, openWiki } = useTutorial();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
     const handleHint = () => {
-      if (tutorials.length > 0) {
+      if (tutorials.some(tutorial => !progressByTutorial[tutorial.id]?.completed)) {
         setShow(true);
         // Auto-hide after 8 seconds
         const timer = setTimeout(() => setShow(false), 8000);
@@ -18,7 +18,7 @@ export default function TutorialHintNotification() {
 
     window.addEventListener('tutorial-hint', handleHint);
     return () => window.removeEventListener('tutorial-hint', handleHint);
-  }, [tutorials.length]);
+  }, [tutorials, progressByTutorial]);
 
   if (!show) return null;
 

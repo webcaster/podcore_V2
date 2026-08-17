@@ -599,14 +599,38 @@ export default function TutorialsManagementPage() {
   );
 
   const handleExportAll = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tutorials, null, 2));
+    const blob = new Blob([JSON.stringify(tutorials, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
     const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("href", url);
     downloadAnchorNode.setAttribute("download", `podcore_tutorials_${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
+    URL.revokeObjectURL(url);
     setSuccess('Export erfolgreich!');
+    setTimeout(() => setSuccess(null), 3000);
+  };
+
+  const handleExportTutorial = (tutorial: Tutorial) => {
+    const exportData = {
+      ...tutorial,
+      exportMeta: {
+        format: 'podcore-tutorial',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+      },
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${(tutorial.title || 'tutorial').replace(/[^a-z0-9äöüß_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'tutorial'}_podcore.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setSuccess(`„${tutorial.title || 'Tutorial'}“ als JSON exportiert`);
     setTimeout(() => setSuccess(null), 3000);
   };
 
@@ -889,6 +913,13 @@ export default function TutorialsManagementPage() {
                     title="Als PDF exportieren"
                   >
                     <Download size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleExportTutorial(t)}
+                    className="p-2 text-text-muted hover:text-accent-blue transition-colors rounded-lg hover:bg-accent-blue/10"
+                    title="Dieses Tutorial als JSON herunterladen"
+                  >
+                    <FileText size={16} />
                   </button>
                   <button
                     onClick={async () => {

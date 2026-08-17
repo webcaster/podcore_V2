@@ -1246,6 +1246,12 @@ export default function EpisodeDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {can('canManageTrash') && (
+            <button onClick={() => navigate('/admin?tab=trash&type=episode')} className="btn-secondary" title="Gelöschte Episoden anzeigen und – mit entsprechender Berechtigung – wiederherstellen">
+              <Trash2 size={16} />
+              <span className="hidden sm:inline">Papierkorb</span>
+            </button>
+          )}
           {can('canViewEpisodes') && (
             <div className="flex items-center gap-2 flex-wrap">
               <input
@@ -1332,7 +1338,6 @@ export default function EpisodeDetailPage() {
           { key: 'production', label: 'Produktion', icon: <Wrench size={16} /> },
           { key: 'technical', label: 'Technik', icon: <Settings size={16} /> },
           { key: 'ads', label: 'Werbung', icon: <Megaphone size={16} /> },
-          { key: 'preview', label: 'Vorschau', icon: <Eye size={16} /> },
           { key: 'hub', label: 'Redaktionshub', icon: <BookOpen size={16} /> },
         ].map(tab => (
           <button
@@ -1984,15 +1989,14 @@ export default function EpisodeDetailPage() {
 
               {/* Folgensponsor-Hinweis und Timeline entfernt (v2.12.0) */}
 
-              {/* ── v2.12.0: Neue Buchungen (ad_bookings) ─────────────────── */}
+              {/* ── Werbeplatzbuchungen ─────────────────────────────────────── */}
               <div className="card border-purple-700/30 bg-purple-900/5">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="font-semibold text-text-primary flex items-center gap-2">
-                      <Megaphone size={16} className="text-accent-purple" /> Buchungen v2
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-400 border border-purple-700/50">v2.12.0</span>
+                      <Megaphone size={16} className="text-accent-purple" /> Werbeplatzbuchungen
                     </h2>
-                    <p className="text-xs text-text-muted mt-0.5">Buchungen aus dem neuen Sponsoring-System (Verträge → Slots → Buchungen)</p>
+                    <p className="text-xs text-text-muted mt-0.5">Gebuchte Werbeplätze aus Sponsoring, Verträgen und Laufzeiten</p>
                   </div>
                   {can('canEditSponsors') && (
                     <button
@@ -2976,11 +2980,11 @@ export default function EpisodeDetailPage() {
         </div>
       </Modal>
 
-      {/* v2.12.0 Buchungsmodal */}
-      <Modal isOpen={showV2BookingModal} onClose={() => setShowV2BookingModal(false)} title="Neue Buchung erstellen">
+      {/* Werbeplatzbuchung */}
+      <Modal isOpen={showV2BookingModal} onClose={() => setShowV2BookingModal(false)} title="Werbeplatz buchen">
         <div className="space-y-4">
           <div className="p-3 bg-purple-900/20 border border-purple-700/40 rounded-lg">
-            <p className="text-xs text-purple-400 font-medium">Buchung im Sponsoring-System v2.12.0</p>
+            <p className="text-xs text-purple-400 font-medium">Werbeplatzbuchung im Sponsoring-System</p>
             <p className="text-[10px] text-text-muted mt-1">Wähle Sponsor und Werbekategorie. Die Buchung gilt für eine Laufzeit (Von – Bis).</p>
           </div>
 

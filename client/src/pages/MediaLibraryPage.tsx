@@ -1,5 +1,6 @@
           // @ts-ignore
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Upload, Search, Play, Pause, Volume2, Download, Trash2, Edit2,
   MessageSquare, Plus, Music, Mic2, Clock, HardDrive, X, Check,
@@ -41,6 +42,7 @@ function formatDuration(seconds?: number) {
 }
 
 export default function MediaLibraryPage() {
+  const navigate = useNavigate();
   const { can, showSuccess, showError } = useApp();
   const [activeTab, setActiveTab] = useState<'library' | 'editor'>('library');
   const [assets, setAssets] = useState<any[]>([]);
@@ -379,6 +381,9 @@ export default function MediaLibraryPage() {
         <div className="flex gap-2">
           {activeTab === 'library' && (
             <>
+              {can('canManageTrash') && (
+                <button onClick={() => navigate('/admin?tab=trash&type=asset')} className="btn-secondary" title="Gelöschte Medien anzeigen und – mit entsprechender Berechtigung – wiederherstellen"><Trash2 size={16} /><span>Papierkorb</span></button>
+              )}
               <button onClick={() => setShowFolderModal(true)} className="btn-secondary"><FolderPlus size={16} /><span>Ordner</span></button>
               {can('canUploadMedia') && (
                 <button onClick={() => setShowUploadModal(true)} className="btn-primary"><Upload size={16} /><span>Asset hochladen</span></button>

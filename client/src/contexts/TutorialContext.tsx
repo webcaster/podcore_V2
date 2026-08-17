@@ -44,6 +44,7 @@ export interface TutorialProgress {
 
 interface TutorialContextType {
   tutorials: Tutorial[];
+  progressByTutorial: Record<string, TutorialProgress>;
   activeTutorial: Tutorial | null;
   currentStep: number;
   progress: TutorialProgress | null;
@@ -65,43 +66,55 @@ const TutorialContext = createContext<TutorialContextType | undefined>(undefined
 export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useApp();
   const [tutorials, setTutorials] = useState<Tutorial[]>([]);
+  const [progressByTutorial, setProgressByTutorial] = useState<Record<string, TutorialProgress>>({});
   const [activeTutorial, setActiveTutorial] = useState<Tutorial | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState<TutorialProgress | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [wikiOpen, setWikiOpen] = useState(false);
 
-  // Open/close wiki panel
   const openWiki = () => setWikiOpen(true);
   const closeWiki = () => setWikiOpen(false);
 
-  // Load tutorials for user's role
+  const loadProgressForTutorial = useCallback(async (tutorialId: string): Promise<TutorialProgress> => {
+    const response = await fetch(`/api/tutorials/${tutorialId}/progress`, { credentials: 'include' });
+    if (!response.ok) throw new Error(`Tutorial-Fortschritt konnte nicht geladen werden (${response.status})`);
+    return response.json();
+  }, []);
+
   const loadTutorials = useCallback(async () => {
     if (!user?.id) {
       setTutorials([]);
+      setProgressByTutorial({});
       return;
     }
 
     try {
       setIsLoading(true);
-      const response = await fetch('/api/tutorials', {
-        credentials: 'include',
-      });
+      const response = await fetch('/api/tutorials', { credentials: 'include' });
+      if (!response.ok) throw new Error(`Tutorials konnten nicht geladen werden (${response.status})`);
 
-      if (response.ok) {
-        const data = await response.json();
-        const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
-        setTutorials(list);
-      }
+      const data = await response.json();
+      const list: Tutorial[] = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      setTutorials(list);
+
+      const progressEntries = await Promise.all(list.map(async (tutorial) => {
+        try {
+          return [tutorial.id, await loadProgressForTutorial(tutorial.id)] as const;
+        } catch {
+          return [tutorial.id, { completed: false, skipped: false, currentStep: 0 }] as const;
+        }
+      }));
+      setProgressByTutorial(Object.fromEntries(progressEntries));
     } catch (error) {
       console.error('Error loading tutorials:', error);
+      setTutorials([]);
+      setProgressByTutorial({});
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [loadProgressForTutorial, user?.id]);
 
-  // Load tutorials on mount and when user changes. A successful import emits
-  // a local event so Wiki and tutorial hints refresh without re-login.
   useEffect(() => {
     void loadTutorials();
     const handleTutorialUpdate = () => { void loadTutorials(); };
@@ -109,66 +122,74 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     return () => window.removeEventListener('podcore-tutorials-updated', handleTutorialUpdate);
   }, [loadTutorials]);
 
-  // Start a tutorial
+  const saveProgress = useCallback(async (tutorialId: string, nextProgress: TutorialProgress) => {
+    const response = await fetch(`/api/tutorials/${tutorialId}/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(nextProgress),
+    });
+    if (!response.ok) throw new Error(`Tutorial-Fortschritt konnte nicht gespeichert werden (${response.status})`);
+    const body = await response.json().catch(() => null);
+    const savedProgress: TutorialProgress = body?.data || nextProgress;
+    setProgress(savedProgress);
+    setProgressByTutorial(previous => ({ ...previous, [tutorialId]: savedProgress }));
+    return savedProgress;
+  }, []);
+
   const startTutorial = async (tutorialId: string) => {
     const tutorial = tutorials.find(t => t.id === tutorialId);
     if (!tutorial || !tutorial.enabled || !tutorial.steps?.length) return;
 
-    // Always open the tutorial, even when progress loading fails. A temporary
-    // network problem must never prevent the user from reading the help.
     setProgress(null);
     setCurrentStep(0);
     setActiveTutorial(tutorial);
     setWikiOpen(false);
 
     try {
-      const progressResponse = await fetch(`/api/tutorials/${tutorialId}/progress`, {
-        credentials: 'include',
-      });
-      if (!progressResponse.ok) return;
-
-      const progressData = await progressResponse.json();
-      const safeStep = Number.isInteger(progressData?.currentStep)
-        ? Math.max(0, Math.min(progressData.currentStep, tutorial.steps.length - 1))
-        : 0;
-      setProgress(progressData);
+      const loadedProgress = await loadProgressForTutorial(tutorialId);
+      setProgress(loadedProgress);
+      setProgressByTutorial(previous => ({ ...previous, [tutorialId]: loadedProgress }));
+      const safeStep = loadedProgress.completed
+        ? 0
+        : Number.isInteger(loadedProgress.currentStep)
+          ? Math.max(0, Math.min(loadedProgress.currentStep, tutorial.steps.length - 1))
+          : 0;
       setCurrentStep(safeStep);
     } catch (error) {
       console.warn('Tutorial-Fortschritt konnte nicht geladen werden:', error);
     }
   };
 
-  // Move to next step
+  const updateProgress = useCallback(async (step: number, completed: boolean, skipped: boolean) => {
+    if (!activeTutorial) return;
+    try {
+      await saveProgress(activeTutorial.id, { completed, skipped, currentStep: step });
+    } catch (error) {
+      console.error('Error updating progress:', error);
+    }
+  }, [activeTutorial, saveProgress]);
+
   const nextStep = () => {
     if (activeTutorial && currentStep < activeTutorial.steps.length - 1) {
-      setCurrentStep(currentStep + 1);
-      updateProgress(currentStep + 1, false, false);
+      const nextStepIndex = currentStep + 1;
+      setCurrentStep(nextStepIndex);
+      void updateProgress(nextStepIndex, false, false);
     }
   };
 
-  // Move to previous step
   const previousStep = () => {
     if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-      updateProgress(currentStep - 1, false, false);
+      const previousStepIndex = currentStep - 1;
+      setCurrentStep(previousStepIndex);
+      void updateProgress(previousStepIndex, false, false);
     }
   };
 
-  // Skip tutorial
   const skipTutorial = async () => {
     if (!activeTutorial) return;
-
     try {
-      await fetch(`/api/tutorials/${activeTutorial.id}/progress`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          skipped: true,
-          currentStep,
-        }),
-      });
-
+      await saveProgress(activeTutorial.id, { completed: false, skipped: true, currentStep });
       setActiveTutorial(null);
       setCurrentStep(0);
       setProgress(null);
@@ -177,21 +198,15 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
-  // Complete tutorial
   const completeTutorial = async () => {
     if (!activeTutorial) return;
-
     try {
-      await fetch(`/api/tutorials/${activeTutorial.id}/progress`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          completed: true,
-          currentStep: activeTutorial.steps.length - 1,
-        }),
+      await saveProgress(activeTutorial.id, {
+        completed: true,
+        completedAt: new Date().toISOString(),
+        skipped: false,
+        currentStep: activeTutorial.steps.length - 1,
       });
-
       setActiveTutorial(null);
       setCurrentStep(0);
       setProgress(null);
@@ -200,27 +215,6 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
-  // Update progress
-  const updateProgress = async (step: number, completed: boolean, skipped: boolean) => {
-    if (!activeTutorial) return;
-
-    try {
-      await fetch(`/api/tutorials/${activeTutorial.id}/progress`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          completed,
-          skipped,
-          currentStep: step,
-        }),
-      });
-    } catch (error) {
-      console.error('Error updating progress:', error);
-    }
-  };
-
-  // Close tutorial
   const closeTutorial = () => {
     setActiveTutorial(null);
     setCurrentStep(0);
@@ -231,6 +225,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     <TutorialContext.Provider
       value={{
         tutorials,
+        progressByTutorial,
         activeTutorial,
         currentStep,
         progress,
@@ -254,8 +249,6 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
 
 export const useTutorial = () => {
   const context = useContext(TutorialContext);
-  if (!context) {
-    throw new Error('useTutorial must be used within TutorialProvider');
-  }
+  if (!context) throw new Error('useTutorial must be used within TutorialProvider');
   return context;
 };

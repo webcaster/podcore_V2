@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { tutorialsApi, TutorialImportResult } from '../lib/api';
 
-const DEFAULT_URL = 'https://podcore.de/wp-json/app-tutorials/v1/tutorials?per_page=50';
+const DEFAULT_URL = 'https://podcore.de/wp-json/app-tutorials/v1/catalog';
 
 export default function TutorialImportPage() {
   const navigate = useNavigate();
@@ -94,7 +94,7 @@ export default function TutorialImportPage() {
             {isImporting ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
             {isImporting ? 'Tutorial wird geladen …' : 'Website-Tutorial laden'}
           </button>
-          <p className="text-xs text-text-muted">Die Standardadresse erwartet die WordPress-Cloud-API von podcore.de. Eine einzelne Tutorial-JSON-URL ist ebenfalls möglich.</p>
+          <p className="text-xs text-text-muted">Die Standardadresse verwendet den PodCore-Katalog mit Versions- und Importhinweisen. Eine einzelne Tutorial-JSON-URL ist ebenfalls möglich.</p>
         </section>
 
         <section className="card space-y-5">
