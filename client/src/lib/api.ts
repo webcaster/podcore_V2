@@ -497,7 +497,8 @@ export const mediaApi = {
 // Backup API
 // ============================================================
 export const backupApi = {
-  export: (type: 'episodes' | 'ideas' | 'full') => requestRaw('GET', `/backup/export/${type}`),
+  export: (type: 'episodes' | 'ideas' | 'full', options?: { includeFiles?: boolean }) =>
+    requestRaw('GET', `/backup/export/${type}${type === 'full' && options?.includeFiles === false ? '?includeFiles=0' : ''}`),
   import: (type: 'episodes' | 'ideas', formData: FormData) =>
     api.upload<any>(`/backup/import/${type}`, formData),
   importFull: (formData: FormData) =>
@@ -506,6 +507,8 @@ export const backupApi = {
     api.upload<any>('/backup/import/preview', formData),
   list: () => api.get<any[]>('/backup/list'),
   delete: (filename: string) => api.delete(`/backup/${encodeURIComponent(filename)}`),
+  getAutomationStatus: () => api.get<any>('/backup/automation/status'),
+  runAutomaticBackup: () => api.post<any>('/backup/automation/run', {}),
 };
 
 // ============================================================

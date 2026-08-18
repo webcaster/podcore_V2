@@ -716,8 +716,22 @@ export default function SponsorDetailPageV2() {
           <div className="space-y-4">
             <div>
               <h2 className="text-lg font-semibold text-white">Verfügbare Werbe-Slots</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Buchbare Werbekategorien aus den globalen Einstellungen</p>
+              <p className="text-xs text-gray-500 mt-0.5">Wähle zuerst die Werbekategorie, dann den passenden Platz und das Preismodell.</p>
             </div>
+            {adCategories.filter((category: any) => category.isActive !== false).length > 0 && (
+              <div className="rounded-xl border border-purple-500/20 bg-purple-950/15 p-3">
+                <div className="flex items-center gap-2 mb-2"><Tag size={15} className="text-purple-300" /><h3 className="text-sm font-medium text-white">Buchbare Werbekategorien</h3></div>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {adCategories.filter((category: any) => category.isActive !== false).map((category: any) => (
+                    <div key={category.id} className="rounded-lg border border-gray-800 bg-gray-900/60 p-2.5">
+                      <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color || '#9d4edd' }} /><span className="text-sm font-medium text-gray-100">{category.name}</span></div>
+                      {category.description && <p className="mt-1 text-xs text-gray-400 line-clamp-2">{category.description}</p>}
+                      <p className="mt-1.5 text-[11px] text-gray-500">{category.pricePerEpisode ? `${Number(category.pricePerEpisode).toFixed(2)} € pro Folge` : category.basePrice ? `${Number(category.basePrice).toFixed(2)} € pauschal` : 'Preis wird je Angebot festgelegt'}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {slots.length === 0 ? (
               <div className="p-6 text-center text-gray-400 bg-gray-900/30 rounded-lg">Keine Werbe-Slots definiert</div>
             ) : (
@@ -1925,7 +1939,7 @@ export default function SponsorDetailPageV2() {
                   className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:outline-none focus:border-purple-500">
                   <option value="">Kategorie (optional)</option>
                   {adCategories.filter((c: any) => c.isActive !== false).map((cat: any) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    <option key={cat.id} value={cat.id}>{cat.name}{cat.description ? ` · ${cat.description}` : ''}</option>
                   ))}
                 </select>
                 <button

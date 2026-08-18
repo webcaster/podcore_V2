@@ -1,6 +1,6 @@
 {
   "name": "podcore",
-  "version": "2.16.17",
+  "version": "2.16.18",
   "description": "PodCore - Professionelles Podcast Management System",
   "private": true,
   "scripts": {
@@ -15,6 +15,7 @@
     "build:server": "pnpm --dir server run build",
     "sync:public": "node scripts/sync-public.cjs",
     "start": "node server/dist/index.js",
+    "backup:automatic": "pnpm --dir server exec ts-node scripts/automatic-backup.ts",
     "install:all": "pnpm install --frozen-lockfile && pnpm --dir client install --frozen-lockfile && pnpm --dir server install --frozen-lockfile"
   },
   "devDependencies": {

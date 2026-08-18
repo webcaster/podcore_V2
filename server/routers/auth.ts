@@ -85,6 +85,21 @@ function normalizeDashboardLayout(value: unknown): any {
   };
 }
 
+function isThemeHex(value: unknown): value is string {
+  return typeof value === 'string' && /^#(?:[a-f\d]{3}|[a-f\d]{6})$/i.test(value.trim());
+}
+
+function normalizeUserTheme(value: unknown): any {
+  const source = value && typeof value === 'object' ? value as Record<string, any> : {};
+  const fontScale = Number(source.fontScale);
+  return {
+    accentColor: isThemeHex(source.accentColor) ? source.accentColor : '#9d4edd',
+    sidebarColor: isThemeHex(source.sidebarColor) ? source.sidebarColor : '#14121d',
+    fontScale: Number.isFinite(fontScale) ? Math.min(1.25, Math.max(0.85, fontScale)) : 1,
+    mode: source.mode === 'light' ? 'light' : 'dark',
+  };
+}
+
 function formatUser(user: any) {
   return {
     id: user.id,
@@ -95,7 +110,7 @@ function formatUser(user: any) {
     permissions: resolveUserPermissions(user),
     developerMode: user.developer_mode === 1,
     avatarColor: user.avatar_color,
-    theme: parseStoredJson(user.theme, null),
+    theme: user.theme ? normalizeUserTheme(parseStoredJson(user.theme, null)) : null,
     dashboardLayout: normalizeDashboardLayout(user.dashboard_layout),
   };
 }
@@ -215,7 +230,7 @@ router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
   const newDisplayName = displayName !== undefined ? displayName : user.display_name;
   const newEmail = email !== undefined ? email : user.email;
   const newAvatarColor = avatarColor !== undefined ? avatarColor : user.avatar_color;
-  const newTheme = theme !== undefined ? JSON.stringify(theme) : user.theme;
+  const newTheme = theme !== undefined ? JSON.stringify(normalizeUserTheme(theme)) : user.theme;
   const normalizedDashboardLayout = dashboardLayout !== undefined ? normalizeDashboardLayout(dashboardLayout) : undefined;
   const newDashboardLayout = normalizedDashboardLayout !== undefined ? JSON.stringify(normalizedDashboardLayout) : user.dashboard_layout;
   // Only administrators may switch developer mode for their own account.

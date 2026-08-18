@@ -25,6 +25,13 @@
 - [x] Tutorial-Führung in der App: Schritte navigieren bei Bedarf zur Zielseite, markieren das konfigurierte Menü oder Bedienelement sichtbar, führen den nächsten Klick kontextbezogen und speichern den Fortschritt pro Benutzer.
 - [x] Episoden-Editor: Technischen Hinweis zu fehlenden v2-Buchungen durch eine klare Leeransicht für Werbeplatzbuchungen mit direkter Anlegen- oder Auswahlaktion ersetzt.
 - [x] Design-Update: Visuelle Sprache des `podcore_promo_video_v2.mp4` analysiert und als zugängliches, konsistentes Designsystem in Navigation, Karten, Formulare und Kernseiten der App übertragen.
+- [x] Stabilitätsupdate: Überdimensionierte Zahlen-, Auswahl- und Formfelder anhand der betroffenen Komponenten konsistent verdichtet, ohne Touch- oder Lesbarkeit zu verschlechtern.
+- [x] Stabilitätsupdate Redaktions-Hub: Interviewpartner bei großen Mengen mit Suche, Filtern, Status und kompakter Listenansicht übersichtlich verwalten.
+- [x] Stabilitätsupdate Redaktions-Hub: Umfangreiche Fragenkataloge mit Suche, Freigabefilter, Seitenaufteilung und klarer Reihenfolge skalierbar bearbeiten.
+- [x] Stabilitätsupdate Sponsoring: Werbekategorien fachlich klarer strukturiert, beschrieben und für Angebote sowie Buchungen konsistent dargestellt.
+- [x] Stabilitätsupdate Mein Design: Persönliche Akzent-, Sidebar-, Schrift- und Moduseinstellungen zuverlässig normalisiert, beim Start wiederhergestellt und gegen unpassende Werte abgesichert.
+- [x] Stabilitätsupdate Sicherung: Konfigurierbare automatische lokale Backups, Aufbewahrung, Prüfsummen, Wiederherstellungsprüfung und verständliche Wiederherstellungsführung ergänzt.
+- [x] Stabilitätsupdate Sicherung: Kombination A + B umgesetzt – In-App-Sicherungen bei Start und Intervallen sowie optionale tägliche Systemplanung für geschlossene App-Instanzen.
 
 ## Branding
 

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Lightbulb, Calendar, Users, FileText, Plus, Search, Trash2,
   Edit2, Check, X, ArrowRight, ArrowUp, ArrowDown, Tag, Star, Clock, ChevronDown,
   Mic2, BookOpen, StickyNote, MessageSquare, Filter, Pin, PinOff, Loader2,
   Globe, BookMarked, Video, FileImage, Newspaper, ExternalLink, Link2, Save, Eye,
-  ListChecks, UserPlus, Download, ListOrdered, RotateCcw
+  ListChecks, UserPlus, Download, ListOrdered, RotateCcw, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { editorialApi, episodesApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
@@ -744,6 +744,14 @@ function InterviewsTab() {
   const [pdfFileName, setPdfFileName] = useState('');
   const [pdfDocTitle, setPdfDocTitle] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [partnerSearch, setPartnerSearch] = useState('');
+  const [partnerStatusFilter, setPartnerStatusFilter] = useState('');
+  const [partnerPage, setPartnerPage] = useState(1);
+  const [questionSearch, setQuestionSearch] = useState('');
+  const [questionApprovalFilter, setQuestionApprovalFilter] = useState<'all' | 'approved' | 'open'>('all');
+  const [questionPage, setQuestionPage] = useState(1);
+  const PARTNERS_PER_PAGE = 12;
+  const QUESTIONS_PER_PAGE = 16;
 
   const loadPartners = async () => {
     setIsLoading(true);
@@ -763,6 +771,35 @@ function InterviewsTab() {
 
   useEffect(() => { loadPartners(); }, []);
   useEffect(() => { if (selectedPartner) loadQuestions(selectedPartner.id); }, [selectedPartner]);
+  useEffect(() => { setPartnerPage(1); }, [partnerSearch, partnerStatusFilter]);
+  useEffect(() => { setQuestionPage(1); }, [questionSearch, questionApprovalFilter, selectedPartner?.id]);
+
+  const filteredPartners = useMemo(() => {
+    const term = partnerSearch.trim().toLocaleLowerCase('de');
+    return partners.filter(partner => {
+      const matchesText = !term || [partner.name, partner.company, partner.role, partner.email]
+        .filter(Boolean)
+        .some(value => String(value).toLocaleLowerCase('de').includes(term));
+      const matchesStatus = !partnerStatusFilter || (partner.status || 'offen') === partnerStatusFilter;
+      return matchesText && matchesStatus;
+    });
+  }, [partners, partnerSearch, partnerStatusFilter]);
+  const partnerPages = Math.max(1, Math.ceil(filteredPartners.length / PARTNERS_PER_PAGE));
+  const visiblePartners = filteredPartners.slice((partnerPage - 1) * PARTNERS_PER_PAGE, partnerPage * PARTNERS_PER_PAGE);
+
+  const filteredQuestions = useMemo(() => {
+    const term = questionSearch.trim().toLocaleLowerCase('de');
+    return questions.filter(question => {
+      const matchesText = !term || [question.question, question.category, question.notes]
+        .filter(Boolean)
+        .some(value => String(value).toLocaleLowerCase('de').includes(term));
+      const matchesApproval = questionApprovalFilter === 'all'
+        || (questionApprovalFilter === 'approved' ? question.approved : !question.approved);
+      return matchesText && matchesApproval;
+    });
+  }, [questions, questionSearch, questionApprovalFilter]);
+  const questionPages = Math.max(1, Math.ceil(filteredQuestions.length / QUESTIONS_PER_PAGE));
+  const visibleQuestions = filteredQuestions.slice((questionPage - 1) * QUESTIONS_PER_PAGE, questionPage * QUESTIONS_PER_PAGE);
 
   const handleSavePartner = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -946,15 +983,27 @@ function InterviewsTab() {
           )}
         </div>
 
+        <div className="rounded-xl border border-surface-border bg-obsidian-800/50 p-2 space-y-2">
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input value={partnerSearch} onChange={event => setPartnerSearch(event.target.value)} className="input input-compact pl-8" placeholder="Partner suchen…" />
+          </div>
+          <select value={partnerStatusFilter} onChange={event => setPartnerStatusFilter(event.target.value)} className="select select-compact">
+            <option value="">Alle Status</option>
+            {INTERVIEW_PARTNER_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
+          </select>
+          <p className="px-1 text-[11px] text-text-muted">{filteredPartners.length} von {partners.length} Partnern</p>
+        </div>
+
         {isLoading ? (
           <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" /></div>
-        ) : partners.length === 0 ? (
+        ) : filteredPartners.length === 0 ? (
           <div className="card text-center py-8">
             <Users size={32} className="text-text-muted mx-auto mb-2" />
-            <p className="text-text-muted text-sm">Keine Partner</p>
+            <p className="text-text-muted text-sm">Keine Partner entsprechen dem aktuellen Filter</p>
           </div>
         ) : (
-          partners.map(partner => (
+          visiblePartners.map(partner => (
             <div
               key={partner.id}
               onClick={() => setSelectedPartner(partner)}
@@ -975,6 +1024,15 @@ function InterviewsTab() {
               </div>
             </div>
           ))
+        )}
+        {filteredPartners.length > PARTNERS_PER_PAGE && (
+          <div className="flex items-center justify-between px-1 text-xs text-text-muted">
+            <span>Seite {partnerPage} von {partnerPages}</span>
+            <div className="flex gap-1">
+              <button type="button" className="btn-ghost p-1.5" disabled={partnerPage === 1} onClick={() => setPartnerPage(page => Math.max(1, page - 1))} aria-label="Vorherige Partnerseite"><ChevronLeft size={14} /></button>
+              <button type="button" className="btn-ghost p-1.5" disabled={partnerPage === partnerPages} onClick={() => setPartnerPage(page => Math.min(partnerPages, page + 1))} aria-label="Nächste Partnerseite"><ChevronRight size={14} /></button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -1049,13 +1107,28 @@ function InterviewsTab() {
               </div>
             </div>
 
+            <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-obsidian-800/50 p-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input value={questionSearch} onChange={event => setQuestionSearch(event.target.value)} className="input input-compact pl-8" placeholder="Fragen in diesem Interview durchsuchen…" />
+              </div>
+              <select value={questionApprovalFilter} onChange={event => setQuestionApprovalFilter(event.target.value as 'all' | 'approved' | 'open')} className="select select-compact sm:w-44">
+                <option value="all">Alle Freigaben</option>
+                <option value="approved">Freigegeben</option>
+                <option value="open">Noch offen</option>
+              </select>
+            </div>
+
             {questions.length === 0 ? (
               <div className="card text-center py-8">
                 <p className="text-text-muted text-sm">Noch keine Fragen für diesen Partner</p>
               </div>
-            ) : (
+            ) : (<>
               <div className="space-y-2">
-                {questions.map((q, index) => (
+                {visibleQuestions.map((q, index) => {
+                  const originalIndex = questions.findIndex(question => question.id === q.id);
+                  const displayedNumber = (questionPage - 1) * QUESTIONS_PER_PAGE + index + 1;
+                  return (
                   <div key={q.id} className={`card flex items-start gap-3 group ${q.approved ? 'border-accent-green/40 bg-accent-green/5' : ''}`}>
                     {/* Approve toggle - only for users with canApproveInterviewQuestions */}
                     {can('canApproveInterviewQuestions') ? (
@@ -1076,7 +1149,7 @@ function InterviewsTab() {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-semibold text-accent-purple mb-1">Frage {index + 1}</p>
+                      <p className="text-[11px] font-semibold text-accent-purple mb-1">Frage {displayedNumber}</p>
                       <p className="text-sm text-text-primary">{q.question}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         {q.category && <span className="badge bg-surface-overlay text-text-muted text-xs">{q.category}</span>}
@@ -1095,8 +1168,8 @@ function InterviewsTab() {
                         <button onClick={() => handleRequestQuestionApproval(q)} className="p-1 text-text-muted hover:text-accent-orange" title="Freigabe anfordern"><Clock size={12} /></button>
                       )}
                       {can('canEditInterviews') && <>
-                        <button onClick={() => handleMoveQuestion(q.id, -1)} disabled={index === 0} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach oben"><ArrowUp size={12} /></button>
-                        <button onClick={() => handleMoveQuestion(q.id, 1)} disabled={index === questions.length - 1} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach unten"><ArrowDown size={12} /></button>
+                        <button onClick={() => handleMoveQuestion(q.id, -1)} disabled={originalIndex === 0} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach oben"><ArrowUp size={12} /></button>
+                        <button onClick={() => handleMoveQuestion(q.id, 1)} disabled={originalIndex === questions.length - 1} className="p-1 text-text-muted hover:text-accent-purple disabled:opacity-30" title="Eine Position nach unten"><ArrowDown size={12} /></button>
                         <button onClick={() => handleArchiveQuestionToPool(q)} className="p-1 text-text-muted hover:text-accent-cyan" title="In Fragenbibliothek übernehmen"><BookMarked size={12} /></button>
                         <button
                           onClick={() => {
@@ -1113,9 +1186,20 @@ function InterviewsTab() {
                       </>}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
-            )}
+              {filteredQuestions.length === 0 && <p className="rounded-xl border border-dashed border-surface-border px-4 py-5 text-center text-sm text-text-muted">Keine Fragen entsprechen dem aktuellen Filter.</p>}
+              {filteredQuestions.length > QUESTIONS_PER_PAGE && (
+                <div className="flex items-center justify-between px-1 text-xs text-text-muted">
+                  <span>{filteredQuestions.length} gefilterte Fragen · Seite {questionPage} von {questionPages}</span>
+                  <div className="flex gap-1">
+                    <button type="button" className="btn-ghost p-1.5" disabled={questionPage === 1} onClick={() => setQuestionPage(page => Math.max(1, page - 1))} aria-label="Vorherige Fragenseite"><ChevronLeft size={14} /></button>
+                    <button type="button" className="btn-ghost p-1.5" disabled={questionPage === questionPages} onClick={() => setQuestionPage(page => Math.min(questionPages, page + 1))} aria-label="Nächste Fragenseite"><ChevronRight size={14} /></button>
+                  </div>
+                </div>
+              )}
+            </>) }
           </>
         )}
       </div>

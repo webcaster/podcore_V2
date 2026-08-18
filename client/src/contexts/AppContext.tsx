@@ -411,50 +411,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 export function applyUserTheme(theme: UserTheme | null | undefined) {
   const root = document.documentElement;
+  const clearThemeOverrides = () => {
+    ['--color-accent-primary', '--color-accent-primary-light', '--color-accent-primary-dark', '--color-text-accent', '--color-sidebar-bg', '--color-sidebar-border', '--font-scale', '--color-surface', '--color-surface-raised', '--color-obsidian-800']
+      .forEach(variable => root.style.removeProperty(variable));
+  };
 
   if (!theme) {
-    root.style.removeProperty('--color-accent-primary');
-    root.style.removeProperty('--color-accent-primary-light');
-    root.style.removeProperty('--color-accent-primary-dark');
-    root.style.removeProperty('--color-text-accent');
-    root.style.removeProperty('--color-sidebar-bg');
-    root.style.removeProperty('--color-sidebar-border');
-    root.style.removeProperty('--font-scale');
-    root.style.removeProperty('--color-surface');
-    root.style.removeProperty('--color-surface-raised');
-    root.style.removeProperty('--color-obsidian-800');
+    clearThemeOverrides();
     return;
   }
 
-  if (theme.accentColor) {
-    root.style.setProperty('--color-accent-primary', theme.accentColor);
-    root.style.setProperty('--color-accent-primary-light', theme.accentColorLight || lightenColor(theme.accentColor, 20));
-    root.style.setProperty('--color-accent-primary-dark', theme.accentColorDark || darkenColor(theme.accentColor, 20));
-    root.style.setProperty('--color-text-accent', lightenColor(theme.accentColor, 30));
-  }
+  clearThemeOverrides();
+  const accentColor = isValidThemeHex(theme.accentColor) ? theme.accentColor : '#9d4edd';
+  const sidebarColor = isValidThemeHex(theme.sidebarColor) ? theme.sidebarColor : '#14121d';
+  const fontScale = Number.isFinite(Number(theme.fontScale)) ? Math.min(1.25, Math.max(0.85, Number(theme.fontScale))) : 1;
+  root.style.setProperty('--color-accent-primary', accentColor);
+  root.style.setProperty('--color-accent-primary-light', isValidThemeHex(theme.accentColorLight) ? theme.accentColorLight : lightenColor(accentColor, 20));
+  root.style.setProperty('--color-accent-primary-dark', isValidThemeHex(theme.accentColorDark) ? theme.accentColorDark : darkenColor(accentColor, 20));
+  root.style.setProperty('--color-text-accent', lightenColor(accentColor, 30));
+  root.style.setProperty('--color-sidebar-bg', sidebarColor);
+  root.style.setProperty('--font-scale', String(fontScale));
 
-  if (theme.sidebarColor) {
-    root.style.setProperty('--color-sidebar-bg', theme.sidebarColor);
-    // root.style.setProperty('--color-obsidian-800', theme.sidebarColor); // REMOVED: Breaks shared card styling
-    // root.style.setProperty('--color-surface', lightenColor(theme.sidebarColor, 8)); // REMOVED: Breaks shared card styling
-    // root.style.setProperty('--color-surface-raised', lightenColor(theme.sidebarColor, 12)); // REMOVED: Breaks shared card styling
-  }
-
-  if (theme.fontScale) {
-    root.style.setProperty('--font-scale', String(theme.fontScale));
-  }
-
-  // Apply light/dark mode if specified in user theme
   if (theme.mode === 'light' || theme.mode === 'dark') {
     const modeChanged = root.getAttribute('data-theme') !== theme.mode;
     localStorage.setItem('podcore-theme', theme.mode);
     root.setAttribute('data-theme', theme.mode);
     root.style.setProperty('color-scheme', theme.mode);
-    // ThemeContext muss die Grundpalette nur bei einem echten Moduswechsel neu setzen.
-    // Die Wiederherstellung persönlicher Tokens nach der Grundpalette löst so keine Schleife aus.
-    if (modeChanged) {
-      window.dispatchEvent(new CustomEvent('podcore-theme-change', { detail: { mode: theme.mode } }));
-    }
+    if (modeChanged) window.dispatchEvent(new CustomEvent('podcore-theme-change', { detail: { mode: theme.mode } }));
   }
 }
 
@@ -467,6 +450,10 @@ function hexToRgb(hex: string): [number, number, number] | null {
   return result
     ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
     : null;
+}
+
+function isValidThemeHex(value: unknown): value is string {
+  return typeof value === 'string' && /^#(?:[a-f\d]{3}|[a-f\d]{6})$/i.test(value.trim());
 }
 
 function rgbToHex(r: number, g: number, b: number): string {

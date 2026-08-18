@@ -319,8 +319,18 @@ export default function SettingsPage() {
     includeFiles: true,
     setupCompleted: false,
     lastBackupAt: '',
+    automaticBackup: {
+      enabled: true,
+      intervalHours: 24,
+      retentionCount: 14,
+      includeFiles: true,
+      lastRunAt: '',
+      lastStatus: 'never',
+      lastError: '',
+    },
   });
   const [isCreatingStorageBackup, setIsCreatingStorageBackup] = useState(false);
+  const [isRunningAutomaticBackup, setIsRunningAutomaticBackup] = useState(false);
 
   // ── Workflow settings form ───────────────────────────────────────────────────
   const [workflowForm, setWorkflowForm] = useState({
@@ -391,6 +401,15 @@ export default function SettingsPage() {
         includeFiles: storage.includeFiles !== false,
         setupCompleted: storage.setupCompleted === true,
         lastBackupAt: storage.lastBackupAt || '',
+        automaticBackup: {
+          enabled: storage.automaticBackup?.enabled !== false,
+          intervalHours: Number(storage.automaticBackup?.intervalHours) || 24,
+          retentionCount: Number(storage.automaticBackup?.retentionCount) || 14,
+          includeFiles: storage.automaticBackup?.includeFiles !== false,
+          lastRunAt: storage.automaticBackup?.lastRunAt || '',
+          lastStatus: storage.automaticBackup?.lastStatus || 'never',
+          lastError: storage.automaticBackup?.lastError || '',
+        },
       });
       // Podcast profile
       const p = data.podcast || {};
@@ -580,7 +599,7 @@ export default function SettingsPage() {
   const handleCreateCloudBackup = async () => {
     setIsCreatingStorageBackup(true);
     try {
-      const data = await backupApi.export('full');
+      const data = await backupApi.export('full', { includeFiles: storageForm.includeFiles });
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -596,6 +615,18 @@ export default function SettingsPage() {
       showSuccess('Vollständige Backup-Datei erstellt. Lege sie jetzt in deinem gewünschten Cloud-Ordner ab.');
     } catch (err: any) { showError(err.message || 'Backup-Datei konnte nicht erstellt werden'); }
     finally { setIsCreatingStorageBackup(false); }
+  };
+
+  const handleRunAutomaticBackup = async () => {
+    setIsRunningAutomaticBackup(true);
+    try {
+      const result = await backupApi.runAutomaticBackup();
+      const automaticBackup = result.config || storageForm.automaticBackup;
+      setStorageForm(current => ({ ...current, automaticBackup }));
+      setSettings((current: any) => ({ ...(current || {}), storage: { ...(current?.storage || {}), automaticBackup } }));
+      showSuccess(result.filename ? `Automatische Sicherung erstellt: ${result.filename}` : 'Automatische Sicherung geprüft');
+    } catch (err: any) { showError(err.message || 'Automatische Sicherung konnte nicht erstellt werden'); }
+    finally { setIsRunningAutomaticBackup(false); }
   };
 
   const initials = user?.displayName?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || user?.username?.[0]?.toUpperCase() || '?';
@@ -1115,6 +1146,23 @@ export default function SettingsPage() {
               <label className="flex items-center gap-3 rounded-lg border border-surface-border p-3 text-sm text-text-secondary"><input type="checkbox" checked={storageForm.includeFiles} onChange={event => setStorageForm(current => ({ ...current, includeFiles: event.target.checked }))} className="h-4 w-4 accent-accent-purple" /><span><strong className="text-text-primary">Verknüpfte Dateien einbeziehen</strong><br /><span className="text-xs text-text-muted">Dateien innerhalb der bestehenden Backup-Grenzen werden in die Sicherung aufgenommen.</span></span></label>
               <div className="flex flex-wrap gap-3"><button onClick={() => void handleSaveStorage()} disabled={isSaving} className="btn-secondary">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Speichervorgabe sichern</button><button onClick={() => void handleCreateCloudBackup()} disabled={isCreatingStorageBackup} className="btn-primary">{isCreatingStorageBackup ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Vollbackup für Cloud erstellen</button></div>
               {storageForm.lastBackupAt && <p className="text-xs text-text-muted">Letzter erfolgreicher Backup-Export: {new Date(storageForm.lastBackupAt).toLocaleString('de-DE')}</p>}
+            </div>
+            <div className="card space-y-4">
+              <div className="flex items-start gap-3"><Clock size={18} className="mt-0.5 text-accent-purple" /><div><h3 className="font-semibold text-text-primary">Automatische lokale Sicherung</h3><p className="mt-1 text-sm text-text-secondary">PodCore erstellt im laufenden Betrieb fällige Vollsicherungen automatisch und behält nur die gewünschte Anzahl. Die Dateien bleiben im lokalen Sicherungsordner und werden mit Prüfsumme geschrieben.</p></div></div>
+              <label className="flex items-center gap-3 rounded-lg border border-surface-border p-3 text-sm text-text-secondary"><input type="checkbox" checked={storageForm.automaticBackup.enabled} onChange={event => setStorageForm(current => ({ ...current, automaticBackup: { ...current.automaticBackup, enabled: event.target.checked } }))} className="h-4 w-4 accent-accent-purple" /><span><strong className="text-text-primary">In-App-Sicherung aktivieren</strong><br /><span className="text-xs text-text-muted">Die Prüfung läuft bei Serverstart und anschließend im Hintergrund, solange PodCore geöffnet ist.</span></span></label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div><label className="label text-xs">Intervall</label><select value={storageForm.automaticBackup.intervalHours} onChange={event => setStorageForm(current => ({ ...current, automaticBackup: { ...current.automaticBackup, intervalHours: Number(event.target.value) } }))} className="select select-compact"><option value={6}>Alle 6 Stunden</option><option value={12}>Alle 12 Stunden</option><option value={24}>Täglich</option><option value={72}>Alle 3 Tage</option><option value={168}>Wöchentlich</option></select></div>
+                <div><label className="label text-xs">Aufbewahrung</label><select value={storageForm.automaticBackup.retentionCount} onChange={event => setStorageForm(current => ({ ...current, automaticBackup: { ...current.automaticBackup, retentionCount: Number(event.target.value) } }))} className="select select-compact"><option value={7}>7 Sicherungen</option><option value={14}>14 Sicherungen</option><option value={30}>30 Sicherungen</option><option value={60}>60 Sicherungen</option></select></div>
+                <div className="flex items-end"><button onClick={() => void handleRunAutomaticBackup()} disabled={isRunningAutomaticBackup} className="btn-secondary w-full justify-center">{isRunningAutomaticBackup ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Jetzt sichern</button></div>
+              </div>
+              <label className="flex items-center gap-3 text-sm text-text-secondary"><input type="checkbox" checked={storageForm.automaticBackup.includeFiles} onChange={event => setStorageForm(current => ({ ...current, automaticBackup: { ...current.automaticBackup, includeFiles: event.target.checked } }))} className="h-4 w-4 accent-accent-purple" /><span>Verknüpfte Dateien in automatische Sicherungen einbeziehen</span></label>
+              <div className="flex flex-wrap gap-3"><button onClick={() => void handleSaveStorage()} disabled={isSaving} className="btn-secondary">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Automatik speichern</button>{storageForm.automaticBackup.lastRunAt && <span className="self-center text-xs text-text-muted">Letzter Lauf: {new Date(storageForm.automaticBackup.lastRunAt).toLocaleString('de-DE')}</span>}</div>
+              {storageForm.automaticBackup.lastStatus === 'error' && storageForm.automaticBackup.lastError && <p className="rounded-lg border border-accent-red/30 bg-accent-red/5 p-2 text-xs text-accent-red">Letzter Sicherungsfehler: {storageForm.automaticBackup.lastError}</p>}
+            </div>
+            <div className="card space-y-3 border-accent-blue/25 bg-accent-blue/5">
+              <div className="flex items-start gap-3"><Clock size={18} className="mt-0.5 text-accent-blue" /><div><h3 className="font-semibold text-text-primary">Systemgeplante Sicherung bei geschlossener App</h3><p className="mt-1 text-sm text-text-secondary">Für eine tägliche Sicherung auch bei geschlossener App liegen im PodCore-Ordner vorbereitete Einrichtungsdateien bereit.</p></div></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-text-secondary"><code className="rounded bg-obsidian-900/70 p-2 break-all">Windows: install-automatic-backup-windows.bat</code><code className="rounded bg-obsidian-900/70 p-2 break-all">macOS/Linux: ./install-automatic-backup-unix.sh</code></div>
+              <p className="text-xs text-text-muted">Die Standardplanung läuft täglich um 20:00 Uhr. Sie nutzt denselben Prüfsummen- und Aufbewahrungsablauf wie die In-App-Sicherung und kann später über die jeweilige Aufgabenplanung entfernt werden.</p>
             </div>
             <div className="card border-accent-orange/30 bg-accent-orange/5"><h3 className="font-semibold text-text-primary flex items-center gap-2"><AlertTriangle size={16} className="text-accent-orange" /> Wechsel und Fallback</h3><p className="mt-2 text-sm text-text-secondary">Bei einer späteren Online-Datenbank wird PodCore vor dem Wechsel eine lokale Vorsicherung, Datenvorschau und Integritätsprüfung verlangen. Bei Verbindungsfehlern bleibt der letzte bestätigte lokale Stand verfügbar; ein stilles Überschreiben findet nicht statt.</p></div>
           </>}

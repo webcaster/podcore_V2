@@ -16,6 +16,28 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_EMBEDDED_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_TOTAL_EMBEDDED_BYTES = 60 * 1024 * 1024;
 
+type AutomaticBackupSource = 'in-app' | 'system';
+type AutomaticBackupConfig = {
+  enabled: boolean;
+  intervalHours: number;
+  retentionCount: number;
+  includeFiles: boolean;
+  lastRunAt: string | null;
+  lastStatus: 'never' | 'success' | 'error';
+  lastError: string | null;
+};
+
+const DEFAULT_AUTOMATIC_BACKUP: AutomaticBackupConfig = {
+  enabled: true,
+  intervalHours: 24,
+  retentionCount: 14,
+  includeFiles: true,
+  lastRunAt: null,
+  lastStatus: 'never',
+  lastError: null,
+};
+let automaticBackupRunning = false;
+
 const uploadBackup = multer({
   dest: path.join(DATA_DIR, 'tmp'),
   limits: { fileSize: MAX_UPLOAD_BYTES },
@@ -181,6 +203,54 @@ function writeBackupAtomically(filename: string, backup: any): string {
   return target;
 }
 
+function readAppSettings(db: any): Record<string, any> {
+  try {
+    const row = db.get("SELECT value FROM settings WHERE key = 'app'") as any;
+    return row?.value ? JSON.parse(row.value) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function normalizeAutomaticBackupConfig(value: any): AutomaticBackupConfig {
+  const source = value && typeof value === 'object' ? value : {};
+  const intervalCandidate = Number(source.intervalHours);
+  const retentionCandidate = Number(source.retentionCount);
+  return {
+    enabled: source.enabled !== false,
+    intervalHours: Number.isFinite(intervalCandidate) ? Math.min(168, Math.max(1, Math.round(intervalCandidate))) : DEFAULT_AUTOMATIC_BACKUP.intervalHours,
+    retentionCount: Number.isFinite(retentionCandidate) ? Math.min(90, Math.max(3, Math.round(retentionCandidate))) : DEFAULT_AUTOMATIC_BACKUP.retentionCount,
+    includeFiles: source.includeFiles !== false,
+    lastRunAt: typeof source.lastRunAt === 'string' ? source.lastRunAt : null,
+    lastStatus: source.lastStatus === 'success' || source.lastStatus === 'error' ? source.lastStatus : 'never',
+    lastError: typeof source.lastError === 'string' ? source.lastError.slice(0, 500) : null,
+  };
+}
+
+function saveAutomaticBackupConfig(db: any, config: AutomaticBackupConfig): void {
+  const settings = readAppSettings(db);
+  const storage = settings.storage && typeof settings.storage === 'object' ? settings.storage : {};
+  settings.storage = { ...storage, automaticBackup: config };
+  db.run(`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, ['app', JSON.stringify(settings)]);
+}
+
+function removeExpiredAutomaticBackups(retentionCount: number): number {
+  if (!fs.existsSync(BACKUPS_DIR)) return 0;
+  const automaticFiles = fs.readdirSync(BACKUPS_DIR)
+    .filter(filename => /^(automatic|scheduled)-full-backup-.*\.json$/i.test(filename))
+    .map(filename => {
+      const filePath = path.join(BACKUPS_DIR, filename);
+      return { path: filePath, mtime: fs.statSync(filePath).mtimeMs };
+    })
+    .sort((left, right) => right.mtime - left.mtime);
+  let removed = 0;
+  automaticFiles.slice(retentionCount).forEach(file => {
+    try { fs.unlinkSync(file.path); removed += 1; } catch (_) {}
+  });
+  return removed;
+}
+
 function createFullBackup(db: any, exportedBy: string, includeFiles = true) {
   const tables: Record<string, any[]> = {};
   const tableManifest: Record<string, any> = {};
@@ -206,6 +276,48 @@ function createFullBackup(db: any, exportedBy: string, includeFiles = true) {
     integrity: { algorithm: 'sha256', dataHash: backupDataHash(data) },
     data,
   };
+}
+
+/** Erstellt eine atomare lokale Vollsicherung für In-App- und Systemläufe. */
+export function runAutomaticBackup(options: { force?: boolean; source?: AutomaticBackupSource } = {}) {
+  if (automaticBackupRunning) return { created: false, reason: 'running' as const };
+  const db = getDb();
+  const current = normalizeAutomaticBackupConfig(readAppSettings(db)?.storage?.automaticBackup);
+  const source = options.source || 'in-app';
+  const lastRunMs = current.lastRunAt ? Date.parse(current.lastRunAt) : NaN;
+  const due = !Number.isFinite(lastRunMs) || Date.now() - lastRunMs >= current.intervalHours * 60 * 60 * 1000;
+  if (!options.force && (!current.enabled || !due)) {
+    return { created: false, reason: current.enabled ? 'not-due' as const : 'disabled' as const, config: current };
+  }
+
+  automaticBackupRunning = true;
+  try {
+    const backup = createFullBackup(db, source === 'system' ? 'system scheduler' : 'in-app scheduler', current.includeFiles);
+    const prefix = source === 'system' ? 'scheduled' : 'automatic';
+    const filename = `${prefix}-full-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    const filePath = writeBackupAtomically(filename, backup);
+    const next: AutomaticBackupConfig = { ...current, lastRunAt: new Date().toISOString(), lastStatus: 'success', lastError: null };
+    saveAutomaticBackupConfig(db, next);
+    const removed = removeExpiredAutomaticBackups(next.retentionCount);
+    return { created: true, filename, filePath, removed, config: next, integrity: backup.integrity };
+  } catch (error: any) {
+    const next: AutomaticBackupConfig = { ...current, lastStatus: 'error', lastError: error?.message || String(error) };
+    saveAutomaticBackupConfig(db, next);
+    throw error;
+  } finally {
+    automaticBackupRunning = false;
+  }
+}
+
+function startAutomaticBackupTimer(): void {
+  if (process.env.PODCORE_DISABLE_AUTO_BACKUP === '1') return;
+  const run = () => {
+    try { runAutomaticBackup(); } catch (error: any) { console.warn('[backup] Automatische Sicherung fehlgeschlagen:', error?.message || error); }
+  };
+  const initial = setTimeout(run, 8_000);
+  const interval = setInterval(run, 15 * 60 * 1000);
+  initial.unref?.();
+  interval.unref?.();
 }
 
 function validateBackupIntegrity(importData: any): void {
@@ -384,6 +496,28 @@ router.get('/export/full', requirePermission('canManageSettings') as any, (req: 
 });
 
 // ============================================================
+// AUTOMATISCHE SICHERUNGEN
+// ============================================================
+
+router.get('/automation/status', requirePermission('canManageSettings') as any, (_req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const config = normalizeAutomaticBackupConfig(readAppSettings(db)?.storage?.automaticBackup);
+  const savedAutomaticBackups = fs.existsSync(BACKUPS_DIR)
+    ? fs.readdirSync(BACKUPS_DIR).filter(filename => /^(automatic|scheduled)-full-backup-.*\.json$/i.test(filename)).length
+    : 0;
+  return res.json({ success: true, data: { config, savedAutomaticBackups, backupsPath: BACKUPS_DIR } });
+});
+
+router.post('/automation/run', requirePermission('canManageSettings') as any, (_req: AuthRequest, res: Response) => {
+  try {
+    const result = runAutomaticBackup({ force: true, source: 'in-app' });
+    return res.json({ success: true, data: result });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: `Automatische Sicherung fehlgeschlagen: ${error?.message || String(error)}` });
+  }
+});
+
+// ============================================================
 // IMPORT – spezielle Legacy-Endpunkte
 // ============================================================
 
@@ -514,5 +648,7 @@ router.delete('/:filename', requirePermission('canManageSettings') as any, (req:
   fs.unlinkSync(filePath);
   return res.json({ success: true, message: 'Backup gelöscht' });
 });
+
+startAutomaticBackupTimer();
 
 export default router;
