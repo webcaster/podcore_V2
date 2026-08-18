@@ -189,12 +189,12 @@ export default function Layout() {
     <aside
       data-tutorial-id={mobile ? 'sidebar-mobile' : 'sidebar'}
       className={`
-      flex flex-col h-full min-h-0 bg-obsidian-800 border-r border-surface-border
+      flex flex-col h-full min-h-0 bg-sidebar-bg border-r border-sidebar-border shadow-[10px_0_30px_rgba(4,2,10,0.18)]
       ${mobile ? 'w-72' : collapsed ? 'w-16' : 'w-64'}
       transition-all duration-300
     `}>
       {/* Logo / Branding */}
-      <div className={`flex items-center gap-3 p-4 border-b border-surface-border ${collapsed && !mobile ? 'justify-center' : ''}`}>
+      <div className={`flex items-center gap-3 p-4 border-b border-sidebar-border ${collapsed && !mobile ? 'justify-center' : ''}`}>
         <SidebarLogo mobile={mobile} />
         {(!collapsed || mobile) && (
           <div className="min-w-0 flex-1">
@@ -264,7 +264,7 @@ export default function Layout() {
       </nav>
 
       {/* User info */}
-      <div data-tutorial-id="sidebar-user-info" className={`p-3 border-t border-surface-border ${collapsed && !mobile ? 'flex flex-col items-center gap-2' : ''}`}>
+      <div data-tutorial-id="sidebar-user-info" className={`p-3 border-t border-sidebar-border ${collapsed && !mobile ? 'flex flex-col items-center gap-2' : ''}`}>
         {/* Im Screenshot-Modus: simulierte Rolle anzeigen, nicht den echten Admin */}
         {screenshotActive ? (
           (!collapsed || mobile) ? (
@@ -434,7 +434,7 @@ export default function Layout() {
         </div>
 
         {/* Page Content */}
-        <main data-tutorial-id="main-content" className="flex-1 overflow-y-auto p-6 scrollbar-gutter-stable">
+        <main data-tutorial-id="main-content" className="flex-1 overflow-y-auto p-6 scrollbar-gutter-stable bg-[radial-gradient(circle_at_96%_0%,rgba(157,78,221,0.11),transparent_31rem)]">
           <Outlet />
         </main>
       </div>

@@ -8,34 +8,34 @@
    ============================================================ */
 :root {
   /* Accent / Primary color */
-  --color-accent-primary: #7c3aed;
-  --color-accent-primary-light: #8b5cf6;
-  --color-accent-primary-dark: #6d28d9;
-  --color-text-accent: #a78bfa;
+  --color-accent-primary: #9d4edd;
+  --color-accent-primary-light: #c77dff;
+  --color-accent-primary-dark: #7b2cbf;
+  --color-text-accent: #d8b4fe;
 
   /* Background layers */
-  --color-obsidian-950: #0a0a0f;
-  --color-obsidian-900: #0f0f1a;
-  --color-obsidian-800: #141420;
-  --color-obsidian-700: #1a1a2e;
-  --color-obsidian-600: #1e1e35;
-  --color-obsidian-500: #252540;
+  --color-obsidian-950: #0d0b14;
+  --color-obsidian-900: #14111f;
+  --color-obsidian-800: #1a1625;
+  --color-obsidian-700: #211b30;
+  --color-obsidian-600: #2a223d;
+  --color-obsidian-500: #342a4c;
 
   /* Surface colors */
-  --color-surface: #1a1a2e;
-  --color-surface-raised: #1e1e35;
-  --color-surface-overlay: #252540;
-  --color-surface-border: #2d2d4e;
-  --color-surface-border-light: #3d3d6e;
+  --color-surface: #211b30;
+  --color-surface-raised: #2a223d;
+  --color-surface-overlay: #342a4c;
+  --color-surface-border: #43365f;
+  --color-surface-border-light: #5c4b7c;
 
   /* Sidebar */
-  --color-sidebar-bg: #141420;
-  --color-sidebar-border: #2d2d4e;
+  --color-sidebar-bg: #110e19;
+  --color-sidebar-border: #352a4c;
 
   /* Text colors */
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
+  --color-text-primary: #fbf9ff;
+  --color-text-secondary: #c1b9d2;
+  --color-text-muted: #938aa5;
 
   /* Fixed accent colors (not user-configurable, but referenced by Tailwind) */
   --color-accent-blue: #2563eb;
@@ -87,6 +87,9 @@
     margin: 0;
     padding: 0;
     min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 92% -8%, rgba(157, 78, 221, 0.16), transparent 32rem),
+      radial-gradient(circle at 7% 105%, rgba(91, 33, 182, 0.1), transparent 30rem);
   }
 
   ::-webkit-scrollbar {
@@ -177,10 +180,10 @@
     /* Nutzt CSS-Variablen direkt für Theme-Kompatibilität */
     background-color: var(--color-accent-primary, #7c3aed);
     color: white;
-    font-weight: 500;
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
-    transition: all 0.2s;
+    font-weight: 600;
+    padding: 0.58rem 1.1rem;
+    border-radius: 999px;
+    transition: transform 0.16s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
@@ -188,8 +191,11 @@
     cursor: pointer;
   }
   .btn-primary:hover {
-    background-color: var(--color-accent-primary-dark, #6d28d9);
+    background-color: var(--color-accent-primary-light, #c77dff);
+    box-shadow: 0 8px 22px rgba(157, 78, 221, 0.3);
+    transform: translateY(-1px);
   }
+  .btn-primary:active { transform: translateY(0) scale(0.98); }
   .btn-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -198,9 +204,9 @@
   .btn-secondary {
     background-color: var(--color-surface-raised, #1e1e35);
     color: var(--color-text-primary, #f1f5f9);
-    font-weight: 500;
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
+    font-weight: 600;
+    padding: 0.58rem 1.1rem;
+    border-radius: 999px;
     border: 1px solid var(--color-surface-border, #2d2d4e);
     transition: all 0.2s;
     display: inline-flex;
@@ -232,10 +238,11 @@
   }
 
   .card {
-    background-color: var(--color-obsidian-700, #1a1a2e);
-    border: 1px solid var(--color-surface-border, #2d2d4e);
-    border-radius: 0.75rem;
-    padding: 1rem;
+    background: linear-gradient(145deg, var(--color-obsidian-700, #211b30), var(--color-surface, #211b30));
+    border: 1px solid rgba(216, 180, 254, 0.12);
+    border-radius: 1rem;
+    padding: 1.1rem;
+    box-shadow: 0 14px 32px rgba(4, 2, 10, 0.18);
   }
 
   .card-raised {
@@ -354,13 +361,16 @@
   }
 
   .nav-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-raised transition-all duration-200 cursor-pointer;
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-text-secondary hover:text-text-primary transition-all duration-200 cursor-pointer;
+    border: 1px solid transparent;
   }
+  .nav-item:hover { background-color: rgba(199, 125, 255, 0.08); border-color: rgba(199, 125, 255, 0.12); }
 
   .nav-item-active {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-primary font-medium;
-    background-color: rgba(124, 58, 237, 0.2);
-    border: 1px solid rgba(124, 58, 237, 0.3);
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-text-primary font-semibold;
+    background: linear-gradient(105deg, var(--color-accent-primary, #9d4edd), var(--color-accent-primary-dark, #7b2cbf));
+    border: 1px solid rgba(216, 180, 254, 0.42);
+    box-shadow: 0 6px 18px rgba(157, 78, 221, 0.25);
   }
 
   .page-header {
@@ -399,7 +409,7 @@
   .modal {
     background-color: var(--color-obsidian-700, #1a1a2e);
     border: 1px solid var(--color-surface-border, #2d2d4e);
-    border-radius: 0.75rem;
+    border-radius: 1rem;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
     max-height: calc(100vh - 2rem);
     overflow-y: auto;
