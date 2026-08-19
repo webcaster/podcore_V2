@@ -19,6 +19,7 @@ interface TutorialStep {
   title: string;
   description: string;
   target?: string;
+  route?: string;
   position?: 'top' | 'bottom' | 'left' | 'right';
   image?: string;
   annotations?: AnnotationPoint[];
@@ -108,6 +109,7 @@ async function cacheImportedSteps(value: any): Promise<TutorialStep[]> {
       title: String(raw.title || raw.name || `Schritt ${index + 1}`).slice(0, 300),
       description: String(raw.description || raw.content || raw.text || '').slice(0, 20_000),
       target: raw.target ? String(raw.target).slice(0, 500) : undefined,
+      route: typeof raw.route === 'string' && raw.route.startsWith('/') ? raw.route.slice(0, 500) : undefined,
       position: ['top', 'bottom', 'left', 'right'].includes(raw.position) ? raw.position : undefined,
       image,
       annotations: Array.isArray(raw.annotations) ? raw.annotations.slice(0, 100) : [],

@@ -102,7 +102,7 @@ export const TutorialOverlay: React.FC = () => {
       setPosition(null);
       
       // Check if we should navigate
-      const targetRoute = TARGET_ROUTES[step.target];
+      const targetRoute = step.route || TARGET_ROUTES[step.target];
       if (targetRoute && location.pathname !== targetRoute && !isNavigating) {
         setIsNavigating(true);
         navigate(targetRoute);

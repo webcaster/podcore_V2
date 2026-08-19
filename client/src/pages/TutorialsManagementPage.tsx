@@ -16,9 +16,10 @@ import {
   Camera, Download, Eye, Users, BookOpen, Edit3,
   X, Check, AlertCircle, Loader2, ArrowLeft,
   ToggleLeft, ToggleRight, GripVertical, Image as ImageIcon,
-  FileText, Settings as SettingsIcon, ChevronRight, RefreshCw, Copy,
+  FileText, Settings as SettingsIcon, ChevronRight, RefreshCw, Copy, MousePointerClick,
 } from 'lucide-react';
 import { useScreenshotMode } from '../contexts/ScreenshotModeContext';
+import { RecordedTutorialAction, useTutorialRecording } from '../contexts/TutorialRecordingContext';
 import RoleMenuPreview from '../components/tutorials/RoleMenuPreview';
 import { tutorialCloudApi, TutorialCloudItem, TutorialCloudStatus } from '../lib/api';
 
@@ -35,6 +36,7 @@ interface TutorialStep {
   title: string;
   description: string;
   target?: string;
+  route?: string;
   position?: 'top' | 'bottom' | 'left' | 'right';
   image?: string;
   annotations?: AnnotationPoint[];
@@ -110,9 +112,9 @@ const PAGE_ROUTES: { label: string; path: string; tutorialId: string }[] = [
 const getRoleColor = (name: string) =>
   ROLE_COLORS[name?.toLowerCase()] || '#6b7280';
 
-const newStep = (): TutorialStep => ({
+const newStep = (title = 'Neuer Tutorialschritt'): TutorialStep => ({
   id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-  title: '',
+  title,
   description: '',
   target: '',
   position: 'bottom',
@@ -127,6 +129,7 @@ export default function TutorialsManagementPage() {
   const navigate = useNavigate();
   const { user } = useApp();
   const { startScreenshotMode, persistedState, clearPersistedState } = useScreenshotMode();
+  const { startRecording } = useTutorialRecording();
 
   // Developer Mode Check
   const isDeveloper = user?.developerMode === true;
@@ -158,6 +161,7 @@ export default function TutorialsManagementPage() {
   const [cloudAutoSync, setCloudAutoSync] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const screenshotRestoreAppliedRef = useRef(false);
+  const recordingRestoreAppliedRef = useRef(false);
 
   // Ref to hold the current editTutorial for use inside screenshot callbacks
   const editTutorialRef = useRef<Tutorial | null>(null);
@@ -229,6 +233,34 @@ export default function TutorialsManagementPage() {
       clearPersistedState();
     }
   }, [persistedState, clearPersistedState]);
+
+  useEffect(() => {
+    if (recordingRestoreAppliedRef.current) return;
+    try {
+      const raw = sessionStorage.getItem('podcore_tutorial_recording_result');
+      if (!raw) return;
+      const result = JSON.parse(raw) as { editTutorial: Tutorial; stepId?: string; append?: boolean; action: RecordedTutorialAction };
+      if (!result.editTutorial || !result.action?.target) return;
+      const applyAction = (step: TutorialStep): TutorialStep => ({
+        ...step,
+        title: step.title || result.action.title,
+        description: step.description || result.action.description,
+        target: result.action.target,
+        route: result.action.route,
+        interaction: result.action.interaction,
+      });
+      const restoredTutorial: Tutorial = result.append
+        ? { ...result.editTutorial, steps: [...result.editTutorial.steps, applyAction(newStep())] }
+        : { ...result.editTutorial, steps: result.editTutorial.steps.map(step => step.id === result.stepId ? applyAction(step) : step) };
+      setEditTutorial(restoredTutorial);
+      setView('edit');
+      setActiveTab('steps');
+      recordingRestoreAppliedRef.current = true;
+      sessionStorage.removeItem('podcore_tutorial_recording_result');
+    } catch {
+      sessionStorage.removeItem('podcore_tutorial_recording_result');
+    }
+  }, []);
 
   // ── LOAD ──
   const loadData = useCallback(async () => {
@@ -335,6 +367,13 @@ export default function TutorialsManagementPage() {
     if (!editTutorial.title.trim()) { setError('Titel erforderlich'); return; }
     if (!editTutorial.roles.length) { setError('Mindestens eine Rolle erforderlich'); return; }
     if (!editTutorial.steps.length) { setError('Mindestens ein Schritt erforderlich'); return; }
+    const normalizedSteps = editTutorial.steps.map((step, index) => ({
+      ...step,
+      title: step.title.trim() || `Schritt ${index + 1}`,
+      description: step.description.trim(),
+      image: step.image || undefined,
+      annotations: step.image ? (step.annotations || []) : [],
+    }));
     setSaving(true); setError(null);
     try {
       const isNew = editTutorial.id.startsWith('new-');
@@ -349,7 +388,9 @@ export default function TutorialsManagementPage() {
           title: editTutorial.title,
           description: editTutorial.description,
           enabled: editTutorial.enabled,
-          steps: editTutorial.steps,
+          // Screenshots und Markierungen sind optional. Die interaktive App-
+          // Führung benötigt nur Klickziel, Route und Call-out-Text.
+          steps: normalizedSteps,
         }),
       });
       if (!res.ok) {
@@ -537,6 +578,25 @@ export default function TutorialsManagementPage() {
     navigate(targetPath);
   }, [roles, startScreenshotMode, navigate]);
 
+  const handleStartRecording = useCallback((stepId?: string) => {
+    const current = editTutorialRef.current;
+    if (!current) return;
+    const firstRole = current.roles[0];
+    const roleObj = roles.find(role => role.name === firstRole || role.id === firstRole);
+    const step = stepId ? current.steps.find(item => item.id === stepId) : undefined;
+    const targetPath = step?.route || PAGE_ROUTES.find(route => route.tutorialId === step?.target)?.path || '/';
+    startRecording({
+      role: firstRole || 'unbekannt',
+      permissions: roleObj?.permissions || {},
+      onRecord: (action) => {
+        sessionStorage.setItem('podcore_tutorial_recording_result', JSON.stringify({ editTutorial: current, stepId, append: !stepId, action }));
+        navigate('/admin/tutorials/edit');
+      },
+      onCancel: () => navigate('/admin/tutorials/edit'),
+    });
+    navigate(targetPath);
+  }, [navigate, roles, startRecording]);
+
   // ── STEP HELPERS ──
   const toggleStep = (id: string) => setCollapsedSteps(p => {
     const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n;
@@ -544,7 +604,7 @@ export default function TutorialsManagementPage() {
   const updateStep = (id: string, upd: Partial<TutorialStep>) =>
     setEditTutorial(p => p ? { ...p, steps: p.steps.map(s => s.id === id ? { ...s, ...upd } : s) } : p);
   const addStep = () => {
-    const s = newStep();
+    const s = newStep(`Schritt ${(editTutorial?.steps.length || 0) + 1}`);
     setEditTutorial(p => p ? { ...p, steps: [...p.steps, s] } : p);
     setCollapsedSteps(p => { const n = new Set(p); n.delete(s.id); return n; });
   };
@@ -735,7 +795,7 @@ export default function TutorialsManagementPage() {
                 title: '',
                 description: '',
                 enabled: true,
-                steps: [newStep()],
+                steps: [newStep('Schritt 1')],
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               };
@@ -1446,6 +1506,14 @@ export default function TutorialsManagementPage() {
                             </div>
                           </div>
 
+                          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-obsidian-700 bg-obsidian-800/60 p-3">
+                            <div>
+                              <p className="text-sm font-medium text-text-primary">Klickziel aufzeichnen</p>
+                              <p className="mt-1 text-xs text-text-muted">Optional: Navigiere zur Zielseite, klicke ein vorbereitetes Bedienelement an und ergänze den Call-out. Screenshots sind dafür nicht erforderlich.</p>
+                            </div>
+                            <button type="button" onClick={() => handleStartRecording(step.id)} className="btn-secondary flex items-center gap-2 text-sm"><MousePointerClick size={15} /> Klick aufzeichnen</button>
+                          </div>
+
                           {/* Screenshot */}
                           <div>
                             <label className="form-label text-xs flex items-center gap-2">
@@ -1493,8 +1561,8 @@ export default function TutorialsManagementPage() {
                                 className="border-2 border-dashed border-obsidian-600 hover:border-accent-purple/60 rounded-xl p-6 text-center cursor-pointer transition-colors group"
                               >
                                 <Camera size={20} className="mx-auto mb-2 text-text-muted group-hover:text-accent-purple transition-colors" />
-                                <p className="text-sm text-text-muted group-hover:text-text-secondary transition-colors font-medium">Screenshot aufnehmen</p>
-                                <p className="text-xs text-text-muted mt-1">Navigiert zur Zielseite mit Rollen-Ansicht</p>
+                                <p className="text-sm text-text-muted group-hover:text-text-secondary transition-colors font-medium">Optionalen Screenshot aufnehmen</p>
+                                <p className="text-xs text-text-muted mt-1">Für Website, PDF und JSON-Download empfohlen – die App-Führung funktioniert auch ohne Bild.</p>
                               </div>
                             )}
 
@@ -1547,12 +1615,21 @@ export default function TutorialsManagementPage() {
                 })}
 
                 {/* Add step button */}
-                <button
-                  onClick={addStep}
-                  className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-obsidian-600 hover:border-accent-purple/50 rounded-xl text-text-muted hover:text-accent-purple transition-colors text-sm font-medium"
-                >
-                  <Plus size={16} />Schritt hinzufügen
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={addStep}
+                    className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-obsidian-600 hover:border-accent-purple/50 rounded-xl text-text-muted hover:text-accent-purple transition-colors text-sm font-medium"
+                  >
+                    <Plus size={16} />Schritt hinzufügen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStartRecording()}
+                    className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-accent-purple/50 hover:border-accent-purple rounded-xl text-accent-purple hover:bg-accent-purple/10 transition-colors text-sm font-medium"
+                  >
+                    <MousePointerClick size={16} />Schritt durch Klick aufzeichnen
+                  </button>
+                </div>
               </div>
             )}
           </div>

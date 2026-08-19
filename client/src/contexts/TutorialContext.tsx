@@ -14,6 +14,7 @@ export interface TutorialStep {
   title: string;
   description: string;
   target?: string;
+  route?: string;
   position?: 'top' | 'bottom' | 'left' | 'right';
   image?: string;
   annotations?: AnnotationPoint[];

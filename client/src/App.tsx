@@ -8,6 +8,8 @@ import TutorialWikiPanel from './components/tutorials/TutorialWikiPanel';
 import TutorialHintNotification from './components/tutorials/TutorialHintNotification';
 import { ScreenshotModeProvider } from './contexts/ScreenshotModeContext';
 import ScreenshotCaptureOverlay from './components/tutorials/ScreenshotCaptureOverlay';
+import { TutorialRecordingProvider } from './contexts/TutorialRecordingContext';
+import TutorialRecordingOverlay from './components/tutorials/TutorialRecordingOverlay';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import ToastContainer from './components/ui/ToastContainer';
@@ -131,17 +133,20 @@ export default function App() {
     <ThemeProvider>
       <AppProvider>
         <ScreenshotModeProvider>
-          <TutorialProvider>
-            <BrowserRouter>
+          <TutorialRecordingProvider>
+            <TutorialProvider>
+              <BrowserRouter>
               <AppRoutes />
               <TutorialOverlay />
               <TutorialWikiPanel />
               <TutorialHintNotification />
               <ScreenshotCaptureOverlay />
+              <TutorialRecordingOverlay />
               <LicenseStatusBanner />
               <ToastContainer />
-            </BrowserRouter>
-          </TutorialProvider>
+              </BrowserRouter>
+            </TutorialProvider>
+          </TutorialRecordingProvider>
         </ScreenshotModeProvider>
       </AppProvider>
     </ThemeProvider>
