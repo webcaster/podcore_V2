@@ -7,13 +7,14 @@ export interface RecordedTutorialAction {
   title: string;
   description: string;
   interaction: 'click' | 'guide' | 'confirm';
+  image?: string;
 }
 
 interface TutorialRecordingState {
   active: boolean;
   simulatedRole: string | null;
   simulatedPermissions: Record<string, boolean>;
-  onRecord: ((action: RecordedTutorialAction) => void) | null;
+  onComplete: ((actions: RecordedTutorialAction[]) => void) | null;
   onCancel: (() => void) | null;
 }
 
@@ -21,7 +22,7 @@ interface TutorialRecordingContextValue extends TutorialRecordingState {
   startRecording: (params: {
     role: string;
     permissions: Record<string, boolean>;
-    onRecord: (action: RecordedTutorialAction) => void;
+    onComplete: (actions: RecordedTutorialAction[]) => void;
     onCancel: () => void;
   }) => void;
   endRecording: () => void;
@@ -34,21 +35,21 @@ export function TutorialRecordingProvider({ children }: { children: ReactNode })
     active: false,
     simulatedRole: null,
     simulatedPermissions: {},
-    onRecord: null,
+    onComplete: null,
     onCancel: null,
   });
 
   const startRecording = useCallback((params: {
     role: string;
     permissions: Record<string, boolean>;
-    onRecord: (action: RecordedTutorialAction) => void;
+    onComplete: (actions: RecordedTutorialAction[]) => void;
     onCancel: () => void;
   }) => {
-    setState({ active: true, simulatedRole: params.role, simulatedPermissions: params.permissions, onRecord: params.onRecord, onCancel: params.onCancel });
+    setState({ active: true, simulatedRole: params.role, simulatedPermissions: params.permissions, onComplete: params.onComplete, onCancel: params.onCancel });
   }, []);
 
   const endRecording = useCallback(() => {
-    setState({ active: false, simulatedRole: null, simulatedPermissions: {}, onRecord: null, onCancel: null });
+    setState({ active: false, simulatedRole: null, simulatedPermissions: {}, onComplete: null, onCancel: null });
   }, []);
 
   return <TutorialRecordingContext.Provider value={{ ...state, startRecording, endRecording }}>{children}</TutorialRecordingContext.Provider>;

@@ -239,19 +239,30 @@ export default function TutorialsManagementPage() {
     try {
       const raw = sessionStorage.getItem('podcore_tutorial_recording_result');
       if (!raw) return;
-      const result = JSON.parse(raw) as { editTutorial: Tutorial; stepId?: string; append?: boolean; action: RecordedTutorialAction };
-      if (!result.editTutorial || !result.action?.target) return;
-      const applyAction = (step: TutorialStep): TutorialStep => ({
+      const result = JSON.parse(raw) as { editTutorial: Tutorial; stepId?: string; append?: boolean; actions?: RecordedTutorialAction[]; action?: RecordedTutorialAction };
+      const actions = result.actions || (result.action ? [result.action] : []);
+      if (!result.editTutorial || !actions.length || !actions.every(action => action.target)) return;
+      const applyAction = (step: TutorialStep, action: RecordedTutorialAction, index: number): TutorialStep => ({
         ...step,
-        title: step.title || result.action.title,
-        description: step.description || result.action.description,
-        target: result.action.target,
-        route: result.action.route,
-        interaction: result.action.interaction,
+        title: action.title || step.title || `Schritt ${index + 1}`,
+        description: action.description || step.description,
+        target: action.target,
+        route: action.route,
+        interaction: action.interaction,
+        image: action.image || step.image,
+        annotations: action.image ? [] : step.annotations,
       });
-      const restoredTutorial: Tutorial = result.append
-        ? { ...result.editTutorial, steps: [...result.editTutorial.steps, applyAction(newStep())] }
-        : { ...result.editTutorial, steps: result.editTutorial.steps.map(step => step.id === result.stepId ? applyAction(step) : step) };
+      let restoredTutorial: Tutorial;
+      if (result.append) {
+        const offset = result.editTutorial.steps.length;
+        restoredTutorial = { ...result.editTutorial, steps: [...result.editTutorial.steps, ...actions.map((action, index) => applyAction(newStep(`Schritt ${offset + index + 1}`), action, offset + index))] };
+      } else {
+        const stepIndex = result.editTutorial.steps.findIndex(step => step.id === result.stepId);
+        if (stepIndex < 0) return;
+        const steps = [...result.editTutorial.steps];
+        steps.splice(stepIndex, 1, applyAction(steps[stepIndex], actions[0], stepIndex), ...actions.slice(1).map((action, index) => applyAction(newStep(`Schritt ${stepIndex + index + 2}`), action, stepIndex + index + 1)));
+        restoredTutorial = { ...result.editTutorial, steps };
+      }
       setEditTutorial(restoredTutorial);
       setView('edit');
       setActiveTab('steps');
@@ -588,8 +599,8 @@ export default function TutorialsManagementPage() {
     startRecording({
       role: firstRole || 'unbekannt',
       permissions: roleObj?.permissions || {},
-      onRecord: (action) => {
-        sessionStorage.setItem('podcore_tutorial_recording_result', JSON.stringify({ editTutorial: current, stepId, append: !stepId, action }));
+      onComplete: (actions) => {
+        sessionStorage.setItem('podcore_tutorial_recording_result', JSON.stringify({ editTutorial: current, stepId, append: !stepId, actions }));
         navigate('/admin/tutorials/edit');
       },
       onCancel: () => navigate('/admin/tutorials/edit'),

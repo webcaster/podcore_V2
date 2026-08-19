@@ -29,6 +29,9 @@
 - [x] Kritischer Tutorial-Patch: Neue Tutorialschritte zuverlässig mit Screenshot, mit Markierungen, ohne Markierungen oder vollständig ohne Bild speichern.
 - [x] Kritischer Tutorial-Patch: Interaktive App-Tutorials ohne Screenshot vollständig nutzbar gemacht; Screenshots und Markierungen werden als optionale, qualitätsgesicherte Website- und Exportinhalte behandelt.
 - [x] Tutorial-Aufzeichnungsmodus: Admins erfassen während eines geführten Durchlaufs Klickziele und Hinweise als Schritte; Nutzer erhalten diese später als kontextbezogene Call-outs auf der richtigen Seite.
+- [x] Tutorial-Sequenzaufzeichnung: Mehrere Klicks, Unterschritte, Zwischenhinweise und optionale Screenshots in einem laufenden Durchgang erfassen und als geordnete interaktive Anleitung wiedergeben.
+- [x] WordPress-Tutorial-Workflow: Mehrstufige Klicksequenzen, Unterschritte, Zwischenhinweise und optionale Screenshots aus PodCore-JSON vollständig übernehmen und als klare Schrittfolge darstellen.
+- [x] WordPress-Tutorial-Workflow: Pro Tutorial ein frei wählbares Titelbild im Backend sowie eine konsistente Titelbilddarstellung im Grid und in der Detailansicht ergänzt.
 - [x] Episoden-Editor: Technischen Hinweis zu fehlenden v2-Buchungen durch eine klare Leeransicht für Werbeplatzbuchungen mit direkter Anlegen- oder Auswahlaktion ersetzt.
 - [x] Design-Update: Visuelle Sprache des `podcore_promo_video_v2.mp4` analysiert und als zugängliches, konsistentes Designsystem in Navigation, Karten, Formulare und Kernseiten der App übertragen.
 - [x] Stabilitätsupdate: Überdimensionierte Zahlen-, Auswahl- und Formfelder anhand der betroffenen Komponenten konsistent verdichtet, ohne Touch- oder Lesbarkeit zu verschlechtern.

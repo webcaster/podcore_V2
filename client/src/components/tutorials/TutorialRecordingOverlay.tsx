@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Crosshair, MousePointerClick, X } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { Camera, Check, Crosshair, ListChecks, MousePointerClick, X } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { RecordedTutorialAction, useTutorialRecording } from '../../contexts/TutorialRecordingContext';
 
 function getElementLabel(element: HTMLElement) {
@@ -10,12 +10,16 @@ function getElementLabel(element: HTMLElement) {
 }
 
 export default function TutorialRecordingOverlay() {
-  const { active, simulatedRole, onRecord, onCancel, endRecording } = useTutorialRecording();
+  const { active, simulatedRole, onComplete, onCancel, endRecording } = useTutorialRecording();
   const location = useLocation();
-  const [candidate, setCandidate] = useState<{ target: string; label: string } | null>(null);
+  const navigate = useNavigate();
+  const [candidate, setCandidate] = useState<{ target: string; label: string; destination?: string } | null>(null);
+  const [actions, setActions] = useState<RecordedTutorialAction[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [interaction, setInteraction] = useState<RecordedTutorialAction['interaction']>('click');
+  const [includeScreenshot, setIncludeScreenshot] = useState(false);
+  const [capturingScreenshot, setCapturingScreenshot] = useState(false);
   const [notice, setNotice] = useState('Klicke auf ein markiertes Menü oder Bedienelement, um den nächsten Tutorialschritt aufzuzeichnen.');
 
   useEffect(() => {
@@ -24,6 +28,8 @@ export default function TutorialRecordingOverlay() {
     setTitle('');
     setDescription('');
     setInteraction('click');
+    setActions([]);
+    setIncludeScreenshot(false);
     setNotice('Klicke auf ein markiertes Menü oder Bedienelement, um den nächsten Tutorialschritt aufzuzeichnen.');
   }, [active]);
 
@@ -42,7 +48,9 @@ export default function TutorialRecordingOverlay() {
       event.stopPropagation();
       const target = element.dataset.tutorialId || '';
       const label = getElementLabel(element);
-      setCandidate({ target, label });
+      const anchor = element.closest('a[href]') as HTMLAnchorElement | null;
+      const destination = anchor?.getAttribute('href') || undefined;
+      setCandidate({ target, label, destination: destination?.startsWith('/') ? destination : undefined });
       setTitle(label);
       setNotice(`„${label}“ wurde als Klickziel erkannt. Ergänze nun den Hinweis für die Nutzer.`);
     };
@@ -55,18 +63,61 @@ export default function TutorialRecordingOverlay() {
     endRecording();
   }, [endRecording, onCancel]);
 
-  const confirm = useCallback(() => {
-    if (!candidate || !onRecord) return;
-    onRecord({
+  const captureCurrentViewport = useCallback(async () => {
+    const overlay = document.getElementById('tutorial-recording-overlay');
+    const previousVisibility = overlay?.style.visibility || '';
+    if (overlay) overlay.style.visibility = 'hidden';
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const canvas = await html2canvas(document.body, {
+        backgroundColor: '#12111e',
+        scale: Math.min(window.devicePixelRatio || 1, 1.5),
+        useCORS: true,
+        logging: false,
+      });
+      return canvas.toDataURL('image/jpeg', 0.86);
+    } finally {
+      if (overlay) overlay.style.visibility = previousVisibility;
+    }
+  }, []);
+
+  const addAction = useCallback(async () => {
+    if (!candidate) return;
+    setCapturingScreenshot(includeScreenshot);
+    let image: string | undefined;
+    try {
+      if (includeScreenshot) image = await captureCurrentViewport();
+    } catch {
+      setNotice('Der Zwischenscreenshot konnte nicht erzeugt werden. Der Klickschritt wurde trotzdem übernommen.');
+    } finally {
+      setCapturingScreenshot(false);
+    }
+    const action: RecordedTutorialAction = {
       target: candidate.target,
       route: `${location.pathname}${location.search}`,
       label: candidate.label,
       title: title.trim() || candidate.label,
       description: description.trim(),
       interaction,
-    });
+      image,
+    };
+    setActions(previous => [...previous, action]);
+    setCandidate(null);
+    setTitle('');
+    setDescription('');
+    setIncludeScreenshot(false);
+    setInteraction('click');
+    setNotice(`Schritt ${actions.length + 1} wurde übernommen. Führe jetzt die nächste Aktion aus oder schließe die Sequenz ab.`);
+    if (candidate.destination && candidate.destination !== `${location.pathname}${location.search}`) {
+      navigate(candidate.destination);
+    }
+  }, [actions.length, candidate, captureCurrentViewport, description, includeScreenshot, interaction, location.pathname, location.search, navigate, title]);
+
+  const finish = useCallback(() => {
+    if (!actions.length || !onComplete) return;
+    onComplete(actions);
     endRecording();
-  }, [candidate, description, endRecording, interaction, location.pathname, location.search, onRecord, title]);
+  }, [actions, endRecording, onComplete]);
 
   if (!active) return null;
 
@@ -79,7 +130,10 @@ export default function TutorialRecordingOverlay() {
             <p className="text-sm font-semibold text-text-primary">Tutorialschritt aufzeichnen</p>
             <p className="mt-1 text-xs leading-5 text-text-muted">Ansicht: {simulatedRole || 'Rolle'} · {notice}</p>
           </div>
-          <button type="button" onClick={cancel} className="rounded-lg p-2 text-text-muted hover:bg-obsidian-700 hover:text-text-primary" aria-label="Aufzeichnung abbrechen"><X size={16} /></button>
+          <div className="flex items-center gap-1">
+            {actions.length > 0 && <button type="button" onClick={finish} className="btn-primary flex items-center gap-1 px-3 py-2 text-xs"><ListChecks size={14} /> Sequenz fertig ({actions.length})</button>}
+            <button type="button" onClick={cancel} className="rounded-lg p-2 text-text-muted hover:bg-obsidian-700 hover:text-text-primary" aria-label="Aufzeichnung abbrechen"><X size={16} /></button>
+          </div>
         </div>
 
         {candidate && (
@@ -87,13 +141,17 @@ export default function TutorialRecordingOverlay() {
             <div className="flex items-center gap-2 text-sm text-text-primary"><MousePointerClick size={15} className="text-accent-purple" /><strong>Klickziel:</strong> {candidate.label}</div>
             <input value={title} onChange={event => setTitle(event.target.value)} className="form-input text-sm" placeholder="Titel des Schritts" />
             <textarea value={description} onChange={event => setDescription(event.target.value)} className="form-input text-sm" rows={3} placeholder="Was soll der Nutzer hier tun oder beachten?" />
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-text-muted">
+              <input type="checkbox" checked={includeScreenshot} onChange={event => setIncludeScreenshot(event.target.checked)} />
+              <Camera size={14} className="text-accent-purple" /> Zwischenbild dieses Schritts aufnehmen
+            </label>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <select value={interaction} onChange={event => setInteraction(event.target.value as RecordedTutorialAction['interaction'])} className="form-input w-auto text-sm">
                 <option value="click">Klick auf Ziel abwarten</option>
                 <option value="guide">Hinweis & weiter</option>
                 <option value="confirm">Schritt bestätigen</option>
               </select>
-              <button type="button" onClick={confirm} className="btn-primary flex items-center gap-2 text-sm"><Check size={15} /> Schritt übernehmen</button>
+              <button type="button" disabled={capturingScreenshot} onClick={addAction} className="btn-primary flex items-center gap-2 text-sm"><Check size={15} /> {capturingScreenshot ? 'Zwischenbild wird erstellt…' : 'Zur Sequenz hinzufügen'}</button>
             </div>
           </div>
         )}

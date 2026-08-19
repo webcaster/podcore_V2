@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.20**
+**Aktuelle Version: 2.16.21**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -49,6 +49,10 @@ Tutorialschritte können nun als Hinweis, als Klickziel oder als bewusste Bestä
 ### Neu in v2.16.20: Klickaufzeichnung und optionale Screenshots
 
 Im Entwickler-Modus können Tutorialautoren Klickziele direkt in der App aufzeichnen und daraus Route, Zielkennung und Call-out übernehmen. Die interaktive App-Führung funktioniert vollständig ohne Screenshot; Bilder und Markierungen sind optional und vor allem für WordPress, PDF und JSON-Download vorgesehen. Details: [`docs/RELEASE-2.16.20.md`](docs/RELEASE-2.16.20.md).
+
+### Neu in v2.16.21: Mehrstufige Klicksequenzen
+
+Die Aufzeichnung bleibt jetzt über mehrere Klicks aktiv. Autoren können komplexe Abläufe als geordnete Folge von Zielklicks, Unterschritten, Hinweisen und optionalen Zwischenbildern erfassen. Das WordPress Tutorial Hub v2.16.11 zeigt diese Sequenzen samt Interaktionshinweisen und gestaltbaren Titelbildern an. Details: [`docs/RELEASE-2.16.21.md`](docs/RELEASE-2.16.21.md).
 
 ### 📝 Redaktions-Hub & Ideenpool
 - Sammeln von Themenideen, Recherchen und Links
