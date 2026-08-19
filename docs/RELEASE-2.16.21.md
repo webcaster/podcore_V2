@@ -12,11 +12,13 @@ Die Schaltfläche **„Sequenz fertig“** übergibt alle aufgezeichneten Aktion
 
 Für jeden erfassten Klick kann optional **„Zwischenbild dieses Schritts aufnehmen“** aktiviert werden. PodCore erzeugt dann eine Momentaufnahme der aktuellen App-Ansicht und ordnet sie genau diesem Sequenzschritt zu. Screenshots bleiben optional: Sie unterstützen besonders WordPress, PDF und JSON-Download, während die interaktive App-Führung auch ohne Bild vollständig funktioniert.
 
-## WordPress Tutorial Hub v2.16.11
+## WordPress Tutorial Hub v2.16.12
 
 Das separate WordPress-Plugin übernimmt nun Zielroute, Interaktionsmodus und Reihenfolge der Sequenzschritte. Auf der Tutorialseite wird bei jedem Schritt erklärt, ob in PodCore ein markierter Bereich angeklickt, eine Aufgabe bestätigt oder nur ein Hinweis gelesen werden soll.
 
 Tutoriale erhalten zusätzlich ein gestaltbares Titelbild. Autoren können im WordPress-Editor das normale **Beitragsbild** setzen. Beim JSON-Import werden alternativ `titleImage`, `coverImage` oder `featuredImage` berücksichtigt; eingebettete Titelbilder werden in die Mediathek übertragen und für Grid sowie Detailansicht verwendet.
+
+Das aktualisierte Plugin übernimmt außerdem Screenshot-Markierungen der Arten **Punkt**, **Kreis** und **Zeichen**. Farbe, Kreisgröße, Symbol und Erklärung bleiben beim JSON-Import erhalten und werden in Screenshot sowie Markierungslegende sichtbar dargestellt. Das Plugin bleibt ein separates Installationspaket und wird nicht in das App-Repository aufgenommen.
 
 ## Bugfix: Im Tutorial-Editor weiterarbeiten
 
