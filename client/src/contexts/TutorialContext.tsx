@@ -20,6 +20,7 @@ export interface TutorialStep {
   highlightColor?: string;
   allowSkip?: boolean;
   action?: string;
+  interaction?: 'guide' | 'click' | 'confirm';
 }
 
 export interface Tutorial {

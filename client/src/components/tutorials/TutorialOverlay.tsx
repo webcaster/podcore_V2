@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, X, SkipForward } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, SkipForward, MousePointerClick, CheckCircle2, PauseCircle } from 'lucide-react';
 import { useTutorial, TutorialStep } from '../../contexts/TutorialContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './TutorialOverlay.css';
@@ -39,6 +39,16 @@ export const TutorialOverlay: React.FC = () => {
   const [position, setPosition] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const [isNavigating, setIsNavigating] = useState(false);
+  const [actionConfirmed, setActionConfirmed] = useState(false);
+
+  const findTargetElement = useCallback((target?: string): Element | null => {
+    if (!target) return null;
+    let element: Element | null = document.querySelector(`[data-tutorial-id="${CSS.escape(target)}"]`);
+    if (!element && /^(#|\.|\[)/.test(target)) {
+      try { element = document.querySelector(target); } catch { element = null; }
+    }
+    return element || document.getElementById(target);
+  }, []);
 
   const updatePosition = useCallback(() => {
     if (!activeTutorial) return;
@@ -50,11 +60,7 @@ export const TutorialOverlay: React.FC = () => {
 
     // Prefer the stable tutorial ID, but also support legacy CSS selectors
     // and direct element IDs for tutorials created in older versions.
-    let element: Element | null = document.querySelector(`[data-tutorial-id="${CSS.escape(step.target)}"]`);
-    if (!element && /^(#|\.|\[)/.test(step.target)) {
-      try { element = document.querySelector(step.target); } catch { element = null; }
-    }
-    if (!element) element = document.getElementById(step.target);
+    const element = findTargetElement(step.target);
 
     if (element) {
       const initialRect = element.getBoundingClientRect();
@@ -102,7 +108,7 @@ export const TutorialOverlay: React.FC = () => {
         navigate(targetRoute);
       }
     }
-  }, [activeTutorial, currentStep, location.pathname, navigate, isNavigating]);
+  }, [activeTutorial, currentStep, findTargetElement, location.pathname, navigate, isNavigating]);
 
   useEffect(() => {
     if (!activeTutorial) return;
@@ -123,14 +129,55 @@ export const TutorialOverlay: React.FC = () => {
     };
   }, [activeTutorial, currentStep, updatePosition]);
 
+  useEffect(() => {
+    setActionConfirmed(false);
+  }, [activeTutorial?.id, currentStep]);
+
+  const currentStepData = activeTutorial?.steps[currentStep];
+  const currentInteraction = currentStepData?.interaction || (currentStepData?.action === 'confirm' ? 'confirm' : currentStepData?.target ? 'click' : 'guide');
+  const currentRequiresTargetClick = currentInteraction === 'click' && Boolean(currentStepData?.target);
+
+  useEffect(() => {
+    if (!activeTutorial || !currentRequiresTargetClick || !currentStepData?.target) return;
+    const handleTargetClick = (event: MouseEvent) => {
+      const element = findTargetElement(currentStepData.target);
+      if (!element || !element.contains(event.target as Node)) return;
+      setActionConfirmed(true);
+      window.setTimeout(() => {
+        if (currentStep === activeTutorial.steps.length - 1) void completeTutorial();
+        else nextStep();
+      }, 180);
+    };
+    document.addEventListener('click', handleTargetClick, true);
+    return () => document.removeEventListener('click', handleTargetClick, true);
+  }, [activeTutorial, completeTutorial, currentRequiresTargetClick, currentStep, currentStepData?.target, findTargetElement, nextStep]);
+
   if (!activeTutorial) return null;
 
   const step = activeTutorial.steps[currentStep];
   const isLastStep = currentStep === activeTutorial.steps.length - 1;
+  const interaction = step.interaction || (step.action === 'confirm' ? 'confirm' : step.target ? 'click' : 'guide');
+  const requiresTargetClick = interaction === 'click' && Boolean(step.target);
+  const requiresConfirmation = interaction === 'confirm';
   const highlightColor = step.highlightColor || 'rgba(124, 58, 237, 0.15)';
   const targetLabel = step.target && TARGET_ROUTES[step.target]
     ? Object.entries(TARGET_ROUTES).find(([target]) => target === step.target)?.[0]?.replace('nav-', '').replace(/-/g, ' ')
     : null;
+
+  const continueTutorial = () => {
+    if (isLastStep) {
+      void completeTutorial();
+    } else {
+      nextStep();
+    }
+  };
+
+  const focusTarget = () => {
+    const element = findTargetElement(step.target);
+    if (!element) return;
+    element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    (element as HTMLElement).focus?.({ preventScroll: true });
+  };
 
   return (
     <>
@@ -211,9 +258,10 @@ export const TutorialOverlay: React.FC = () => {
             {step.target && (
               <div className="tutorial-action-hint" role="status">
                 <span className="tutorial-action-hint__pulse" aria-hidden="true" />
-                <span><strong>Nächste Aktion:</strong> Klicke auf den violett hervorgehobenen Bereich{targetLabel ? ` (${targetLabel})` : ''}.</span>
+                <span><strong>Nächste Aktion:</strong> {requiresTargetClick ? `Klicke auf den violett hervorgehobenen Bereich${targetLabel ? ` (${targetLabel})` : ''}. Danach geht das Tutorial automatisch weiter.` : requiresConfirmation ? 'Führe die Aufgabe aus und bestätige anschließend diesen Schritt.' : `Sieh dir den hervorgehobenen Bereich${targetLabel ? ` (${targetLabel})` : ''} an und fahre fort, wenn du bereit bist.`}</span>
               </div>
             )}
+            {requiresTargetClick && actionConfirmed && <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-accent-green"><CheckCircle2 size={14} /> Aktion erkannt – nächster Schritt wird geöffnet.</p>}
             <p className="text-base text-text-secondary leading-relaxed whitespace-pre-wrap">
               {step.description}
             </p>
@@ -272,7 +320,21 @@ export const TutorialOverlay: React.FC = () => {
                   </button>
                 )}
                 
-                {isLastStep ? (
+                {requiresTargetClick ? (
+                  <button
+                    onClick={focusTarget}
+                    className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
+                  >
+                    <MousePointerClick size={16} /> Zum markierten Bereich
+                  </button>
+                ) : requiresConfirmation ? (
+                  <button
+                    onClick={() => { setActionConfirmed(true); continueTutorial(); }}
+                    className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
+                  >
+                    <CheckCircle2 size={16} /> Erledigt – {isLastStep ? 'abschließen' : 'weiter'}
+                  </button>
+                ) : isLastStep ? (
                   <button
                     onClick={completeTutorial}
                     className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
@@ -289,6 +351,7 @@ export const TutorialOverlay: React.FC = () => {
                 )}
               </div>
             </div>
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-text-muted"><PauseCircle size={13} /> Du kannst das Tutorial jederzeit schließen und später bei diesem Schritt fortsetzen.</p>
           </div>
         </div>
       </div>

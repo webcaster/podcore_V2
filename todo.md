@@ -23,6 +23,7 @@
 - [x] Nutzertest-Analyse WaveSurfer-Audio-Editor: Adobe-Audition-Importweg für PodCore-Schnittlisten geprüft und als CSV-Export plus Anleitung ergänzt.
 - [x] Kritischer WordPress-Tutorial-Patch: JSON-Import übernimmt Schritttexte, Beschreibungen, Bildverknüpfungen und Marker vollständig; Frontend zeigt pro Schritt eine lesbare, nummerierte Screenshot-Annotation inklusive Erklärung.
 - [x] Tutorial-Führung in der App: Schritte navigieren bei Bedarf zur Zielseite, markieren das konfigurierte Menü oder Bedienelement sichtbar, führen den nächsten Klick kontextbezogen und speichern den Fortschritt pro Benutzer.
+- [x] Tutorial-Interaktivität: Schrittaktionen mit sichtbarem Ziel, kontextbezogener Klickanweisung, optionaler Bestätigung, Fortschrittsanzeige, sicherer Wiederaufnahme und rollenbewussten Hilfen erweitert.
 - [x] Episoden-Editor: Technischen Hinweis zu fehlenden v2-Buchungen durch eine klare Leeransicht für Werbeplatzbuchungen mit direkter Anlegen- oder Auswahlaktion ersetzt.
 - [x] Design-Update: Visuelle Sprache des `podcore_promo_video_v2.mp4` analysiert und als zugängliches, konsistentes Designsystem in Navigation, Karten, Formulare und Kernseiten der App übertragen.
 - [x] Stabilitätsupdate: Überdimensionierte Zahlen-, Auswahl- und Formfelder anhand der betroffenen Komponenten konsistent verdichtet, ohne Touch- oder Lesbarkeit zu verschlechtern.

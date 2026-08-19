@@ -39,6 +39,7 @@ interface TutorialStep {
   image?: string;
   annotations?: AnnotationPoint[];
   allowSkip?: boolean;
+  interaction?: 'guide' | 'click' | 'confirm';
 }
 interface Tutorial {
   id: string;
@@ -118,6 +119,7 @@ const newStep = (): TutorialStep => ({
   image: '',
   annotations: [],
   allowSkip: true,
+  interaction: 'guide',
 });
 
 // ── COMPONENT ──────────────────────────────────────────────────────────────
@@ -1396,8 +1398,8 @@ export default function TutorialsManagementPage() {
                             </p>
                           </div>
 
-                          {/* Target + Position */}
-                          <div className="grid grid-cols-2 gap-3">
+                          {/* Target + Position + Interaction */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                               <label className="form-label text-xs">Ziel-Element</label>
                               <select
@@ -1428,6 +1430,19 @@ export default function TutorialsManagementPage() {
                                 <option value="left">Links</option>
                                 <option value="right">Rechts</option>
                               </select>
+                            </div>
+                            <div>
+                              <label className="form-label text-xs">Interaktion</label>
+                              <select
+                                value={step.interaction || 'guide'}
+                                onChange={e => updateStep(step.id, { interaction: e.target.value as 'guide' | 'click' | 'confirm' })}
+                                className="form-input text-sm"
+                              >
+                                <option value="guide">Hinweis &amp; weiter</option>
+                                <option value="click" disabled={!step.target}>Klick auf Ziel abwarten</option>
+                                <option value="confirm">Schritt bestätigen</option>
+                              </select>
+                              <p className="text-[11px] text-text-muted mt-1">{step.interaction === 'click' ? 'Der nächste Schritt folgt erst nach dem Klick auf das markierte Ziel.' : step.interaction === 'confirm' ? 'Der Nutzer bestätigt bewusst, dass die Aufgabe erledigt ist.' : 'Der Hinweis wird gezeigt; der Nutzer steuert den nächsten Schritt selbst.'}</p>
                             </div>
                           </div>
 

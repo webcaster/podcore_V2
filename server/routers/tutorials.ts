@@ -25,6 +25,7 @@ interface TutorialStep {
   highlightColor?: string;
   allowSkip?: boolean;
   action?: string;
+  interaction?: 'guide' | 'click' | 'confirm';
 }
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ async function cacheImportedSteps(value: any): Promise<TutorialStep[]> {
       highlightColor: raw.highlightColor ? String(raw.highlightColor).slice(0, 30) : undefined,
       allowSkip: raw.allowSkip !== false,
       action: raw.action ? String(raw.action).slice(0, 500) : undefined,
+      interaction: ['guide', 'click', 'confirm'].includes(raw.interaction) ? raw.interaction : undefined,
     });
   }
   return result;
