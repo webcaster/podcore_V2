@@ -8,6 +8,7 @@ import {
 import { adminApi, backupApi } from '../lib/api';
 import { useApp, useFeatures } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
+import { useLocation, useNavigate } from 'react-router-dom';
 const TutorialsManagementPage = lazy(() => import('./TutorialsManagementPage'));
 
 const ALL_PERMISSIONS = [
@@ -89,20 +90,26 @@ const PERMISSION_GROUPS = [...new Set(ALL_PERMISSIONS.map(p => p.group))];
 
 const emptyPermissions = () => Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, false]));
 type TrashEntityType = 'all' | 'idea' | 'episode' | 'sponsor' | 'asset';
-const readInitialTrashType = (): TrashEntityType => {
-  const type = new URLSearchParams(window.location.search).get('type');
+type AdminTabKey = 'users' | 'roles' | 'modules' | 'system' | 'database' | 'trash' | 'tutorials' | 'logs';
+const ADMIN_TAB_KEYS: AdminTabKey[] = ['users', 'roles', 'modules', 'system', 'database', 'trash', 'tutorials', 'logs'];
+const readInitialAdminTab = (search: string): AdminTabKey => {
+  const tab = new URLSearchParams(search).get('tab') as AdminTabKey | null;
+  return tab && ADMIN_TAB_KEYS.includes(tab) ? tab : 'users';
+};
+const readInitialTrashType = (search: string): TrashEntityType => {
+  const type = new URLSearchParams(search).get('type');
   return ['idea', 'episode', 'sponsor', 'asset'].includes(type || '') ? type as TrashEntityType : 'all';
 };
 
 export default function AdminPage() {
   const { can, user: currentUser, showSuccess, showError, refreshUser } = useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'modules' | 'system' | 'database' | 'trash' | 'tutorials' | 'logs'>(() =>
-    new URLSearchParams(window.location.search).get('tab') === 'trash' ? 'trash' : 'users'
-  );
+  const [activeTab, setActiveTab] = useState<AdminTabKey>(() => readInitialAdminTab(window.location.search));
 
   // Database Migration State
   const [dbStatus, setDbStatus] = useState<any>(null);
@@ -115,10 +122,23 @@ export default function AdminPage() {
   const [trashEntries, setTrashEntries] = useState<any[]>([]);
   const [isTrashLoading, setIsTrashLoading] = useState(false);
   const [isTrashMutating, setIsTrashMutating] = useState<string | null>(null);
-  const [trashTypeFilter, setTrashTypeFilter] = useState<TrashEntityType>(readInitialTrashType);
+  const [trashTypeFilter, setTrashTypeFilter] = useState<TrashEntityType>(() => readInitialTrashType(window.location.search));
   const { features } = useFeatures();
   const [featureForm, setFeatureForm] = useState<Record<string, boolean>>({});
   const [isSavingFeatures, setIsSavingFeatures] = useState(false);
+
+  useEffect(() => {
+    setActiveTab(readInitialAdminTab(location.search));
+    setTrashTypeFilter(readInitialTrashType(location.search));
+  }, [location.search]);
+
+  const selectTab = (tab: AdminTabKey) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(location.search);
+    params.set('tab', tab);
+    if (tab !== 'trash') params.delete('type');
+    navigate({ pathname: '/admin', search: `?${params.toString()}` }, { replace: true });
+  };
 
   // User modal
   const [showUserModal, setShowUserModal] = useState(false);
@@ -498,7 +518,7 @@ export default function AdminPage() {
           { key: 'tutorials', label: 'Tutorials', icon: <HelpCircle size={14} /> },
           { key: 'logs', label: 'Logs', icon: <Activity size={14} /> },
         ].map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
+          <button key={tab.key} data-tutorial-id={`admin-tab-${tab.key}`} onClick={() => selectTab(tab.key as AdminTabKey)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}>
             {tab.icon}{tab.label}
           </button>

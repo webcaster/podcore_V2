@@ -7,15 +7,25 @@ import {
 import { mediaApi, adminApi, backupApi, podigeeApi, storageApi } from '../lib/api';
 import { useApp, useBranding } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
+import { useLocation, useNavigate } from 'react-router-dom';
+
+type BrandingTabKey = 'branding' | 'storage' | 'backup' | 'podigee';
+const BRANDING_TAB_KEYS: BrandingTabKey[] = ['branding', 'storage', 'backup', 'podigee'];
+const readBrandingTab = (search: string): BrandingTabKey => {
+  const requestedTab = new URLSearchParams(search).get('tab') as BrandingTabKey | null;
+  return requestedTab && BRANDING_TAB_KEYS.includes(requestedTab) ? requestedTab : 'branding';
+};
 
 export default function BrandingPage() {
   const { can, showSuccess, showError } = useApp();
   const { refreshBranding } = useBranding();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [branding, setBranding] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'branding' | 'storage' | 'backup' | 'podigee'>('branding');
+  const [activeTab, setActiveTab] = useState<BrandingTabKey>(() => readBrandingTab(window.location.search));
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
   const [isDraggingCover, setIsDraggingCover] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -116,6 +126,17 @@ export default function BrandingPage() {
   useEffect(() => {
     if (activeTab === 'backup') loadBackups();
   }, [activeTab]);
+
+  useEffect(() => {
+    setActiveTab(readBrandingTab(location.search));
+  }, [location.search]);
+
+  const selectTab = (tab: BrandingTabKey) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(location.search);
+    params.set('tab', tab);
+    navigate({ pathname: '/branding', search: `?${params.toString()}` }, { replace: true });
+  };
 
   const handleUploadBranding = async (type: 'logo' | 'cover', file: File) => {
     const formData = new FormData();
@@ -249,8 +270,8 @@ export default function BrandingPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
+    <div data-tutorial-id="page-branding" className="space-y-6 animate-fade-in">
+      <div data-tutorial-id="branding-header">
         <h1 className="page-title flex items-center gap-3">
           <Image size={24} className="text-accent-blue" />
           Podcast-Einstellungen
@@ -259,14 +280,14 @@ export default function BrandingPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit flex-wrap">
+      <div data-tutorial-id="branding-tabs" className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit flex-wrap">
         {[
           { key: 'branding', label: 'Branding' },
           { key: 'storage', label: 'Speicher' },
           { key: 'backup', label: 'Backup & Export' },
           { key: 'podigee', label: 'Podigee' },
         ].map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
+          <button key={tab.key} data-tutorial-id={`branding-tab-${tab.key}`} onClick={() => selectTab(tab.key as BrandingTabKey)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}>
             {tab.key === 'podigee' && podigeeStatus?.connected && <span className="inline-block w-2 h-2 bg-accent-green rounded-full mr-1.5" />}
             {tab.label}

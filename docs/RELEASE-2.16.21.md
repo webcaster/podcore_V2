@@ -30,6 +30,12 @@ Das Tutorialfenster richtet sich jetzt konsequent am sichtbaren Viewport aus. La
 
 Der Screenshot-Editor bietet neben nummerierten Punkten nun drei Markierungsarten: **Punkt**, **Kreis** und **Zeichen**. Kreise können in klein, mittel oder groß gesetzt werden; Zeichen stehen für `!`, `?`, `✓`, `→` und `⚠` bereit. Jede Markierung hat eine eigene Farbe, Position und Erklärung. Die Formen werden in der App wiedergegeben und beim Import sicher normalisiert, sodass sie auch in exportierten Tutorialdaten erhalten bleiben.
 
+## Bugfix: Untermenüs in Tutorials
+
+Tutorialschritte können jetzt nicht nur eine Hauptseite, sondern auch einen konkreten Unterbereich sicher öffnen. Die Zielauflösung berücksichtigt dafür die vollständige Route einschließlich Tab-Parameter und wartet anschließend auf das tatsächliche Bedienelement. Dies betrifft insbesondere **Einstellungen**, **Administration**, **Podcast-Einstellungen/Branding** und den **Redaktions-Hub**.
+
+Alle Tabs erhalten stabile Tutorialkennungen wie `settings-tab-theme`, `admin-tab-trash`, `branding-tab-backup` oder `editorial-tab-interviews`. Ein Schritt mit Klickinteraktion markiert den geöffneten Tab, erkennt den anschließenden Klick zuverlässig und setzt das Tutorial automatisch fort. Bereits angelegte Tutoriale mit den kürzeren Zielnamen, beispielsweise `settings-theme` oder `admin-trash`, bleiben weiterhin kompatibel.
+
 ## Prüfung
 
 Der Client- und Server-TypeScript-Build sowie die Produktionssynchronisierung waren erfolgreich. Die WordPress-Plugin-Datei wurde auf PHP-Syntax geprüft. Eine isolierte JSON-Prüfung bestätigte Titelbild, Klicksequenz, Zielroute, Interaktionsmodus, Bildschutz, Markierungen und Rollen.

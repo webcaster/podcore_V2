@@ -9,7 +9,9 @@ const ANN_COLORS = [
   '#0891b2', '#65a30d', '#ea580c', '#9333ea', '#0d9488',
 ];
 
-// Mapping targets to routes for auto-navigation
+// Mapping stabile Tutorialkennungen auf Seiten und Unterbereiche. Untermenüs
+// verwenden bewusst Query-Parameter, damit ein Schritt direkt den geöffneten
+// Tab findet und nicht nur die übergeordnete Seite erreichen kann.
 const TARGET_ROUTES: Record<string, string> = {
   'nav-dashboard': '/',
   'nav-episodes': '/episodes',
@@ -29,6 +31,54 @@ const TARGET_ROUTES: Record<string, string> = {
   'nav-admin': '/admin',
   'nav-settings': '/settings',
   'nav-pdf-layouts': '/pdf-layouts',
+  'settings-tabs': '/settings',
+  'settings-tab-profile': '/settings?tab=profile',
+  'settings-tab-theme': '/settings?tab=theme',
+  'settings-tab-podcast': '/settings?tab=podcast',
+  'settings-tab-technical': '/settings?tab=technical',
+  'settings-tab-storage': '/settings?tab=storage',
+  'settings-tab-app': '/settings?tab=app',
+  'settings-tab-update': '/settings?tab=update',
+  'settings-tab-license': '/settings?tab=license',
+  'settings-profile': '/settings?tab=profile',
+  'settings-theme': '/settings?tab=theme',
+  'settings-podcast': '/settings?tab=podcast',
+  'settings-technical': '/settings?tab=technical',
+  'settings-storage': '/settings?tab=storage',
+  'settings-app': '/settings?tab=app',
+  'settings-update': '/settings?tab=update',
+  'admin-tabs': '/admin',
+  'admin-tab-users': '/admin?tab=users',
+  'admin-tab-roles': '/admin?tab=roles',
+  'admin-tab-modules': '/admin?tab=modules',
+  'admin-tab-system': '/admin?tab=system',
+  'admin-tab-database': '/admin?tab=database',
+  'admin-tab-trash': '/admin?tab=trash',
+  'admin-tab-tutorials': '/admin?tab=tutorials',
+  'admin-tab-logs': '/admin?tab=logs',
+  'admin-users': '/admin?tab=users',
+  'admin-roles': '/admin?tab=roles',
+  'admin-modules': '/admin?tab=modules',
+  'admin-system': '/admin?tab=system',
+  'admin-database': '/admin?tab=database',
+  'admin-trash': '/admin?tab=trash',
+  'admin-tutorials': '/admin?tab=tutorials',
+  'admin-logs': '/admin?tab=logs',
+  'branding-tabs': '/branding',
+  'branding-tab-branding': '/branding?tab=branding',
+  'branding-tab-storage': '/branding?tab=storage',
+  'branding-tab-backup': '/branding?tab=backup',
+  'branding-tab-podigee': '/branding?tab=podigee',
+  'branding-storage': '/branding?tab=storage',
+  'branding-backup': '/branding?tab=backup',
+  'branding-podigee': '/branding?tab=podigee',
+  'editorial-tabs': '/editorial',
+  'editorial-tab-ideas': '/editorial?tab=ideas',
+  'editorial-tab-season-planning': '/editorial?tab=season-planning',
+  'editorial-tab-research': '/editorial?tab=research',
+  'editorial-tab-plan': '/editorial?tab=plan',
+  'editorial-tab-interviews': '/editorial?tab=interviews',
+  'editorial-tab-notes': '/editorial?tab=notes',
 };
 
 export const TutorialOverlay: React.FC = () => {
@@ -49,6 +99,14 @@ export const TutorialOverlay: React.FC = () => {
     }
     return element || document.getElementById(target);
   }, []);
+
+  const isTargetRouteActive = useCallback((targetRoute: string) => {
+    const [targetPath, targetQuery = ''] = targetRoute.split('?');
+    if (location.pathname !== targetPath) return false;
+    const expectedParams = new URLSearchParams(targetQuery);
+    const currentParams = new URLSearchParams(location.search);
+    return Array.from(expectedParams.entries()).every(([key, value]) => currentParams.get(key) === value);
+  }, [location.pathname, location.search]);
 
   const updatePosition = useCallback(() => {
     if (!activeTutorial) return;
@@ -97,13 +155,13 @@ export const TutorialOverlay: React.FC = () => {
       setPosition(null);
       
       // Check if we should navigate
-      const targetRoute = step.route || TARGET_ROUTES[step.target];
-      if (targetRoute && location.pathname !== targetRoute && !isNavigating) {
+      const targetRoute = TARGET_ROUTES[step.target] || step.route;
+      if (targetRoute && !isTargetRouteActive(targetRoute) && !isNavigating) {
         setIsNavigating(true);
         navigate(targetRoute);
       }
     }
-  }, [activeTutorial, currentStep, findTargetElement, location.pathname, navigate, isNavigating]);
+  }, [activeTutorial, currentStep, findTargetElement, isNavigating, isTargetRouteActive, navigate]);
 
   useEffect(() => {
     if (!activeTutorial) return;

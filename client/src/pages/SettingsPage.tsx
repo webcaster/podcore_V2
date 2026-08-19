@@ -7,6 +7,7 @@ import {
 import { adminApi, authApi, backupApi, updateApi, licenseApi, LicenseStatus } from '../lib/api';
 import { useTheme } from '../contexts/ThemeContext';
 import { useApp, applyUserTheme } from '../contexts/AppContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function applyThemePreview(theme: { accentColor?: string; sidebarColor?: string; fontScale?: number }) {
@@ -27,6 +28,13 @@ const ACCENT_PRESETS = [
 ];
 
 const PODCORE_PURCHASE_URL = 'https://podcore.de';
+type SettingsTabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'storage' | 'app' | 'update' | 'license';
+const SETTINGS_TAB_KEYS: SettingsTabKey[] = ['profile', 'theme', 'podcast', 'technical', 'storage', 'app', 'update', 'license'];
+
+const readSettingsTab = (search: string): SettingsTabKey => {
+  const requestedTab = new URLSearchParams(search).get('tab') as SettingsTabKey | null;
+  return requestedTab && SETTINGS_TAB_KEYS.includes(requestedTab) ? requestedTab : 'profile';
+};
 
 // Stabilitätsmodus: Bis zum ausdrücklich geplanten Lizenz-Release bleibt PodCore
 // vollständig kostenlos. Die bestehende DLM-Anbindung bleibt im Code, wird aber
@@ -46,13 +54,11 @@ const SIDEBAR_PRESETS = [
 export default function SettingsPage() {
   const { user, can, showSuccess, showError, refreshUser, refreshPodcastProfile } = useApp();
   const { mode, setMode } = useTheme();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  type TabKey = 'profile' | 'theme' | 'podcast' | 'technical' | 'storage' | 'app' | 'update' | 'license';
-  const [activeTab, setActiveTab] = useState<TabKey>(() =>
-    (['update', 'storage'].includes(new URLSearchParams(window.location.search).get('tab') || '')
-      ? new URLSearchParams(window.location.search).get('tab') as TabKey
-      : 'profile')
-  );
+  type TabKey = SettingsTabKey;
+  const [activeTab, setActiveTab] = useState<TabKey>(() => readSettingsTab(window.location.search));
   const [isSaving, setIsSaving] = useState(false);
   const [developerControlsUnlocked, setDeveloperControlsUnlocked] = useState(() => {
     try {
@@ -64,6 +70,17 @@ export default function SettingsPage() {
   });
   const [settings, setSettings] = useState<any>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+
+  useEffect(() => {
+    setActiveTab(readSettingsTab(location.search));
+  }, [location.search]);
+
+  const selectTab = (tab: TabKey) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(location.search);
+    params.set('tab', tab);
+    navigate({ pathname: '/settings', search: `?${params.toString()}` }, { replace: true });
+  };
 
   // ── License state ───────────────────────────────────────────────────────────
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
@@ -645,8 +662,8 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
+    <div data-tutorial-id="page-settings" className="space-y-6 animate-fade-in">
+      <div data-tutorial-id="settings-header">
         <h1 className="page-title flex items-center gap-3">
           <Settings size={24} className="text-text-secondary" />
           Einstellungen
@@ -654,9 +671,9 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 bg-obsidian-800 p-1 rounded-xl w-fit">
+      <div data-tutorial-id="settings-tabs" className="flex flex-wrap gap-1 bg-obsidian-800 p-1 rounded-xl w-fit">
         {tabs.map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+          <button key={tab.key} data-tutorial-id={`settings-tab-${tab.key}`} onClick={() => selectTab(tab.key)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}>
             {tab.icon}
             {tab.label}
