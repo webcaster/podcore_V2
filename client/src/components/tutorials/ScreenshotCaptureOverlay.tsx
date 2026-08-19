@@ -8,7 +8,7 @@
  * - Annotationspunkte mit Beschreibungsfeldern
  */
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Camera, X, Check, Plus, Trash2, ArrowLeft, Eye, Loader2 } from 'lucide-react';
+import { Camera, X, Check, Plus, Trash2, ArrowLeft, Eye, Loader2, Circle, Type } from 'lucide-react';
 import { useScreenshotMode, AnnotationPoint } from '../../contexts/ScreenshotModeContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -16,6 +16,9 @@ const POINT_COLORS = [
   '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
   '#0891b2', '#65a30d', '#ea580c', '#9333ea', '#0d9488',
 ];
+
+type AnnotationTool = 'point' | 'circle' | 'symbol';
+const ANNOTATION_SYMBOLS = ['!', '?', '✓', '→', '⚠'];
 
 // `crypto.randomUUID()` ist in einigen Browsern über lokale IP-Adressen ohne
 // HTTPS nicht verfügbar. Tutorials werden häufig genau so im Studio-Netzwerk
@@ -35,6 +38,8 @@ export default function ScreenshotCaptureOverlay() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<AnnotationPoint[]>([]);
   const [activePointId, setActivePointId] = useState<string | null>(null);
+  const [annotationTool, setAnnotationTool] = useState<AnnotationTool>('point');
+  const [selectedSymbol, setSelectedSymbol] = useState('!');
   const [captureError, setCaptureError] = useState<string | null>(null);
   const imgRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -46,6 +51,8 @@ export default function ScreenshotCaptureOverlay() {
       setCapturedImage(null);
       setAnnotations([]);
       setActivePointId(null);
+      setAnnotationTool('point');
+      setSelectedSymbol('!');
       setCaptureError(null);
     }
   }, [active]);
@@ -123,25 +130,42 @@ export default function ScreenshotCaptureOverlay() {
     if (!rect.width || !rect.height) return;
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const pointNumber = annotations.filter(point => !point.type || point.type === 'point').length + 1;
+    const annotationColor = POINT_COLORS[annotations.length % POINT_COLORS.length];
     const newPoint: AnnotationPoint = {
       id: createAnnotationId(),
       x: Math.min(100, Math.max(0, x)),
       y: Math.min(100, Math.max(0, y)),
-      label: String(annotations.length + 1),
+      label: annotationTool === 'point' ? String(pointNumber) : (annotationTool === 'symbol' ? selectedSymbol : ''),
       description: '',
+      type: annotationTool,
+      symbol: annotationTool === 'symbol' ? selectedSymbol : undefined,
+      color: annotationColor,
+      size: annotationTool === 'circle' ? 10 : undefined,
     };
     setAnnotations(prev => [...prev, newPoint]);
     setActivePointId(newPoint.id);
-  }, [phase, annotations.length]);
+  }, [phase, annotations, annotationTool, selectedSymbol]);
 
   const updateDescription = useCallback((id: string, description: string) => {
     setAnnotations(prev => prev.map(p => p.id === id ? { ...p, description } : p));
   }, []);
 
+  const updateAnnotation = useCallback((id: string, patch: Partial<AnnotationPoint>) => {
+    setAnnotations(prev => prev.map(point => point.id === id ? { ...point, ...patch } : point));
+  }, []);
+
   const removePoint = useCallback((id: string) => {
     setAnnotations(prev => {
       const filtered = prev.filter(p => p.id !== id);
-      return filtered.map((p, i) => ({ ...p, label: String(i + 1) }));
+      let pointNumber = 0;
+      return filtered.map(point => {
+        if (!point.type || point.type === 'point') {
+          pointNumber += 1;
+          return { ...point, label: String(pointNumber) };
+        }
+        return point;
+      });
     });
     setActivePointId(null);
   }, []);
@@ -237,8 +261,19 @@ export default function ScreenshotCaptureOverlay() {
                 Screenshot annotieren
               </h2>
                   <p className="text-text-muted text-xs mt-0.5">
-                    Klicke oder tippe auf das Bild, um nummerierte Punkte zu setzen · Beschreibe jeden Punkt rechts
+                    Wähle Punkt, Kreis oder Zeichen und klicke auf das Bild · Ergänze die Erklärung rechts
               </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-text-muted">Markierung:</span>
+                <button onClick={() => setAnnotationTool('point')} className={`px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${annotationTool === 'point' ? 'bg-accent-purple/20 border-accent-purple text-accent-purple' : 'bg-obsidian-800 border-obsidian-600 text-text-secondary'}`}>Punkt</button>
+                <button onClick={() => setAnnotationTool('circle')} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${annotationTool === 'circle' ? 'bg-accent-purple/20 border-accent-purple text-accent-purple' : 'bg-obsidian-800 border-obsidian-600 text-text-secondary'}`}><Circle size={13} /> Kreis</button>
+                <button onClick={() => setAnnotationTool('symbol')} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${annotationTool === 'symbol' ? 'bg-accent-purple/20 border-accent-purple text-accent-purple' : 'bg-obsidian-800 border-obsidian-600 text-text-secondary'}`}><Type size={13} /> Zeichen</button>
+                {annotationTool === 'symbol' && (
+                  <select value={selectedSymbol} onChange={(event) => setSelectedSymbol(event.target.value)} className="bg-obsidian-800 border border-obsidian-600 rounded-lg px-2 py-1.5 text-xs text-text-primary">
+                    {ANNOTATION_SYMBOLS.map(symbol => <option key={symbol} value={symbol}>{symbol}</option>)}
+                  </select>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -297,26 +332,31 @@ export default function ScreenshotCaptureOverlay() {
                   className="max-w-full rounded-lg shadow-2xl border border-obsidian-700 pointer-events-none"
                   draggable={false}
                 />
-                {/* Annotation points */}
-                {annotations.map((pt, idx) => (
-                  <button
-                    key={pt.id}
-                    onPointerDown={(e) => { e.stopPropagation(); setActivePointId(pt.id); }}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full
-                               flex items-center justify-center text-white text-xs font-bold
-                               shadow-lg border-2 border-white/80 transition-transform hover:scale-110 z-10"
-                    style={{
-                      left: `${pt.x}%`,
-                      top: `${pt.y}%`,
-                      backgroundColor: POINT_COLORS[idx % POINT_COLORS.length],
-                      outline: activePointId === pt.id ? '3px solid white' : 'none',
-                      outlineOffset: '2px',
-                    }}
-                    title={`Punkt ${pt.label}: ${pt.description || 'Keine Beschreibung'}`}
-                  >
-                    {pt.label}
-                  </button>
-                ))}
+                {annotations.map((pt, idx) => {
+                  const type = pt.type || 'point';
+                  const color = pt.color || POINT_COLORS[idx % POINT_COLORS.length];
+                  return (
+                    <button
+                      key={pt.id}
+                      onPointerDown={(e) => { e.stopPropagation(); setActivePointId(pt.id); }}
+                      className={type === 'circle'
+                        ? 'absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-transparent shadow-lg transition-transform hover:scale-105 z-10'
+                        : 'absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg border-2 border-white/80 transition-transform hover:scale-110 z-10'}
+                      style={{
+                        left: `${pt.x}%`,
+                        top: `${pt.y}%`,
+                        ...(type === 'circle'
+                          ? { width: `${pt.size || 10}%`, aspectRatio: '1 / 1', borderColor: color, boxShadow: `0 0 0 3px rgba(255,255,255,.35), 0 4px 16px ${color}99` }
+                          : { backgroundColor: color }),
+                        outline: activePointId === pt.id ? '3px solid white' : 'none',
+                        outlineOffset: '2px',
+                      }}
+                      title={`${type === 'circle' ? 'Kreis' : type === 'symbol' ? 'Zeichen' : `Punkt ${pt.label}`}: ${pt.description || 'Keine Beschreibung'}`}
+                    >
+                      {type === 'circle' ? null : (type === 'symbol' ? (pt.symbol || pt.label) : pt.label)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -328,8 +368,8 @@ export default function ScreenshotCaptureOverlay() {
                 </h3>
                 <p className="text-xs text-text-muted mt-0.5">
                   {annotations.length === 0
-                    ? 'Klicke auf das Bild um Punkte zu setzen'
-                    : 'Beschreibe jeden Punkt'}
+                    ? 'Wähle eine Markierung und klicke auf das Bild'
+                    : 'Beschreibe oder passe jede Markierung an'}
                 </p>
               </div>
 
@@ -354,11 +394,11 @@ export default function ScreenshotCaptureOverlay() {
                       <div className="flex items-center gap-2">
                         <span
                           className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ backgroundColor: POINT_COLORS[idx % POINT_COLORS.length] }}
+                          style={{ backgroundColor: pt.color || POINT_COLORS[idx % POINT_COLORS.length] }}
                         >
-                          {pt.label}
+                          {pt.type === 'circle' ? '○' : pt.type === 'symbol' ? (pt.symbol || pt.label) : pt.label}
                         </span>
-                        <span className="text-xs font-medium text-text-primary">Punkt {pt.label}</span>
+                        <span className="text-xs font-medium text-text-primary">{pt.type === 'circle' ? 'Kreis' : pt.type === 'symbol' ? 'Zeichen' : `Punkt ${pt.label}`}</span>
                       </div>
                       <button
                     onPointerDown={(e) => { e.stopPropagation(); removePoint(pt.id); }}
@@ -367,11 +407,28 @@ export default function ScreenshotCaptureOverlay() {
                         <Trash2 size={12} />
                       </button>
                     </div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <select value={pt.type || 'point'} onChange={(event) => {
+                        const type = event.target.value as AnnotationTool;
+                        updateAnnotation(pt.id, { type, label: type === 'point' ? pt.label || String(idx + 1) : type === 'symbol' ? (pt.symbol || selectedSymbol) : '', symbol: type === 'symbol' ? (pt.symbol || selectedSymbol) : undefined, size: type === 'circle' ? (pt.size || 10) : undefined });
+                      }} onPointerDown={(event) => event.stopPropagation()} className="bg-obsidian-700 border border-obsidian-600 rounded-lg px-2 py-1.5 text-xs text-text-primary">
+                        <option value="point">Punkt</option><option value="circle">Kreis</option><option value="symbol">Zeichen</option>
+                      </select>
+                      {(pt.type || 'point') === 'symbol' ? (
+                        <select value={pt.symbol || pt.label || '!'} onChange={(event) => updateAnnotation(pt.id, { symbol: event.target.value, label: event.target.value })} onPointerDown={(event) => event.stopPropagation()} className="bg-obsidian-700 border border-obsidian-600 rounded-lg px-2 py-1.5 text-xs text-text-primary">
+                          {ANNOTATION_SYMBOLS.map(symbol => <option key={symbol} value={symbol}>{symbol}</option>)}
+                        </select>
+                      ) : (pt.type || 'point') === 'circle' ? (
+                        <select value={String(pt.size || 10)} onChange={(event) => updateAnnotation(pt.id, { size: Number(event.target.value) })} onPointerDown={(event) => event.stopPropagation()} className="bg-obsidian-700 border border-obsidian-600 rounded-lg px-2 py-1.5 text-xs text-text-primary">
+                          <option value="6">Klein</option><option value="10">Mittel</option><option value="16">Groß</option>
+                        </select>
+                      ) : <span className="text-xs text-text-muted self-center">Nummeriert</span>}
+                    </div>
                     <textarea
                       value={pt.description}
                       onChange={(e) => updateDescription(pt.id, e.target.value)}
                       onPointerDown={(e) => e.stopPropagation()}
-                      placeholder={`Beschreibung für Punkt ${pt.label}...`}
+                      placeholder={`Erklärung für ${pt.type === 'circle' ? 'den Kreis' : pt.type === 'symbol' ? 'das Zeichen' : `Punkt ${pt.label}`}...`}
                       rows={3}
                       className="w-full bg-obsidian-700 border border-obsidian-600 rounded-lg px-3 py-2
                                  text-xs text-text-primary placeholder-text-muted resize-none

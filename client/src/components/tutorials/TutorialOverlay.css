@@ -34,6 +34,7 @@
   z-index: 10000;
   width: 500px;
   max-width: 95vw;
+  max-height: calc(100dvh - 24px);
   pointer-events: auto;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -46,10 +47,17 @@
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(124, 58, 237, 0.25);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  animation: tutorial-fade-in 0.3s ease-out;
-  max-height: 90vh;
+  overflow-x: hidden;
   overflow-y: auto;
+  animation: tutorial-fade-in 0.3s ease-out;
+  max-height: calc(100dvh - 24px);
+}
+
+.tutorial-scroll-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @keyframes tutorial-fade-in {
@@ -93,8 +101,6 @@
 
 .tutorial-body {
   padding: 20px 24px;
-  flex: 1;
-  overflow-y: auto;
   min-height: 60px;
 }
 
@@ -169,7 +175,7 @@
   }
 
   .tutorial-card {
-    max-height: 80vh;
+    max-height: calc(100dvh - 16px);
   }
 
   .tutorial-header {

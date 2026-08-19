@@ -69,31 +69,26 @@ export const TutorialOverlay: React.FC = () => {
       }
       const rect = element.getBoundingClientRect();
       setPosition({
-        top: rect.top + window.scrollY,
-        left: rect.left + window.scrollX,
+        top: rect.top,
+        left: rect.left,
         width: rect.width,
         height: rect.height,
       });
 
-      // Calculate tooltip position - much larger dialog now
-      const tooltipWidth = 500;
-      const tooltipHeight = 320;
-      const offset = 32;
+      const margin = 12;
+      const tooltipWidth = Math.min(500, window.innerWidth - margin * 2);
+      const tooltipHeight = Math.min(680, window.innerHeight - margin * 2);
+      const offset = 24;
       
-      let top = rect.top + window.scrollY - tooltipHeight - offset;
-      let left = rect.left + window.scrollX + rect.width / 2 - tooltipWidth / 2;
+      let top = rect.top - tooltipHeight - offset;
+      let left = rect.left + rect.width / 2 - tooltipWidth / 2;
 
-      // Adjust if off-screen (too high)
-      if (top < window.scrollY + offset) {
-        top = rect.top + window.scrollY + rect.height + offset;
+      if (top < margin) {
+        top = rect.bottom + offset;
       }
+      top = Math.max(margin, Math.min(top, window.innerHeight - tooltipHeight - margin));
       
-      // Adjust if off-screen (horizontal)
-      if (left < offset) {
-        left = offset;
-      } else if (left + tooltipWidth > window.innerWidth - offset) {
-        left = window.innerWidth - tooltipWidth - offset;
-      }
+      left = Math.max(margin, Math.min(left, window.innerWidth - tooltipWidth - margin));
 
       setTooltipPos({ top, left });
       setIsNavigating(false);
@@ -210,7 +205,7 @@ export const TutorialOverlay: React.FC = () => {
           } : { 
             top: tooltipPos.top,
             left: tooltipPos.left,
-            position: 'absolute' as const
+            position: 'fixed' as const
           }),
           display: position ? 'block' : (isNavigating ? 'none' : 'block'),
         }}
@@ -234,21 +229,28 @@ export const TutorialOverlay: React.FC = () => {
             <div className="tutorial-image-container">
               <div className="relative inline-block w-full">
                 <img src={step.image} alt={step.title} className="w-full rounded-lg border border-obsidian-700" />
-                {/* Render annotation points on the image */}
-                {step.annotations?.map((ann, i) => (
-                  <div
-                    key={ann.id}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg border-2 border-white/80 hover:scale-110 transition-transform cursor-help"
-                    style={{
-                      left: `${ann.x}%`,
-                      top: `${ann.y}%`,
-                      backgroundColor: ANN_COLORS[i % ANN_COLORS.length],
-                    }}
-                    title={ann.description}
-                  >
-                    {ann.label}
-                  </div>
-                ))}
+                {step.annotations?.map((ann, i) => {
+                  const annotationType = ann.type || 'point';
+                  const annotationColor = ann.color || ANN_COLORS[i % ANN_COLORS.length];
+                  return (
+                    <div
+                      key={ann.id}
+                      className={annotationType === 'circle'
+                        ? 'absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-transparent shadow-lg pointer-events-none'
+                        : 'absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg border-2 border-white/80 pointer-events-none'}
+                      style={{
+                        left: `${ann.x}%`,
+                        top: `${ann.y}%`,
+                        ...(annotationType === 'circle'
+                          ? { width: `${ann.size || 10}%`, aspectRatio: '1 / 1', borderColor: annotationColor, boxShadow: `0 0 0 3px rgba(255,255,255,.34), 0 4px 16px ${annotationColor}77` }
+                          : { backgroundColor: annotationColor }),
+                      }}
+                      title={ann.description}
+                    >
+                      {annotationType === 'circle' ? null : (annotationType === 'symbol' ? (ann.symbol || ann.label) : ann.label)}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -272,17 +274,18 @@ export const TutorialOverlay: React.FC = () => {
             <div className="tutorial-annotations-list">
               <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Markierungen</p>
               <div className="space-y-1.5">
-                {step.annotations.map((ann, i) => (
-                  <div key={ann.id} className="flex items-start gap-2 text-sm">
-                    <span
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5"
-                      style={{ backgroundColor: ANN_COLORS[i % ANN_COLORS.length] }}
-                    >
-                      {ann.label}
-                    </span>
-                    <span className="text-text-secondary">{ann.description}</span>
-                  </div>
-                ))}
+                {step.annotations.map((ann, i) => {
+                  const annotationType = ann.type || 'point';
+                  const annotationColor = ann.color || ANN_COLORS[i % ANN_COLORS.length];
+                  return (
+                    <div key={ann.id} className="flex items-start gap-2 text-sm">
+                      <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5" style={{ backgroundColor: annotationColor }}>
+                        {annotationType === 'circle' ? '○' : (annotationType === 'symbol' ? (ann.symbol || ann.label) : ann.label)}
+                      </span>
+                      <span className="text-text-secondary">{ann.description || (annotationType === 'circle' ? 'Hervorgehobener Bereich' : 'Markierung')}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

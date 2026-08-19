@@ -22,6 +22,14 @@ Tutoriale erhalten zusätzlich ein gestaltbares Titelbild. Autoren können im Wo
 
 Das Speichern eines Tutorials führt nicht mehr automatisch zurück zur Tutorialübersicht. Der Editor übernimmt den vom Server bestätigten Datensatz direkt in den aktuellen Bearbeitungszustand, zeigt die Erfolgsmeldung **„Tutorial gespeichert“** und bleibt auf dem Tab **Schritte** geöffnet. Neue Tutorials erhalten dadurch nach dem ersten Speichern ihre echte ID und können ohne Duplikate weiter bearbeitet werden. Die Rückkehr zur Übersicht erfolgt nur noch über die vorhandene bewusste Zurück-Aktion.
 
+## Bugfix: Scrollbares Tutorialfenster
+
+Das Tutorialfenster richtet sich jetzt konsequent am sichtbaren Viewport aus. Lange Schritttexte, Screenshots, Markierungslisten und die Aktionsleiste bleiben innerhalb der Karte scrollbar und erreichbar. Dies gilt auch für kleinere Fensterhöhen; das Tutorialfenster wird nicht mehr unterhalb des Bildschirms abgeschnitten.
+
+## Erweiterte Screenshot-Markierungen
+
+Der Screenshot-Editor bietet neben nummerierten Punkten nun drei Markierungsarten: **Punkt**, **Kreis** und **Zeichen**. Kreise können in klein, mittel oder groß gesetzt werden; Zeichen stehen für `!`, `?`, `✓`, `→` und `⚠` bereit. Jede Markierung hat eine eigene Farbe, Position und Erklärung. Die Formen werden in der App wiedergegeben und beim Import sicher normalisiert, sodass sie auch in exportierten Tutorialdaten erhalten bleiben.
+
 ## Prüfung
 
 Der Client- und Server-TypeScript-Build sowie die Produktionssynchronisierung waren erfolgreich. Die WordPress-Plugin-Datei wurde auf PHP-Syntax geprüft. Eine isolierte JSON-Prüfung bestätigte Titelbild, Klicksequenz, Zielroute, Interaktionsmodus, Bildschutz, Markierungen und Rollen.

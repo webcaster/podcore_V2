@@ -18,6 +18,10 @@ export interface AnnotationPoint {
   y: number;
   label: string;
   description: string;
+  type?: 'point' | 'circle' | 'symbol';
+  symbol?: string;
+  color?: string;
+  size?: number;
 }
 
 export interface ScreenshotResult {

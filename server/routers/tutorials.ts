@@ -12,6 +12,10 @@ interface AnnotationPoint {
   y: number;
   label: string;
   description: string;
+  type?: 'point' | 'circle' | 'symbol';
+  symbol?: string;
+  color?: string;
+  size?: number;
 }
 
 interface TutorialStep {
@@ -98,6 +102,31 @@ async function cacheImportedImage(value: unknown): Promise<string | undefined> {
   }
 }
 
+function normalizeImportedAnnotations(value: any): AnnotationPoint[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 100).flatMap((raw, index) => {
+    if (!raw || typeof raw !== 'object') return [];
+    const x = Number(raw.x);
+    const y = Number(raw.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return [];
+    const type = ['point', 'circle', 'symbol'].includes(raw.type) ? raw.type : 'point';
+    const color = typeof raw.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(raw.color) ? raw.color : undefined;
+    const size = Number(raw.size);
+    const symbol = typeof raw.symbol === 'string' ? Array.from(raw.symbol).slice(0, 2).join('') : undefined;
+    return [{
+      id: String(raw.id || `annotation-${index + 1}`).slice(0, 120),
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y)),
+      label: String(raw.label || (type === 'circle' ? '' : index + 1)).slice(0, 32),
+      description: String(raw.description || '').slice(0, 2_000),
+      type,
+      symbol: type === 'symbol' ? symbol : undefined,
+      color,
+      size: type === 'circle' && Number.isFinite(size) ? Math.max(4, Math.min(30, size)) : undefined,
+    }];
+  });
+}
+
 async function cacheImportedSteps(value: any): Promise<TutorialStep[]> {
   if (!Array.isArray(value)) return [];
   const result: TutorialStep[] = [];
@@ -112,7 +141,7 @@ async function cacheImportedSteps(value: any): Promise<TutorialStep[]> {
       route: typeof raw.route === 'string' && raw.route.startsWith('/') ? raw.route.slice(0, 500) : undefined,
       position: ['top', 'bottom', 'left', 'right'].includes(raw.position) ? raw.position : undefined,
       image,
-      annotations: Array.isArray(raw.annotations) ? raw.annotations.slice(0, 100) : [],
+      annotations: normalizeImportedAnnotations(raw.annotations),
       highlightColor: raw.highlightColor ? String(raw.highlightColor).slice(0, 30) : undefined,
       allowSkip: raw.allowSkip !== false,
       action: raw.action ? String(raw.action).slice(0, 500) : undefined,
