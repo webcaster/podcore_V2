@@ -32,6 +32,7 @@
 - [x] Tutorial-Sequenzaufzeichnung: Mehrere Klicks, Unterschritte, Zwischenhinweise und optionale Screenshots in einem laufenden Durchgang erfassen und als geordnete interaktive Anleitung wiedergeben.
 - [x] WordPress-Tutorial-Workflow: Mehrstufige Klicksequenzen, Unterschritte, Zwischenhinweise und optionale Screenshots aus PodCore-JSON vollständig übernehmen und als klare Schrittfolge darstellen.
 - [x] WordPress-Tutorial-Workflow: Pro Tutorial ein frei wählbares Titelbild im Backend sowie eine konsistente Titelbilddarstellung im Grid und in der Detailansicht ergänzt.
+- [x] Kritischer Tutorial-Bugfix v2.16.21: Nach dem Speichern im geöffneten Tutorial bleiben, den aktuellen Bearbeitungszustand aktualisieren und nur über eine bewusste Aktion zur Tutorialübersicht wechseln.
 - [x] Episoden-Editor: Technischen Hinweis zu fehlenden v2-Buchungen durch eine klare Leeransicht für Werbeplatzbuchungen mit direkter Anlegen- oder Auswahlaktion ersetzt.
 - [x] Design-Update: Visuelle Sprache des `podcore_promo_video_v2.mp4` analysiert und als zugängliches, konsistentes Designsystem in Navigation, Karten, Formulare und Kernseiten der App übertragen.
 - [x] Stabilitätsupdate: Überdimensionierte Zahlen-, Auswahl- und Formfelder anhand der betroffenen Komponenten konsistent verdichtet, ohne Touch- oder Lesbarkeit zu verschlechtern.

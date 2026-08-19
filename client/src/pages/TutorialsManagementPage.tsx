@@ -408,11 +408,18 @@ export default function TutorialsManagementPage() {
         const e = await res.json().catch(() => ({}));
         throw new Error(e.error || `Speichern fehlgeschlagen (${res.status})`);
       }
+      const savedTutorial = await res.json() as Tutorial;
+      setEditTutorial(savedTutorial);
+      setTutorials(previous => {
+        const exists = previous.some(item => item.id === savedTutorial.id);
+        return exists
+          ? previous.map(item => item.id === savedTutorial.id ? savedTutorial : item)
+          : [savedTutorial, ...previous];
+      });
+      setView('edit');
+      setActiveTab('steps');
       setSuccess('Tutorial gespeichert');
       setTimeout(() => setSuccess(null), 3000);
-      await loadData();
-      setView('list');
-      setEditTutorial(null);
     } catch (e: any) { setError(e.message); }
     finally { setSaving(false); }
   }, [editTutorial, loadData]);

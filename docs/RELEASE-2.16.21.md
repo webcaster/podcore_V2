@@ -18,6 +18,10 @@ Das separate WordPress-Plugin übernimmt nun Zielroute, Interaktionsmodus und Re
 
 Tutoriale erhalten zusätzlich ein gestaltbares Titelbild. Autoren können im WordPress-Editor das normale **Beitragsbild** setzen. Beim JSON-Import werden alternativ `titleImage`, `coverImage` oder `featuredImage` berücksichtigt; eingebettete Titelbilder werden in die Mediathek übertragen und für Grid sowie Detailansicht verwendet.
 
+## Bugfix: Im Tutorial-Editor weiterarbeiten
+
+Das Speichern eines Tutorials führt nicht mehr automatisch zurück zur Tutorialübersicht. Der Editor übernimmt den vom Server bestätigten Datensatz direkt in den aktuellen Bearbeitungszustand, zeigt die Erfolgsmeldung **„Tutorial gespeichert“** und bleibt auf dem Tab **Schritte** geöffnet. Neue Tutorials erhalten dadurch nach dem ersten Speichern ihre echte ID und können ohne Duplikate weiter bearbeitet werden. Die Rückkehr zur Übersicht erfolgt nur noch über die vorhandene bewusste Zurück-Aktion.
+
 ## Prüfung
 
 Der Client- und Server-TypeScript-Build sowie die Produktionssynchronisierung waren erfolgreich. Die WordPress-Plugin-Datei wurde auf PHP-Syntax geprüft. Eine isolierte JSON-Prüfung bestätigte Titelbild, Klicksequenz, Zielroute, Interaktionsmodus, Bildschutz, Markierungen und Rollen.
