@@ -8,3 +8,7 @@ branding/
 assets/
 .env
 .env.local
+*.log
+*.orig
+*.bak
+.DS_Store
