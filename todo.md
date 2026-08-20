@@ -38,6 +38,10 @@
 - [x] WordPress-Tutorial-Workflow: Punkt-, Kreis- und Zeichenmarkierungen mit Farbe, Größe und Erklärung aus v2.16.21-Tutorialen importieren und in Grid sowie Detailansicht darstellen.
 - [x] Tutorialführung: Verschachtelte Untermenüs wie Einstellungen zuverlässig öffnen, den Schritt zum Zielbereich führen und erwartete Klicks erkennen.
 - [x] WordPress-Tutorial-Plugin v2.16.12 nach Abschluss des App-Bugfixes final prüfen, Anleitung aktualisieren und als separates Installationspaket bereitstellen.
+- [x] Tutorial-PDF: Überschrift, Beschreibung, Markierungslegende und zugehörigen Screenshot je Schritt zusammenhängend mit intelligenter Seitenumbruchprüfung ausgeben.
+- [x] Tutorial-Editor: Zwischen normalen Schritten gezielte Ausschnitt- beziehungsweise Hinweisblöcke mit eigener Überschrift, Erklärung, optionalem Screenshot und Markierungen einfügen.
+- [x] Tutorial-Editor: Direkt nach jedem vorhandenen Schritt eine sichtbare Aktion „Zwischenschritt einfügen“ anbieten und den neuen Schritt exakt an dieser Position erstellen.
+- [x] Kritischer Tutorial-Bugfix: Aktion „Weiter“ und Klickerkennung in der Tutorialführung wieder zuverlässig aktivieren, damit Nutzer jeden Schritt fortsetzen können.
 - [x] Episoden-Editor: Technischen Hinweis zu fehlenden v2-Buchungen durch eine klare Leeransicht für Werbeplatzbuchungen mit direkter Anlegen- oder Auswahlaktion ersetzt.
 - [x] Design-Update: Visuelle Sprache des `podcore_promo_video_v2.mp4` analysiert und als zugängliches, konsistentes Designsystem in Navigation, Karten, Formulare und Kernseiten der App übertragen.
 - [x] Stabilitätsupdate: Überdimensionierte Zahlen-, Auswahl- und Formfelder anhand der betroffenen Komponenten konsistent verdichtet, ohne Touch- oder Lesbarkeit zu verschlechtern.

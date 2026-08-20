@@ -38,6 +38,18 @@ Tutorialschritte können jetzt nicht nur eine Hauptseite, sondern auch einen kon
 
 Alle Tabs erhalten stabile Tutorialkennungen wie `settings-tab-theme`, `admin-tab-trash`, `branding-tab-backup` oder `editorial-tab-interviews`. Ein Schritt mit Klickinteraktion markiert den geöffneten Tab, erkennt den anschließenden Klick zuverlässig und setzt das Tutorial automatisch fort. Bereits angelegte Tutoriale mit den kürzeren Zielnamen, beispielsweise `settings-theme` oder `admin-trash`, bleiben weiterhin kompatibel.
 
+## Bugfix: Tutorial fortsetzen
+
+Die Tutorialkarte bleibt während eines Routenwechsels sichtbar und mittig ausgerichtet. Dadurch kann ein Tutorial nicht mehr blockiert werden, wenn ein Zielbereich wegen einer Rolle, einer noch ladenden Seite oder einer nicht verfügbaren Ansicht kurzfristig nicht gefunden wird. Klickschritte bieten neben **„Zum Bereich“** nun stets eine sichtbare Aktion **„Weiter“**. Nach einem erfolgreichen Klick auf das Ziel geht das Tutorial weiterhin automatisch weiter; die neue Aktion dient als kontrollierter Fallback, wenn die Aufgabe bereits erledigt oder das Ziel nicht verfügbar ist.
+
+## Zusammenhängende Tutorial-PDFs
+
+Der PDF-Export berechnet vor dem Zeichnen eines Schritts dessen benötigte Höhe. Überschrift, Beschreibung und der zugehörige Screenshot werden gemeinsam auf die nächste Seite verschoben, wenn sie auf der aktuellen Seite nicht vollständig Platz finden. Dadurch bleiben Bild und Schrittinhalt zusammen, statt nach einem großen Leerraum auf der Folgeseite zu erscheinen. Die PDF-Ausgabe zeichnet außerdem Punkte, Kreise und Zeichen mit ihren jeweiligen Farben und ergänzt die Legende verständlich.
+
+## Zwischenschritte im Tutorial-Editor
+
+Zwischen und nach jedem vorhandenen Schritt erscheint die Aktion **„Zwischenschritt einfügen“**. Sie legt direkt an der gewählten Position einen normalen, voll bearbeitbaren Hinweis-Schritt an. Dieser kann mit einer eigenen Überschrift, Erklärung, optionalem Screenshot sowie Punkten, Kreisen oder Zeichen ergänzt werden. Für Zwischenschritte ist standardmäßig kein Klickziel erforderlich; dadurch eignen sie sich für wichtige Ausschnitte, Sicherheitshinweise und Erklärungen zwischen zwei Bedienhandlungen.
+
 ## Prüfung
 
 Der Client- und Server-TypeScript-Build sowie die Produktionssynchronisierung waren erfolgreich. Die WordPress-Plugin-Datei wurde auf PHP-Syntax geprüft. Eine isolierte JSON-Prüfung bestätigte Titelbild, Klicksequenz, Zielroute, Interaktionsmodus, Bildschutz, Markierungen und Rollen.

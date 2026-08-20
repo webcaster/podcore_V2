@@ -255,7 +255,7 @@ export const TutorialOverlay: React.FC = () => {
       <div
         className="tutorial-tooltip-container"
         style={{
-          ...( (!position && !isNavigating) ? {
+          ...( !position ? {
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
@@ -265,7 +265,10 @@ export const TutorialOverlay: React.FC = () => {
             left: tooltipPos.left,
             position: 'fixed' as const
           }),
-          display: position ? 'block' : (isNavigating ? 'none' : 'block'),
+          // Die Karte bleibt auch während eines Routenwechsels sichtbar. So ist
+          // ein Tutorial nie blockiert, falls ein Ziel wegen Rolle, Route oder
+          // einer noch nicht gerenderten Ansicht kurzfristig nicht gefunden wird.
+          display: 'block',
         }}
       >
         <div className="tutorial-card">
@@ -382,12 +385,21 @@ export const TutorialOverlay: React.FC = () => {
                 )}
                 
                 {requiresTargetClick ? (
-                  <button
-                    onClick={focusTarget}
-                    className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
-                  >
-                    <MousePointerClick size={16} /> Zum markierten Bereich
-                  </button>
+                  <>
+                    <button
+                      onClick={focusTarget}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
+                    >
+                      <MousePointerClick size={16} /> Zum Bereich
+                    </button>
+                    <button
+                      onClick={continueTutorial}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-obsidian-700 text-text-primary hover:bg-obsidian-600 transition-all"
+                      title="Fahre fort, wenn der Bereich nicht verfügbar ist oder du die Aktion bereits ausgeführt hast."
+                    >
+                      {isLastStep ? 'Abschließen' : 'Weiter'} <ChevronRight size={16} />
+                    </button>
+                  </>
                 ) : requiresConfirmation ? (
                   <button
                     onClick={() => { setActionConfirmed(true); continueTutorial(); }}

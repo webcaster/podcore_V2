@@ -30,6 +30,10 @@ interface AnnotationPoint {
   y: number;
   label: string;
   description: string;
+  type?: 'point' | 'circle' | 'symbol';
+  symbol?: string;
+  color?: string;
+  size?: number;
 }
 interface TutorialStep {
   id: string;
@@ -473,13 +477,25 @@ export default function TutorialsManagementPage() {
         annotations.forEach((ann, i) => {
           const x = (ann.x / 100) * img.width;
           const y = (ann.y / 100) * img.height;
+          const type = ann.type || 'point';
+          const color = ann.color || ANN_COLORS[i % ANN_COLORS.length];
           const radius = Math.max(img.width, img.height) * 0.012;
-          ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
-          ctx.fillStyle = ANN_COLORS[i % ANN_COLORS.length]; ctx.fill();
-          ctx.lineWidth = radius * 0.2; ctx.strokeStyle = 'white'; ctx.stroke();
-          ctx.fillStyle = 'white'; ctx.font = `bold ${radius * 1.2}px Arial`;
+          ctx.save();
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(ann.label, x, y);
+          if (type === 'circle') {
+            const diameter = Math.max(16, ((Number(ann.size) || 10) / 100) * img.width);
+            ctx.beginPath(); ctx.arc(x, y, diameter / 2, 0, Math.PI * 2);
+            ctx.lineWidth = Math.max(3, diameter * 0.055); ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.stroke();
+            ctx.beginPath(); ctx.arc(x, y, diameter / 2, 0, Math.PI * 2);
+            ctx.lineWidth = Math.max(2, diameter * 0.035); ctx.strokeStyle = color; ctx.stroke();
+          } else {
+            ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = color; ctx.fill();
+            ctx.lineWidth = radius * 0.2; ctx.strokeStyle = 'white'; ctx.stroke();
+            ctx.fillStyle = 'white'; ctx.font = `bold ${radius * 1.2}px Arial`;
+            ctx.fillText(type === 'symbol' ? (ann.symbol || ann.label) : ann.label, x, y);
+          }
+          ctx.restore();
         });
         resolve(canvas.toDataURL('image/png'));
       };
@@ -493,8 +509,9 @@ export default function TutorialsManagementPage() {
     try {
       const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const W = 210; const M = 15; let y = M;
-      const checkY = (h: number) => { if (y + h > 280) { doc.addPage(); y = M; } };
+      const W = 210; const M = 15; const pageBottom = 280; const contentWidth = W - 2 * M; let y = M;
+      const newPage = () => { doc.addPage(); y = M; };
+      const checkY = (h: number) => { if (y + h > pageBottom) newPage(); };
 
       doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.setTextColor(50, 50, 50);
       doc.text(tutorial.title, M, y); y += 10;
@@ -509,34 +526,52 @@ export default function TutorialsManagementPage() {
 
       for (let i = 0; i < tutorial.steps.length; i++) {
         const s = tutorial.steps[i];
-        checkY(20);
+        doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+        const titleLines = doc.splitTextToSize(`${i + 1}. ${s.title || `Schritt ${i + 1}`}`, contentWidth);
+        const titleHeight = Math.max(7, titleLines.length * 6 + 2);
+        doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+        const descriptionLines = s.description ? doc.splitTextToSize(s.description, contentWidth) : [];
+        const descriptionHeight = descriptionLines.length ? descriptionLines.length * 5 + 4 : 0;
+        const imageHeight = s.image ? 84 : 0;
+        const annotationHeight = (s.annotations || []).reduce((total, annotation) => {
+          const label = annotation.type === 'circle' ? '[Kreis]' : annotation.type === 'symbol' ? `[${annotation.symbol || annotation.label || 'Zeichen'}]` : `[${annotation.label}]`;
+          return total + doc.splitTextToSize(`${label} ${annotation.description || 'Markierung'}`, contentWidth - 4).length * 5 + 2;
+        }, s.annotations?.length ? 10 : 0);
+        const completeStepHeight = titleHeight + descriptionHeight + imageHeight + annotationHeight + 8;
+        const boundBlockHeight = titleHeight + descriptionHeight + imageHeight;
+
+        // Überschrift, Erklärung und Bild werden gemeinsam auf die nächste Seite
+        // verschoben, falls sie auf der aktuellen Seite nicht vollständig Platz finden.
+        if (completeStepHeight <= pageBottom - M && y + completeStepHeight > pageBottom) newPage();
+        else if (boundBlockHeight <= pageBottom - M && y + boundBlockHeight > pageBottom) newPage();
+
         doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 80, 80);
-        doc.text(`${i + 1}. ${s.title || `Schritt ${i + 1}`}`, M, y); y += 7;
+        doc.text(titleLines, M, y); y += titleHeight;
         if (s.description) {
           doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 60);
-          const lines = doc.splitTextToSize(s.description, W - 2 * M);
-          checkY(lines.length * 5 + 4);
-          doc.text(lines, M, y); y += lines.length * 5 + 4;
+          doc.text(descriptionLines, M, y); y += descriptionHeight;
         }
         if (s.image) {
           try {
             const bakedImage = await bakeAnnotationsToImage(s.image, s.annotations || []);
-            checkY(90);
-            doc.addImage(bakedImage, 'PNG', M, y, W - 2 * M, 80);
+            checkY(imageHeight);
+            doc.addImage(bakedImage, 'PNG', M, y, contentWidth, 80);
             y += 84;
           } catch (err) {
             console.error('Image bake error:', err);
-            doc.addImage(s.image, 'PNG', M, y, W - 2 * M, 80);
+            checkY(imageHeight);
+            doc.addImage(s.image, 'PNG', M, y, contentWidth, 80);
             y += 84;
           }
         }
         if (s.annotations?.length) {
-          checkY(10 + s.annotations.length * 8);
+          checkY(10);
           doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
           doc.text('Markierungen:', M, y); y += 6;
           for (const a of s.annotations) {
             doc.setFont('helvetica', 'normal'); doc.setTextColor(50, 50, 50);
-            const al = doc.splitTextToSize(`[${a.label}] ${a.description}`, W - 2 * M - 4);
+            const annotationLabel = a.type === 'circle' ? '[Kreis]' : a.type === 'symbol' ? `[${a.symbol || a.label || 'Zeichen'}]` : `[${a.label}]`;
+            const al = doc.splitTextToSize(`${annotationLabel} ${a.description || 'Markierung'}`, contentWidth - 4);
             checkY(al.length * 5 + 2);
             doc.text(al, M + 4, y); y += al.length * 5 + 2;
           }
@@ -625,6 +660,23 @@ export default function TutorialsManagementPage() {
     const s = newStep(`Schritt ${(editTutorial?.steps.length || 0) + 1}`);
     setEditTutorial(p => p ? { ...p, steps: [...p.steps, s] } : p);
     setCollapsedSteps(p => { const n = new Set(p); n.delete(s.id); return n; });
+  };
+  const insertIntermediateStep = (afterId: string) => {
+    const intermediate = newStep('Zwischenschritt: Wichtiger Hinweis');
+    intermediate.description = 'Ergänze hier einen wichtigen Hinweis, einen Ausschnitt oder eine Erklärung, bevor das Tutorial mit dem nächsten Schritt fortgesetzt wird.';
+    intermediate.target = '';
+    intermediate.interaction = 'guide';
+    setEditTutorial(p => {
+      if (!p) return p;
+      const index = p.steps.findIndex(step => step.id === afterId);
+      if (index < 0) return p;
+      const steps = [...p.steps];
+      steps.splice(index + 1, 0, intermediate);
+      return { ...p, steps };
+    });
+    setCollapsedSteps(p => { const n = new Set(p); n.delete(intermediate.id); return n; });
+    setSuccess('Zwischenschritt wurde eingefügt. Titel, Hinweis und optionalen Screenshot kannst du jetzt bearbeiten.');
+    setTimeout(() => setSuccess(null), 3500);
   };
   const removeStep = (id: string) =>
     setEditTutorial(p => p ? { ...p, steps: p.steps.filter(s => s.id !== id) } : p);
@@ -1400,10 +1452,8 @@ export default function TutorialsManagementPage() {
                 {editTutorial.steps.map((step, idx) => {
                   const isCollapsed = collapsedSteps.has(step.id);
                   return (
-                    <div
-                      key={step.id}
-                      className="card border border-obsidian-700 hover:border-obsidian-600 transition-colors"
-                    >
+                    <React.Fragment key={step.id}>
+                    <div className="card border border-obsidian-700 hover:border-obsidian-600 transition-colors">
                       {/* Step header */}
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2 shrink-0">
@@ -1629,6 +1679,19 @@ export default function TutorialsManagementPage() {
                         </div>
                       )}
                     </div>
+                    <div className="flex items-center gap-3 px-2 py-0.5" aria-label={`Zwischenschritt nach ${step.title || `Schritt ${idx + 1}`} einfügen`}>
+                      <div className="h-px flex-1 bg-obsidian-700" />
+                      <button
+                        type="button"
+                        onClick={() => insertIntermediateStep(step.id)}
+                        className="flex items-center gap-1.5 rounded-full border border-dashed border-accent-purple/50 bg-accent-purple/5 px-3 py-1.5 text-xs font-medium text-accent-purple transition-colors hover:border-accent-purple hover:bg-accent-purple/15"
+                        title="Fügt direkt nach diesem Schritt einen Hinweis oder Screenshot-Ausschnitt ein."
+                      >
+                        <Plus size={13} /> Zwischenschritt einfügen
+                      </button>
+                      <div className="h-px flex-1 bg-obsidian-700" />
+                    </div>
+                    </React.Fragment>
                   );
                 })}
 
