@@ -12,3 +12,4 @@ assets/
 *.orig
 *.bak
 .DS_Store
+tutorial-studio/

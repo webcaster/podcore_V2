@@ -71,6 +71,7 @@
 - [x] Öffentlichen PodCore-GitHub-Branch von websitefremden Dateien bereinigen; nur app-relevante Quellen und Dokumentation behalten.
 - [x] GitHub-Releases bereinigt: Es wird ausschließlich die geprüfte Endnutzer-App-ZIP v2.16.10 ohne Zusatzpakete und Promo-Medien angeboten.
 - [x] Aktuellen GitHub-Stand erneut prüfen und sämtliche nicht apprelevanten Dateien oder Release-Anhänge entfernen; WordPress-, Webseiten-, Video- und sonstige Begleitdateien bleiben außerhalb des Repositorys.
+- [x] Separat hinzugefügtes Tutorial-Studio-Projekt einschließlich Workflow-Datei aus dem PodCore-Repository entfernen, da es nicht Teil der PodCore-App ist.
 
 ## Persönliches Dashboard
 
