@@ -14,6 +14,8 @@ const ANN_COLORS = [
 // Tab findet und nicht nur die übergeordnete Seite erreichen kann.
 const TARGET_ROUTES: Record<string, string> = {
   'nav-dashboard': '/',
+  'dashboard-settings-toggle': '/',
+  'dashboard-settings-panel': '/?tutorial=dashboard-settings',
   'nav-episodes': '/episodes',
   'nav-episodes-dashboard': '/episodes-dashboard',
   'nav-editorial': '/editorial',

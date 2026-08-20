@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Mic2, Lightbulb, Library, Megaphone, TrendingUp, Clock,
   BarChart2, Radio, Save, X, RefreshCw,
@@ -20,6 +20,7 @@ interface Stats {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, can, branding, podcastProfile, refreshPodcastProfile, showSuccess, showError, refreshUser } = useApp();
   const { onlineUsers } = useOnlineUsers();
   useTutorialAutoInit();
@@ -63,6 +64,15 @@ export default function Dashboard() {
   const [isCustomizing, setIsCustomizing] = useState(false);
   const [isSavingLayout, setIsSavingLayout] = useState(false);
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null);
+
+  // Tutorialschritte können den Einstellungsbereich über eine stabile Route
+  // öffnen. Der Parameter bleibt absichtlich erhalten, solange der Schritt
+  // sichtbar ist, damit ein erneutes Rendern die Ansicht nicht wieder schließt.
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('tutorial') === 'dashboard-settings') {
+      setIsCustomizing(true);
+    }
+  }, [location.search]);
 
   // Layout aus dem individuellen Benutzerprofil laden. Alte Array-Layouts
   // bleiben lesbar, neue Einstellungen trennen Reihenfolge und Sichtbarkeit.
@@ -1036,6 +1046,8 @@ export default function Dashboard() {
           )}
           <button
             onClick={() => setIsCustomizing(!isCustomizing)}
+            data-tutorial-id="dashboard-settings-toggle"
+            data-tutorial-record-route="/?tutorial=dashboard-settings"
             className={`p-2 rounded-lg transition-colors ${isCustomizing ? 'bg-accent-purple text-white' : 'text-text-muted hover:text-text-primary hover:bg-obsidian-800'}`}
             title="Dashboard anpassen"
           >
@@ -1053,7 +1065,7 @@ export default function Dashboard() {
 
       {/* Dashboard-Anpassung Panel */}
       {isCustomizing && (
-        <div className="card border-accent-purple/30">
+        <div data-tutorial-id="dashboard-settings-panel" className="card border-accent-purple/30">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0 flex items-center gap-2">
               <Settings2 size={16} className="text-accent-purple" /> Dashboard anpassen

@@ -49,7 +49,7 @@ export default function TutorialRecordingOverlay() {
       const target = element.dataset.tutorialId || '';
       const label = getElementLabel(element);
       const anchor = element.closest('a[href]') as HTMLAnchorElement | null;
-      const destination = anchor?.getAttribute('href') || undefined;
+      const destination = element.dataset.tutorialRecordRoute || anchor?.getAttribute('href') || undefined;
       setCandidate({ target, label, destination: destination?.startsWith('/') ? destination : undefined });
       setTitle(label);
       setNotice(`„${label}“ wurde als Klickziel erkannt. Ergänze nun den Hinweis für die Nutzer.`);

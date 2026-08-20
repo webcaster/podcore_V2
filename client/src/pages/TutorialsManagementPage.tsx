@@ -112,6 +112,8 @@ const ANN_COLORS = [
 ];
 const PAGE_ROUTES: TutorialRoute[] = [
   { group: 'Hauptnavigation', label: 'Dashboard', path: '/', tutorialId: 'nav-dashboard' },
+  { group: 'Dashboard', label: 'Dashboard Einstellungen öffnen', path: '/', tutorialId: 'dashboard-settings-toggle' },
+  { group: 'Dashboard', label: 'Dashboard Einstellungen bearbeiten', path: '/?tutorial=dashboard-settings', tutorialId: 'dashboard-settings-panel' },
   { group: 'Hauptnavigation', label: 'Episoden', path: '/episodes', tutorialId: 'nav-episodes' },
   { group: 'Hauptnavigation', label: 'Episoden-Dashboard', path: '/episodes-dashboard', tutorialId: 'nav-episodes-dashboard' },
   { group: 'Hauptnavigation', label: 'Redaktions-Hub', path: '/editorial', tutorialId: 'nav-editorial' },
