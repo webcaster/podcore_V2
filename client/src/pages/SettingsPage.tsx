@@ -39,7 +39,7 @@ const readSettingsTab = (search: string): SettingsTabKey => {
 // Stabilitätsmodus: Bis zum ausdrücklich geplanten Lizenz-Release bleibt PodCore
 // vollständig kostenlos. Die bestehende DLM-Anbindung bleibt im Code, wird aber
 // nicht in der App-Oberfläche angeboten.
-const LICENSING_ENABLED = false;
+const LICENSING_ENABLED = true;
 
 const SIDEBAR_PRESETS = [
   { label: 'Obsidian (Standard)', value: '#0f0f13' },
@@ -194,6 +194,35 @@ export default function SettingsPage() {
     } finally {
       setIsLicenseBusy(false);
     }
+  };
+
+  const handleOfflineLicenseImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsLicenseBusy(true);
+    try {
+      const document = JSON.parse(await file.text());
+      const status = await licenseApi.importOffline(document);
+      setLicenseStatus(status);
+      showSuccess('Offline-Lizenz wurde signaturgeprüft und importiert.');
+    } catch (err: any) {
+      showError(err.message || 'Offline-Lizenz konnte nicht importiert werden.');
+    } finally {
+      setIsLicenseBusy(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleLicensePdfExport = async () => {
+    try {
+      const blob = await licenseApi.exportPdf();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'podcore-lizenznachweis.pdf';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) { showError(err.message); }
   };
 
   const handleUpdateFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1403,7 +1432,7 @@ export default function SettingsPage() {
               <KeyRound size={16} /> PodCore-Lizenzierung
             </h3>
             <p className="text-text-muted text-sm leading-relaxed">
-              Kaufe den Lizenzschlüssel auf <span className="font-mono text-accent-purple">podcore.de</span>, lade ihn nach dem Kauf herunter und aktiviere ihn anschließend hier. Die Zugangsdaten werden nur serverseitig gespeichert und niemals an den Browser zurückgegeben.
+              Kaufe den Lizenzschlüssel auf <span className="font-mono text-accent-purple">podcore.de</span>, lade ihn nach dem Kauf herunter und aktiviere ihn anschließend hier. Die Zugangsdaten werden nur serverseitig gespeichert. Alternativ kannst du ein signiertes Offline-Lizenzdokument importieren; PodCore prüft die Ed25519-Signatur lokal ohne Internetverbindung.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
               <a href={PODCORE_PURCHASE_URL} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-accent-purple/30 bg-accent-purple/10 p-3 transition-colors hover:border-accent-purple/70 hover:bg-accent-purple/20">
@@ -1446,9 +1475,10 @@ export default function SettingsPage() {
                         <div><span className="text-text-muted">Schlüssel:</span> <span className="font-mono text-text-secondary">{licenseStatus.licenseKeyMasked || '—'}</span></div>
                         <div><span className="text-text-muted">Aktivierung:</span> <span className="font-mono text-text-secondary">{licenseStatus.activationTokenMasked || '—'}</span></div>
                         {licenseStatus.productName && <div><span className="text-text-muted">Produkt:</span> <span className="text-text-secondary">{licenseStatus.productName}</span></div>}
-                        {licenseStatus.plan && licenseStatus.plan !== 'unknown' && <div><span className="text-text-muted">Tarif:</span> <span className="text-text-secondary">{licenseStatus.plan === 'lifetime' ? 'Lifetime · lebenslang' : licenseStatus.plan === 'yearly' ? 'Jährlich · 365 Tage' : 'Monatlich · 30 Tage'}</span></div>}
+                        {licenseStatus.plan && licenseStatus.plan !== 'unknown' && <div><span className="text-text-muted">Tarif:</span> <span className="text-text-secondary">{licenseStatus.plan === 'lifetime' ? 'Lifetime · lebenslang' : licenseStatus.plan === 'yearly' ? 'Jährlich · 365 Tage' : licenseStatus.plan === 'special' ? 'Sonderabo · individuell' : 'Monatlich · 30 Tage'}</span></div>}
                         {licenseStatus.plan === 'lifetime' ? <div><span className="text-text-muted">Gültigkeit:</span> <span className="text-accent-purple font-medium">Lebenslang · kein Ablaufdatum</span></div> : licenseStatus.expiresAt && <div><span className="text-text-muted">Gültig bis:</span> <span className="text-text-secondary">{new Date(licenseStatus.expiresAt).toLocaleDateString('de-DE')}</span></div>}
                         {licenseStatus.lastValidatedAt && <div><span className="text-text-muted">Zuletzt geprüft:</span> <span className="text-text-secondary">{new Date(licenseStatus.lastValidatedAt).toLocaleString('de-DE')}</span></div>}
+                        {licenseStatus.verificationMode && <div><span className="text-text-muted">Prüfung:</span> <span className="text-text-secondary">{licenseStatus.verificationMode === 'offline' ? 'Offline-Signatur' : licenseStatus.verificationMode === 'online' ? 'Online-API' : 'Kompatibilitätsmodus'}</span></div>}
                       </div>
                       {licenseStatus.lastError && <p className="text-xs text-red-300 mt-3">{licenseStatus.lastError}</p>}
                     </div>
@@ -1498,13 +1528,20 @@ export default function SettingsPage() {
                   <button type="button" onClick={handleLicenseDeactivate} disabled={isLicenseBusy || !licenseStatus?.activationTokenMasked} className="btn-secondary text-red-300 hover:text-red-200">
                     <XCircle size={15} /> Deaktivieren
                   </button>
+                  <button type="button" onClick={handleLicensePdfExport} disabled={isLicenseBusy || !licenseStatus?.licenseKeyMasked} className="btn-secondary">
+                    <Download size={15} /> Lizenz-PDF
+                  </button>
+                  <label className="btn-secondary cursor-pointer">
+                    <Upload size={15} /> Offline-Lizenz importieren
+                    <input type="file" accept="application/json,.json" className="hidden" onChange={handleOfflineLicenseImport} disabled={isLicenseBusy} />
+                  </label>
                 </div>
               </form>
 
                 <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-4">
                   <div className="flex items-start gap-2">
                     <Info size={15} className="text-accent-blue mt-0.5 shrink-0" />
-                    <p className="text-text-muted text-xs leading-relaxed">Für die Verbindung brauchst du im WordPress-Dashboard des Digital License Manager einen Consumer Key und Consumer Secret. Der Lizenzschlüssel stammt aus dem Verkauf beziehungsweise der Lizenzzuweisung auf podcore.de. Nach dem Download kopierst du den Schlüssel hier in das Feld und aktivierst die Installation.</p>
+                    <p className="text-text-muted text-xs leading-relaxed">Für die Online-Aktivierung nutzt du die WooCommerce-REST-Zugangsdaten der WordPress-Seite mit installiertem PodCore-Lizenzplugin. Für vollständig isolierte Installationen importierst du die vom Lizenzserver erzeugte JSON-Lizenzdatei. Der PDF-Export dient als lesbarer Lizenznachweis; die kryptografische Prüfung erfolgt aus dem eingebetteten signierten Dokument.</p>
                   </div>
                 </div>
             </>

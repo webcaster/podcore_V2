@@ -1,6 +1,8 @@
 import express, { Response } from 'express';
 import http from 'http';
 import https from 'https';
+import crypto from 'crypto';
+import PDFDocument from 'pdfkit';
 import { getDb } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
@@ -20,7 +22,11 @@ interface LicenseSettings {
   expiresAt: string | null;
   licenseId: string | number | null;
   productName: string;
-  plan: 'monthly' | 'yearly' | 'lifetime' | 'unknown';
+  plan: 'monthly' | 'yearly' | 'lifetime' | 'special' | 'unknown';
+  publicKey: string;
+  signature: string;
+  licenseDocument: any | null;
+  verificationMode: 'online' | 'offline' | 'legacy';
   lastError: string | null;
 }
 
@@ -41,6 +47,10 @@ const DEFAULT_LICENSE: LicenseSettings = {
   licenseId: null,
   productName: '',
   plan: 'unknown',
+  publicKey: '',
+  signature: '',
+  licenseDocument: null,
+  verificationMode: 'legacy',
   lastError: null,
 };
 
@@ -118,6 +128,10 @@ function publicStatus(license: LicenseSettings) {
     licenseId: license.licenseId,
     productName: license.productName,
     plan: license.plan,
+    publicKey: license.publicKey,
+    signature: license.signature,
+    verificationMode: license.verificationMode,
+    hasOfflineDocument: Boolean(license.licenseDocument),
     lastError: license.lastError,
   };
 }
@@ -170,6 +184,48 @@ function extractLicenseData(response: any): any {
 
 function extractError(error: any): string {
   return error instanceof Error ? error.message : 'Unbekannter Fehler bei der Lizenzprüfung';
+}
+
+function verifyOfflineDocument(document: any): { valid: boolean; reason?: string; payload?: any } {
+  const payload = document?.payload;
+  const signature = String(document?.signature || '');
+  const publicKey = String(payload?.public_key || document?.public_key || '');
+  if (!payload || !signature || !publicKey) return { valid: false, reason: 'Unvollständiges Lizenzdokument.' };
+  if (payload.format !== 'podcore-license-v1' || document.algorithm !== 'Ed25519') return { valid: false, reason: 'Unbekanntes Lizenzformat oder Signaturalgorithmus.' };
+  try {
+    const rawKey = Buffer.from(publicKey, 'base64');
+    const derPrefix = Buffer.from('302a300506032b6570032100', 'hex');
+    const key = crypto.createPublicKey({ key: Buffer.concat([derPrefix, rawKey]), format: 'der', type: 'spki' });
+    const valid = crypto.verify(null, Buffer.from(JSON.stringify(payload)), key, Buffer.from(signature, 'base64'));
+    if (!valid) return { valid: false, reason: 'Lizenzsignatur ist ungültig.' };
+    if (payload.status !== 'active') return { valid: false, reason: 'Lizenz ist widerrufen oder nicht aktiv.' };
+    if (payload.expires_at && new Date(payload.expires_at).getTime() < Date.now()) return { valid: false, reason: 'Lizenz ist abgelaufen.' };
+    return { valid: true, payload };
+  } catch (error: any) {
+    return { valid: false, reason: `Offline-Lizenz konnte nicht geprüft werden: ${error.message}` };
+  }
+}
+
+function generateLicensePdf(license: LicenseSettings): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 54 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+    doc.fontSize(24).fillColor('#16324f').text('PodCore Lizenznachweis');
+    doc.moveDown(0.5).fontSize(10).fillColor('#555').text('Offline verifizierbares Lizenzdokument');
+    doc.moveDown(1.5).fontSize(12).fillColor('#111');
+    const rows = [
+      ['Lizenzschlüssel', license.licenseKey], ['Produkt', license.productName || 'PodCore'],
+      ['Tarif', license.plan], ['Status', license.status], ['Ausgestellt', license.activatedAt || license.lastValidatedAt || '–'],
+      ['Gültig bis', license.expiresAt || 'Unbefristet'], ['Prüfmodus', license.verificationMode],
+    ];
+    rows.forEach(([label, value]) => doc.text(`${label}: ${value}`));
+    doc.moveDown(1.5).fontSize(9).fillColor('#555').text('Die Lizenz kann ohne Internetverbindung anhand der eingebetteten Ed25519-Signatur geprüft werden. Bewahren Sie dieses PDF und die zugehörige Lizenzdatei sicher auf.');
+    if (license.signature) { doc.moveDown(1).text(`Signatur: ${license.signature}`); }
+    doc.end();
+  });
 }
 
 router.get('/status', requireAuth as any, (_req: AuthRequest, res: Response) => {
@@ -254,6 +310,36 @@ router.post('/validate', requirePermission('canManageSettings') as any, async (_
     writeLicense(next);
     return res.status(502).json({ success: false, error: next.lastError, data: publicStatus(next) });
   }
+});
+
+router.post('/import', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+  const document = req.body?.document || req.body;
+  const result = verifyOfflineDocument(document);
+  if (!result.valid) return res.status(400).json({ success: false, error: result.reason });
+  const payload = result.payload;
+  const now = new Date().toISOString();
+  const imported: LicenseSettings = {
+    ...readLicense(), siteUrl: '', consumerKey: '', consumerSecret: '', licenseKey: String(payload.license_key || ''),
+    software: 'podcore', label: String(payload.customer_name || 'Offline-Lizenz'), activationToken: String(payload.activation_token || ''),
+    status: 'active', lastValidatedAt: now, activatedAt: String(payload.activated_at || now), expiresAt: payload.expires_at || null,
+    licenseId: payload.license_id || null, productName: String(payload.product_name || `PodCore ${payload.plan || 'Lizenz'}`),
+    plan: payload.plan === 'monthly' || payload.plan === 'yearly' || payload.plan === 'special' ? payload.plan : 'unknown',
+    publicKey: String(payload.public_key || ''), signature: String(document.signature || ''), licenseDocument: document, verificationMode: 'offline', lastError: null,
+  };
+  writeLicense(imported);
+  return res.json({ success: true, data: publicStatus(imported) });
+});
+
+router.get('/export-pdf', requireAuth as any, async (_req: AuthRequest, res: Response) => {
+  try {
+    const license = readLicense();
+    if (!license.licenseKey) return res.status(400).json({ success: false, error: 'Kein Lizenznachweis vorhanden.' });
+    const pdf = await generateLicensePdf(license);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="podcore-lizenznachweis.pdf"');
+    res.setHeader('Content-Length', pdf.length);
+    return res.send(pdf);
+  } catch (error: any) { return res.status(500).json({ success: false, error: error.message }); }
 });
 
 router.post('/deactivate', requirePermission('canManageSettings') as any, async (_req: AuthRequest, res: Response) => {

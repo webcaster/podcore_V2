@@ -1,5 +1,20 @@
 # PodCore – Release Notes
 
+## v2.16.25 – Eigene WooCommerce-Lizenzplattform und Offline-Lizenznachweis
+
+PodCore 2.16.25 ergänzt eine eigene WordPress-/WooCommerce-Lizenzplattform. Das begleitende Plugin unterstützt Monatsabo, Jahresabo und Sonderabo, erzeugt Lizenzcodes, verarbeitet Subscription-Verlängerungen und signiert Lizenzdokumente mit Ed25519. PodCore kann Lizenzdokumente offline importieren und den aktuellen Lizenznachweis als PDF exportieren.
+
+| Bereich | Änderung |
+|---|---|
+| WordPress-Plugin | Eigenständiges Plugin unter `wordpress-plugin/podcore-licensing` mit REST-API und WooCommerce-Integration. |
+| Tarifmodelle | Monatsabo mit 30 Tagen, Jahresabo mit 365 Tagen und frei konfigurierbares Sonderabo. |
+| Code-Generator | Manuelle Ausgabe von Lizenzschlüsseln unter **WooCommerce → PodCore-Lizenzen**. |
+| Offlineprüfung | Ed25519-signierte JSON-Dokumente werden in PodCore lokal auf Signatur, Status und Ablauf geprüft. |
+| PDF-Export | Lizenznachweis über **Einstellungen → Lizenzierung → Lizenz-PDF**. |
+| Qualitätssicherung | Client- und Server-Build, PHP-Lint sowie reproduzierbarer Ed25519-Signaturtest erfolgreich ausgeführt. |
+
+Die vollständige Anleitung steht unter [`docs/WORDPRESS-LICENSE-PLUGIN.md`](docs/WORDPRESS-LICENSE-PLUGIN.md).
+
 ## v2.14.10 – Plattformunabhängige PDF-Schriften und Fragenbibliothek
 
 Version **2.14.10** stabilisiert alle PDF-Exporte durch mitgelieferte DejaVu-Schriften. Dadurch hängt die Ausgabe nicht mehr von installierten Systemschriften auf macOS, Windows oder Linux ab. Historische, ungültige Schriftbezeichnungen werden sicher auf gültige PDF-Schriften abgebildet; eine defensive Fallback-Logik verhindert zudem, dass ein einzelnes Layout einen Export wegen einer fehlenden Schrift abbricht. Die PDF-Texte bereinigen fehlerhaft doppelt kodierte UTF-8-Zeichen, damit insbesondere **ä, ö, ü, Ä, Ö, Ü und ß** korrekt dargestellt werden.

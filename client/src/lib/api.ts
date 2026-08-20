@@ -756,7 +756,11 @@ export interface LicenseStatus {
   expiresAt: string | null;
   licenseId: string | number | null;
   productName?: string;
-  plan?: 'monthly' | 'yearly' | 'lifetime' | 'unknown';
+  plan?: 'monthly' | 'yearly' | 'lifetime' | 'special' | 'unknown';
+  publicKey?: string;
+  signature?: string;
+  verificationMode?: 'online' | 'offline' | 'legacy';
+  hasOfflineDocument?: boolean;
   lastError: string | null;
 }
 
@@ -766,6 +770,12 @@ export const licenseApi = {
     api.post<LicenseStatus>('/license/activate', data),
   validate: () => api.post<LicenseStatus>('/license/validate', {}),
   deactivate: () => api.post<LicenseStatus>('/license/deactivate', {}),
+  importOffline: (document: unknown) => api.post<LicenseStatus>('/license/import', { document }),
+  exportPdf: async (): Promise<Blob> => {
+    const response = await fetch('/api/license/export-pdf', { credentials: 'include' });
+    if (!response.ok) throw new Error('Lizenz-PDF konnte nicht erzeugt werden.');
+    return response.blob();
+  },
 };
 
 
