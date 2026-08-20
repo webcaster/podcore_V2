@@ -1,5 +1,9 @@
 # PodCore – Release Notes
 
+## v2.16.26 – Korrigiertes WordPress-Plugin-Paket
+
+Das WordPress-Plugin wurde als Version **1.0.1** neu paketiert. Der Pluginordner liegt jetzt direkt auf der ZIP-Wurzelebene, sodass WordPress die Datei `podcore-licensing/podcore-licensing.php` beim Hochladen erkennt. Das PodCore-Anwendungsrelease ist auf **2.16.26** fortgeschrieben. Die korrigierte Installationsdatei wird im neuen GitHub-Release bereitgestellt.
+
 ## v2.16.25 – Eigene WooCommerce-Lizenzplattform und Offline-Lizenznachweis
 
 PodCore 2.16.25 ergänzt eine eigene WordPress-/WooCommerce-Lizenzplattform. Das begleitende Plugin unterstützt Monatsabo, Jahresabo und Sonderabo, erzeugt Lizenzcodes, verarbeitet Subscription-Verlängerungen und signiert Lizenzdokumente mit Ed25519. PodCore kann Lizenzdokumente offline importieren und den aktuellen Lizenznachweis als PDF exportieren.

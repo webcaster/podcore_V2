@@ -1,8 +1,8 @@
 # PodCore-Lizenzierung mit WordPress und WooCommerce
 
-**Stand: PodCore 2.16.25**
+**Stand: PodCore 2.16.26**
 
-PodCore enthält ab dieser Version eine eigene Lizenzschnittstelle für ein WordPress-Backend mit WooCommerce. Das WordPress-Plugin liegt unter [`wordpress-plugin/podcore-licensing`](../wordpress-plugin/podcore-licensing). Es verwaltet Monatsabo, Jahresabo und Sonderabo, erzeugt Lizenzcodes und liefert signierte Lizenzdokumente.
+PodCore enthält ab dieser Version eine eigene Lizenzschnittstelle für ein WordPress-Backend mit WooCommerce. Das WordPress-Plugin in Version 1.0.1 liegt unter [`wordpress-plugin/podcore-licensing`](../wordpress-plugin/podcore-licensing). Es verwaltet Monatsabo, Jahresabo und Sonderabo, erzeugt Lizenzcodes und liefert signierte Lizenzdokumente.
 
 ## Betriebsarten
 
@@ -28,7 +28,7 @@ Für einen Offlinebetrieb exportiert die WordPress-Administration beziehungsweis
 
 ## Versionshinweis
 
-Dieses Update ist ein kleiner Funktionsschritt und verwendet daher **PodCore 2.16.25**. Die Versionsnummer darf bei weiteren kleineren Änderungen fortgeschrieben werden, bis ausdrücklich ein finales Update verlangt wird.
+Dieses korrigierte Update verwendet **PodCore 2.16.26**. Das Plugin trägt die Version **1.0.1**. Die Versionsnummer darf bei weiteren kleineren Änderungen fortgeschrieben werden, bis ausdrücklich ein finales Update verlangt wird.
 
 ## Technischer Hinweis
 
