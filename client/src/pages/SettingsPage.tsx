@@ -673,7 +673,7 @@ export default function SettingsPage() {
       {/* Tabs */}
       <div data-tutorial-id="settings-tabs" className="flex flex-wrap gap-1 bg-obsidian-800 p-1 rounded-xl w-fit">
         {tabs.map(tab => (
-          <button key={tab.key} data-tutorial-id={`settings-tab-${tab.key}`} onClick={() => selectTab(tab.key)}
+          <button key={tab.key} data-tutorial-id={`settings-tab-${tab.key}`} data-tutorial-record-route={`/settings?tab=${tab.key}`} onClick={() => selectTab(tab.key)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}>
             {tab.icon}
             {tab.label}

@@ -518,7 +518,7 @@ export default function AdminPage() {
           { key: 'tutorials', label: 'Tutorials', icon: <HelpCircle size={14} /> },
           { key: 'logs', label: 'Logs', icon: <Activity size={14} /> },
         ].map(tab => (
-          <button key={tab.key} data-tutorial-id={`admin-tab-${tab.key}`} onClick={() => selectTab(tab.key as AdminTabKey)}
+          <button key={tab.key} data-tutorial-id={`admin-tab-${tab.key}`} data-tutorial-record-route={`/admin?tab=${tab.key}`} onClick={() => selectTab(tab.key as AdminTabKey)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}>
             {tab.icon}{tab.label}
           </button>

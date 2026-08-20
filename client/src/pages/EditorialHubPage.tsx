@@ -97,6 +97,7 @@ export default function EditorialHubPage() {
           <button
             key={tab.key}
             data-tutorial-id={`editorial-tab-${tab.key}`}
+            data-tutorial-record-route={`/editorial?tab=${tab.key}`}
             onClick={() => selectTab(tab.key)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === tab.key

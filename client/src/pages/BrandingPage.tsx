@@ -287,7 +287,7 @@ export default function BrandingPage() {
           { key: 'backup', label: 'Backup & Export' },
           { key: 'podigee', label: 'Podigee' },
         ].map(tab => (
-          <button key={tab.key} data-tutorial-id={`branding-tab-${tab.key}`} onClick={() => selectTab(tab.key as BrandingTabKey)}
+          <button key={tab.key} data-tutorial-id={`branding-tab-${tab.key}`} data-tutorial-record-route={`/branding?tab=${tab.key}`} onClick={() => selectTab(tab.key as BrandingTabKey)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}>
             {tab.key === 'podigee' && podigeeStatus?.connected && <span className="inline-block w-2 h-2 bg-accent-green rounded-full mr-1.5" />}
             {tab.label}
