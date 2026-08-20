@@ -46,6 +46,7 @@
 - [x] Tutorial-Editor: Alle verschachtelten Untermenüs als eindeutige Klickziele auswählen und bei der Aufzeichnung mit vollständiger Route zuverlässig übernehmen.
 - [x] Dashboard-Tutorial: „Dashboard Einstellungen“ als stabiles Untermenüziel mit Route, Klickaufzeichnung und zuverlässiger Wiedergabe ergänzen.
 - [x] Tutorialführung: Komplexe Menüs appweit nach dem Dashboard-Muster mit getrennten Öffnungs- und Bearbeitungszielen, vollständigen Routen und Aufzeichnungsübergabe standardisieren.
+- [x] WordPress-Tutorial-Plugin: Aktuelle Untermenürouten und komplexe Menühinweise aus PodCore v2.16.24 beim JSON-Import verständlich darstellen und separat als Pluginpaket bereitstellen.
 - [x] Abschlussprüfung: Vollständigen PodCore-Fehlercheck mit Versionsprüfung, Client- und Server-Build, Produktionssynchronisierung, Tutorialregressionen und Release-Archivprüfung vor der Bereitstellung durchführen.
 - [x] Risikoprüfung: Fehleranfällige Kernabläufe für Anmeldung, Berechtigungen, Datenbank, Sicherung, Tutorialfortschritt, Import/Export, Screenshot-Verarbeitung sowie Löschen und Wiederherstellen gezielt testen.
 - [x] Episoden-Editor: Technischen Hinweis zu fehlenden v2-Buchungen durch eine klare Leeransicht für Werbeplatzbuchungen mit direkter Anlegen- oder Auswahlaktion ersetzt.
