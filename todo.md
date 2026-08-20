@@ -42,6 +42,10 @@
 - [x] Tutorial-Editor: Zwischen normalen Schritten gezielte Ausschnitt- beziehungsweise Hinweisblöcke mit eigener Überschrift, Erklärung, optionalem Screenshot und Markierungen einfügen.
 - [x] Tutorial-Editor: Direkt nach jedem vorhandenen Schritt eine sichtbare Aktion „Zwischenschritt einfügen“ anbieten und den neuen Schritt exakt an dieser Position erstellen.
 - [x] Kritischer Tutorial-Bugfix: Aktion „Weiter“ und Klickerkennung in der Tutorialführung wieder zuverlässig aktivieren, damit Nutzer jeden Schritt fortsetzen können.
+- [x] Tutorial-Editor: Vorhandene Screenshot-Bilder interaktiv zuschneiden und den gewählten Bereich als Detailausschnitt in einen neuen oder bestehenden Zwischenschritt übernehmen.
+- [x] Tutorial-Editor: Alle verschachtelten Untermenüs als eindeutige Klickziele auswählen und bei der Aufzeichnung mit vollständiger Route zuverlässig übernehmen.
+- [x] Abschlussprüfung: Vollständigen PodCore-Fehlercheck mit Versionsprüfung, Client- und Server-Build, Produktionssynchronisierung, Tutorialregressionen und Release-Archivprüfung vor der Bereitstellung durchführen.
+- [x] Risikoprüfung: Fehleranfällige Kernabläufe für Anmeldung, Berechtigungen, Datenbank, Sicherung, Tutorialfortschritt, Import/Export, Screenshot-Verarbeitung sowie Löschen und Wiederherstellen gezielt testen.
 - [x] Episoden-Editor: Technischen Hinweis zu fehlenden v2-Buchungen durch eine klare Leeransicht für Werbeplatzbuchungen mit direkter Anlegen- oder Auswahlaktion ersetzt.
 - [x] Design-Update: Visuelle Sprache des `podcore_promo_video_v2.mp4` analysiert und als zugängliches, konsistentes Designsystem in Navigation, Karten, Formulare und Kernseiten der App übertragen.
 - [x] Stabilitätsupdate: Überdimensionierte Zahlen-, Auswahl- und Formfelder anhand der betroffenen Komponenten konsistent verdichtet, ohne Touch- oder Lesbarkeit zu verschlechtern.

@@ -16,7 +16,7 @@ import {
   Camera, Download, Eye, Users, BookOpen, Edit3,
   X, Check, AlertCircle, Loader2, ArrowLeft,
   ToggleLeft, ToggleRight, GripVertical, Image as ImageIcon,
-  FileText, Settings as SettingsIcon, ChevronRight, RefreshCw, Copy, MousePointerClick,
+  FileText, Settings as SettingsIcon, ChevronRight, RefreshCw, Copy, MousePointerClick, Scissors,
 } from 'lucide-react';
 import { useScreenshotMode } from '../contexts/ScreenshotModeContext';
 import { RecordedTutorialAction, useTutorialRecording } from '../contexts/TutorialRecordingContext';
@@ -59,6 +59,24 @@ interface Tutorial {
   updatedAt: string;
   createdBy?: string;
 }
+interface TutorialRoute {
+  label: string;
+  path: string;
+  tutorialId: string;
+  group: string;
+}
+interface CropSelection {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+interface CropEditorState {
+  stepId: string;
+  title: string;
+  image: string;
+  annotations: AnnotationPoint[];
+}
 interface Role {
   id: string;
   name: string;
@@ -92,26 +110,52 @@ const ANN_COLORS = [
   '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
   '#0891b2', '#65a30d', '#ea580c', '#9333ea', '#0d9488',
 ];
-const PAGE_ROUTES: { label: string; path: string; tutorialId: string }[] = [
-  { label: 'Dashboard', path: '/', tutorialId: 'nav-dashboard' },
-  { label: 'Episoden', path: '/episodes', tutorialId: 'nav-episodes' },
-  { label: 'Episoden-Dashboard', path: '/episodes-dashboard', tutorialId: 'nav-episodes-dashboard' },
-  { label: 'Redaktions-Hub', path: '/editorial', tutorialId: 'nav-editorial' },
-  { label: 'Redaktionskalender', path: '/calendar', tutorialId: 'nav-calendar' },
-  { label: 'Team-Chat', path: '/chat', tutorialId: 'nav-chat' },
-  { label: 'Media Library', path: '/media', tutorialId: 'nav-media' },
-  { label: 'Sponsoring', path: '/sponsors', tutorialId: 'nav-sponsors' },
-  { label: 'Buchungskalender', path: '/sponsors/calendar', tutorialId: 'nav-sponsors-calendar' },
-  { label: 'Sponsor-Auswertungen', path: '/sponsors/reports', tutorialId: 'nav-sponsors-reports' },
-  { label: 'Staffeln', path: '/seasons', tutorialId: 'nav-seasons' },
-  { label: 'Archiv', path: '/archive', tutorialId: 'nav-archive' },
-  { label: 'Podigee Analytics', path: '/analytics', tutorialId: 'nav-analytics' },
-  { label: 'Podcast-Statistiken', path: '/stats', tutorialId: 'nav-stats' },
-  { label: 'Branding & Backup', path: '/branding', tutorialId: 'nav-branding' },
-  { label: 'Administration', path: '/admin', tutorialId: 'nav-admin' },
-  { label: 'Einstellungen', path: '/settings', tutorialId: 'nav-settings' },
-  { label: 'PDF-Layouts', path: '/pdf-layouts', tutorialId: 'nav-pdf-layouts' },
+const PAGE_ROUTES: TutorialRoute[] = [
+  { group: 'Hauptnavigation', label: 'Dashboard', path: '/', tutorialId: 'nav-dashboard' },
+  { group: 'Hauptnavigation', label: 'Episoden', path: '/episodes', tutorialId: 'nav-episodes' },
+  { group: 'Hauptnavigation', label: 'Episoden-Dashboard', path: '/episodes-dashboard', tutorialId: 'nav-episodes-dashboard' },
+  { group: 'Hauptnavigation', label: 'Redaktions-Hub', path: '/editorial', tutorialId: 'nav-editorial' },
+  { group: 'Hauptnavigation', label: 'Redaktionskalender', path: '/calendar', tutorialId: 'nav-calendar' },
+  { group: 'Hauptnavigation', label: 'Team-Chat', path: '/chat', tutorialId: 'nav-chat' },
+  { group: 'Hauptnavigation', label: 'Media Library', path: '/media', tutorialId: 'nav-media' },
+  { group: 'Hauptnavigation', label: 'Sponsoring', path: '/sponsors', tutorialId: 'nav-sponsors' },
+  { group: 'Hauptnavigation', label: 'Buchungskalender', path: '/sponsors/calendar', tutorialId: 'nav-sponsors-calendar' },
+  { group: 'Hauptnavigation', label: 'Sponsor-Auswertungen', path: '/sponsors/reports', tutorialId: 'nav-sponsors-reports' },
+  { group: 'Hauptnavigation', label: 'Staffeln', path: '/seasons', tutorialId: 'nav-seasons' },
+  { group: 'Hauptnavigation', label: 'Archiv', path: '/archive', tutorialId: 'nav-archive' },
+  { group: 'Hauptnavigation', label: 'Podigee Analytics', path: '/analytics', tutorialId: 'nav-analytics' },
+  { group: 'Hauptnavigation', label: 'Podcast-Statistiken', path: '/stats', tutorialId: 'nav-stats' },
+  { group: 'Hauptnavigation', label: 'Branding & Backup', path: '/branding', tutorialId: 'nav-branding' },
+  { group: 'Hauptnavigation', label: 'Administration', path: '/admin', tutorialId: 'nav-admin' },
+  { group: 'Hauptnavigation', label: 'Einstellungen', path: '/settings', tutorialId: 'nav-settings' },
+  { group: 'Hauptnavigation', label: 'PDF-Layouts', path: '/pdf-layouts', tutorialId: 'nav-pdf-layouts' },
+  { group: 'Einstellungen', label: 'Profil', path: '/settings?tab=profile', tutorialId: 'settings-tab-profile' },
+  { group: 'Einstellungen', label: 'Mein Design', path: '/settings?tab=theme', tutorialId: 'settings-tab-theme' },
+  { group: 'Einstellungen', label: 'Podcast', path: '/settings?tab=podcast', tutorialId: 'settings-tab-podcast' },
+  { group: 'Einstellungen', label: 'Technik', path: '/settings?tab=technical', tutorialId: 'settings-tab-technical' },
+  { group: 'Einstellungen', label: 'Speicher', path: '/settings?tab=storage', tutorialId: 'settings-tab-storage' },
+  { group: 'Einstellungen', label: 'App-Einstellungen', path: '/settings?tab=app', tutorialId: 'settings-tab-app' },
+  { group: 'Einstellungen', label: 'Update-Hinweise', path: '/settings?tab=update', tutorialId: 'settings-tab-update' },
+  { group: 'Administration', label: 'Benutzer', path: '/admin?tab=users', tutorialId: 'admin-tab-users' },
+  { group: 'Administration', label: 'Rollen', path: '/admin?tab=roles', tutorialId: 'admin-tab-roles' },
+  { group: 'Administration', label: 'Module', path: '/admin?tab=modules', tutorialId: 'admin-tab-modules' },
+  { group: 'Administration', label: 'System', path: '/admin?tab=system', tutorialId: 'admin-tab-system' },
+  { group: 'Administration', label: 'Datenbank', path: '/admin?tab=database', tutorialId: 'admin-tab-database' },
+  { group: 'Administration', label: 'Papierkorb', path: '/admin?tab=trash', tutorialId: 'admin-tab-trash' },
+  { group: 'Administration', label: 'Tutorials', path: '/admin?tab=tutorials', tutorialId: 'admin-tab-tutorials' },
+  { group: 'Administration', label: 'Protokolle', path: '/admin?tab=logs', tutorialId: 'admin-tab-logs' },
+  { group: 'Branding & Backup', label: 'Branding', path: '/branding?tab=branding', tutorialId: 'branding-tab-branding' },
+  { group: 'Branding & Backup', label: 'Speicher', path: '/branding?tab=storage', tutorialId: 'branding-tab-storage' },
+  { group: 'Branding & Backup', label: 'Backup & Export', path: '/branding?tab=backup', tutorialId: 'branding-tab-backup' },
+  { group: 'Branding & Backup', label: 'Podigee', path: '/branding?tab=podigee', tutorialId: 'branding-tab-podigee' },
+  { group: 'Redaktions-Hub', label: 'Ideenpool', path: '/editorial?tab=ideas', tutorialId: 'editorial-tab-ideas' },
+  { group: 'Redaktions-Hub', label: 'Staffelplanung', path: '/editorial?tab=season-planning', tutorialId: 'editorial-tab-season-planning' },
+  { group: 'Redaktions-Hub', label: 'Recherche', path: '/editorial?tab=research', tutorialId: 'editorial-tab-research' },
+  { group: 'Redaktions-Hub', label: 'Redaktionsplan', path: '/editorial?tab=plan', tutorialId: 'editorial-tab-plan' },
+  { group: 'Redaktions-Hub', label: 'Interviews', path: '/editorial?tab=interviews', tutorialId: 'editorial-tab-interviews' },
+  { group: 'Redaktions-Hub', label: 'Notizen', path: '/editorial?tab=notes', tutorialId: 'editorial-tab-notes' },
 ];
+const TUTORIAL_TARGET_GROUPS = [...new Set(PAGE_ROUTES.map(route => route.group))];
 
 const getRoleColor = (name: string) =>
   ROLE_COLORS[name?.toLowerCase()] || '#6b7280';
@@ -163,12 +207,16 @@ export default function TutorialsManagementPage() {
   const [cloudUrl, setCloudUrl] = useState('https://podcore.de/wp-json/app-tutorials/v1');
   const [cloudEnabled, setCloudEnabled] = useState(false);
   const [cloudAutoSync, setCloudAutoSync] = useState(false);
+  const [cropEditor, setCropEditor] = useState<CropEditorState | null>(null);
+  const [cropSelection, setCropSelection] = useState<CropSelection | null>(null);
+  const [cropDragStart, setCropDragStart] = useState<{ x: number; y: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const screenshotRestoreAppliedRef = useRef(false);
   const recordingRestoreAppliedRef = useRef(false);
 
   // Ref to hold the current editTutorial for use inside screenshot callbacks
   const editTutorialRef = useRef<Tutorial | null>(null);
+  const cropImageRef = useRef<HTMLDivElement>(null);
   useEffect(() => { editTutorialRef.current = editTutorial; }, [editTutorial]);
 
   const visibleTutorials = tutorials.filter((tutorial) => {
@@ -594,9 +642,9 @@ export default function TutorialsManagementPage() {
     if (!current) return;
     const firstRole = current.roles[0];
     const roleObj = roles.find(r => r.name === firstRole || r.id === firstRole);
+    const selectedStep = current.steps.find(s => s.id === stepId);
     const route = PAGE_ROUTES.find(r => {
-      const step = current.steps.find(s => s.id === stepId);
-      return step && (r.tutorialId === step.target || r.path === step.target);
+      return selectedStep && (r.tutorialId === selectedStep.target || r.path === selectedStep.target);
     });
 
     startScreenshotMode({
@@ -627,7 +675,7 @@ export default function TutorialsManagementPage() {
 
     // Einstiegs-Tutorial (mehrere Rollen) oder kein Ziel gesetzt → immer Dashboard
     const isMultiRole = (current.roles?.length || 0) > 1;
-    const targetPath = isMultiRole ? '/' : (route?.path || '/');
+    const targetPath = isMultiRole ? '/' : (selectedStep?.route || route?.path || '/');
     navigate(targetPath);
   }, [roles, startScreenshotMode, navigate]);
 
@@ -677,6 +725,105 @@ export default function TutorialsManagementPage() {
     setCollapsedSteps(p => { const n = new Set(p); n.delete(intermediate.id); return n; });
     setSuccess('Zwischenschritt wurde eingefügt. Titel, Hinweis und optionalen Screenshot kannst du jetzt bearbeiten.');
     setTimeout(() => setSuccess(null), 3500);
+  };
+  const openCropEditor = (step: TutorialStep) => {
+    if (!step.image) return;
+    setCropEditor({ stepId: step.id, title: step.title, image: step.image, annotations: step.annotations || [] });
+    setCropSelection({ x: 15, y: 15, width: 70, height: 70 });
+    setCropDragStart(null);
+  };
+  const getCropPointerPosition = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = cropImageRef.current?.getBoundingClientRect();
+    if (!rect?.width || !rect.height) return null;
+    return {
+      x: Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)),
+      y: Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)),
+    };
+  };
+  const handleCropPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const point = getCropPointerPosition(event);
+    if (!point) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setCropDragStart(point);
+    setCropSelection({ x: point.x, y: point.y, width: 0, height: 0 });
+  };
+  const handleCropPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!cropDragStart) return;
+    const point = getCropPointerPosition(event);
+    if (!point) return;
+    setCropSelection({
+      x: Math.min(cropDragStart.x, point.x),
+      y: Math.min(cropDragStart.y, point.y),
+      width: Math.abs(point.x - cropDragStart.x),
+      height: Math.abs(point.y - cropDragStart.y),
+    });
+  };
+  const completeCropDrag = () => setCropDragStart(null);
+  const cropImageToDataUrl = (imageData: string, crop: CropSelection) => new Promise<string>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const sourceX = Math.round((crop.x / 100) * image.width);
+      const sourceY = Math.round((crop.y / 100) * image.height);
+      const sourceWidth = Math.max(1, Math.round((crop.width / 100) * image.width));
+      const sourceHeight = Math.max(1, Math.round((crop.height / 100) * image.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = sourceWidth;
+      canvas.height = sourceHeight;
+      const context = canvas.getContext('2d');
+      if (!context) { reject(new Error('Canvas nicht verfügbar')); return; }
+      context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    image.onerror = () => reject(new Error('Screenshot konnte nicht zugeschnitten werden'));
+    image.src = imageData;
+  });
+  const applyCrop = async (createIntermediate: boolean) => {
+    if (!cropEditor || !cropSelection || cropSelection.width < 5 || cropSelection.height < 5) {
+      setError('Ziehe zuerst einen ausreichend großen Bildbereich für den Detailausschnitt auf.');
+      return;
+    }
+    const crop: CropSelection = {
+      x: Math.max(0, Math.min(95, cropSelection.x)),
+      y: Math.max(0, Math.min(95, cropSelection.y)),
+      width: Math.max(5, Math.min(100 - cropSelection.x, cropSelection.width)),
+      height: Math.max(5, Math.min(100 - cropSelection.y, cropSelection.height)),
+    };
+    try {
+      const image = await cropImageToDataUrl(cropEditor.image, crop);
+      const annotations = cropEditor.annotations
+        .filter(annotation => annotation.x >= crop.x && annotation.x <= crop.x + crop.width && annotation.y >= crop.y && annotation.y <= crop.y + crop.height)
+        .map(annotation => ({
+          ...annotation,
+          x: ((annotation.x - crop.x) / crop.width) * 100,
+          y: ((annotation.y - crop.y) / crop.height) * 100,
+          size: annotation.type === 'circle' && annotation.size ? Math.max(4, Math.min(30, annotation.size * (100 / crop.width))) : annotation.size,
+        }));
+      let insertedId: string | null = null;
+      setEditTutorial(current => {
+        if (!current) return current;
+        const sourceIndex = current.steps.findIndex(step => step.id === cropEditor.stepId);
+        if (sourceIndex < 0) return current;
+        if (!createIntermediate) {
+          return { ...current, steps: current.steps.map(step => step.id === cropEditor.stepId ? { ...step, image, annotations } : step) };
+        }
+        const detailStep = newStep(`Detailausschnitt: ${cropEditor.title || 'Tutorialschritt'}`);
+        detailStep.description = 'Dieser Ausschnitt zeigt den wichtigen Bereich im Detail. Ergänze die Erklärung und Markierungen für eine präzise Anleitung.';
+        detailStep.image = image;
+        detailStep.annotations = annotations;
+        insertedId = detailStep.id;
+        const steps = [...current.steps];
+        steps.splice(sourceIndex + 1, 0, detailStep);
+        return { ...current, steps };
+      });
+      if (insertedId) setCollapsedSteps(current => { const next = new Set(current); next.delete(insertedId!); return next; });
+      setCropEditor(null);
+      setCropSelection(null);
+      setSuccess(createIntermediate ? 'Detailausschnitt als Zwischenschritt eingefügt. Der Original-Screenshot bleibt unverändert.' : 'Screenshot wurde auf den gewählten Detailausschnitt zugeschnitten.');
+      setTimeout(() => setSuccess(null), 4000);
+    } catch (cropError) {
+      console.error('Screenshot crop error:', cropError);
+      setError('Der Screenshot-Ausschnitt konnte nicht erstellt werden.');
+    }
   };
   const removeStep = (id: string) =>
     setEditTutorial(p => p ? { ...p, steps: p.steps.filter(s => s.id !== id) } : p);
@@ -1533,18 +1680,24 @@ export default function TutorialsManagementPage() {
                               <select
                                 value={step.target || ''}
                                 onChange={e => {
-                                  updateStep(step.id, { target: e.target.value });
-                                  setHighlightedTarget(e.target.value || null);
+                                  const target = PAGE_ROUTES.find(route => route.tutorialId === e.target.value);
+                                  updateStep(step.id, { target: e.target.value, route: target?.path });
+                                  setHighlightedTarget(target?.tutorialId || null);
                                 }}
                                 onFocus={() => setHighlightedTarget(step.target || null)}
                                 onBlur={() => setHighlightedTarget(null)}
                                 className="form-input text-sm"
                               >
                                 <option value="">— Kein Ziel —</option>
-                                {PAGE_ROUTES.map(r => (
-                                  <option key={r.tutorialId} value={r.tutorialId}>{r.label}</option>
+                                {TUTORIAL_TARGET_GROUPS.map(group => (
+                                  <optgroup key={group} label={group}>
+                                    {PAGE_ROUTES.filter(route => route.group === group).map(route => (
+                                      <option key={route.tutorialId} value={route.tutorialId}>{route.label}</option>
+                                    ))}
+                                  </optgroup>
                                 ))}
                               </select>
+                              <p className="mt-1 text-[11px] text-text-muted">Untermenüs öffnen den passenden Tab automatisch und speichern die vollständige Route.</p>
                             </div>
                             <div>
                               <label className="form-label text-xs">Position</label>
@@ -1614,6 +1767,13 @@ export default function TutorialsManagementPage() {
                                     className="px-3 py-1.5 bg-accent-purple text-white rounded-lg text-xs font-medium hover:bg-accent-purple/80 transition-colors"
                                   >
                                     Neu aufnehmen
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openCropEditor(step)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-obsidian-700 text-white rounded-lg text-xs font-medium hover:bg-obsidian-600 transition-colors"
+                                  >
+                                    <Scissors size={13} /> Ausschnitt
                                   </button>
                                   <button
                                     onClick={() => updateStep(step.id, { image: '', annotations: [] })}
@@ -1764,6 +1924,55 @@ export default function TutorialsManagementPage() {
             </div>
           </div>
         </div>
+
+        {cropEditor && (
+          <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-obsidian-950/85 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Screenshot-Detailausschnitt erstellen">
+            <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-obsidian-600 bg-obsidian-900 shadow-2xl">
+              <div className="flex items-center justify-between gap-4 border-b border-obsidian-700 px-5 py-4">
+                <div>
+                  <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary"><Scissors size={17} className="text-accent-purple" /> Screenshot-Detailausschnitt</h2>
+                  <p className="mt-1 text-xs text-text-muted">Ziehe auf dem Bild den Bereich auf, den du in der Anleitung vergrößert erklären möchtest.</p>
+                </div>
+                <button type="button" onClick={() => { setCropEditor(null); setCropSelection(null); }} className="rounded-lg p-2 text-text-muted transition-colors hover:bg-obsidian-800 hover:text-text-primary" aria-label="Zuschnitt schließen"><X size={18} /></button>
+              </div>
+              <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto lg:grid-cols-[minmax(0,1fr)_300px]">
+                <div className="flex min-h-[320px] items-center justify-center overflow-auto bg-obsidian-950 p-5">
+                  <div
+                    ref={cropImageRef}
+                    className="relative inline-block max-w-full touch-none select-none cursor-crosshair"
+                    onPointerDown={handleCropPointerDown}
+                    onPointerMove={handleCropPointerMove}
+                    onPointerUp={completeCropDrag}
+                    onPointerCancel={completeCropDrag}
+                  >
+                    <img src={cropEditor.image} alt={`Screenshot aus ${cropEditor.title || 'Tutorialschritt'}`} className="max-h-[68vh] max-w-full rounded-lg border border-obsidian-700 shadow-2xl pointer-events-none" draggable={false} />
+                    {cropSelection && cropSelection.width > 0 && cropSelection.height > 0 && (
+                      <div
+                        className="pointer-events-none absolute border-2 border-accent-purple bg-accent-purple/15 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
+                        style={{ left: `${cropSelection.x}%`, top: `${cropSelection.y}%`, width: `${cropSelection.width}%`, height: `${cropSelection.height}%` }}
+                      >
+                        <span className="absolute -top-7 left-0 rounded bg-accent-purple px-2 py-1 text-[11px] font-medium text-white">Detailausschnitt</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <aside className="border-t border-obsidian-700 bg-obsidian-900 p-5 lg:border-l lg:border-t-0">
+                  <h3 className="text-sm font-semibold text-text-primary">So verwendest du den Ausschnitt</h3>
+                  <p className="mt-2 text-xs leading-5 text-text-muted">Markierungen innerhalb der Auswahl werden mit übernommen und auf den neuen Bildausschnitt ausgerichtet. Der Original-Screenshot bleibt erhalten, wenn du einen Zwischenschritt erstellst.</p>
+                  <div className="mt-4 rounded-xl border border-obsidian-700 bg-obsidian-800/70 p-3 text-xs text-text-secondary">
+                    <span className="font-medium text-text-primary">Auswahl: </span>
+                    {cropSelection && cropSelection.width >= 5 && cropSelection.height >= 5 ? `${Math.round(cropSelection.width)} % × ${Math.round(cropSelection.height)} % des Screenshots` : 'Bitte einen Bereich mit mindestens 5 % Breite und Höhe aufziehen.'}
+                  </div>
+                  <button type="button" onClick={() => setCropSelection({ x: 15, y: 15, width: 70, height: 70 })} className="mt-3 text-xs text-accent-purple transition-colors hover:text-accent-purple/80">Auswahl zurücksetzen</button>
+                  <div className="mt-6 space-y-2">
+                    <button type="button" onClick={() => void applyCrop(true)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent-purple px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-purple/80"><Plus size={15} /> Als Zwischenschritt einfügen</button>
+                    <button type="button" onClick={() => void applyCrop(false)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-obsidian-700 px-3 py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-obsidian-600"><Scissors size={15} /> Aktuellen Screenshot ersetzen</button>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
