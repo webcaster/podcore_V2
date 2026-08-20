@@ -16,6 +16,6 @@ Die Klickaufzeichnung sichert weiterhin den aktuellen Pfad gemeinsam mit den Suc
 
 ## Fehler- und Releasecheck
 
-Der vollständige Versions-, Client-, Server- und Produktionscheck war erfolgreich. Zusätzlich wurde eine isolierte Serverinstanz mit temporärer SQLite-Datenbank genutzt, um Gesundheitsstatus, Frontend-Auslieferung, Anmeldung, Berechtigungsschutz, Tutorialzugriff, Systemdiagnose und Sicherungsstatus zu prüfen. Die detaillierte Checkliste steht in [QA-2.16.21.md](QA-2.16.21.md).
+Der vollständige Versions-, Client-, Server- und Produktionscheck war erfolgreich. Zusätzlich wurde eine isolierte Serverinstanz mit temporärer SQLite-Datenbank genutzt, um Gesundheitsstatus, Frontend-Auslieferung, Anmeldung, Berechtigungsschutz, Tutorialzugriff, Systemdiagnose und Sicherungsstatus zu prüfen. Die detaillierte Checkliste steht in [QA-2.16.22.md](QA-2.16.22.md).
 
 > Für installationsspezifische Daten, Rollen, externe Speicher, Podigee und WordPress bleibt eine kurze manuelle Abnahme mit einer eigenen Sicherungskopie erforderlich. Die dabei empfohlenen Schritte sind im Prüfprotokoll enthalten.
