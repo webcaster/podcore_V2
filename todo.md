@@ -53,6 +53,7 @@
 - [x] Mehrsprachigkeit: PodCore vollständig auf Deutsch und Englisch nutzbar machen, mit sprachbezogener Auswahl pro Benutzer und sicherer Standardsprache Deutsch.
 - [x] Rechtschreibprüfung: In Textfeldern eine einstellbare Prüfung für Deutsch und Englisch mit klaren Browserhinweisen und zugänglichen Fehlermeldungen ergänzen.
 - [x] Administration: Wörterbücher und zulässige eigene Fachbegriffe pro Sprache verwalten, importieren, exportieren und für die Rechtschreibprüfung bereitstellen.
+- [x] Release-Korrektur: Versionsnummer in Browser-Build, Endnutzerarchiv, GitHub-Tag und Release-Anhang einheitlich prüfen und den Versionskonflikt beheben.
 - [x] Abschlussprüfung: Vollständigen PodCore-Fehlercheck mit Versionsprüfung, Client- und Server-Build, Produktionssynchronisierung, Tutorialregressionen und Release-Archivprüfung vor der Bereitstellung durchführen.
 - [x] Risikoprüfung: Fehleranfällige Kernabläufe für Anmeldung, Berechtigungen, Datenbank, Sicherung, Tutorialfortschritt, Import/Export, Screenshot-Verarbeitung sowie Löschen und Wiederherstellen gezielt testen.
 - [x] Episoden-Editor: Technischen Hinweis zu fehlenden v2-Buchungen durch eine klare Leeransicht für Werbeplatzbuchungen mit direkter Anlegen- oder Auswahlaktion ersetzt.
