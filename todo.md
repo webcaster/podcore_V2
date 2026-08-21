@@ -10,6 +10,7 @@
 - [x] WordPress-Lizenzplugin: Kunden- und Lizenzendpunkte durch Besitzprüfung, Nonces, Rate Limits, sichere Tokenverarbeitung und datensparsame Ausgaben weiter härten.
 - [x] WordPress-Lizenzplugin: Lizenzdaten im Administrationsbereich sicher bearbeiten, Aktivierungen gezielt widerrufen und Lizenzen erst nach ausdrücklicher Bestätigung endgültig löschen.
 - [x] WordPress-Lizenzplugin: Zentrale Kundenansicht mit zugehörigen Lizenzen, Abos und Aktivierungen sowie signiertem Notfall-Download pro konkreter Installation ergänzen.
+- [x] Lizenz-PDF: Aus PodCore herunterladbaren Lizenznachweis mit PodCore-Signet, Subline, Kennzeichnung „medien der sinne“, „Eine Idee von Maximilian Hartwich“, goldener Trennlinie und Fußzeile als einheitlichen Marken-Kopfbereich ergänzen.
 - [ ] Lizenzstufen Basis, Studio und Lifetime vor Aktivierung final mit den geplanten Lizenzprodukten und Lizenzschlüsseln abgleichen.
 - [ ] Separate lokale Entwickler-Testversion erstellen: Lizenzoberfläche und Testaktivierung sichtbar, klar als Nicht-Produktivmodus markiert, ohne GitHub-Upload.
 - [ ] Lokale Entwicklerwerkzeuge ergänzen: Systemdiagnose, kontrollierte Testdaten, lokale Fehlerprotokolle, Funktionsstatus und sichere Entwicklungsaktionen ohne Produktivdaten zu verändern.

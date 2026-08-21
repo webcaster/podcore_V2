@@ -223,22 +223,37 @@ function verifyOfflineDocument(document: any): { valid: boolean; reason?: string
   } catch (error: any) { return { valid: false, reason: `Offline-Lizenz konnte nicht geprüft werden: ${error.message}` }; }
 }
 
-function generateLicensePdf(license: LicenseSettings): Promise<Buffer> {
+export function generateLicensePdf(license: LicenseSettings): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 54 });
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
-    doc.fontSize(24).fillColor('#16324f').text('PodCore Lizenznachweis');
-    doc.moveDown(0.5).fontSize(10).fillColor('#555').text('Lizenz bestätigt durch das PodCore WordPress-Lizenzplugin');
-    doc.moveDown(1.5).fontSize(12).fillColor('#111');
+    const pageWidth = doc.page.width;
+    doc.save();
+    doc.rect(0, 0, pageWidth, 108).fill('#17152e');
+    doc.circle(76, 53, 20).fill('#7c3aed');
+    doc.circle(84, 45, 8).fill('#f59e0b');
+    doc.circle(68, 61, 5).fill('#d8b4fe');
+    doc.font('Helvetica-Bold').fontSize(25).fillColor('#ffffff').text('PodCore', 110, 32, { lineBreak: false });
+    doc.font('Helvetica').fontSize(9).fillColor('#d8d2f4').text('Dein Podcast. Dein Workflow.', 111, 62, { lineBreak: false });
+    doc.font('Helvetica-Oblique').fontSize(10).fillColor('#ffffff').text('medien der sinne', pageWidth - 170, 42, { width: 116, align: 'right', lineBreak: false });
+    doc.font('Helvetica').fontSize(7).fillColor('#c8c0e5').text('Eine Idee von Maximilian Hartwich', pageWidth - 190, 60, { width: 136, align: 'right', lineBreak: false });
+    doc.strokeColor('#f59e0b').lineWidth(2).moveTo(54, 91).lineTo(pageWidth - 54, 91).stroke();
+    doc.restore();
+    doc.x = 54;
+    doc.y = 132;
+    doc.font('Helvetica-Bold').fontSize(20).fillColor('#16324f').text('Lizenznachweis');
+    doc.moveDown(0.4).font('Helvetica').fontSize(10).fillColor('#555').text('Lizenz bestätigt durch das PodCore WordPress-Lizenzplugin');
+    doc.moveDown(1.25).fontSize(12).fillColor('#111');
     [
       ['Lizenzschlüssel', license.licenseKey], ['Produkt', license.productName || 'PodCore'], ['Tarif', license.plan],
       ['Status', license.status], ['Installation', license.label], ['Ausgestellt', license.activatedAt || license.lastValidatedAt || '–'],
       ['Gültig bis', license.expiresAt || 'Unbefristet'], ['Prüfmodus', license.verificationMode],
     ].forEach(([label, value]) => doc.text(`${label}: ${value}`));
     doc.moveDown(1.5).fontSize(9).fillColor('#555').text('Das zugehörige Offline-Lizenzdokument wird lokal per Ed25519-Signatur geprüft. Bewahren Sie es zusammen mit diesem Nachweis sicher auf.');
+    doc.font('Helvetica').fontSize(7).fillColor('#777').text('PodCore · Medien der Sinne · podcore.de', 54, doc.page.height - 70, { width: pageWidth - 108, align: 'center', lineBreak: false });
     doc.end();
   });
 }
