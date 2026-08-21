@@ -13,3 +13,5 @@ assets/
 *.bak
 .DS_Store
 tutorial-studio/
+wordpress-plugin/
+podcore-wordpress-licensing-plugin-*/

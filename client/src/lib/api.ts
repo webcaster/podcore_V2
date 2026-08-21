@@ -740,13 +740,14 @@ export const seasonPlanningApi = {
 
 
 // ============================================================
-// Digital License Manager API
+// PodCore WordPress License Plugin API
 // ============================================================
 export interface LicenseStatus {
+  provider?: 'podcore-wordpress-plugin';
   configured: boolean;
   siteUrl: string;
-  software: string;
   label: string;
+  installationId?: string;
   status: 'unconfigured' | 'active' | 'invalid' | 'offline' | 'deactivated';
   realStatus?: 'unconfigured' | 'active' | 'invalid' | 'offline' | 'deactivated';
   isGracePeriod?: boolean;
@@ -761,14 +762,14 @@ export interface LicenseStatus {
   plan?: 'monthly' | 'yearly' | 'lifetime' | 'special' | 'unknown';
   publicKey?: string;
   signature?: string;
-  verificationMode?: 'online' | 'offline' | 'legacy';
+  verificationMode?: 'online' | 'offline';
   hasOfflineDocument?: boolean;
   lastError: string | null;
 }
 
 export const licenseApi = {
   getStatus: () => api.get<LicenseStatus>('/license/status'),
-  activate: (data: { siteUrl: string; consumerKey: string; consumerSecret: string; licenseKey: string; software?: string; label?: string }) =>
+  activate: (data: { siteUrl: string; licenseKey: string; label?: string }) =>
     api.post<LicenseStatus>('/license/activate', data),
   validate: () => api.post<LicenseStatus>('/license/validate', {}),
   deactivate: () => api.post<LicenseStatus>('/license/deactivate', {}),

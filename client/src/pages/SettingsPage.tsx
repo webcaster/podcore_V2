@@ -90,10 +90,7 @@ export default function SettingsPage() {
   const [isLicenseBusy, setIsLicenseBusy] = useState(false);
   const [licenseForm, setLicenseForm] = useState({
     siteUrl: 'https://podcore.de',
-    consumerKey: '',
-    consumerSecret: '',
     licenseKey: '',
-    software: '',
     label: 'PodCore Installation',
   });
 
@@ -140,7 +137,6 @@ export default function SettingsPage() {
       setLicenseForm(current => ({
         ...current,
         siteUrl: status.siteUrl || current.siteUrl,
-        software: status.software || current.software,
         label: status.label || current.label,
       }));
     } catch (err: any) {
@@ -1462,7 +1458,7 @@ export default function SettingsPage() {
               <KeyRound size={16} /> PodCore-Lizenzierung
             </h3>
             <p className="text-text-muted text-sm leading-relaxed">
-              Kaufe den Lizenzschlüssel auf <span className="font-mono text-accent-purple">podcore.de</span>, lade ihn nach dem Kauf herunter und aktiviere ihn anschließend hier. Die Zugangsdaten werden nur serverseitig gespeichert. Alternativ kannst du ein signiertes Offline-Lizenzdokument importieren; PodCore prüft die Ed25519-Signatur lokal ohne Internetverbindung.
+              Kaufe den Lizenzschlüssel auf <span className="font-mono text-accent-purple">podcore.de</span> und aktiviere ihn anschließend direkt in PodCore. Die Aktivierung erfolgt über das eigene PodCore-WordPress-Lizenzplugin – ohne Digital License Manager und ohne WooCommerce-API-Zugangsdaten in der App. Alternativ kannst du ein signiertes Offline-Lizenzdokument importieren; PodCore prüft die Ed25519-Signatur lokal ohne Internetverbindung.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
               <a href={PODCORE_PURCHASE_URL} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-accent-purple/30 bg-accent-purple/10 p-3 transition-colors hover:border-accent-purple/70 hover:bg-accent-purple/20">
@@ -1476,9 +1472,9 @@ export default function SettingsPage() {
                 <span className="inline-flex items-center gap-1 text-xs text-accent-blue mt-2">Auf podcore.de kaufen <Globe size={12} /></span>
               </a>
             </div>
-            <a href="https://docs.codeverve.com/digital-license-manager/rest-api/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-accent-purple hover:underline mt-3">
-              DLM-REST-API-Dokumentation öffnen <Globe size={12} />
-            </a>
+            <p className="inline-flex items-center gap-1 text-xs text-accent-purple mt-3">
+              <KeyRound size={12} /> Sichere Aktivierung über das PodCore-Lizenzplugin
+            </p>
           </div>
 
           {isLoadingLicense ? (
@@ -1508,7 +1504,7 @@ export default function SettingsPage() {
                         {licenseStatus.plan && licenseStatus.plan !== 'unknown' && <div><span className="text-text-muted">Tarif:</span> <span className="text-text-secondary">{licenseStatus.plan === 'lifetime' ? 'Lifetime · lebenslang' : licenseStatus.plan === 'yearly' ? 'Jährlich · 365 Tage' : licenseStatus.plan === 'special' ? 'Sonderabo · individuell' : 'Monatlich · 30 Tage'}</span></div>}
                         {licenseStatus.plan === 'lifetime' ? <div><span className="text-text-muted">Gültigkeit:</span> <span className="text-accent-purple font-medium">Lebenslang · kein Ablaufdatum</span></div> : licenseStatus.expiresAt && <div><span className="text-text-muted">Gültig bis:</span> <span className="text-text-secondary">{new Date(licenseStatus.expiresAt).toLocaleDateString('de-DE')}</span></div>}
                         {licenseStatus.lastValidatedAt && <div><span className="text-text-muted">Zuletzt geprüft:</span> <span className="text-text-secondary">{new Date(licenseStatus.lastValidatedAt).toLocaleString('de-DE')}</span></div>}
-                        {licenseStatus.verificationMode && <div><span className="text-text-muted">Prüfung:</span> <span className="text-text-secondary">{licenseStatus.verificationMode === 'offline' ? 'Offline-Signatur' : licenseStatus.verificationMode === 'online' ? 'Online-API' : 'Kompatibilitätsmodus'}</span></div>}
+                        {licenseStatus.verificationMode && <div><span className="text-text-muted">Prüfung:</span> <span className="text-text-secondary">{licenseStatus.verificationMode === 'offline' ? 'Offline-Signatur' : 'PodCore-Lizenzserver'}</span></div>}
                       </div>
                       {licenseStatus.lastError && <p className="text-xs text-red-300 mt-3">{licenseStatus.lastError}</p>}
                     </div>
@@ -1520,31 +1516,16 @@ export default function SettingsPage() {
                 <div>
                   <label className="label">Lizenz-Webseite</label>
                   <input type="url" value={licenseForm.siteUrl} onChange={e => setLicenseForm(p => ({ ...p, siteUrl: e.target.value }))} className="input" placeholder="https://podcore.de" required />
-                  <p className="text-text-muted text-xs mt-1">Die WordPress-Installation mit aktiviertem Digital License Manager.</p>
+                  <p className="text-text-muted text-xs mt-1">Die WordPress-Installation mit aktiviertem PodCore-Lizenzplugin.</p>
                 </div>
                 <div>
                   <label className="label">Lizenzschlüssel</label>
                   <input type="text" value={licenseForm.licenseKey} onChange={e => setLicenseForm(p => ({ ...p, licenseKey: e.target.value }))} className="input font-mono" placeholder="XXXX-XXXX-XXXX-XXXX" required />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="label">Consumer Key</label>
-                    <input type="text" value={licenseForm.consumerKey} onChange={e => setLicenseForm(p => ({ ...p, consumerKey: e.target.value }))} className="input font-mono" placeholder="ck_..." required />
-                  </div>
-                  <div>
-                    <label className="label">Consumer Secret</label>
-                    <input type="password" value={licenseForm.consumerSecret} onChange={e => setLicenseForm(p => ({ ...p, consumerSecret: e.target.value }))} className="input font-mono" placeholder="cs_..." required />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="label">Software-ID (DLM Pro, optional)</label>
-                    <input type="text" value={licenseForm.software} onChange={e => setLicenseForm(p => ({ ...p, software: e.target.value }))} className="input" placeholder="z.B. 12" />
-                  </div>
-                  <div>
-                    <label className="label">Installationsbezeichnung</label>
-                    <input type="text" value={licenseForm.label} onChange={e => setLicenseForm(p => ({ ...p, label: e.target.value }))} className="input" placeholder="PodCore Installation" />
-                  </div>
+                <div>
+                  <label className="label">Installationsbezeichnung</label>
+                  <input type="text" value={licenseForm.label} onChange={e => setLicenseForm(p => ({ ...p, label: e.target.value }))} className="input" placeholder="PodCore Installation" />
+                  <p className="text-text-muted text-xs mt-1">Hilft dir, diese Aktivierung im WordPress-Lizenzplugin wiederzuerkennen. PodCore erzeugt die technische Installationskennung selbst.</p>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-2">
                   <button type="submit" disabled={isLicenseBusy} className="btn-primary">
@@ -1571,7 +1552,7 @@ export default function SettingsPage() {
                 <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-4">
                   <div className="flex items-start gap-2">
                     <Info size={15} className="text-accent-blue mt-0.5 shrink-0" />
-                    <p className="text-text-muted text-xs leading-relaxed">Für die Online-Aktivierung nutzt du die WooCommerce-REST-Zugangsdaten der WordPress-Seite mit installiertem PodCore-Lizenzplugin. Für vollständig isolierte Installationen importierst du die vom Lizenzserver erzeugte JSON-Lizenzdatei. Der PDF-Export dient als lesbarer Lizenznachweis; die kryptografische Prüfung erfolgt aus dem eingebetteten signierten Dokument.</p>
+                    <p className="text-text-muted text-xs leading-relaxed">Für die Online-Aktivierung reichen Lizenz-Webseite, Lizenzschlüssel und Installationsbezeichnung. Die App authentifiziert weitere Status- und Deaktivierungsanfragen über einen pro Installation ausgestellten Aktivierungstoken. Für vollständig isolierte Installationen importierst du die vom PodCore-Lizenzplugin erzeugte JSON-Lizenzdatei. Der PDF-Export dient als lesbarer Lizenznachweis; die kryptografische Prüfung erfolgt aus dem eingebetteten signierten Dokument.</p>
                   </div>
                 </div>
             </>

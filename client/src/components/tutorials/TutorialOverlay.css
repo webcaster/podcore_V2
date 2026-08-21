@@ -39,6 +39,32 @@
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.tutorial-tooltip-container.is-dragging {
+  transition: none;
+}
+
+.tutorial-header--draggable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.tutorial-header--draggable.is-dragging {
+  cursor: grabbing;
+}
+
+.tutorial-header--draggable button {
+  cursor: pointer;
+}
+
+.tutorial-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  flex: 0 0 auto;
+}
+
 /* ── Tutorial Card ── */
 .tutorial-card {
   background: #141420; /* obsidian-800 */

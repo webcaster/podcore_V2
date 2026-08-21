@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, X, SkipForward, MousePointerClick, CheckCircle2, PauseCircle } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { ChevronLeft, ChevronRight, X, SkipForward, MousePointerClick, CheckCircle2, PauseCircle, GripVertical, RotateCcw } from 'lucide-react';
 import { useTutorial, TutorialStep } from '../../contexts/TutorialContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './TutorialOverlay.css';
@@ -92,6 +92,10 @@ export const TutorialOverlay: React.FC = () => {
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const [isNavigating, setIsNavigating] = useState(false);
   const [actionConfirmed, setActionConfirmed] = useState(false);
+  const [manualPosition, setManualPosition] = useState<{ top: number; left: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
 
   const findTargetElement = useCallback((target?: string): Element | null => {
     if (!target) return null;
@@ -188,6 +192,11 @@ export const TutorialOverlay: React.FC = () => {
     setActionConfirmed(false);
   }, [activeTutorial?.id, currentStep]);
 
+  useEffect(() => {
+    setManualPosition(null);
+    setIsDragging(false);
+  }, [activeTutorial?.id]);
+
   const currentStepData = activeTutorial?.steps[currentStep];
   const currentInteraction = currentStepData?.interaction || (currentStepData?.action === 'confirm' ? 'confirm' : currentStepData?.target ? 'click' : 'guide');
   const currentRequiresTargetClick = currentInteraction === 'click' && Boolean(currentStepData?.target);
@@ -234,6 +243,40 @@ export const TutorialOverlay: React.FC = () => {
     (element as HTMLElement).focus?.({ preventScroll: true });
   };
 
+  const clampManualPosition = useCallback((top: number, left: number) => {
+    const node = tooltipRef.current;
+    const width = node?.offsetWidth || Math.min(500, window.innerWidth - 24);
+    const height = node?.offsetHeight || Math.min(680, window.innerHeight - 24);
+    const margin = 12;
+    return {
+      top: Math.max(margin, Math.min(top, window.innerHeight - height - margin)),
+      left: Math.max(margin, Math.min(left, window.innerWidth - width - margin)),
+    };
+  }, []);
+
+  const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    const interactiveChild = (event.target as HTMLElement).closest('button, a, input, textarea, select');
+    if (interactiveChild) return;
+    const rect = tooltipRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    event.preventDefault();
+    dragOffsetRef.current = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    setManualPosition({ top: rect.top, left: rect.left });
+    setIsDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    setManualPosition(clampManualPosition(event.clientY - dragOffsetRef.current.y, event.clientX - dragOffsetRef.current.x));
+  };
+
+  const handleDragEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   return (
     <>
       {/* ── Highlight Layer ── */}
@@ -255,9 +298,15 @@ export const TutorialOverlay: React.FC = () => {
 
       {/* ── Tooltip / Dialog ── */}
       <div
-        className="tutorial-tooltip-container"
+        ref={tooltipRef}
+        className={`tutorial-tooltip-container${isDragging ? ' is-dragging' : ''}`}
         style={{
-          ...( !position ? {
+          ...(manualPosition ? {
+            top: manualPosition.top,
+            left: manualPosition.left,
+            transform: 'none',
+            position: 'fixed' as const,
+          } : !position ? {
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
@@ -275,8 +324,16 @@ export const TutorialOverlay: React.FC = () => {
       >
         <div className="tutorial-card">
           {/* Header */}
-          <div className="tutorial-header">
+          <div
+            className={`tutorial-header tutorial-header--draggable${isDragging ? ' is-dragging' : ''}`}
+            onPointerDown={handleDragStart}
+            onPointerMove={handleDragMove}
+            onPointerUp={handleDragEnd}
+            onPointerCancel={handleDragEnd}
+            title="Tutorialfenster verschieben"
+          >
             <div className="flex items-center gap-3">
+              <span className="tutorial-drag-handle" aria-hidden="true"><GripVertical size={18} /></span>
               <div className="w-8 h-8 rounded-full bg-accent-purple/30 border border-accent-purple/60 flex items-center justify-center text-accent-purple text-sm font-bold">
                 {currentStep + 1}
               </div>
@@ -383,6 +440,16 @@ export const TutorialOverlay: React.FC = () => {
                     className="text-xs text-text-muted hover:text-text-primary transition-colors px-3 py-2"
                   >
                     Überspringen
+                  </button>
+                )}
+                {manualPosition && (
+                  <button
+                    type="button"
+                    onClick={() => setManualPosition(null)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-obsidian-700 text-text-secondary hover:text-text-primary transition-all"
+                    title="Tutorialfenster wieder automatisch am Zielbereich ausrichten"
+                  >
+                    <RotateCcw size={14} /> Position zurücksetzen
                   </button>
                 )}
                 

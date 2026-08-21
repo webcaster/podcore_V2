@@ -1,7 +1,11 @@
 # Offene Punkte für das nächste Stabilitäts-Update
 
 - [ ] Lizenzsystem nach Abschluss der Stabilisierung bewusst aktivieren: 14 Tage Volltest, 14 Tage Offline-Grace-Period und anschließender Nur-Lese-Modus.
-- [ ] Lizenzverwaltung erst im Stabilitäts-Release wieder sichtbar schalten und vor der Veröffentlichung mit DLM auf podcore.de testen.
+- [ ] Lizenzverwaltung erst im Stabilitäts-Release wieder sichtbar schalten und vor der Veröffentlichung mit dem eigenen WordPress-Lizenzplugin auf podcore.de testen.
+- [x] Lizenzarchitektur: DLM-spezifische App- und Serveranbindung durch sichere Aktivierung, Status, Deaktivierung und Offline-Lizenz über das eigene WordPress-Lizenzplugin ersetzen.
+- [x] WordPress-Lizenzplugin: Kundenbereich für eigene Lizenzen, aktive Abos, Laufzeiten, Installationen und Offline-Dokumente ergänzen.
+- [x] WordPress-Lizenzplugin: Kündigungsablauf für WooCommerce Subscriptions mit eindeutiger Bestätigung, Restlaufzeit und nachvollziehbarem Status ergänzen.
+- [x] WordPress-Lizenzplugin: Kunden- und Lizenzendpunkte durch Besitzprüfung, Nonces, Rate Limits, sichere Tokenverarbeitung und datensparsame Ausgaben weiter härten.
 - [ ] Lizenzstufen Basis, Studio und Lifetime vor Aktivierung final mit den geplanten Lizenzprodukten und Lizenzschlüsseln abgleichen.
 - [ ] Separate lokale Entwickler-Testversion erstellen: Lizenzoberfläche und Testaktivierung sichtbar, klar als Nicht-Produktivmodus markiert, ohne GitHub-Upload.
 - [ ] Lokale Entwicklerwerkzeuge ergänzen: Systemdiagnose, kontrollierte Testdaten, lokale Fehlerprotokolle, Funktionsstatus und sichere Entwicklungsaktionen ohne Produktivdaten zu verändern.
@@ -42,6 +46,7 @@
 - [x] Tutorial-Editor: Zwischen normalen Schritten gezielte Ausschnitt- beziehungsweise Hinweisblöcke mit eigener Überschrift, Erklärung, optionalem Screenshot und Markierungen einfügen.
 - [x] Tutorial-Editor: Direkt nach jedem vorhandenen Schritt eine sichtbare Aktion „Zwischenschritt einfügen“ anbieten und den neuen Schritt exakt an dieser Position erstellen.
 - [x] Kritischer Tutorial-Bugfix: Aktion „Weiter“ und Klickerkennung in der Tutorialführung wieder zuverlässig aktivieren, damit Nutzer jeden Schritt fortsetzen können.
+- [x] Tutorialführung: Tutorialfenster im interaktiven Modus per Kopfbereich verschiebbar machen und eine sichtbare Rücksetzung auf die Standardposition anbieten.
 - [x] Tutorial-Editor: Vorhandene Screenshot-Bilder interaktiv zuschneiden und den gewählten Bereich als Detailausschnitt in einen neuen oder bestehenden Zwischenschritt übernehmen.
 - [x] Tutorial-Editor: Alle verschachtelten Untermenüs als eindeutige Klickziele auswählen und bei der Aufzeichnung mit vollständiger Route zuverlässig übernehmen.
 - [x] Dashboard-Tutorial: „Dashboard Einstellungen“ als stabiles Untermenüziel mit Route, Klickaufzeichnung und zuverlässiger Wiedergabe ergänzen.
