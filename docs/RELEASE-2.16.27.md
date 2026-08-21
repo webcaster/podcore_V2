@@ -1,6 +1,6 @@
-# PodCore v2.16.25 – Screenshotbearbeitung, Tutorial-PDFs und Sprache
+# PodCore v2.16.27 – Screenshotbearbeitung, Tutorial-PDFs und Sprache
 
-Version **2.16.25** verbessert die Produktion ausführlicher Tutorials und ergänzt zentrale Sprachwerkzeuge für deutsch- und englischsprachige Teams.
+Version **2.16.27** verbessert die Produktion ausführlicher Tutorials und ergänzt zentrale Sprachwerkzeuge für deutsch- und englischsprachige Teams.
 
 ## Screenshots im Tutorial-Editor
 
