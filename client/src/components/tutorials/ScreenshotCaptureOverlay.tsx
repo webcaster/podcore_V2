@@ -31,7 +31,7 @@ const createAnnotationId = () => {
 };
 
 export default function ScreenshotCaptureOverlay() {
-  const { active, simulatedRole, onCapture, onCancel, endScreenshotMode } = useScreenshotMode();
+  const { active, simulatedRole, initialImage, initialAnnotations, onCapture, onCancel, endScreenshotMode } = useScreenshotMode();
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState<'ready' | 'capturing' | 'annotate'>('ready');
@@ -47,15 +47,16 @@ export default function ScreenshotCaptureOverlay() {
   // Reset when mode starts
   useEffect(() => {
     if (active) {
-      setPhase('ready');
-      setCapturedImage(null);
-      setAnnotations([]);
+      const isEditingExistingScreenshot = Boolean(initialImage);
+      setPhase(isEditingExistingScreenshot ? 'annotate' : 'ready');
+      setCapturedImage(initialImage || null);
+      setAnnotations(Array.isArray(initialAnnotations) ? initialAnnotations : []);
       setActivePointId(null);
       setAnnotationTool('point');
       setSelectedSymbol('!');
       setCaptureError(null);
     }
-  }, [active]);
+  }, [active, initialAnnotations, initialImage]);
 
   const handleCapture = useCallback(async () => {
     setPhase('capturing');

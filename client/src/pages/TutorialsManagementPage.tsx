@@ -21,7 +21,7 @@ import {
 import { useScreenshotMode } from '../contexts/ScreenshotModeContext';
 import { RecordedTutorialAction, useTutorialRecording } from '../contexts/TutorialRecordingContext';
 import RoleMenuPreview from '../components/tutorials/RoleMenuPreview';
-import { tutorialCloudApi, TutorialCloudItem, TutorialCloudStatus } from '../lib/api';
+import { pdfLayoutsApi, tutorialCloudApi, TutorialCloudItem, TutorialCloudStatus } from '../lib/api';
 
 // ── TYPES ──────────────────────────────────────────────────────────────────
 interface AnnotationPoint {
@@ -209,6 +209,9 @@ export default function TutorialsManagementPage() {
   const [cloudUrl, setCloudUrl] = useState('https://podcore.de/wp-json/app-tutorials/v1');
   const [cloudEnabled, setCloudEnabled] = useState(false);
   const [cloudAutoSync, setCloudAutoSync] = useState(false);
+  const [tutorialPdfLayouts, setTutorialPdfLayouts] = useState<any[]>([]);
+  const [tutorialPdfLayoutId, setTutorialPdfLayoutId] = useState('');
+  const [tutorialPdfFileName, setTutorialPdfFileName] = useState('');
   const [cropEditor, setCropEditor] = useState<CropEditorState | null>(null);
   const [cropSelection, setCropSelection] = useState<CropSelection | null>(null);
   const [cropDragStart, setCropDragStart] = useState<{ x: number; y: number } | null>(null);
@@ -372,6 +375,19 @@ export default function TutorialsManagementPage() {
   }, [isDeveloper]);
 
   useEffect(() => { loadCloudStatus(); }, [loadCloudStatus]);
+
+  useEffect(() => {
+    pdfLayoutsApi.list().then((layouts) => {
+      const available = (Array.isArray(layouts) ? layouts : [])
+        .filter((layout: any) => layout.isEnabled !== false && (layout.exportType === 'tutorial' || layout.exportType === 'all'));
+      setTutorialPdfLayouts(available);
+      const preferred = available.find((layout: any) => layout.exportType === 'tutorial' && layout.isDefault)
+        || available.find((layout: any) => layout.exportType === 'tutorial')
+        || available.find((layout: any) => layout.isDefault)
+        || available[0];
+      if (preferred) setTutorialPdfLayoutId(preferred.id);
+    }).catch(() => setTutorialPdfLayouts([]));
+  }, []);
 
   const handleCloudSave = useCallback(async () => {
     setCloudSaving(true);
@@ -558,31 +574,61 @@ export default function TutorialsManagementPage() {
   const handleExportPDF = useCallback(async (tutorial: Tutorial) => {
     try {
       const { default: jsPDF } = await import('jspdf');
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const W = 210; const M = 15; const pageBottom = 280; const contentWidth = W - 2 * M; let y = M;
-      const newPage = () => { doc.addPage(); y = M; };
+      const layout = tutorialPdfLayouts.find(layoutItem => layoutItem.id === tutorialPdfLayoutId)
+        || tutorialPdfLayouts.find(layoutItem => layoutItem.exportType === 'tutorial' && layoutItem.isDefault)
+        || tutorialPdfLayouts[0]
+        || {};
+      const colors = { primary: '#312e81', secondary: '#7c3aed', accent: '#8b5cf6', text: '#303030', muted: '#777777', background: '#312e81', headerText: '#ffffff', ...(layout.colors || {}) };
+      const typography = { titleSize: 20, subtitleSize: 14, headingSize: 12, bodySize: 10, smallSize: 8, fontFamily: 'helvetica', ...(layout.typography || {}) };
+      const sections = { showTutorialImages: true, showTutorialAnnotations: true, showTutorialMenuPaths: true, showTutorialStepNumbers: true, ...(layout.sections || {}) };
+      const orientation = layout.pageOrientation === 'landscape' ? 'landscape' : 'portrait';
+      const format = layout.pageSize === 'Letter' ? 'letter' : 'a4';
+      const doc = new jsPDF({ orientation, unit: 'mm', format });
+      const W = doc.internal.pageSize.getWidth(); const H = doc.internal.pageSize.getHeight();
+      const M = Math.max(10, Math.min(35, Number(layout.pageMargin) || 15));
+      const headerHeight = Math.max(10, Math.min(35, (Number(layout.headerHeight) || 70) * 0.25));
+      const pageBottom = H - M - 10; const contentWidth = W - 2 * M; let y = M;
+      const hexRgb = (hex: string) => {
+        const normalized = String(hex || '').replace('#', '');
+        const value = /^[0-9a-f]{6}$/i.test(normalized) ? normalized : '303030';
+        return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)] as const;
+      };
+      const fontName = String(typography.fontFamily || 'helvetica').toLowerCase().includes('times') ? 'times' : String(typography.fontFamily || '').toLowerCase().includes('courier') ? 'courier' : 'helvetica';
+      const drawHeader = () => {
+        if (layout.header?.style === 'banner') {
+          doc.setFillColor(...hexRgb(colors.background)); doc.rect(0, 0, W, headerHeight, 'F');
+          doc.setTextColor(...hexRgb(colors.headerText)); doc.setFont(fontName, 'bold'); doc.setFontSize(typography.subtitleSize);
+          if (layout.header?.showDocumentTitle !== false) doc.text(tutorial.title || 'Tutorial', M, Math.max(8, headerHeight * 0.62));
+          y = Math.max(y, headerHeight + 7);
+        } else if (layout.header?.style === 'minimal') {
+          doc.setDrawColor(...hexRgb(colors.accent)); doc.setLineWidth(0.6); doc.line(M, y + 2, W - M, y + 2); y += 7;
+        }
+      };
+      const newPage = () => { doc.addPage(); y = M; drawHeader(); };
       const checkY = (h: number) => { if (y + h > pageBottom) newPage(); };
 
-      doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.setTextColor(50, 50, 50);
+      drawHeader();
+      doc.setFontSize(typography.titleSize); doc.setFont(fontName, 'bold'); doc.setTextColor(...hexRgb(colors.primary));
       doc.text(tutorial.title, M, y); y += 10;
       if (tutorial.description) {
-        doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+        doc.setFontSize(typography.bodySize); doc.setFont(fontName, 'normal'); doc.setTextColor(...hexRgb(colors.muted));
         const desc = doc.splitTextToSize(tutorial.description, W - 2 * M);
         doc.text(desc, M, y); y += desc.length * 6 + 4;
       }
-      doc.setFontSize(9); doc.setTextColor(150, 150, 150);
+      doc.setFontSize(typography.smallSize); doc.setTextColor(...hexRgb(colors.muted));
       doc.text(`Rollen: ${tutorial.roles.join(', ')} · ${tutorial.steps.length} Schritte`, M, y); y += 10;
-      doc.setDrawColor(200, 200, 200); doc.line(M, y, W - M, y); y += 8;
+      doc.setDrawColor(...hexRgb(colors.accent)); doc.line(M, y, W - M, y); y += 8;
 
       for (let i = 0; i < tutorial.steps.length; i++) {
         const s = tutorial.steps[i];
-        doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-        const titleLines = doc.splitTextToSize(`${i + 1}. ${s.title || `Schritt ${i + 1}`}`, contentWidth);
+        doc.setFontSize(typography.headingSize); doc.setFont(fontName, 'bold');
+        const stepPrefix = sections.showTutorialStepNumbers === false ? '' : `${i + 1}. `;
+        const titleLines = doc.splitTextToSize(`${stepPrefix}${s.title || `Schritt ${i + 1}`}`, contentWidth);
         const titleHeight = Math.max(7, titleLines.length * 6 + 2);
         doc.setFontSize(10); doc.setFont('helvetica', 'normal');
         const descriptionLines = s.description ? doc.splitTextToSize(s.description, contentWidth) : [];
         const descriptionHeight = descriptionLines.length ? descriptionLines.length * 5 + 4 : 0;
-        const imageHeight = s.image ? 84 : 0;
+        const imageHeight = s.image && sections.showTutorialImages !== false ? Math.min(94, Math.max(48, contentWidth * 0.43)) : 0;
         const annotationHeight = (s.annotations || []).reduce((total, annotation) => {
           const label = annotation.type === 'circle' ? '[Kreis]' : annotation.type === 'symbol' ? `[${annotation.symbol || annotation.label || 'Zeichen'}]` : `[${annotation.label}]`;
           return total + doc.splitTextToSize(`${label} ${annotation.description || 'Markierung'}`, contentWidth - 4).length * 5 + 2;
@@ -595,31 +641,39 @@ export default function TutorialsManagementPage() {
         if (completeStepHeight <= pageBottom - M && y + completeStepHeight > pageBottom) newPage();
         else if (boundBlockHeight <= pageBottom - M && y + boundBlockHeight > pageBottom) newPage();
 
-        doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 80, 80);
+        doc.setFontSize(typography.headingSize); doc.setFont(fontName, 'bold'); doc.setTextColor(...hexRgb(colors.primary));
         doc.text(titleLines, M, y); y += titleHeight;
         if (s.description) {
-          doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 60);
+          doc.setFontSize(typography.bodySize); doc.setFont(fontName, 'normal'); doc.setTextColor(...hexRgb(colors.text));
           doc.text(descriptionLines, M, y); y += descriptionHeight;
         }
-        if (s.image) {
+        const routeLabel = s.target ? PAGE_ROUTES.find(route => route.tutorialId === s.target)?.label : '';
+        if (sections.showTutorialMenuPaths !== false && (routeLabel || s.route)) {
+          const menuPath = routeLabel ? `Menüpfad: ${routeLabel}${s.route ? ` · ${s.route}` : ''}` : `Menüpfad: ${s.route}`;
+          const menuLines = doc.splitTextToSize(menuPath, contentWidth);
+          checkY(menuLines.length * 4.5 + 4);
+          doc.setFontSize(typography.smallSize); doc.setFont(fontName, 'normal'); doc.setTextColor(...hexRgb(colors.secondary));
+          doc.text(menuLines, M, y); y += menuLines.length * 4.5 + 4;
+        }
+        if (s.image && sections.showTutorialImages !== false) {
           try {
             const bakedImage = await bakeAnnotationsToImage(s.image, s.annotations || []);
             checkY(imageHeight);
-            doc.addImage(bakedImage, 'PNG', M, y, contentWidth, 80);
-            y += 84;
+            doc.addImage(bakedImage, 'PNG', M, y, contentWidth, imageHeight - 4);
+            y += imageHeight;
           } catch (err) {
             console.error('Image bake error:', err);
             checkY(imageHeight);
-            doc.addImage(s.image, 'PNG', M, y, contentWidth, 80);
-            y += 84;
+            doc.addImage(s.image, 'PNG', M, y, contentWidth, imageHeight - 4);
+            y += imageHeight;
           }
         }
-        if (s.annotations?.length) {
+        if (s.annotations?.length && sections.showTutorialAnnotations !== false) {
           checkY(10);
-          doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
+          doc.setFontSize(typography.smallSize); doc.setFont(fontName, 'bold'); doc.setTextColor(...hexRgb(colors.secondary));
           doc.text('Markierungen:', M, y); y += 6;
           for (const a of s.annotations) {
-            doc.setFont('helvetica', 'normal'); doc.setTextColor(50, 50, 50);
+            doc.setFont(fontName, 'normal'); doc.setTextColor(...hexRgb(colors.text));
             const annotationLabel = a.type === 'circle' ? '[Kreis]' : a.type === 'symbol' ? `[${a.symbol || a.label || 'Zeichen'}]` : `[${a.label}]`;
             const al = doc.splitTextToSize(`${annotationLabel} ${a.description || 'Markierung'}`, contentWidth - 4);
             checkY(al.length * 5 + 2);
@@ -628,14 +682,23 @@ export default function TutorialsManagementPage() {
         }
         y += 8;
       }
-      doc.save(`${tutorial.title.replace(/[^a-z0-9]/gi, '_')}_Tutorial.pdf`);
+      const totalPages = doc.getNumberOfPages();
+      if (layout.footer?.showPageNumbers !== false || layout.footer?.showDate || layout.footer?.customText) {
+        for (let page = 1; page <= totalPages; page += 1) {
+          doc.setPage(page); doc.setFont(fontName, 'normal'); doc.setFontSize(typography.smallSize); doc.setTextColor(...hexRgb(colors.muted));
+          const footerParts = [layout.footer?.customText, layout.footer?.showDate ? new Date().toLocaleDateString('de-DE') : '', layout.footer?.showPageNumbers !== false ? `Seite ${page} / ${totalPages}` : ''].filter(Boolean);
+          doc.text(footerParts.join(' · '), M, H - M + 4, { maxWidth: contentWidth, align: 'right' });
+        }
+      }
+      const requestedName = tutorialPdfFileName.trim() || `${tutorial.title}_Tutorial`;
+      doc.save(`${requestedName.replace(/[^a-z0-9äöüß_-]/gi, '_')}.pdf`);
       setSuccess('PDF exportiert');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) { 
       console.error('PDF Export error:', err);
       setError('Fehler beim PDF-Export'); 
     }
-  }, []);
+  }, [tutorialPdfLayoutId, tutorialPdfLayouts]);
 
   // ── SCREENSHOT ──
   // Key fix: use a ref-based callback so the closure always has the latest editTutorial
@@ -680,6 +743,34 @@ export default function TutorialsManagementPage() {
     const targetPath = isMultiRole ? '/' : (selectedStep?.route || route?.path || '/');
     navigate(targetPath);
   }, [roles, startScreenshotMode, navigate]);
+
+  const handleEditScreenshot = useCallback((stepId: string) => {
+    const current = editTutorialRef.current;
+    const selectedStep = current?.steps.find(step => step.id === stepId);
+    if (!current || !selectedStep?.image) return;
+    const firstRole = current.roles[0];
+    const roleObj = roles.find(role => role.name === firstRole || role.id === firstRole);
+
+    startScreenshotMode({
+      role: firstRole || 'unbekannt',
+      permissions: roleObj?.permissions || {},
+      initialImage: selectedStep.image,
+      initialAnnotations: selectedStep.annotations || [],
+      persistedState: { editTutorial: current, stepId },
+      onCapture: ({ dataUrl, annotations }) => {
+        const restoredTutorial: Tutorial = {
+          ...current,
+          steps: current.steps.map(step => step.id === stepId ? { ...step, image: dataUrl, annotations } : step),
+        };
+        sessionStorage.setItem('podcore_screenshot_editor_restore', JSON.stringify({ editTutorial: restoredTutorial, stepId }));
+        navigate('/admin/tutorials/edit');
+      },
+      onCancel: () => {
+        sessionStorage.setItem('podcore_screenshot_editor_restore', JSON.stringify({ editTutorial: current, stepId }));
+        navigate('/admin/tutorials/edit');
+      },
+    });
+  }, [navigate, roles, startScreenshotMode]);
 
   const handleStartRecording = useCallback((stepId?: string) => {
     const current = editTutorialRef.current;
@@ -1360,6 +1451,19 @@ export default function TutorialsManagementPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <select
+              value={tutorialPdfLayoutId}
+              onChange={event => setTutorialPdfLayoutId(event.target.value)}
+              className="form-input w-44 text-xs py-2"
+              aria-label="Layout für Tutorial-PDF"
+            >
+              {tutorialPdfLayouts.length === 0 && <option value="">Standardlayout</option>}
+              {tutorialPdfLayouts.map(layout => <option key={layout.id} value={layout.id}>{layout.name}</option>)}
+            </select>
+            <input value={tutorialPdfFileName} onChange={event => setTutorialPdfFileName(event.target.value)} className="form-input w-36 text-xs py-2" placeholder="PDF-Dateiname" aria-label="Dateiname für Tutorial-PDF" />
+            <button onClick={() => navigate('/pdf-layouts')} className="btn-secondary flex items-center gap-2 text-sm" title="Tutorial-PDF-Layout anpassen">
+              <SettingsIcon size={15} />Layout
+            </button>
             <button
               onClick={() => handleExportPDF(editTutorial)}
               className="btn-secondary flex items-center gap-2 text-sm"
@@ -1743,11 +1847,12 @@ export default function TutorialsManagementPage() {
                               <Camera size={12} />Screenshot
                             </label>
                             {step.image ? (
-                              <div className="relative rounded-xl overflow-hidden border border-obsidian-600 group">
+                              <div className="relative rounded-xl overflow-hidden border border-obsidian-600 bg-obsidian-950">
                                 <img
                                   src={step.image}
                                   alt="Screenshot"
-                                  className="w-full max-h-48 object-cover object-top"
+                                  className="w-full max-h-48 object-cover object-top opacity-100 brightness-100"
+                                  style={{ opacity: 1, filter: 'none' }}
                                 />
                                 {/* Annotation overlays */}
                                 {step.annotations?.map((ann, i) => (
@@ -1763,8 +1868,16 @@ export default function TutorialsManagementPage() {
                                     {ann.label}
                                   </div>
                                 ))}
-                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                <div className="absolute right-2 top-2 z-20 flex flex-wrap justify-end gap-1.5 rounded-lg border border-white/10 bg-obsidian-950/85 p-1.5 shadow-lg backdrop-blur-sm">
                                   <button
+                                    type="button"
+                                    onClick={() => handleEditScreenshot(step.id)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-obsidian-700 text-white rounded-lg text-xs font-medium hover:bg-obsidian-600 transition-colors"
+                                  >
+                                    <Edit3 size={13} /> Bearbeiten
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => handleStartScreenshot(step.id)}
                                     className="px-3 py-1.5 bg-accent-purple text-white rounded-lg text-xs font-medium hover:bg-accent-purple/80 transition-colors"
                                   >

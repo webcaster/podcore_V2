@@ -24,6 +24,7 @@ const EXPORT_TYPES = [
   { value: 'season_planning', label: 'Strategische Staffelplanung' },
   { value: 'price_list', label: 'Preisliste (Werbung)' },
   { value: 'episode_table', label: 'Episoden-Skript (Tabelle)' },
+  { value: 'tutorial', label: 'Tutorial-Anleitung' },
 ];
 
 const HEADER_STYLES = [
@@ -116,6 +117,10 @@ const SECTION_GROUPS: Record<string, { label: string; keys: string[] }> = {
     label: 'Persönliches PDF (Interview-Partner)',
     keys: ['showPartnerGreeting', 'showPartnerQuestions', 'showPartnerEpisodeInfo', 'showPartnerTechnicalNotes', 'showPartnerSignature'],
   },
+  tutorial: {
+    label: 'Tutorial-Anleitung',
+    keys: ['showTutorialImages', 'showTutorialAnnotations', 'showTutorialMenuPaths', 'showTutorialStepNumbers'],
+  },
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -156,6 +161,10 @@ const SECTION_LABELS: Record<string, string> = {
   showPartnerEpisodeInfo: 'Episoden-Informationen (Interview-Partner)',
   showPartnerTechnicalNotes: 'Technische Anweisungen (Interview-Partner)',
   showPartnerSignature: 'Unterschriftsfeld (Interview-Partner)',
+  showTutorialImages: 'Screenshots zu den Schritten anzeigen',
+  showTutorialAnnotations: 'Markierungen und Erklärungen anzeigen',
+  showTutorialMenuPaths: 'Menüpfade und Klickziele anzeigen',
+  showTutorialStepNumbers: 'Schritte nummerieren',
 };
 
 const LINE_SPACING_OPTIONS = [

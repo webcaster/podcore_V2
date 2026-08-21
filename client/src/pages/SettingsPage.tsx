@@ -7,6 +7,7 @@ import {
 import { adminApi, authApi, backupApi, updateApi, licenseApi, LicenseStatus } from '../lib/api';
 import { useTheme } from '../contexts/ThemeContext';
 import { useApp, applyUserTheme } from '../contexts/AppContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ const SIDEBAR_PRESETS = [
 export default function SettingsPage() {
   const { user, can, showSuccess, showError, refreshUser, refreshPodcastProfile } = useApp();
   const { mode, setMode } = useTheme();
+  const { language, setLanguage, t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -678,13 +680,13 @@ export default function SettingsPage() {
   const initials = user?.displayName?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || user?.username?.[0]?.toUpperCase() || '?';
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
-    { key: 'profile', label: 'Mein Profil', icon: <User size={15} /> },
-    { key: 'theme', label: 'Mein Design', icon: <Palette size={15} /> },
+    { key: 'profile', label: t('settings.profile'), icon: <User size={15} /> },
+    { key: 'theme', label: t('settings.design'), icon: <Palette size={15} /> },
     ...(can('canManageSettings') ? [
-      { key: 'podcast' as TabKey, label: 'Podcast-Profil', icon: <Mic2 size={15} />, adminOnly: true },
-      { key: 'technical' as TabKey, label: 'Technische Daten', icon: <Sliders size={15} />, adminOnly: true },
-      { key: 'storage' as TabKey, label: 'Speicher & Backup', icon: <HardDrive size={15} />, adminOnly: true },
-      { key: 'app' as TabKey, label: 'App-Einstellungen', icon: <Settings size={15} />, adminOnly: true },
+      { key: 'podcast' as TabKey, label: t('settings.podcast'), icon: <Mic2 size={15} />, adminOnly: true },
+      { key: 'technical' as TabKey, label: t('settings.technical'), icon: <Sliders size={15} />, adminOnly: true },
+      { key: 'storage' as TabKey, label: t('settings.storage'), icon: <HardDrive size={15} />, adminOnly: true },
+      { key: 'app' as TabKey, label: t('settings.app'), icon: <Settings size={15} />, adminOnly: true },
       { key: 'update' as TabKey, label: 'App-Update', icon: <Download size={15} />, adminOnly: true },
       ...(LICENSING_ENABLED ? [{ key: 'license' as TabKey, label: 'Lizenzierung', icon: <KeyRound size={15} />, adminOnly: true }] : []),
     ] : []),
@@ -695,7 +697,7 @@ export default function SettingsPage() {
       <div data-tutorial-id="settings-header">
         <h1 className="page-title flex items-center gap-3">
           <Settings size={24} className="text-text-secondary" />
-          Einstellungen
+          {t('settings.title')}
         </h1>
       </div>
 
@@ -782,6 +784,34 @@ export default function SettingsPage() {
                         style={{ backgroundColor: c.value }} />
                     ))}
                   </div>
+                </div>
+              </div>
+              <div className="rounded-xl border border-accent-purple/30 bg-accent-purple/5 p-4">
+                <div className="mb-3 flex items-start gap-3">
+                  <Globe size={18} className="mt-0.5 shrink-0 text-accent-purple" />
+                  <div>
+                    <p className="font-medium text-text-primary">App-Sprache und Rechtschreibung</p>
+                    <p className="mt-1 text-xs leading-relaxed text-text-secondary">Die Sprache gilt für Navigation und übersetzte Oberflächentexte. Textfelder verwenden die passende Browser-Rechtschreibprüfung; eigene Fachbegriffe werden von der Administration gepflegt.</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="label mb-0">Sprache</label>
+                  <select
+                    value={language}
+                    onChange={async event => {
+                      try {
+                        await setLanguage(event.target.value === 'en' ? 'en' : 'de');
+                        showSuccess(event.target.value === 'en' ? 'Language changed to English' : 'Sprache auf Deutsch umgestellt');
+                      } catch (error: any) {
+                        showError(error?.message || 'Sprache konnte nicht gespeichert werden');
+                      }
+                    }}
+                    className="input max-w-xs"
+                    aria-label="App-Sprache"
+                  >
+                    <option value="de">Deutsch</option>
+                    <option value="en">English</option>
+                  </select>
                 </div>
               </div>
             </div>

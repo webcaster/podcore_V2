@@ -110,6 +110,7 @@ function formatUser(user: any) {
     permissions: resolveUserPermissions(user),
     developerMode: user.developer_mode === 1,
     avatarColor: user.avatar_color,
+    language: user.language === 'en' ? 'en' : 'de',
     theme: user.theme ? normalizeUserTheme(parseStoredJson(user.theme, null)) : null,
     dashboardLayout: normalizeDashboardLayout(user.dashboard_layout),
   };
@@ -202,7 +203,7 @@ router.get('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
 
 // PUT /api/auth/me — Update own profile (displayName, email, avatarColor, theme)
 router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
-  const { displayName, email, avatarColor, theme, dashboardLayout, developerMode, currentPassword, newPassword } = req.body;
+  const { displayName, email, avatarColor, language, theme, dashboardLayout, developerMode, currentPassword, newPassword } = req.body;
 
   const db = getDb();
   const user = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;
@@ -230,6 +231,7 @@ router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
   const newDisplayName = displayName !== undefined ? displayName : user.display_name;
   const newEmail = email !== undefined ? email : user.email;
   const newAvatarColor = avatarColor !== undefined ? avatarColor : user.avatar_color;
+  const newLanguage = language === 'en' ? 'en' : (language === 'de' ? 'de' : (user.language === 'en' ? 'en' : 'de'));
   const newTheme = theme !== undefined ? JSON.stringify(normalizeUserTheme(theme)) : user.theme;
   const normalizedDashboardLayout = dashboardLayout !== undefined ? normalizeDashboardLayout(dashboardLayout) : undefined;
   const newDashboardLayout = normalizedDashboardLayout !== undefined ? JSON.stringify(normalizedDashboardLayout) : user.dashboard_layout;
@@ -239,8 +241,8 @@ router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
     : (user.developer_mode === 1 ? 1 : 0);
 
   db.run(
-    "UPDATE users SET display_name = ?, email = ?, avatar_color = ?, theme = ?, dashboard_layout = ?, developer_mode = ?, updated_at = datetime('now') WHERE id = ?",
-    [newDisplayName, newEmail, newAvatarColor, newTheme, newDashboardLayout, newDeveloperMode, req.user!.id]
+    "UPDATE users SET display_name = ?, email = ?, avatar_color = ?, language = ?, theme = ?, dashboard_layout = ?, developer_mode = ?, updated_at = datetime('now') WHERE id = ?",
+    [newDisplayName, newEmail, newAvatarColor, newLanguage, newTheme, newDashboardLayout, newDeveloperMode, req.user!.id]
   );
 
   const updated = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;

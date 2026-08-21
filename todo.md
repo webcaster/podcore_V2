@@ -47,6 +47,12 @@
 - [x] Dashboard-Tutorial: „Dashboard Einstellungen“ als stabiles Untermenüziel mit Route, Klickaufzeichnung und zuverlässiger Wiedergabe ergänzen.
 - [x] Tutorialführung: Komplexe Menüs appweit nach dem Dashboard-Muster mit getrennten Öffnungs- und Bearbeitungszielen, vollständigen Routen und Aufzeichnungsübergabe standardisieren.
 - [x] WordPress-Tutorial-Plugin: Aktuelle Untermenürouten und komplexe Menühinweise aus PodCore v2.16.24 beim JSON-Import verständlich darstellen und separat als Pluginpaket bereitstellen.
+- [x] Tutorial-Editor: Abgedunkelte oder ausgeblendete Screenshots wieder normal sichtbar darstellen, ohne Markierungen, Zuschnitt oder Bearbeitungsaktionen zu beeinträchtigen.
+- [x] Tutorial-Editor: Bereits gespeicherte Screenshots nachträglich öffnen, Markierungen bearbeiten und das aktualisierte Bild ohne erneute Aufnahme speichern.
+- [x] PDF-Layouts: Tutorial-Export als eigenen anpassbaren Dokumenttyp mit Farben, Typografie, Kopf- und Fußbereich, Bildgröße, Schrittzählern, Markierungen und Menüpfaden integrieren.
+- [x] Mehrsprachigkeit: PodCore vollständig auf Deutsch und Englisch nutzbar machen, mit sprachbezogener Auswahl pro Benutzer und sicherer Standardsprache Deutsch.
+- [x] Rechtschreibprüfung: In Textfeldern eine einstellbare Prüfung für Deutsch und Englisch mit klaren Browserhinweisen und zugänglichen Fehlermeldungen ergänzen.
+- [x] Administration: Wörterbücher und zulässige eigene Fachbegriffe pro Sprache verwalten, importieren, exportieren und für die Rechtschreibprüfung bereitstellen.
 - [x] Abschlussprüfung: Vollständigen PodCore-Fehlercheck mit Versionsprüfung, Client- und Server-Build, Produktionssynchronisierung, Tutorialregressionen und Release-Archivprüfung vor der Bereitstellung durchführen.
 - [x] Risikoprüfung: Fehleranfällige Kernabläufe für Anmeldung, Berechtigungen, Datenbank, Sicherung, Tutorialfortschritt, Import/Export, Screenshot-Verarbeitung sowie Löschen und Wiederherstellen gezielt testen.
 - [x] Episoden-Editor: Technischen Hinweis zu fehlenden v2-Buchungen durch eine klare Leeransicht für Werbeplatzbuchungen mit direkter Anlegen- oder Auswahlaktion ersetzt.

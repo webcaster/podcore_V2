@@ -550,6 +550,8 @@ export const adminApi = {
   getPublicSettings: () => api.get<any>('/admin/settings/public'),
   updatePodcastProfile: (data: any) => api.put<any>('/admin/settings', { podcast: data }),
   updateTechnicalDefaults: (data: any) => api.put<any>('/admin/settings', { technicalDefaults: data }),
+  getLanguageTools: () => api.get<any>('/admin/language-tools'),
+  updateLanguageTools: (data: any) => api.put<any>('/admin/language-tools', data),
 
   // System
   getSystem: () => api.get<any>('/admin/system'),

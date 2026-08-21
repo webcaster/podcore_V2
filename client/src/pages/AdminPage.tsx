@@ -1,12 +1,13 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import {
   Shield, Users, Plus, Edit2, Trash2, Key, Check, X, Eye, EyeOff,
   Server, Database, HardDrive, Activity, RefreshCw, Loader2, Lock, Tag, Save,
   UserX, ArrowRight, AlertTriangle, ToggleLeft, ToggleRight, Layers, RotateCcw,
-  Upload, FileText, Download, Info, CheckCircle2, XCircle, GitBranch, HelpCircle
+  Upload, FileText, Download, Info, CheckCircle2, XCircle, GitBranch, HelpCircle, Globe2
 } from 'lucide-react';
 import { adminApi, backupApi } from '../lib/api';
 import { useApp, useFeatures } from '../contexts/AppContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import Modal from '../components/ui/Modal';
 import { useLocation, useNavigate } from 'react-router-dom';
 const TutorialsManagementPage = lazy(() => import('./TutorialsManagementPage'));
@@ -90,8 +91,8 @@ const PERMISSION_GROUPS = [...new Set(ALL_PERMISSIONS.map(p => p.group))];
 
 const emptyPermissions = () => Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, false]));
 type TrashEntityType = 'all' | 'idea' | 'episode' | 'sponsor' | 'asset';
-type AdminTabKey = 'users' | 'roles' | 'modules' | 'system' | 'database' | 'trash' | 'tutorials' | 'logs';
-const ADMIN_TAB_KEYS: AdminTabKey[] = ['users', 'roles', 'modules', 'system', 'database', 'trash', 'tutorials', 'logs'];
+type AdminTabKey = 'users' | 'roles' | 'modules' | 'system' | 'database' | 'trash' | 'tutorials' | 'language' | 'logs';
+const ADMIN_TAB_KEYS: AdminTabKey[] = ['users', 'roles', 'modules', 'system', 'database', 'trash', 'tutorials', 'language', 'logs'];
 const readInitialAdminTab = (search: string): AdminTabKey => {
   const tab = new URLSearchParams(search).get('tab') as AdminTabKey | null;
   return tab && ADMIN_TAB_KEYS.includes(tab) ? tab : 'users';
@@ -103,6 +104,7 @@ const readInitialTrashType = (search: string): TrashEntityType => {
 
 export default function AdminPage() {
   const { can, user: currentUser, showSuccess, showError, refreshUser } = useApp();
+  const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   const [users, setUsers] = useState<any[]>([]);
@@ -126,6 +128,10 @@ export default function AdminPage() {
   const { features } = useFeatures();
   const [featureForm, setFeatureForm] = useState<Record<string, boolean>>({});
   const [isSavingFeatures, setIsSavingFeatures] = useState(false);
+  const [languageTools, setLanguageTools] = useState<any>({ enabled: true, defaultLanguage: 'de', customWords: { de: [], en: [] } });
+  const [languageWord, setLanguageWord] = useState('');
+  const [languageWordTarget, setLanguageWordTarget] = useState<'de' | 'en'>('de');
+  const [isSavingLanguageTools, setIsSavingLanguageTools] = useState(false);
 
   useEffect(() => {
     setActiveTab(readInitialAdminTab(location.search));
@@ -138,6 +144,28 @@ export default function AdminPage() {
     params.set('tab', tab);
     if (tab !== 'trash') params.delete('type');
     navigate({ pathname: '/admin', search: `?${params.toString()}` }, { replace: true });
+  };
+
+  const loadLanguageTools = useCallback(async () => {
+    try {
+      const data = await adminApi.getLanguageTools();
+      setLanguageTools({ enabled: data?.enabled !== false, defaultLanguage: data?.defaultLanguage === 'en' ? 'en' : 'de', customWords: { de: data?.customWords?.de || [], en: data?.customWords?.en || [] } });
+    } catch (error: any) {
+      showError(error?.message || 'Sprachverwaltung konnte nicht geladen werden');
+    }
+  }, [showError]);
+
+  useEffect(() => { if (activeTab === 'language') loadLanguageTools(); }, [activeTab, loadLanguageTools]);
+
+  const saveLanguageTools = async (next: any) => {
+    setIsSavingLanguageTools(true);
+    try {
+      const saved = await adminApi.updateLanguageTools(next);
+      setLanguageTools(saved);
+      showSuccess('Sprachwerkzeuge gespeichert');
+    } catch (error: any) {
+      showError(error?.message || 'Sprachwerkzeuge konnten nicht gespeichert werden');
+    } finally { setIsSavingLanguageTools(false); }
   };
 
   // User modal
@@ -501,22 +529,23 @@ export default function AdminPage() {
       <div data-tutorial-id="admin-header">
         <h1 className="page-title flex items-center gap-3">
           <Shield size={24} className="text-accent-red" />
-          Administration
+          {t('admin.title')}
         </h1>
-        <p className="text-text-secondary text-sm mt-1">Benutzerverwaltung, Rollen, Berechtigungen und Systemstatus</p>
+        <p className="text-text-secondary text-sm mt-1">{t('admin.subtitle')}</p>
       </div>
 
       {/* Tabs */}
       <div data-tutorial-id="admin-tabs" className="flex gap-1 bg-obsidian-800 p-1 rounded-xl w-fit flex-wrap">
         {[
-          { key: 'users', label: 'Benutzer', icon: <Users size={14} /> },
-          { key: 'roles', label: 'Rollen', icon: <Tag size={14} /> },
-          { key: 'modules', label: 'Module', icon: <Layers size={14} /> },
-          { key: 'system', label: 'System', icon: <Server size={14} /> },
-          { key: 'database', label: 'Datenbank', icon: <Database size={14} /> },
-          { key: 'trash', label: 'Papierkorb', icon: <Trash2 size={14} /> },
+          { key: 'users', label: t('admin.users'), icon: <Users size={14} /> },
+          { key: 'roles', label: t('admin.roles'), icon: <Tag size={14} /> },
+          { key: 'modules', label: t('admin.modules'), icon: <Layers size={14} /> },
+          { key: 'system', label: t('admin.system'), icon: <Server size={14} /> },
+          { key: 'database', label: t('admin.database'), icon: <Database size={14} /> },
+          { key: 'trash', label: t('admin.trash'), icon: <Trash2 size={14} /> },
           { key: 'tutorials', label: 'Tutorials', icon: <HelpCircle size={14} /> },
-          { key: 'logs', label: 'Logs', icon: <Activity size={14} /> },
+          { key: 'language', label: t('admin.language'), icon: <Globe2 size={14} /> },
+          { key: 'logs', label: t('admin.logs'), icon: <Activity size={14} /> },
         ].map(tab => (
           <button key={tab.key} data-tutorial-id={`admin-tab-${tab.key}`} data-tutorial-record-route={`/admin?tab=${tab.key}`} onClick={() => selectTab(tab.key as AdminTabKey)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}>
@@ -1433,6 +1462,78 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LANGUAGE TOOLS TAB ─────────────────────────────── */}
+      {activeTab === 'language' && (
+        <div className="max-w-4xl space-y-5">
+          <div className="card">
+            <div className="mb-5 flex items-start gap-3">
+              <div className="rounded-lg bg-accent-purple/15 p-2 text-accent-purple"><Globe2 size={20} /></div>
+              <div>
+                <h2 className="font-semibold text-text-primary">Sprachverwaltung und Fachbegriffe</h2>
+                <p className="mt-1 text-sm leading-relaxed text-text-secondary">Eigene Begriffe stehen der deutschen oder englischen Rechtschreibhilfe organisationsweit zur Verfügung. Zum Beispiel PodCore, Podigee, Episodentitel oder kundenspezifische Namen.</p>
+              </div>
+            </div>
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-surface-border p-4">
+              <span>
+                <span className="block font-medium text-text-primary">Rechtschreibhilfe aktivieren</span>
+                <span className="mt-1 block text-xs text-text-muted">Textfelder erhalten die sprachbezogene Browserprüfung; zugelassene Begriffe werden im gemeinsamen Wörterbuch verwaltet.</span>
+              </span>
+              <input type="checkbox" checked={languageTools.enabled !== false} onChange={event => saveLanguageTools({ ...languageTools, enabled: event.target.checked })} className="h-5 w-5 accent-accent-purple" />
+            </label>
+          </div>
+
+          <div className="card">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-text-primary">Eigener Fachbegriff</h3>
+                <p className="mt-1 text-xs text-text-muted">Bis zu 500 Begriffe je Sprache. Doppelte Einträge werden automatisch zusammengeführt.</p>
+              </div>
+              <select value={languageWordTarget} onChange={event => setLanguageWordTarget(event.target.value === 'en' ? 'en' : 'de')} className="input w-36">
+                <option value="de">Deutsch</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <input value={languageWord} onChange={event => setLanguageWord(event.target.value)} onKeyDown={event => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                const word = languageWord.trim();
+                if (!word) return;
+                const words = Array.from(new Set([...(languageTools.customWords?.[languageWordTarget] || []), word]));
+                saveLanguageTools({ ...languageTools, customWords: { ...languageTools.customWords, [languageWordTarget]: words } });
+                setLanguageWord('');
+              }} className="input flex-1" placeholder={languageWordTarget === 'en' ? 'e.g. PodCore Studio' : 'z. B. PodCore Studio'} />
+              <button type="button" disabled={!languageWord.trim() || isSavingLanguageTools} onClick={() => {
+                const word = languageWord.trim();
+                const words = Array.from(new Set([...(languageTools.customWords?.[languageWordTarget] || []), word]));
+                saveLanguageTools({ ...languageTools, customWords: { ...languageTools.customWords, [languageWordTarget]: words } });
+                setLanguageWord('');
+              }} className="btn-primary"><Plus size={16} />Hinzufügen</button>
+            </div>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            {(['de', 'en'] as const).map(locale => (
+              <div key={locale} className="card">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="font-semibold text-text-primary">{locale === 'de' ? 'Deutsch' : 'English'}</h3>
+                  <span className="text-xs text-text-muted">{languageTools.customWords?.[locale]?.length || 0} Begriffe</span>
+                </div>
+                <div className="flex max-h-56 flex-wrap content-start gap-2 overflow-y-auto pr-1">
+                  {(languageTools.customWords?.[locale] || []).map((word: string) => (
+                    <span key={`${locale}-${word}`} className="inline-flex items-center gap-1 rounded-full border border-surface-border bg-obsidian-800 px-2.5 py-1 text-xs text-text-secondary">
+                      {word}
+                      <button type="button" onClick={() => saveLanguageTools({ ...languageTools, customWords: { ...languageTools.customWords, [locale]: (languageTools.customWords?.[locale] || []).filter((item: string) => item !== word) } })} className="text-text-muted hover:text-accent-red" aria-label={`${word} löschen`}><X size={12} /></button>
+                    </span>
+                  ))}
+                  {(languageTools.customWords?.[locale] || []).length === 0 && <p className="text-sm text-text-muted">Noch keine eigenen Begriffe.</p>}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

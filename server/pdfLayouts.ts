@@ -21,7 +21,7 @@ import * as path from 'path';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
-export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report' | 'sponsor_dossier' | 'sponsor_offer' | 'question_pool' | 'season_planning' | 'interview_partner' | 'price_list' | 'episode_table';
+export type PdfExportType = 'episode' | 'idea' | 'calendar' | 'invoice' | 'confirmation' | 'booking_calendar' | 'performance_report' | 'sponsor_dossier' | 'sponsor_offer' | 'question_pool' | 'season_planning' | 'interview_partner' | 'price_list' | 'episode_table' | 'tutorial';
 
 export interface PdfLayoutColors {
   primary: string;       // Hauptfarbe (Überschriften, Akzente)
@@ -108,6 +108,11 @@ export interface PdfLayoutSections {
   showSponsorAddress: boolean;          // Sponsor-Adresse im Angebot
   // Fragenbibliothek – eingeführt in v2.14.3
   showQuestionPoolNotes?: boolean;       // Interne Hinweise je Pool-Frage ausgeben
+  // Tutorial – v2.16.25
+  showTutorialImages?: boolean;
+  showTutorialAnnotations?: boolean;
+  showTutorialMenuPaths?: boolean;
+  showTutorialStepNumbers?: boolean;
 }
 
 export interface PdfLayoutWatermark {
@@ -366,6 +371,10 @@ export const DEFAULT_LAYOUT: Omit<PdfLayout, 'id' | 'createdAt' | 'updatedAt'> =
     showOfferOptions: true,
     showSponsorAddress: true,
     showQuestionPoolNotes: true,
+    showTutorialImages: true,
+    showTutorialAnnotations: true,
+    showTutorialMenuPaths: true,
+    showTutorialStepNumbers: true,
   },
   pageMargin: 50,
   pageSize: 'A4',
@@ -853,6 +862,38 @@ export function ensureDefaultLayouts(): void {
           SET name = ?, description = ?, updated_at = datetime('now')
           WHERE export_type = 'question_pool' AND is_default = 1 AND name = ?`,
     ['Fragenbibliothek Standard', 'Themenweise sortierter Fragenkatalog aus der Fragenbibliothek', 'Fragen-Pool Standard']);
+
+  // v2.16.25: Eigene Vorlage für Schritt-für-Schritt-Tutoriale mit Screenshots.
+  const hasTutorial = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'tutorial' LIMIT 1");
+  if (!hasTutorial) {
+    const layout = {
+      ...DEFAULT_LAYOUT,
+      name: 'Tutorial-Anleitung Standard',
+      description: 'Schritt-für-Schritt-Tutorial mit Screenshots, Markierungen und Menüpfaden',
+      exportType: 'tutorial' as PdfExportType,
+      isDefault: true,
+      isSystem: false,
+      sections: {
+        ...DEFAULT_LAYOUT.sections,
+        showTutorialImages: true,
+        showTutorialAnnotations: true,
+        showTutorialMenuPaths: true,
+        showTutorialStepNumbers: true,
+      },
+      colors: { ...DEFAULT_LAYOUT.colors, primary: '#312e81', secondary: '#7c3aed', accent: '#8b5cf6', background: '#312e81' },
+    };
+    db.run(`INSERT INTO pdf_layouts (id, name, description, export_type, is_default, is_system, colors, typography, header_config, footer_config, sections, page_margin, page_size, page_orientation, header_height, line_spacing, divider_style, watermark)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuidv4(), layout.name, layout.description, layout.exportType,
+        layout.isDefault ? 1 : 0, layout.isSystem ? 1 : 0,
+        JSON.stringify(layout.colors), JSON.stringify(layout.typography),
+        JSON.stringify(layout.header), JSON.stringify(layout.footer),
+        JSON.stringify(layout.sections), layout.pageMargin, layout.pageSize,
+        layout.pageOrientation || 'portrait', layout.headerHeight || 70,
+        layout.lineSpacing || 'normal', layout.dividerStyle || 'line', JSON.stringify(layout.watermark),
+      ]);
+  }
 
   // v2.14.7: Eigenes modernes Layout für die strategische Staffelplanung
   const hasSeasonPlanning = db.get("SELECT id FROM pdf_layouts WHERE export_type = 'season_planning' LIMIT 1");

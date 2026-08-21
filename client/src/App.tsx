@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useAuth } from './contexts/AppContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import { TutorialProvider } from './contexts/TutorialContext';
 import { TutorialOverlay } from './components/tutorials/TutorialOverlay';
 import TutorialWikiPanel from './components/tutorials/TutorialWikiPanel';
@@ -132,6 +133,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <AppProvider>
+        <LanguageProvider>
         <ScreenshotModeProvider>
           <TutorialRecordingProvider>
             <TutorialProvider>
@@ -148,6 +150,7 @@ export default function App() {
             </TutorialProvider>
           </TutorialRecordingProvider>
         </ScreenshotModeProvider>
+        </LanguageProvider>
       </AppProvider>
     </ThemeProvider>
   );

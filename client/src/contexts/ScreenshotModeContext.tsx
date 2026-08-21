@@ -38,6 +38,8 @@ interface ScreenshotModeState {
   active: boolean;
   simulatedRole: string | null;
   simulatedPermissions: Record<string, boolean>;
+  initialImage: string | null;
+  initialAnnotations: AnnotationPoint[];
   onCapture: ((result: ScreenshotResult) => void) | null;
   onCancel: (() => void) | null;
   /** Tutorial-State der nach der Navigation wiederhergestellt werden soll */
@@ -51,6 +53,8 @@ interface ScreenshotModeContextValue extends ScreenshotModeState {
     onCapture: (result: ScreenshotResult) => void;
     onCancel: () => void;
     persistedState?: PersistedTutorialState;
+    initialImage?: string;
+    initialAnnotations?: AnnotationPoint[];
   }) => void;
   endScreenshotMode: () => void;
   clearPersistedState: () => void;
@@ -63,24 +67,30 @@ export function ScreenshotModeProvider({ children }: { children: ReactNode }) {
     active: false,
     simulatedRole: null,
     simulatedPermissions: {},
+    initialImage: null,
+    initialAnnotations: [],
     onCapture: null,
     onCancel: null,
     persistedState: null,
   });
 
   const startScreenshotMode = useCallback(({
-    role, permissions, onCapture, onCancel, persistedState,
+    role, permissions, onCapture, onCancel, persistedState, initialImage, initialAnnotations,
   }: {
     role: string;
     permissions: Record<string, boolean>;
     onCapture: (result: ScreenshotResult) => void;
     onCancel: () => void;
     persistedState?: PersistedTutorialState;
+    initialImage?: string;
+    initialAnnotations?: AnnotationPoint[];
   }) => {
     setState({
       active: true,
       simulatedRole: role,
       simulatedPermissions: permissions,
+      initialImage: initialImage || null,
+      initialAnnotations: Array.isArray(initialAnnotations) ? initialAnnotations : [],
       onCapture,
       onCancel,
       persistedState: persistedState || null,
@@ -92,6 +102,8 @@ export function ScreenshotModeProvider({ children }: { children: ReactNode }) {
       active: false,
       simulatedRole: null,
       simulatedPermissions: {},
+      initialImage: null,
+      initialAnnotations: [],
       onCapture: null,
       onCancel: null,
       // Keep persistedState so the tutorial page can read it on remount

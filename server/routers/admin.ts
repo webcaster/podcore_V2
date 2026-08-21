@@ -523,6 +523,55 @@ router.put('/settings', requirePermission('canManageSettings') as any, (req: Aut
 });
 
 // ============================================================
+// Sprachwerkzeuge: Organisationsweite Fachbegriffe für die lokale
+// deutsche und englische Rechtschreibprüfung. Die Verwaltung bleibt
+// bewusst an das vorhandene Einstellungsrecht gebunden.
+// ============================================================
+function normalizeLanguageWords(value: unknown): string[] {
+  const source = Array.isArray(value) ? value : [];
+  const unique = new Set<string>();
+  for (const item of source) {
+    if (typeof item !== 'string') continue;
+    const word = item.trim().replace(/\s+/g, ' ');
+    if (word.length >= 2 && word.length <= 80) unique.add(word);
+    if (unique.size >= 500) break;
+  }
+  return Array.from(unique).sort((a, b) => a.localeCompare(b, 'de'));
+}
+
+function normalizeLanguageTools(value: unknown) {
+  const source = value && typeof value === 'object' ? value as Record<string, any> : {};
+  const words = source.customWords && typeof source.customWords === 'object' ? source.customWords : {};
+  return {
+    enabled: source.enabled !== false,
+    defaultLanguage: source.defaultLanguage === 'en' ? 'en' : 'de',
+    customWords: {
+      de: normalizeLanguageWords(words.de),
+      en: normalizeLanguageWords(words.en),
+    },
+  };
+}
+
+router.get('/language-tools', requireAuth as any, (_req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const row = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
+  let settings: any = {};
+  try { settings = row?.value ? JSON.parse(row.value) : {}; } catch (_) {}
+  return res.json({ success: true, data: normalizeLanguageTools(settings.languageTools) });
+});
+
+router.put('/language-tools', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const row = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
+  let settings: any = {};
+  try { settings = row?.value ? JSON.parse(row.value) : {}; } catch (_) {}
+  const languageTools = normalizeLanguageTools(req.body);
+  settings = { ...settings, languageTools };
+  db.run(`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, ['app', JSON.stringify(settings)]);
+  return res.json({ success: true, data: languageTools });
+});
+
+// ============================================================
 // SYSTEM INFO
 // ============================================================
 

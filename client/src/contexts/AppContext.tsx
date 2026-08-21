@@ -14,6 +14,7 @@ export interface CurrentUser {
   permissions: Record<string, boolean>;
   developerMode?: boolean;
   avatarColor?: string;
+  language?: 'de' | 'en';
   theme?: UserTheme | null;
   dashboardLayout?: DashboardLayout | string[] | null;
 }

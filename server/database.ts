@@ -122,6 +122,7 @@ function initializeSchema(db: any): void {
       is_active INTEGER NOT NULL DEFAULT 1,
       avatar_color TEXT DEFAULT '#7c3aed',
       developer_mode INTEGER NOT NULL DEFAULT 0,
+      language TEXT NOT NULL DEFAULT 'de',
       last_login TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -987,6 +988,10 @@ function initializeSchema(db: any): void {
   } catch (_) {}
 
   // Default admin user
+  // v2.16.25: Persönliche Spracheinstellung für die deutsch-englische Oberfläche.
+  // Der Migrationsversuch ist idempotent und lässt bestehende Installationen unverändert.
+  try { db.exec("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT 'de'"); } catch (_) {}
+
   const userCount = db.get('SELECT COUNT(*) as count FROM users') as any;
   if (!userCount || userCount.count === 0) {
     const bcrypt = require('bcryptjs');
@@ -1030,6 +1035,11 @@ function initializeSchema(db: any): void {
         episodeApprovalRequired: false,
         interviewApprovalRequired: false,
         approvalRoles: ['moderator', 'admin'],
+      },
+      languageTools: {
+        enabled: true,
+        defaultLanguage: 'de',
+        customWords: { de: [], en: [] },
       },
       sponsoring: {
         offerNumbering: {

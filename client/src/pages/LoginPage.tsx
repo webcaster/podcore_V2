@@ -3,6 +3,7 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AppContext';
 import { authApi } from '../lib/api';
 import { useTutorial } from '../contexts/TutorialContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // Injected at build time by vite.config.ts
 declare const __APP_VERSION__: string;
@@ -10,6 +11,7 @@ const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const { language, setLanguage } = useLanguage();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -52,21 +54,24 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold text-text-primary">PodCore</h1>
           <p className="text-accent-purple font-medium mt-1">Dein Podcast. Dein Workflow.</p>
           <p className="text-text-muted text-xs mt-1">v{APP_VERSION}</p>
+          <button type="button" onClick={() => void setLanguage(language === 'de' ? 'en' : 'de')} className="mt-3 inline-flex items-center rounded-md border border-surface-border px-2.5 py-1 text-xs text-text-secondary hover:border-accent-purple hover:text-accent-purple">
+            {language === 'de' ? 'Deutsch · English' : 'English · Deutsch'}
+          </button>
         </div>
 
         {/* Login Form */}
         <div className="card-raised p-8 shadow-card">
-          <h2 className="text-xl font-semibold text-text-primary mb-6">Anmelden</h2>
+          <h2 className="text-xl font-semibold text-text-primary mb-6">{language === 'en' ? 'Sign in' : 'Anmelden'}</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Benutzername</label>
+              <label className="label">{language === 'en' ? 'Username' : 'Benutzername'}</label>
               <input
                 type="text"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 className="input"
-                placeholder="Benutzername eingeben"
+                placeholder={language === 'en' ? 'Enter username' : 'Benutzername eingeben'}
                 autoComplete="username"
                 autoFocus
                 required
@@ -74,14 +79,14 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="label">Passwort</label>
+              <label className="label">{language === 'en' ? 'Password' : 'Passwort'}</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   className="input pr-10"
-                  placeholder="Passwort eingeben"
+                  placeholder={language === 'en' ? 'Enter password' : 'Passwort eingeben'}
                   autoComplete="current-password"
                   required
                 />
@@ -109,10 +114,10 @@ export default function LoginPage() {
               {isLoading ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  <span>Anmelden...</span>
+                  <span>{language === 'en' ? 'Signing in...' : 'Anmelden...'}</span>
                 </>
               ) : (
-                'Anmelden'
+                language === 'en' ? 'Sign in' : 'Anmelden'
               )}
             </button>
           </form>
@@ -120,18 +125,18 @@ export default function LoginPage() {
           {isFirstSetup === true && (
             <div className="mt-6 pt-6 border-t border-surface-border">
               <p className="text-text-muted text-xs text-center">
-                Erstanmeldung — Standard-Zugangsdaten:{' '}
+                {language === 'en' ? 'First sign-in — default credentials:' : 'Erstanmeldung — Standard-Zugangsdaten:'}{' '}
                 <span className="text-text-secondary font-mono">admin / admin123</span>
               </p>
               <p className="text-text-muted text-xs text-center mt-1">
-                Bitte Passwort nach der ersten Anmeldung ändern.
+                {language === 'en' ? 'Please change the password after the first sign-in.' : 'Bitte Passwort nach der ersten Anmeldung ändern.'}
               </p>
             </div>
           )}
         </div>
 
         <p className="text-center text-text-muted text-xs mt-6">
-          PodCore läuft lokal auf Ihrem System — keine Cloud-Abhängigkeiten
+          {language === 'en' ? 'PodCore runs locally on your system — no cloud dependency' : 'PodCore läuft lokal auf Ihrem System — keine Cloud-Abhängigkeiten'}
         </p>
       </div>
     </div>

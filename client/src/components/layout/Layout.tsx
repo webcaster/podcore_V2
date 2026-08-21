@@ -4,12 +4,13 @@ import { useRef } from 'react';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
-  Shield, Menu, X, TrendingUp, Image, FileText, HelpCircle, Info, Download,
+  Shield, Menu, X, TrendingUp, Image, FileText, HelpCircle, Info, Download, Globe2,
   Layers, Archive, BarChart2, Calendar, MessageSquare, Radio, CheckCircle
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
 import { useTutorial } from '../../contexts/TutorialContext';
 import { useScreenshotMode } from '../../contexts/ScreenshotModeContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { api } from '../../lib/api';
 import NotificationCenter from './NotificationCenter';
 
@@ -33,6 +34,7 @@ export default function Layout() {
   const { branding } = useBranding();
   const { features } = useFeatures();
   const { onlineUsers } = useOnlineUsers();
+  const { language, setLanguage, t } = useLanguage();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -95,27 +97,27 @@ export default function Layout() {
   };
 
   const navItems: NavItem[] = [
-    { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard', exact: true, tutorialId: 'nav-dashboard' },
-    { to: '/approvals', icon: <CheckCircle size={18} />, label: 'Freigabe-Center', permission: 'canApproveEpisodes', tutorialId: 'nav-approvals' },
-    { to: '/episodes', icon: <Mic2 size={18} />, label: 'Episoden', permission: 'canViewEpisodes', tutorialId: 'nav-episodes' },
-    { to: '/episodes-dashboard', icon: <Radio size={18} />, label: 'Episoden-Dashboard', permission: 'canViewEpisodes', tutorialId: 'nav-episodes-dashboard' },
-    { to: '/editorial', icon: <BookOpen size={18} />, label: 'Redaktions-Hub', permission: 'canViewIdeas', tutorialId: 'nav-editorial' },
-    { to: '/calendar', icon: <Calendar size={18} />, label: 'Redaktionskalender', permission: 'canViewEditorialPlan', tutorialId: 'nav-calendar' },
-    { to: '/chat', icon: <MessageSquare size={18} />, label: 'Team-Chat', tutorialId: 'nav-chat' },
-    { to: '/media', icon: <Library size={18} />, label: 'Media Library', permission: 'canViewMedia', tutorialId: 'nav-media' },
-    { to: '/sponsors', icon: <Megaphone size={18} />, label: 'Sponsoring', permission: 'canViewSponsors', dividerBefore: true, tutorialId: 'nav-sponsors' },
-    { to: '/sponsors/calendar', icon: <Calendar size={18} />, label: 'Buchungskalender', permission: 'canViewSponsors', tutorialId: 'nav-sponsors-calendar' },
-    { to: '/sponsors/reports', icon: <BarChart3 size={18} />, label: 'Sponsor-Auswertungen', permission: 'canViewSponsorReports', tutorialId: 'nav-sponsors-reports' },
-    { to: '/seasons', icon: <Layers size={18} />, label: 'Staffeln', permission: 'canViewEpisodes', tutorialId: 'nav-seasons' },
-    { to: '/archive', icon: <Archive size={18} />, label: 'Archiv', permission: 'canViewEpisodes', tutorialId: 'nav-archive' },
-    { to: '/analytics', icon: <TrendingUp size={18} />, label: 'Podigee Analytics', permission: 'canViewEpisodes', dividerBefore: true, tutorialId: 'nav-analytics' },
-    { to: '/stats', icon: <BarChart2 size={18} />, label: 'Podcast-Statistiken', permission: 'canViewEpisodes', tutorialId: 'nav-stats' },
-    { to: '/branding', icon: <Image size={18} />, label: 'Branding', permission: 'canManageSettings', tutorialId: 'nav-branding' },
-    { to: '/admin', icon: <Shield size={18} />, label: 'Administration', permission: 'canManageUsers', dividerBefore: true, tutorialId: 'nav-admin' },
-    { to: '/admin/tutorials', icon: <Info size={18} />, label: 'Tutorial-Verwaltung', permission: 'canManageSettings', tutorialId: 'nav-tutorials' },
-    { to: '/tutorials/import', icon: <Download size={18} />, label: 'Tutorials importieren', permission: 'canImportTutorials', tutorialId: 'nav-tutorial-import' },
-    { to: '/pdf-layouts', icon: <FileText size={18} />, label: 'PDF-Layouts', permission: 'canManageSettings', tutorialId: 'nav-pdf-layouts' },
-    { to: '/settings', icon: <Settings size={18} />, label: 'Einstellungen', permission: 'canManageSettings', tutorialId: 'nav-settings' },
+    { to: '/', icon: <LayoutDashboard size={18} />, label: t('nav.dashboard'), exact: true, tutorialId: 'nav-dashboard' },
+    { to: '/approvals', icon: <CheckCircle size={18} />, label: t('nav.approvals'), permission: 'canApproveEpisodes', tutorialId: 'nav-approvals' },
+    { to: '/episodes', icon: <Mic2 size={18} />, label: t('nav.episodes'), permission: 'canViewEpisodes', tutorialId: 'nav-episodes' },
+    { to: '/episodes-dashboard', icon: <Radio size={18} />, label: t('nav.episodesDashboard'), permission: 'canViewEpisodes', tutorialId: 'nav-episodes-dashboard' },
+    { to: '/editorial', icon: <BookOpen size={18} />, label: t('nav.editorial'), permission: 'canViewIdeas', tutorialId: 'nav-editorial' },
+    { to: '/calendar', icon: <Calendar size={18} />, label: t('nav.calendar'), permission: 'canViewEditorialPlan', tutorialId: 'nav-calendar' },
+    { to: '/chat', icon: <MessageSquare size={18} />, label: t('nav.chat'), tutorialId: 'nav-chat' },
+    { to: '/media', icon: <Library size={18} />, label: t('nav.media'), permission: 'canViewMedia', tutorialId: 'nav-media' },
+    { to: '/sponsors', icon: <Megaphone size={18} />, label: t('nav.sponsoring'), permission: 'canViewSponsors', dividerBefore: true, tutorialId: 'nav-sponsors' },
+    { to: '/sponsors/calendar', icon: <Calendar size={18} />, label: t('nav.bookingCalendar'), permission: 'canViewSponsors', tutorialId: 'nav-sponsors-calendar' },
+    { to: '/sponsors/reports', icon: <BarChart3 size={18} />, label: t('nav.sponsorReports'), permission: 'canViewSponsorReports', tutorialId: 'nav-sponsors-reports' },
+    { to: '/seasons', icon: <Layers size={18} />, label: t('nav.seasons'), permission: 'canViewEpisodes', tutorialId: 'nav-seasons' },
+    { to: '/archive', icon: <Archive size={18} />, label: t('nav.archive'), permission: 'canViewEpisodes', tutorialId: 'nav-archive' },
+    { to: '/analytics', icon: <TrendingUp size={18} />, label: t('nav.analytics'), permission: 'canViewEpisodes', dividerBefore: true, tutorialId: 'nav-analytics' },
+    { to: '/stats', icon: <BarChart2 size={18} />, label: t('nav.statistics'), permission: 'canViewEpisodes', tutorialId: 'nav-stats' },
+    { to: '/branding', icon: <Image size={18} />, label: t('nav.branding'), permission: 'canManageSettings', tutorialId: 'nav-branding' },
+    { to: '/admin', icon: <Shield size={18} />, label: t('nav.administration'), permission: 'canManageUsers', dividerBefore: true, tutorialId: 'nav-admin' },
+    { to: '/admin/tutorials', icon: <Info size={18} />, label: t('nav.tutorials'), permission: 'canManageSettings', tutorialId: 'nav-tutorials' },
+    { to: '/tutorials/import', icon: <Download size={18} />, label: t('nav.tutorialImport'), permission: 'canImportTutorials', tutorialId: 'nav-tutorial-import' },
+    { to: '/pdf-layouts', icon: <FileText size={18} />, label: t('nav.pdfLayouts'), permission: 'canManageSettings', tutorialId: 'nav-pdf-layouts' },
+    { to: '/settings', icon: <Settings size={18} />, label: t('nav.settings'), permission: 'canManageSettings', tutorialId: 'nav-settings' },
   ];
 
   // Feature-Flag-basierte Filterung der Navigation
@@ -314,6 +316,15 @@ export default function Layout() {
             <NotificationCenter compact={collapsed && !mobile} />
           </div>
         )}
+        <button
+          onClick={async () => { try { await setLanguage(language === 'de' ? 'en' : 'de'); } catch { /* Einstellung bleibt unverändert */ } }}
+          className={`flex items-center gap-2 text-text-muted hover:text-accent-purple transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-accent-purple/10 ${collapsed && !mobile ? 'justify-center px-0' : ''}`}
+          title={collapsed && !mobile ? t('language.switch') : undefined}
+          aria-label={t('language.switch')}
+        >
+          <Globe2 size={16} />
+          {(!collapsed || mobile) && <span>{language === 'de' ? 'DE · EN' : 'EN · DE'}</span>}
+        </button>
         <button
           onClick={handleLogout}
           className={`flex items-center gap-2 text-text-muted hover:text-accent-red transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-accent-red/10 ${collapsed && !mobile ? 'justify-center px-0' : ''}`}
