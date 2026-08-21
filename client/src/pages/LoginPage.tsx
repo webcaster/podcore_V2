@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AppContext';
-import { authApi } from '../lib/api';
+import { authApi, licenseApi, LicenseStatus } from '../lib/api';
 import { useTutorial } from '../contexts/TutorialContext';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -18,11 +18,16 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isFirstSetup, setIsFirstSetup] = useState<boolean | null>(null);
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
 
   useEffect(() => {
     authApi.getSetupStatus()
       .then((data: any) => setIsFirstSetup(data?.isFirstSetup ?? true))
       .catch(() => setIsFirstSetup(false)); // On error, hide hint (safer default)
+  }, []);
+
+  useEffect(() => {
+    licenseApi.getStatus().then(setLicenseStatus).catch(() => setLicenseStatus(null));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -131,6 +136,20 @@ export default function LoginPage() {
               <p className="text-text-muted text-xs text-center mt-1">
                 {language === 'en' ? 'Please change the password after the first sign-in.' : 'Bitte Passwort nach der ersten Anmeldung ändern.'}
               </p>
+            </div>
+          )}
+
+          {licenseStatus && !licenseStatus.configured && (
+            <div className="mt-5 rounded-lg border border-accent-purple/35 bg-accent-purple/10 px-4 py-3 text-sm text-text-secondary">
+              <p className="font-semibold text-text-primary">{language === 'en' ? '14-day trial period' : '14 Tage Testzeit'}</p>
+              <p className="mt-1 leading-relaxed">
+                {language === 'en'
+                  ? `PodCore can be tested without a license for ${licenseStatus.trialDaysRemaining ?? 14} more day(s). Afterwards, activate a license from podcore.de in the app settings or import an offline license document.`
+                  : `PodCore kann noch ${licenseStatus.trialDaysRemaining ?? 14} Tage ohne Lizenz getestet werden. Danach aktivierst du eine Lizenz von podcore.de in den App-Einstellungen oder importierst ein Offline-Lizenzdokument.`}
+              </p>
+              <a href={licenseStatus.licensingUrl || 'https://podcore.de'} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-accent-purple hover:underline">
+                {language === 'en' ? 'Visit podcore.de for licensing' : 'podcore.de zur Lizenzierung öffnen'}
+              </a>
             </div>
           )}
         </div>

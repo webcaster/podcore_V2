@@ -752,6 +752,12 @@ export interface LicenseStatus {
   realStatus?: 'unconfigured' | 'active' | 'invalid' | 'offline' | 'deactivated';
   isGracePeriod?: boolean;
   gracePeriodDaysRemaining?: number;
+  isTrial?: boolean;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
+  trialDaysRemaining?: number;
+  requiresLicense?: boolean;
+  licensingUrl?: string;
   licenseKeyMasked: string;
   activationTokenMasked: string;
   lastValidatedAt: string | null;

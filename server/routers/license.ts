@@ -8,6 +8,7 @@ import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth'
 
 const router: import('express').Router = express.Router();
 const GRACE_PERIOD_DAYS = 14;
+const TRIAL_PERIOD_DAYS = 14;
 const WORDPRESS_API_PATH = '/wp-json/podcore-licensing/v1';
 
 type LicenseStatusValue = 'unconfigured' | 'active' | 'invalid' | 'offline' | 'deactivated';
@@ -31,6 +32,7 @@ interface LicenseSettings {
   licenseDocument: any | null;
   verificationMode: 'online' | 'offline';
   lastError: string | null;
+  trialStartedAt: string | null;
 }
 
 const DEFAULT_LICENSE: LicenseSettings = {
@@ -51,6 +53,7 @@ const DEFAULT_LICENSE: LicenseSettings = {
   licenseDocument: null,
   verificationMode: 'online',
   lastError: null,
+  trialStartedAt: null,
 };
 
 function readAppSettings(): Record<string, any> {
@@ -68,6 +71,16 @@ function readLicense(): LicenseSettings {
   const settings = readAppSettings();
   const stored = settings.license || {};
   return { ...DEFAULT_LICENSE, ...stored, installationId: ensureInstallationId(stored.installationId) };
+}
+
+function readLicenseWithTrial(): LicenseSettings {
+  const license = readLicense();
+  if (!license.trialStartedAt && ['unconfigured', 'invalid', 'deactivated'].includes(license.status)) {
+    const next: LicenseSettings = { ...license, trialStartedAt: new Date().toISOString() };
+    writeLicense(next);
+    return next;
+  }
+  return license;
 }
 
 function writeLicense(license: LicenseSettings): void {
@@ -109,6 +122,11 @@ function publicStatus(license: LicenseSettings) {
     const diffDays = (Date.now() - new Date(license.lastValidatedAt).getTime()) / 86400000;
     if (diffDays <= GRACE_PERIOD_DAYS) { effectiveStatus = 'active'; isGracePeriod = true; }
   }
+  const trialStartedAt = license.trialStartedAt;
+  const trialEndsAt = trialStartedAt ? new Date(new Date(trialStartedAt).getTime() + TRIAL_PERIOD_DAYS * 86400000) : null;
+  const hasActiveLicense = effectiveStatus === 'active';
+  const isTrial = !hasActiveLicense && Boolean(trialEndsAt && trialEndsAt.getTime() > Date.now());
+  const trialDaysRemaining = isTrial && trialEndsAt ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000)) : 0;
   return {
     provider: 'podcore-wordpress-plugin',
     configured: Boolean(license.siteUrl && license.licenseKey && license.activationToken),
@@ -132,6 +150,12 @@ function publicStatus(license: LicenseSettings) {
     verificationMode: license.verificationMode,
     hasOfflineDocument: Boolean(license.licenseDocument),
     lastError: license.lastError,
+    isTrial,
+    trialStartedAt,
+    trialEndsAt: trialEndsAt?.toISOString() || null,
+    trialDaysRemaining,
+    requiresLicense: !hasActiveLicense && !isTrial,
+    licensingUrl: license.siteUrl || 'https://podcore.de',
   };
 }
 
@@ -140,7 +164,8 @@ function wordpressRequest(siteUrl: string, endpoint: string, payload: Record<str
     let base: URL;
     try {
       base = new URL(siteUrl.endsWith('/') ? siteUrl : `${siteUrl}/`);
-      if (!['https:', 'http:'].includes(base.protocol)) throw new Error('Nur HTTP oder HTTPS ist erlaubt');
+      const localDevelopmentHost = ['localhost', '127.0.0.1', '::1'].includes(base.hostname);
+      if (base.protocol !== 'https:' && !localDevelopmentHost) throw new Error('Für die Lizenz-Webseite ist HTTPS erforderlich');
     } catch (error: any) { reject(new Error(`Ungültige Lizenz-Webseite: ${error.message}`)); return; }
 
     const url = new URL(`${WORDPRESS_API_PATH}${endpoint}`, base);
@@ -243,10 +268,10 @@ function applyRemoteLicense(current: LicenseSettings, response: any, status: Lic
   };
 }
 
-router.get('/status', requireAuth as any, (_req: AuthRequest, res: Response) => res.json({ success: true, data: publicStatus(readLicense()) }));
+router.get('/status', (_req: AuthRequest, res: Response) => res.json({ success: true, data: publicStatus(readLicenseWithTrial()) }));
 
-router.post('/activate', requirePermission('canManageSettings') as any, async (req: AuthRequest, res: Response) => {
-  const current = readLicense();
+router.post('/activate', async (req: AuthRequest, res: Response) => {
+  const current = readLicenseWithTrial();
   const siteUrl = String(req.body.siteUrl || current.siteUrl || '').trim().replace(/\/$/, '');
   const licenseKey = String(req.body.licenseKey || current.licenseKey || '').trim().toUpperCase();
   const label = String(req.body.label || current.label || 'PodCore Installation').trim().slice(0, 190);
@@ -267,8 +292,8 @@ router.post('/activate', requirePermission('canManageSettings') as any, async (r
   }
 });
 
-router.post('/validate', requirePermission('canManageSettings') as any, async (_req: AuthRequest, res: Response) => {
-  const current = readLicense();
+router.post('/validate', async (_req: AuthRequest, res: Response) => {
+  const current = readLicenseWithTrial();
   if (!current.siteUrl || !current.licenseKey || !current.activationToken) return res.status(400).json({ success: false, error: 'Keine aktivierte Lizenz vorhanden.', data: publicStatus(current) });
   try {
     const response = await wordpressRequest(current.siteUrl, '/validate', { license_key: current.licenseKey, installation_id: current.installationId }, current.activationToken);
@@ -280,7 +305,7 @@ router.post('/validate', requirePermission('canManageSettings') as any, async (_
   }
 });
 
-router.post('/import', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+router.post('/import', (req: AuthRequest, res: Response) => {
   const document = req.body?.document || req.body;
   const result = verifyOfflineDocument(document);
   if (!result.valid) return res.status(400).json({ success: false, error: result.reason });

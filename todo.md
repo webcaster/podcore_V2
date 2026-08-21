@@ -2,10 +2,14 @@
 
 - [ ] Lizenzsystem nach Abschluss der Stabilisierung bewusst aktivieren: 14 Tage Volltest, 14 Tage Offline-Grace-Period und anschließender Nur-Lese-Modus.
 - [ ] Lizenzverwaltung erst im Stabilitäts-Release wieder sichtbar schalten und vor der Veröffentlichung mit dem eigenen WordPress-Lizenzplugin auf podcore.de testen.
+- [x] Lizenzierung bei Neuinstallation: Aktivierung, Statusprüfung und Offline-Lizenzimport ohne vorherige App-Anmeldung ermöglichen; Fehler „Nicht authentifiziert“ beheben.
+- [x] Erststart: 14-Tage-Testhinweis mit Verweis auf podcore.de und verständlicher Erklärung zu Online- sowie Offline-Lizenzierung anzeigen.
 - [x] Lizenzarchitektur: DLM-spezifische App- und Serveranbindung durch sichere Aktivierung, Status, Deaktivierung und Offline-Lizenz über das eigene WordPress-Lizenzplugin ersetzen.
 - [x] WordPress-Lizenzplugin: Kundenbereich für eigene Lizenzen, aktive Abos, Laufzeiten, Installationen und Offline-Dokumente ergänzen.
 - [x] WordPress-Lizenzplugin: Kündigungsablauf für WooCommerce Subscriptions mit eindeutiger Bestätigung, Restlaufzeit und nachvollziehbarem Status ergänzen.
 - [x] WordPress-Lizenzplugin: Kunden- und Lizenzendpunkte durch Besitzprüfung, Nonces, Rate Limits, sichere Tokenverarbeitung und datensparsame Ausgaben weiter härten.
+- [x] WordPress-Lizenzplugin: Lizenzdaten im Administrationsbereich sicher bearbeiten, Aktivierungen gezielt widerrufen und Lizenzen erst nach ausdrücklicher Bestätigung endgültig löschen.
+- [x] WordPress-Lizenzplugin: Zentrale Kundenansicht mit zugehörigen Lizenzen, Abos und Aktivierungen sowie signiertem Notfall-Download pro konkreter Installation ergänzen.
 - [ ] Lizenzstufen Basis, Studio und Lifetime vor Aktivierung final mit den geplanten Lizenzprodukten und Lizenzschlüsseln abgleichen.
 - [ ] Separate lokale Entwickler-Testversion erstellen: Lizenzoberfläche und Testaktivierung sichtbar, klar als Nicht-Produktivmodus markiert, ohne GitHub-Upload.
 - [ ] Lokale Entwicklerwerkzeuge ergänzen: Systemdiagnose, kontrollierte Testdaten, lokale Fehlerprotokolle, Funktionsstatus und sichere Entwicklungsaktionen ohne Produktivdaten zu verändern.
