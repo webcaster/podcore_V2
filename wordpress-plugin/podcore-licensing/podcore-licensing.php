@@ -3,7 +3,7 @@
  * Plugin Name: PodCore Licensing for WooCommerce
  * Plugin URI: https://podcore.de
  * Description: Eigene PodCore-Lizenz-API mit WooCommerce-Abos, Code-Generator und offline verifizierbaren Lizenzdokumenten.
- * Version: 1.0.4
+ * Version: 1.0.5
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Author: PodCore
@@ -13,7 +13,7 @@
 
 defined('ABSPATH') || exit;
 
-define('PODCORE_LICENSING_VERSION', '1.0.4');
+define('PODCORE_LICENSING_VERSION', '1.0.5');
 define('PODCORE_LICENSING_FILE', __FILE__);
 define('PODCORE_LICENSING_DIR', plugin_dir_path(__FILE__));
 define('PODCORE_LICENSING_URL', plugin_dir_url(__FILE__));
