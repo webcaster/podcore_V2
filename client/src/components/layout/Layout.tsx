@@ -5,7 +5,7 @@ import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
   Shield, Menu, X, TrendingUp, Image, FileText, HelpCircle, Info, Download, Globe2,
-  Layers, Archive, BarChart2, Calendar, MessageSquare, Radio, CheckCircle
+  Layers, Archive, BarChart2, Calendar, MessageSquare, Radio, CheckCircle, Podcast
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
 import { useTutorial } from '../../contexts/TutorialContext';
@@ -113,6 +113,7 @@ export default function Layout() {
     { to: '/analytics', icon: <TrendingUp size={18} />, label: t('nav.analytics'), permission: 'canViewEpisodes', dividerBefore: true, tutorialId: 'nav-analytics' },
     { to: '/stats', icon: <BarChart2 size={18} />, label: t('nav.statistics'), permission: 'canViewEpisodes', tutorialId: 'nav-stats' },
     { to: '/branding', icon: <Image size={18} />, label: t('nav.branding'), permission: 'canManageSettings', tutorialId: 'nav-branding' },
+    { to: '/podcasts', icon: <Podcast size={18} />, label: t('nav.podcasts'), permission: 'canManageSettings', tutorialId: 'nav-podcasts' },
     { to: '/admin', icon: <Shield size={18} />, label: t('nav.administration'), permission: 'canManageUsers', dividerBefore: true, tutorialId: 'nav-admin' },
     { to: '/admin/tutorials', icon: <Info size={18} />, label: t('nav.tutorials'), permission: 'canManageSettings', tutorialId: 'nav-tutorials' },
     { to: '/tutorials/import', icon: <Download size={18} />, label: t('nav.tutorialImport'), permission: 'canImportTutorials', tutorialId: 'nav-tutorial-import' },

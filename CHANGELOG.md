@@ -1,5 +1,11 @@
 # PodCore – Release Notes
 
+## v2.16.35 – Add-on für mehrere Podcasts
+
+PodCore kann jetzt mehrere Podcast-Profile innerhalb einer Installation verwalten. Berechtigte Nutzer legen Profile an, bearbeiten Stammdaten, wählen das aktive Profil und entfernen Profile nach einer Sicherheitsabfrage. Die Daten werden in den bestehenden geschützten App-Einstellungen gespeichert; eine Datenbankmigration ist nicht erforderlich.
+
+Die vollständige Bedien- und Upgrade-Anleitung steht unter [`docs/RELEASE-2.16.35.md`](docs/RELEASE-2.16.35.md).
+
 ## v2.16.26 – Korrigiertes WordPress-Plugin-Paket
 
 Das WordPress-Plugin wurde als Version **1.0.1** neu paketiert. Der Pluginordner liegt jetzt direkt auf der ZIP-Wurzelebene, sodass WordPress die Datei `podcore-licensing/podcore-licensing.php` beim Hochladen erkennt. Das PodCore-Anwendungsrelease ist auf **2.16.26** fortgeschrieben. Die korrigierte Installationsdatei wird im neuen GitHub-Release bereitgestellt.

@@ -30,6 +30,7 @@ const SponsorRevenuePage = lazy(() => import('./pages/SponsorRevenuePage'));
 const SponsorBookingCalendarPage = lazy(() => import('./pages/SponsorBookingCalendarPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const PodcastsPage = lazy(() => import('./pages/PodcastsPage'));
 const PodigeePage = lazy(() => import('./pages/PodigeePage'));
 const BrandingPage = lazy(() => import('./pages/BrandingPage'));
 const ImpressumPage = lazy(() => import('./pages/ImpressumPage'));
@@ -110,6 +111,7 @@ function AppRoutes() {
         <Route path="branding" element={<Suspense fallback={<LoadingSpinner />}><BrandingPage /></Suspense>} />
         <Route path="admin" element={<Suspense fallback={<LoadingSpinner />}><AdminPage /></Suspense>} />
         <Route path="settings" element={<Suspense fallback={<LoadingSpinner />}><SettingsPage /></Suspense>} />
+        <Route path="podcasts" element={<Suspense fallback={<LoadingSpinner />}><PodcastsPage /></Suspense>} />
         <Route path="impressum" element={<Suspense fallback={<LoadingSpinner />}><ImpressumPage /></Suspense>} />
         <Route path="wiki" element={<Suspense fallback={<LoadingSpinner />}><WikiPage /></Suspense>} />
         <Route path="seasons" element={<Suspense fallback={<LoadingSpinner />}><SeasonsPage /></Suspense>} />
