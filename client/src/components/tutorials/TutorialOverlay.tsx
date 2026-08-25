@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X, SkipForward, MousePointerClick, CheckCircle2, PauseCircle, GripVertical, RotateCcw, BookOpen } from 'lucide-react';
 import { useTutorial, TutorialStep } from '../../contexts/TutorialContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -220,7 +221,7 @@ export const TutorialOverlay: React.FC = () => {
 
   const step = activeTutorial.steps[currentStep];
   if (!step) {
-    return (
+    return createPortal(
       <div className="tutorial-tooltip-container" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)', position: 'fixed', display: 'block' }}>
         <div className="tutorial-card">
           <div className="tutorial-header">
@@ -232,7 +233,8 @@ export const TutorialOverlay: React.FC = () => {
             <button onClick={() => { closeTutorial(); openWiki(); }} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"><BookOpen size={16} /> Im Wiki öffnen</button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
   const isLastStep = currentStep === activeTutorial.steps.length - 1;
@@ -293,7 +295,7 @@ export const TutorialOverlay: React.FC = () => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
-  return (
+  return createPortal(
     <>
       {/* ── Highlight Layer ── */}
       <div className="tutorial-overlay-root">
@@ -521,6 +523,7 @@ export const TutorialOverlay: React.FC = () => {
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 };

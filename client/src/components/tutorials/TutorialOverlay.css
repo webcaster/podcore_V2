@@ -5,9 +5,10 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9998;
+  z-index: 2147483645;
   pointer-events: none;
   overflow: hidden;
+  isolation: isolate;
 }
 
 /* ── Highlight Box ── */
@@ -15,7 +16,7 @@
   position: absolute;
   border-radius: 16px;
   pointer-events: none;
-  z-index: 9999;
+  z-index: 2147483646;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   animation: tutorial-pulse 2s infinite;
 }
@@ -31,11 +32,15 @@
 
 /* ── Tooltip Container ── */
 .tutorial-tooltip-container {
-  z-index: 10000;
+  position: fixed;
+  z-index: 2147483647;
   width: 500px;
   max-width: 95vw;
   max-height: calc(100dvh - 24px);
   pointer-events: auto;
+  visibility: visible !important;
+  opacity: 1 !important;
+  isolation: isolate;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -76,7 +81,10 @@
   overflow-x: hidden;
   overflow-y: auto;
   animation: tutorial-fade-in 0.3s ease-out;
+  min-height: 164px;
   max-height: calc(100dvh - 24px);
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .tutorial-scroll-content {
