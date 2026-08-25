@@ -119,6 +119,28 @@ const wikiData: WikiCategory[] = [
         ],
       },
       {
+        id: 'tutorials-wiki-hilfe',
+        title: 'Tutorials, Wiki und geführte Hilfe',
+        summary: 'Geführte Tutorials starten, die Wiki-Alternative nutzen und typische Darstellungsprobleme sicher einordnen.',
+        icon: <BookOpen size={18} />,
+        tags: ['tutorial', 'wiki', 'hilfe', 'führung', 'markierungen', 'pdf'],
+        content: [
+          {
+            heading: 'Tutorial oder Wiki wählen',
+            text: 'Wenn für Ihre Rolle ein Tutorial verfügbar ist, können Sie es über den Tutorial-Hinweis oder die Hilfe & Wissensbase öffnen. Die Schaltfläche „Starten“ führt interaktiv durch die App. Wenn Sie lieber selbst navigieren möchten, verwenden Sie die Schaltfläche „Wiki“, um die vollständigen Anleitungen ohne geführte Klicks zu lesen.',
+          },
+          {
+            heading: 'Wenn eine Führung nicht startet',
+            text: 'Ein Tutorial ohne gültige Schritte wird nicht mehr als leerer Bereich geöffnet. PodCore zeigt stattdessen einen verständlichen Hinweis und bietet den direkten Wechsel in die Wissensbase an. Öffnen Sie das Tutorial später erneut oder bitten Sie einen Administrator, die Schritte im Entwickler-Modus zu prüfen.',
+            tip: 'Ein Tutorial kann auch ohne Screenshot verwendet werden. Entscheidend sind Titel, Erklärung und gegebenenfalls ein Menü- oder Klickziel.',
+          },
+          {
+            heading: 'Screenshots und PDF-Markierungen',
+            text: 'Punkte, Kreise und Zeichen in einem Tutorial-Screenshot werden in der interaktiven Führung, im Wiki und im Tutorial-PDF angezeigt. Im PDF-Layout muss die Option „Markierungen und Erklärungen anzeigen“ aktiviert bleiben, wenn Markierungen bewusst ausgeblendet wurden.',
+          },
+        ],
+      },
+      {
         id: 'profil-design',
         title: 'Eigenes Profil und persönliches Design',
         summary: 'Persönliche Angaben, Passwort und Darstellungsfarben verwalten.',

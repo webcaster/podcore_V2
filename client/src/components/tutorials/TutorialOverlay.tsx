@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, X, SkipForward, MousePointerClick, CheckCircle2, PauseCircle, GripVertical, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, SkipForward, MousePointerClick, CheckCircle2, PauseCircle, GripVertical, RotateCcw, BookOpen } from 'lucide-react';
 import { useTutorial, TutorialStep } from '../../contexts/TutorialContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './TutorialOverlay.css';
@@ -84,7 +84,7 @@ const TARGET_ROUTES: Record<string, string> = {
 };
 
 export const TutorialOverlay: React.FC = () => {
-  const { activeTutorial, currentStep, nextStep, previousStep, skipTutorial, completeTutorial, closeTutorial } = useTutorial();
+  const { activeTutorial, currentStep, nextStep, previousStep, skipTutorial, completeTutorial, closeTutorial, openWiki } = useTutorial();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -219,6 +219,22 @@ export const TutorialOverlay: React.FC = () => {
   if (!activeTutorial) return null;
 
   const step = activeTutorial.steps[currentStep];
+  if (!step) {
+    return (
+      <div className="tutorial-tooltip-container" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)', position: 'fixed', display: 'block' }}>
+        <div className="tutorial-card">
+          <div className="tutorial-header">
+            <div className="flex items-center gap-3"><BookOpen size={20} className="text-accent-purple" /><h3 className="text-lg font-bold text-text-primary">Tutorial kann nicht angezeigt werden</h3></div>
+            <button onClick={closeTutorial} className="text-text-muted hover:text-text-primary transition-colors p-1"><X size={20} /></button>
+          </div>
+          <div className="tutorial-body"><p className="text-base text-text-secondary leading-relaxed">Für dieses Tutorial wurde kein gültiger Schritt geladen. Du kannst die Inhalte im Wiki nachlesen oder das Tutorial später erneut öffnen.</p></div>
+          <div className="tutorial-footer flex justify-end gap-2">
+            <button onClick={() => { closeTutorial(); openWiki(); }} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"><BookOpen size={16} /> Im Wiki öffnen</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const isLastStep = currentStep === activeTutorial.steps.length - 1;
   const interaction = step.interaction || (step.action === 'confirm' ? 'confirm' : step.target ? 'click' : 'guide');
   const requiresTargetClick = interaction === 'click' && Boolean(step.target);
@@ -434,6 +450,14 @@ export const TutorialOverlay: React.FC = () => {
               </button>
 
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { closeTutorial(); navigate('/wiki'); }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-obsidian-700 text-text-secondary hover:text-text-primary transition-all"
+                  title="Interaktive Führung schließen und die vollständige Hilfe im Wiki öffnen"
+                >
+                  <BookOpen size={14} /> Wiki
+                </button>
                 {step.allowSkip && (
                   <button
                     onClick={skipTutorial}

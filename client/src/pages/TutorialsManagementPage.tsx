@@ -563,10 +563,45 @@ export default function TutorialsManagementPage() {
           }
           ctx.restore();
         });
-        resolve(canvas.toDataURL('image/png'));
+        try { resolve(canvas.toDataURL('image/png')); } catch { resolve(dataUrl); }
       };
       img.onerror = () => resolve(dataUrl);
       img.src = dataUrl;
+    });
+  };
+
+  const detectPdfImageFormat = (image: string): 'PNG' | 'JPEG' | 'WEBP' => {
+    const source = String(image || '').toLowerCase();
+    if (source.startsWith('data:image/jpeg') || source.startsWith('data:image/jpg')) return 'JPEG';
+    if (source.startsWith('data:image/webp')) return 'WEBP';
+    return 'PNG';
+  };
+
+  const hexToRgb = (hex: string) => {
+    const normalized = String(hex || '').replace('#', '');
+    const value = /^[0-9a-f]{6}$/i.test(normalized) ? normalized : '303030';
+    return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)] as const;
+  };
+
+  const drawPdfAnnotations = (doc: any, annotations: AnnotationPoint[], imageX: number, imageY: number, imageWidth: number, imageHeight: number) => {
+    annotations.forEach((annotation, index) => {
+      const x = imageX + (Math.max(0, Math.min(100, Number(annotation.x) || 0)) / 100) * imageWidth;
+      const y = imageY + (Math.max(0, Math.min(100, Number(annotation.y) || 0)) / 100) * imageHeight;
+      const type = annotation.type || 'point';
+      const color = annotation.color || ANN_COLORS[index % ANN_COLORS.length];
+      const [red, green, blue] = hexToRgb(color);
+      doc.setDrawColor(255, 255, 255); doc.setFillColor(red, green, blue);
+      if (type === 'circle') {
+        const diameter = Math.max(5, ((Number(annotation.size) || 10) / 100) * imageWidth);
+        doc.setLineWidth(1.25); doc.circle(x, y, diameter / 2, 'S');
+        doc.setDrawColor(red, green, blue); doc.setLineWidth(0.72); doc.circle(x, y, Math.max(1.7, diameter / 2 - 1.1), 'S');
+      } else {
+        const radius = Math.max(3, Math.min(6, imageWidth * 0.021));
+        doc.setLineWidth(0.75); doc.circle(x, y, radius, 'FD');
+        const label = String(type === 'symbol' ? (annotation.symbol || annotation.label || '•') : (annotation.label || index + 1)).slice(0, 2);
+        doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(Math.max(5.4, radius * 1.7));
+        doc.text(label, x, y + radius * 0.57, { align: 'center', baseline: 'middle' });
+      }
     });
   };
 
@@ -656,15 +691,20 @@ export default function TutorialsManagementPage() {
           doc.text(menuLines, M, y); y += menuLines.length * 4.5 + 4;
         }
         if (s.image && sections.showTutorialImages !== false) {
+          const visibleAnnotations = sections.showTutorialAnnotations === false ? [] : (s.annotations || []);
           try {
-            const bakedImage = await bakeAnnotationsToImage(s.image, s.annotations || []);
+            const bakedImage = await bakeAnnotationsToImage(s.image, visibleAnnotations);
             checkY(imageHeight);
-            doc.addImage(bakedImage, 'PNG', M, y, contentWidth, imageHeight - 4);
+            const renderedImageHeight = imageHeight - 4;
+            doc.addImage(bakedImage, detectPdfImageFormat(bakedImage), M, y, contentWidth, renderedImageHeight);
+            if (visibleAnnotations.length > 0) drawPdfAnnotations(doc, visibleAnnotations, M, y, contentWidth, renderedImageHeight);
             y += imageHeight;
           } catch (err) {
             console.error('Image bake error:', err);
             checkY(imageHeight);
-            doc.addImage(s.image, 'PNG', M, y, contentWidth, imageHeight - 4);
+            const renderedImageHeight = imageHeight - 4;
+            doc.addImage(s.image, detectPdfImageFormat(s.image), M, y, contentWidth, renderedImageHeight);
+            if (sections.showTutorialAnnotations !== false && (s.annotations || []).length > 0) drawPdfAnnotations(doc, s.annotations || [], M, y, contentWidth, renderedImageHeight);
             y += imageHeight;
           }
         }

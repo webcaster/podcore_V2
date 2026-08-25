@@ -11,6 +11,9 @@
 - [x] WordPress-Lizenzplugin: Lizenzdaten im Administrationsbereich sicher bearbeiten, Aktivierungen gezielt widerrufen und Lizenzen erst nach ausdrücklicher Bestätigung endgültig löschen.
 - [x] WordPress-Lizenzplugin: Zentrale Kundenansicht mit zugehörigen Lizenzen, Abos und Aktivierungen sowie signiertem Notfall-Download pro konkreter Installation ergänzen.
 - [x] Lizenz-PDF: Aus PodCore herunterladbaren Lizenznachweis mit PodCore-Signet, Subline, Kennzeichnung „medien der sinne“, „Eine Idee von Maximilian Hartwich“, goldener Trennlinie und Fußzeile als einheitlichen Marken-Kopfbereich ergänzen.
+- [x] v2.16.34: Tutorialführung gegen fehlende oder fehlerhafte Schrittlisten abgesichert, im Tutorialfenster und im Tutorial-Menü einen direkten Wiki-Zugang ergänzt sowie das zentrale Wiki um eine Hilfe zur alternativen Nutzung erweitert.
+- [x] v2.16.34: Tutorial-PDF-Export korrigiert, sodass Punkt-, Kreis- und Zeichenmarkierungen unabhängig vom Screenshotformat direkt in der PDF sichtbar gezeichnet werden.
+- [x] v2.16.34: Add-on-Architektur, Freischaltung, Kompatibilitätsprüfung und Präsentation über das bestehende WordPress-Add-on-Plugin als Roadmap dokumentiert.
 - [ ] Lizenzstufen Basis, Studio und Lifetime vor Aktivierung final mit den geplanten Lizenzprodukten und Lizenzschlüsseln abgleichen.
 - [ ] Separate lokale Entwickler-Testversion erstellen: Lizenzoberfläche und Testaktivierung sichtbar, klar als Nicht-Produktivmodus markiert, ohne GitHub-Upload.
 - [ ] Lokale Entwicklerwerkzeuge ergänzen: Systemdiagnose, kontrollierte Testdaten, lokale Fehlerprotokolle, Funktionsstatus und sichere Entwicklungsaktionen ohne Produktivdaten zu verändern.

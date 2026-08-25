@@ -55,10 +55,12 @@ interface TutorialContextType {
   currentStep: number;
   progress: TutorialProgress | null;
   isLoading: boolean;
+  tutorialStartError: string | null;
   wikiOpen: boolean;
   openWiki: () => void;
   closeWiki: () => void;
-  startTutorial: (tutorialId: string) => Promise<void>;
+  clearTutorialStartError: () => void;
+  startTutorial: (tutorialId: string) => Promise<boolean>;
   nextStep: () => void;
   previousStep: () => void;
   skipTutorial: () => Promise<void>;
@@ -77,10 +79,12 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState<TutorialProgress | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [tutorialStartError, setTutorialStartError] = useState<string | null>(null);
   const [wikiOpen, setWikiOpen] = useState(false);
 
   const openWiki = () => setWikiOpen(true);
   const closeWiki = () => setWikiOpen(false);
+  const clearTutorialStartError = () => setTutorialStartError(null);
 
   const loadProgressForTutorial = useCallback(async (tutorialId: string): Promise<TutorialProgress> => {
     const response = await fetch(`/api/tutorials/${tutorialId}/progress`, { credentials: 'include' });
@@ -143,13 +147,24 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     return savedProgress;
   }, []);
 
-  const startTutorial = async (tutorialId: string) => {
+  const startTutorial = async (tutorialId: string): Promise<boolean> => {
     const tutorial = tutorials.find(t => t.id === tutorialId);
-    if (!tutorial || !tutorial.enabled || !tutorial.steps?.length) return;
+    const steps = Array.isArray(tutorial?.steps)
+      ? tutorial.steps.filter((step): step is TutorialStep => Boolean(step && typeof step === 'object'))
+      : [];
+    if (!tutorial || !tutorial.enabled) {
+      setTutorialStartError('Dieses Tutorial ist nicht mehr verfügbar. Öffne stattdessen das Wiki oder aktualisiere die Tutorialliste.');
+      return false;
+    }
+    if (steps.length === 0) {
+      setTutorialStartError('Dieses Tutorial enthält keine gültigen Schritte. Öffne das Wiki als Alternative oder lasse das Tutorial durch einen Administrator prüfen.');
+      return false;
+    }
 
+    setTutorialStartError(null);
     setProgress(null);
     setCurrentStep(0);
-    setActiveTutorial(tutorial);
+    setActiveTutorial({ ...tutorial, steps });
     setWikiOpen(false);
 
     try {
@@ -159,12 +174,13 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       const safeStep = loadedProgress.completed
         ? 0
         : Number.isInteger(loadedProgress.currentStep)
-          ? Math.max(0, Math.min(loadedProgress.currentStep, tutorial.steps.length - 1))
+          ? Math.max(0, Math.min(loadedProgress.currentStep, steps.length - 1))
           : 0;
       setCurrentStep(safeStep);
     } catch (error) {
       console.warn('Tutorial-Fortschritt konnte nicht geladen werden:', error);
     }
+    return true;
   };
 
   const updateProgress = useCallback(async (step: number, completed: boolean, skipped: boolean) => {
@@ -236,9 +252,11 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
         currentStep,
         progress,
         isLoading,
+        tutorialStartError,
         wikiOpen,
         openWiki,
         closeWiki,
+        clearTutorialStartError,
         startTutorial,
         nextStep,
         previousStep,

@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.32**
+**Aktuelle Version: 2.16.34**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,12 @@
 PodCore 2.16.32 enthält eine eigene Lizenzanbindung für das Plugin [`PodCore Licensing for WooCommerce`](wordpress-plugin/podcore-licensing). Unterstützt werden Monatsabo, Jahresabo und Sonderabo. Lizenzen können online über die eigene WordPress-REST-API aktiviert oder als Ed25519-signiertes Dokument offline importiert werden. Ein lesbarer Lizenznachweis lässt sich unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Die vollständige Einrichtung steht in [`docs/RELEASE-2.16.32.md`](docs/RELEASE-2.16.32.md).
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.34: Stabile Tutorialhilfe und sichtbare PDF-Markierungen
+
+Die interaktive Tutorialführung prüft beim Start jetzt konsequent, ob ein Tutorial gültige Schritte enthält. Unvollständige oder historisch fehlerhafte Tutorials führen nicht mehr zu einem leeren Bereich; stattdessen erscheint ein verständlicher Hinweis mit direktem Wechsel in die Wissensbase. Im Tutorialfenster und in der Tutorial-Wissensbase steht zusätzlich eine sichtbare **Wiki**-Aktion zur Verfügung. Das zentrale Wiki erläutert die Wahl zwischen interaktiver Führung und Nachschlagewerk sowie die Behandlung von Screenshot-Markierungen.
+
+Der Tutorial-PDF-Export zeichnet Punkte, Kreise und Zeichen zusätzlich direkt im PDF über dem jeweiligen Screenshot. Dadurch bleiben Markierungen auch dann sichtbar, wenn ein Screenshotformat nicht über eine Canvas-Nachbearbeitung exportiert werden kann. Die Erklärungsliste und die Einstellung im PDF-Layout bleiben weiterhin maßgeblich. Die Add-on-Planung für den bestehenden WordPress-Katalog ist in [`docs/ADDON-PLAN-2.16.34.md`](docs/ADDON-PLAN-2.16.34.md) dokumentiert.
 
 ### Neu in v2.16.11: Persönlicher Workflow und sichere Speicherverwaltung
 
