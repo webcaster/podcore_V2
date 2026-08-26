@@ -177,12 +177,12 @@ const newStep = (title = 'Neuer Tutorialschritt'): TutorialStep => ({
 // ── COMPONENT ──────────────────────────────────────────────────────────────
 export default function TutorialsManagementPage() {
   const navigate = useNavigate();
-  const { user } = useApp();
+  const { user, can } = useApp();
   const { startScreenshotMode, persistedState, clearPersistedState } = useScreenshotMode();
   const { startRecording } = useTutorialRecording();
 
   // Developer Mode Check
-  const isDeveloper = user?.developerMode === true;
+  const canManageTutorials = can('canManageTutorials');
 
   // ── State ──
   type View = 'list' | 'edit' | 'progress';
@@ -362,7 +362,7 @@ export default function TutorialsManagementPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const loadCloudStatus = useCallback(async () => {
-    if (!isDeveloper) return;
+    if (!canManageTutorials) return;
     try {
       const status = await tutorialCloudApi.getStatus();
       setCloudStatus(status);
@@ -372,7 +372,7 @@ export default function TutorialsManagementPage() {
     } catch {
       setCloudStatus(null);
     }
-  }, [isDeveloper]);
+  }, [canManageTutorials]);
 
   useEffect(() => { loadCloudStatus(); }, [loadCloudStatus]);
 
@@ -1054,27 +1054,53 @@ export default function TutorialsManagementPage() {
     reader.onload = async (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        const importedTutorials = Array.isArray(json) ? json : [json];
-        
+        const importedTutorials = Array.isArray(json)
+          ? json
+          : Array.isArray(json?.items)
+            ? json.items
+            : Array.isArray(json?.tutorials)
+              ? json.tutorials
+              : Array.isArray(json?.data?.items)
+                ? json.data.items
+                : [json];
+
         setSaving(true);
         let count = 0;
-        for (const t of importedTutorials) {
-          // Clean up ID to avoid conflicts, let backend handle it or create new
-          const { id, createdAt, updatedAt, ...cleanT } = t;
+        const failures: string[] = [];
+        for (const rawTutorial of importedTutorials) {
+          if (!rawTutorial || typeof rawTutorial !== 'object') {
+            failures.push('Ein Eintrag ist kein gültiges Tutorialobjekt.');
+            continue;
+          }
+          // IDs und Zeitstempel werden lokal neu vergeben. Alle Importformate
+          // erhalten eine Rollenfreigabe, damit der Verwaltungs- und Endnutzerimport
+          // dieselbe Projektdatei akzeptieren.
+          const { id, createdAt, updatedAt, role, roles, enabled, steps, ...cleanT } = rawTutorial as any;
+          const normalizedTutorial = {
+            ...cleanT,
+            roles: Array.isArray(roles) && roles.length > 0 ? roles : (role ? [role] : ['*']),
+            enabled: enabled !== false,
+            steps: Array.isArray(steps) ? steps : [],
+          };
           const res = await fetch('/api/tutorials', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(cleanT),
+            body: JSON.stringify(normalizedTutorial),
             credentials: 'include',
           });
-          if (res.ok) count++;
+          if (res.ok) {
+            count += 1;
+          } else {
+            const body = await res.json().catch(() => ({}));
+            failures.push(body?.error || `„${rawTutorial.title || 'Ohne Titel'}“ konnte nicht importiert werden (${res.status}).`);
+          }
         }
-        
-        setSuccess(`${count} Tutorials erfolgreich importiert!`);
-        loadData();
-        setTimeout(() => setSuccess(null), 3000);
-      } catch (err) {
-        setError('Fehler beim Importieren der Datei.');
+        if (count === 0) throw new Error(failures[0] || 'Die Datei enthält kein importierbares Tutorial.');
+        await loadData();
+        setSuccess(`${count} Tutorial${count === 1 ? '' : 's'} erfolgreich importiert${failures.length ? `; ${failures.length} Eintrag/Einträge übersprungen` : ''}.`);
+        setTimeout(() => setSuccess(null), 4000);
+      } catch (err: any) {
+        setError(err?.message || 'Fehler beim Importieren der Datei.');
       } finally {
         setSaving(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -1083,13 +1109,13 @@ export default function TutorialsManagementPage() {
     reader.readAsText(file);
   };
 
-  // ── DEVELOPER MODE CHECK ──
-  if (!isDeveloper) return (
+  // ── TUTORIAL-VERWALTUNGSBERECHTIGUNG ──
+  if (!canManageTutorials) return (
     <div className="flex items-center justify-center h-screen">
       <div className="card max-w-md text-center">
         <AlertCircle size={48} className="mx-auto mb-4 text-accent-red" />
-        <h2 className="text-xl font-bold text-text-primary mb-2">Entwickler-Modus erforderlich</h2>
-        <p className="text-text-muted mb-4">Die Tutorial-Verwaltung ist nur im Entwickler-Modus verfügbar. Aktiviere diesen in deinen Einstellungen.</p>
+        <h2 className="text-xl font-bold text-text-primary mb-2">Tutorial-Verwaltung nicht freigegeben</h2>
+        <p className="text-text-muted mb-4">Für Import, Verwaltung und Cloud-Synchronisation ist die Berechtigung „Tutorials verwalten“ erforderlich.</p>
         <button onClick={() => navigate('/settings')} className="btn-primary inline-flex items-center gap-2">
           <SettingsIcon size={16} /> Zu den Einstellungen
         </button>
@@ -1163,7 +1189,7 @@ export default function TutorialsManagementPage() {
 
       <Notifications />
 
-      {isDeveloper && (
+      {canManageTutorials && (
         <section className="card border border-accent-purple/30 bg-accent-purple/5 space-y-4" aria-labelledby="tutorial-cloud-heading">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
