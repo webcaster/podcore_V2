@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DATA_DIR } from '../database';
 import { getDefaultLayoutForType, getLayoutById, renderPdfHeader, renderPdfFooter, renderWatermark, preparePdfDocument } from '../pdfLayouts';
+import { getPodcastScopeId, podcastScopeClause } from '../services/podcastScope';
 
 const router: express.Router = express.Router();
 
@@ -63,13 +64,44 @@ function loadBranding(db: any): { podcastName: string; companyName: string; logo
 
 router.use(requireAuth as any);
 
+function recordInPodcastScope(db: any, req: AuthRequest, table: string, idColumn: string, id: string) {
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
+  return db.get(`SELECT * FROM ${table} WHERE ${idColumn} = ?${scope.sql}`, [id, ...scope.params]) as any;
+}
+
+router.param('sponsorId', (req: AuthRequest, res: Response, next: any, sponsorId: string) => {
+  const sponsor = recordInPodcastScope(getDb(), req, 'sponsors', 'id', sponsorId);
+  if (!sponsor) return res.status(404).json({ success: false, error: 'Sponsor im aktiven Podcast nicht gefunden' });
+  (req as any).podcastSponsor = sponsor;
+  next();
+});
+router.param('contractId', (req: AuthRequest, res: Response, next: any, contractId: string) => {
+  const contract = recordInPodcastScope(getDb(), req, 'sponsor_contracts', 'id', contractId);
+  if (!contract) return res.status(404).json({ success: false, error: 'Vertrag im aktiven Podcast nicht gefunden' });
+  (req as any).podcastContract = contract;
+  next();
+});
+router.param('bookingId', (req: AuthRequest, res: Response, next: any, bookingId: string) => {
+  const booking = recordInPodcastScope(getDb(), req, 'ad_bookings', 'id', bookingId);
+  if (!booking) return res.status(404).json({ success: false, error: 'Buchung im aktiven Podcast nicht gefunden' });
+  (req as any).podcastBooking = booking;
+  next();
+});
+router.param('offerId', (req: AuthRequest, res: Response, next: any, offerId: string) => {
+  const offer = recordInPodcastScope(getDb(), req, 'sponsor_offers', 'id', offerId);
+  if (!offer) return res.status(404).json({ success: false, error: 'Angebot im aktiven Podcast nicht gefunden' });
+  (req as any).podcastOffer = offer;
+  next();
+});
+
 // ============================================================
 // SPONSOR CONTRACTS
 // ============================================================
 
 router.get('/:sponsorId/contracts', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const contracts = db.all('SELECT * FROM sponsor_contracts WHERE sponsor_id = ? ORDER BY contract_start DESC', [req.params.sponsorId]) as any[];
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
+  const contracts = db.all(`SELECT * FROM sponsor_contracts WHERE sponsor_id = ?${scope.sql} ORDER BY contract_start DESC`, [req.params.sponsorId, ...scope.params]) as any[];
   return res.json({
     success: true, data: contracts.map(c => ({
       id: c.id, sponsorId: c.sponsor_id, contractStart: c.contract_start, contractEnd: c.contract_end,
@@ -81,12 +113,13 @@ router.get('/:sponsorId/contracts', requirePermission('canViewSponsors') as any,
 
 router.post('/:sponsorId/contracts', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const podcastId = getPodcastScopeId(req, db);
   const { contractStart, contractEnd, contactPerson, contactEmail, contactPhone, sponsoringType, notes } = req.body;
   if (!contractStart || !contractEnd) return res.status(400).json({ success: false, error: 'contractStart und contractEnd erforderlich' });
   const id = uuidv4();
   db.run(
-    `INSERT INTO sponsor_contracts (id, sponsor_id, contract_start, contract_end, contact_person, contact_email, contact_phone, sponsoring_type, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aktiv')`,
-    [id, req.params.sponsorId, contractStart, contractEnd, contactPerson || null, contactEmail || null, contactPhone || null, sponsoringType || null, notes || null],
+    `INSERT INTO sponsor_contracts (id, sponsor_id, contract_start, contract_end, contact_person, contact_email, contact_phone, sponsoring_type, notes, status, podcast_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aktiv', ?)`,
+    [id, req.params.sponsorId, contractStart, contractEnd, contactPerson || null, contactEmail || null, contactPhone || null, sponsoringType || null, notes || null, podcastId],
   );
   const c = db.get('SELECT * FROM sponsor_contracts WHERE id = ?', [id]) as any;
   return res.status(201).json({ success: true, data: c });
@@ -226,9 +259,10 @@ function getMappedBooking(db: any, bookingId: string) {
 
 router.get('/:sponsorId/bookings', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const scope = podcastScopeClause('ab.podcast_id', getPodcastScopeId(req, db));
   const { from, to, status } = req.query;
-  let query = `SELECT ab.*, COALESCE(s.name, c.name) as slot_name, sp.name as sponsor_name FROM ad_bookings ab LEFT JOIN ad_slots s ON ab.slot_id = s.id LEFT JOIN ad_categories c ON ab.slot_id = c.id JOIN sponsors sp ON ab.sponsor_id = sp.id WHERE ab.sponsor_id = ?`;
-  const params: any[] = [req.params.sponsorId];
+  let query = `SELECT ab.*, COALESCE(s.name, c.name) as slot_name, sp.name as sponsor_name FROM ad_bookings ab LEFT JOIN ad_slots s ON ab.slot_id = s.id LEFT JOIN ad_categories c ON ab.slot_id = c.id JOIN sponsors sp ON ab.sponsor_id = sp.id WHERE ab.sponsor_id = ?${scope.sql}`;
+  const params: any[] = [req.params.sponsorId, ...scope.params];
   if (from) { query += ' AND ab.booking_date >= ?'; params.push(from); }
   if (to) { query += ' AND ab.booking_date <= ?'; params.push(to); }
   if (status) { query += ' AND ab.status = ?'; params.push(status); }
@@ -239,11 +273,13 @@ router.get('/:sponsorId/bookings', requirePermission('canViewSponsors') as any, 
 
 router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const podcastId = getPodcastScopeId(req, db);
   const { slotId, bookingDate, bookingEndDate, notes, invoiceStatus, status, contractId, episodeRefs } = req.body;
   if (!slotId || !bookingDate) return res.status(400).json({ success: false, error: 'Werbe-Slot und Laufzeitbeginn sind erforderlich' });
   if (bookingEndDate && bookingEndDate < bookingDate) return res.status(400).json({ success: false, error: 'Das Laufzeitende darf nicht vor dem Laufzeitbeginn liegen' });
+  if (podcastId && !db.get('SELECT id FROM ad_slots WHERE id = ? AND podcast_id = ?', [slotId, podcastId])) return res.status(400).json({ success: false, error: 'Der Werbe-Slot gehört nicht zum aktiven Podcast' });
   if (contractId) {
-    const contract = db.get('SELECT contract_start, contract_end FROM sponsor_contracts WHERE id = ? AND sponsor_id = ?', [contractId, req.params.sponsorId]) as any;
+    const contract = db.get(`SELECT contract_start, contract_end FROM sponsor_contracts WHERE id = ? AND sponsor_id = ?${podcastId ? ' AND podcast_id = ?' : ''}`, podcastId ? [contractId, req.params.sponsorId, podcastId] : [contractId, req.params.sponsorId]) as any;
     if (!contract) return res.status(400).json({ success: false, error: 'Der ausgewählte Vertrag gehört nicht zu diesem Sponsor' });
     if (bookingDate < contract.contract_start || (bookingEndDate && bookingEndDate > contract.contract_end)) return res.status(400).json({ success: false, error: 'Die Buchung liegt außerhalb der gewählten Vertragslaufzeit' });
   }
@@ -251,8 +287,8 @@ router.post('/:sponsorId/bookings', requirePermission('canEditSponsors') as any,
   const pricing = calculateBookingPrice({ ...req.body, episodeRefs });
   const conflicts = getBookingConflicts(db, slotId, bookingDate, bookingEndDate || null);
   db.run(
-    `INSERT INTO ad_bookings (id, slot_id, sponsor_id, booking_date, booking_end_date, price, price_model, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs, discount, discount_type, listener_count, total_episodes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, slotId, req.params.sponsorId, bookingDate, bookingEndDate || null, pricing.unitPrice, pricing.priceModel, pricing.priceAdjustment, pricing.listenerFee, pricing.finalPrice, status || 'geplant', invoiceStatus || 'offen', notes || null, contractId || null, pricing.placementCount, JSON.stringify(episodeRefs || []), pricing.discount, pricing.discountType, pricing.listenerCount || null, pricing.totalEpisodes || null],
+    `INSERT INTO ad_bookings (id, slot_id, sponsor_id, booking_date, booking_end_date, price, price_model, price_adjustment, listener_fee, final_price, status, invoice_status, notes, contract_id, placement_count, episode_refs, discount, discount_type, listener_count, total_episodes, podcast_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, slotId, req.params.sponsorId, bookingDate, bookingEndDate || null, pricing.unitPrice, pricing.priceModel, pricing.priceAdjustment, pricing.listenerFee, pricing.finalPrice, status || 'geplant', invoiceStatus || 'offen', notes || null, contractId || null, pricing.placementCount, JSON.stringify(episodeRefs || []), pricing.discount, pricing.discountType, pricing.listenerCount || null, pricing.totalEpisodes || null, podcastId],
   );
   return res.status(201).json({ success: true, data: { ...getMappedBooking(db, id), priceBreakdown: pricing, conflicts } });
 });
@@ -340,7 +376,8 @@ router.get('/slots', requirePermission('canViewSponsors') as any, (_req: AuthReq
 
 router.get('/:sponsorId/offers', requirePermission('canViewSponsorOffers') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const offers = db.all(`SELECT * FROM sponsor_offers WHERE sponsor_id = ? ORDER BY created_at DESC`, [req.params.sponsorId]) as any[];
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
+  const offers = db.all(`SELECT * FROM sponsor_offers WHERE sponsor_id = ?${scope.sql} ORDER BY created_at DESC`, [req.params.sponsorId, ...scope.params]) as any[];
   return res.json({
     success: true, data: offers.map(o => ({
       ...o,
@@ -356,12 +393,13 @@ router.get('/:sponsorId/offers', requirePermission('canViewSponsorOffers') as an
 
 router.post('/:sponsorId/offers', requirePermission('canManageSponsorOffers') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const podcastId = getPodcastScopeId(req, db);
   const b = req.body;
   const id = uuidv4();
   const offerNumber = b.offerNumber || generateOfferNumber(db);
   db.run(
-    `INSERT INTO sponsor_offers (id, sponsor_id, title, offer_number, valid_until, status, intro_text, outro_text, positions, total_price, discount, discount_type, notes, offer_options, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    [id, req.params.sponsorId, b.title || 'Neues Angebot', offerNumber, b.validUntil || null, 'entwurf', b.introText || null, b.outroText || null, JSON.stringify(b.positions || []), b.totalPrice || b.total || 0, b.discount || 0, b.discountType || 'absolute', b.notes || null, JSON.stringify(b.offerOptions || null), (req as any).user?.id || null],
+    `INSERT INTO sponsor_offers (id, sponsor_id, title, offer_number, valid_until, status, intro_text, outro_text, positions, total_price, discount, discount_type, notes, offer_options, created_by, created_at, updated_at, podcast_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)`,
+    [id, req.params.sponsorId, b.title || 'Neues Angebot', offerNumber, b.validUntil || null, 'entwurf', b.introText || null, b.outroText || null, JSON.stringify(b.positions || []), b.totalPrice || b.total || 0, b.discount || 0, b.discountType || 'absolute', b.notes || null, JSON.stringify(b.offerOptions || null), (req as any).user?.id || null, podcastId],
   );
   return res.json({ success: true, data: { id, offerNumber } });
 });

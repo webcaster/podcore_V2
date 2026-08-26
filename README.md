@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.37**
+**Aktuelle Version: 2.16.38**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,12 @@
 PodCore 2.16.32 enthält eine eigene Lizenzanbindung für das Plugin [`PodCore Licensing for WooCommerce`](wordpress-plugin/podcore-licensing). Unterstützt werden Monatsabo, Jahresabo und Sonderabo. Lizenzen können online über die eigene WordPress-REST-API aktiviert oder als Ed25519-signiertes Dokument offline importiert werden. Ein lesbarer Lizenznachweis lässt sich unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Die vollständige Einrichtung steht in [`docs/RELEASE-2.16.32.md`](docs/RELEASE-2.16.32.md).
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.38: Echte Datenbereiche für mehrere Podcasts
+
+Das Mehrfach-Podcast-Add-on trennt Episoden, Medien, Medienordner, Sponsoren, Werbeplätze, Verträge, Buchungen und Angebote jetzt anhand einer Podcast-ID. Neue Datensätze übernehmen den aktiven Podcast automatisch. Beim Wechsel des aktiven Profils übermittelt der API-Client den Datenbereich mit jeder normalen Anfrage; die Serverrouten filtern Listen, Detailzugriffe, Streams, Freigaben und Exporte zusätzlich serverseitig. Rechte-Register und Produktionsgates bleiben über die technischen Daten ihrer Episode ebenfalls im jeweiligen Podcastbereich.
+
+Bestehende Einzelpodcast-Installationen bleiben kompatibel. Beim Upgrade werden nur bislang unzugeordnete Daten einmalig dem bereits aktiven Podcastprofil zugeteilt. Bereits zugeordnete Daten werden weder verschoben noch dupliziert.
 
 ### Neu in v2.16.37: Produktionsgates für Aufnahme, Audio, Rechte und Veröffentlichung
 

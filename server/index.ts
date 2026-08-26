@@ -34,6 +34,7 @@ import tutorialCloudRouter from './routers/tutorialCloud';
 import licenseRouter from './routers/license';
 import trashRouter from './routers/trash';
 import { initializeRealtime } from './services/realtime';
+import { getPodcastScopeId, podcastScopeClause } from './services/podcastScope';
 
 const app: import("express").Express = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -213,7 +214,9 @@ app.get('/api/media/stream/:filename', (req: any, res: any) => {
   if (!filename || filename !== rawFilename) return res.status(400).json({ success: false, error: 'Ungültiger Dateiname' });
 
   const db = getDb();
-  const asset = db.get('SELECT filepath, filename FROM assets WHERE filename = ?', [filename]) as any;
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
+  const asset = db.get(`SELECT filepath, filename FROM assets WHERE filename = ?${scope.sql}`, [filename, ...scope.params]) as any;
+  if (!asset) return res.status(404).json({ success: false, error: 'Datei im aktiven Podcast nicht gefunden' });
   const assetsRoot = path.resolve(ASSETS_DIR);
   let filePath = path.resolve(asset?.filepath || path.join(ASSETS_DIR, filename));
   const relativeAssetPath = path.relative(assetsRoot, filePath);

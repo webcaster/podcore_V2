@@ -220,6 +220,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const data = await adminApi.getPublicSettings();
       if (data) {
+        try {
+          const activePodcastId = String(data.activePodcastId || '');
+          if (activePodcastId) window.localStorage.setItem('podcore-active-podcast-id', activePodcastId);
+          else window.localStorage.removeItem('podcore-active-podcast-id');
+        } catch (_) {}
         const podcast = data.podcast || {};
         setPodcastProfile({
           name: podcast.name || data.general?.podcastName || '',

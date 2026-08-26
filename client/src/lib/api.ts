@@ -4,6 +4,13 @@
 
 const API_BASE = '/api';
 
+function activePodcastHeaders(): Record<string, string> {
+  try {
+    const activePodcastId = window.localStorage.getItem('podcore-active-podcast-id') || '';
+    return activePodcastId ? { 'X-PodCore-Podcast-Id': activePodcastId } : {};
+  } catch { return {}; }
+}
+
 class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -23,6 +30,7 @@ async function request<T>(
     method,
     headers: {
       'Content-Type': 'application/json',
+      ...activePodcastHeaders(),
       ...options?.headers,
     },
     credentials: 'include',
@@ -42,7 +50,7 @@ async function request<T>(
 // For raw JSON responses (backup export)
 async function requestRaw(method: string, path: string): Promise<any> {
   const url = `${API_BASE}${path}`;
-  const res = await fetch(url, { method, credentials: 'include' });
+  const res = await fetch(url, { method, credentials: 'include', headers: activePodcastHeaders() });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new ApiError(res.status, data.error || 'Fehler');
@@ -73,6 +81,7 @@ export const api = {
     const res = await fetch(`${API_BASE}${path}`, {
       method: 'POST',
       credentials: 'include',
+      headers: activePodcastHeaders(),
       body: formData,
     });
     const data = await res.json();

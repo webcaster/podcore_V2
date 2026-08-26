@@ -1254,6 +1254,39 @@ function initializeSchema(db: any): void {
   try { db.exec('ALTER TABLE sponsors ADD COLUMN max_episode_duration INTEGER DEFAULT NULL'); } catch (_) {}
   try { db.exec('ALTER TABLE sponsors ADD COLUMN address TEXT DEFAULT NULL'); } catch (_) {}
 
+  // v2.16.38: Mehrfach-Podcast-Datenbereiche. Die Spalten bleiben zunächst nullable,
+  // damit Einzelpodcast-Installationen ohne Profil vollständig rückwärtskompatibel sind.
+  for (const table of ['episodes', 'assets', 'media_folders', 'sponsors', 'ad_slots', 'ad_placements', 'episode_ad_bookings', 'sponsor_contracts', 'sponsor_offers']) {
+    try { db.exec(`ALTER TABLE ${table} ADD COLUMN podcast_id TEXT DEFAULT NULL`); } catch (_) {}
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_${table}_podcast_id ON ${table}(podcast_id)`); } catch (_) {}
+  }
+  // Bestehende Installationen kannten bislang nur einen globalen Datenbereich.
+  // Beim Upgrade werden ausschließlich noch leere Zuordnungen dem bereits aktiven
+  // Profil zugeteilt; Daten eines später angelegten Profils bleiben unangetastet.
+  try {
+    const appRow = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
+    const appSettings = appRow?.value ? JSON.parse(appRow.value) : {};
+    const profiles = Array.isArray(appSettings?.podcasts) ? appSettings.podcasts : [];
+    const activePodcastId = String(appSettings?.activePodcastId || profiles.find((profile: any) => profile?.active)?.id || '');
+    if (activePodcastId) {
+      for (const table of ['episodes', 'assets', 'media_folders', 'sponsors', 'ad_slots', 'ad_placements', 'episode_ad_bookings', 'sponsor_contracts', 'sponsor_offers']) {
+        try { db.run(`UPDATE ${table} SET podcast_id = ? WHERE podcast_id IS NULL OR podcast_id = ''`, [activePodcastId]); } catch (_) {}
+      }
+    }
+  } catch (error) {
+    console.warn('[DB] Mehrfach-Podcast-Erstzuordnung konnte nicht vollständig ausgeführt werden:', error);
+  }
+
+  // Untergeordnete Sponsoringdatensätze übernehmen ihren Bereich automatisch von
+  // der fachlichen Elternbeziehung. So bleiben auch bestehende Spezialrouten und
+  // künftige Importe ohne versehentlich globalen Datensatz konsistent.
+  try { db.exec(`CREATE TRIGGER IF NOT EXISTS trg_ad_slots_podcast AFTER INSERT ON ad_slots WHEN NEW.podcast_id IS NULL BEGIN UPDATE ad_slots SET podcast_id = (SELECT podcast_id FROM sponsors WHERE id = NEW.sponsor_id) WHERE id = NEW.id; END`); } catch (_) {}
+  try { db.exec(`CREATE TRIGGER IF NOT EXISTS trg_ad_placements_podcast AFTER INSERT ON ad_placements WHEN NEW.podcast_id IS NULL BEGIN UPDATE ad_placements SET podcast_id = (SELECT podcast_id FROM ad_slots WHERE id = NEW.ad_slot_id) WHERE id = NEW.id; END`); } catch (_) {}
+  try { db.exec(`CREATE TRIGGER IF NOT EXISTS trg_episode_bookings_podcast AFTER INSERT ON episode_ad_bookings WHEN NEW.podcast_id IS NULL BEGIN UPDATE episode_ad_bookings SET podcast_id = COALESCE((SELECT podcast_id FROM episodes WHERE id = NEW.episode_id), (SELECT podcast_id FROM ad_slots WHERE id = NEW.ad_slot_id), (SELECT podcast_id FROM sponsors WHERE id = NEW.sponsor_id)) WHERE id = NEW.id; END`); } catch (_) {}
+  try { db.exec(`CREATE TRIGGER IF NOT EXISTS trg_contracts_podcast AFTER INSERT ON sponsor_contracts WHEN NEW.podcast_id IS NULL BEGIN UPDATE sponsor_contracts SET podcast_id = (SELECT podcast_id FROM sponsors WHERE id = NEW.sponsor_id) WHERE id = NEW.id; END`); } catch (_) {}
+  try { db.exec(`CREATE TRIGGER IF NOT EXISTS trg_offers_podcast AFTER INSERT ON sponsor_offers WHEN NEW.podcast_id IS NULL BEGIN UPDATE sponsor_offers SET podcast_id = (SELECT podcast_id FROM sponsors WHERE id = NEW.sponsor_id) WHERE id = NEW.id; END`); } catch (_) {}
+  try { db.exec(`CREATE TRIGGER IF NOT EXISTS trg_bookings_podcast AFTER INSERT ON ad_bookings WHEN NEW.podcast_id IS NULL BEGIN UPDATE ad_bookings SET podcast_id = (SELECT podcast_id FROM sponsors WHERE id = NEW.sponsor_id) WHERE id = NEW.id; END`); } catch (_) {}
+
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_episode_revisions_episode ON episode_revisions(episode_id, revision_number DESC)'); } catch (_) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_episode_comments_episode_field ON episode_comments(episode_id, field_key, created_at)'); } catch (_) {}
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read, created_at DESC)'); } catch (_) {}

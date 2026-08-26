@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb, DATA_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 import { createTrashEntry } from './trash';
+import { getPodcastScopeId, podcastScopeClause } from '../services/podcastScope';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -101,6 +102,11 @@ function parseSponsor(row: any) {
   };
 }
 
+function getSponsorInScope(db: any, req: AuthRequest, sponsorId: string, includeDeleted = true) {
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
+  return db.get(`SELECT * FROM sponsors WHERE id = ?${includeDeleted ? '' : ' AND deleted_at IS NULL'}${scope.sql}`, [sponsorId, ...scope.params]) as any;
+}
+
 function parseAdSlot(row: any) {
   if (!row) return null;
   return {
@@ -169,9 +175,10 @@ function parsePlacement(row: any) {
 
 router.get('/', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
   const { status, search } = req.query;
-  let query = 'SELECT * FROM sponsors WHERE deleted_at IS NULL';
-  const params: any[] = [];
+  let query = `SELECT * FROM sponsors WHERE deleted_at IS NULL${scope.sql}`;
+  const params: any[] = [...scope.params];
 
   if (status) { query += ' AND status = ?'; params.push(status); }
   if (search) { query += ' AND (name LIKE ? OR company LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
@@ -179,7 +186,8 @@ router.get('/', requirePermission('canViewSponsors') as any, (req: AuthRequest, 
 
   const sponsors = db.all(query, params).map((s: any) => {
     const sponsor = parseSponsor(s);
-    const adSlots = db.all('SELECT * FROM ad_slots WHERE sponsor_id = ? ORDER BY created_at DESC', [s.id]).map((slot: any) => {
+    const slotScope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
+    const adSlots = db.all(`SELECT * FROM ad_slots WHERE sponsor_id = ?${slotScope.sql} ORDER BY created_at DESC`, [s.id, ...slotScope.params]).map((slot: any) => {
       const parsed = parseAdSlot(slot);
       parsed.placements = db.all('SELECT * FROM ad_placements WHERE ad_slot_id = ? ORDER BY created_at DESC', [slot.id]).map(parsePlacement);
       return parsed;
@@ -1402,7 +1410,7 @@ export default router;
 
 router.get('/:id', requirePermission('canViewSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const row = db.get('SELECT * FROM sponsors WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
+  const row = getSponsorInScope(db, req, req.params.id, false);
   if (!row) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
 
   const sponsor = parseSponsor(row);
@@ -1465,6 +1473,7 @@ router.delete('/:id/logo', requirePermission('canEditSponsors') as any, (req: Au
 
 router.post('/', requirePermission('canCreateSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const podcastId = getPodcastScopeId(req, db);
   const id = uuidv4();
   const { name, company, address, contactName, contactEmail, contactPhone, website, logo, status = 'interessent', description, notes, tags = [], interests = [], targetTags = [], targetCategories = [], targetAudience, preferredFormats = [], minEpisodeDuration, maxEpisodeDuration, totalBudget, currency = 'EUR', customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
 
@@ -1479,16 +1488,16 @@ router.post('/', requirePermission('canCreateSponsors') as any, (req: AuthReques
   let initialContract: any = null;
   try {
     db.exec('BEGIN IMMEDIATE');
-    db.run('INSERT INTO sponsors (id, name, company, address, contact_name, contact_email, contact_phone, website, logo, status, description, notes, tags, interests, target_tags, target_categories, target_audience, preferred_formats, min_episode_duration, max_episode_duration, total_budget, currency, customer_number, contract_start, contract_end, contact_hint, ad_delivery, color, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, name, company, address || null, contactName || null, contactEmail || null, contactPhone || null, website || null, logo || null, status, description || null, notes || null, JSON.stringify(tags), JSON.stringify(interests), JSON.stringify(targetTags), JSON.stringify(targetCategories), targetAudience || null, JSON.stringify(preferredFormats), minEpisodeDuration || null, maxEpisodeDuration || null, totalBudget || null, currency, customerNumber || null, contractStart || null, contractEnd || null, contactHint || null, adDelivery || 'self', color || null, req.user!.id]);
+    db.run('INSERT INTO sponsors (id, name, company, address, contact_name, contact_email, contact_phone, website, logo, status, description, notes, tags, interests, target_tags, target_categories, target_audience, preferred_formats, min_episode_duration, max_episode_duration, total_budget, currency, customer_number, contract_start, contract_end, contact_hint, ad_delivery, color, created_by, podcast_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, name, company, address || null, contactName || null, contactEmail || null, contactPhone || null, website || null, logo || null, status, description || null, notes || null, JSON.stringify(tags), JSON.stringify(interests), JSON.stringify(targetTags), JSON.stringify(targetCategories), targetAudience || null, JSON.stringify(preferredFormats), minEpisodeDuration || null, maxEpisodeDuration || null, totalBudget || null, currency, customerNumber || null, contractStart || null, contractEnd || null, contactHint || null, adDelivery || 'self', color || null, req.user!.id, podcastId]);
 
     if (contractStart && contractEnd) {
       const contractId = uuidv4();
       const contractNotes = 'Erstvertrag – bei Anlage des Sponsors automatisch aus der Vertragslaufzeit erstellt.';
       db.run(
-        `INSERT INTO sponsor_contracts (id, sponsor_id, contract_start, contract_end, contact_person, contact_email, contact_phone, notes, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aktiv')`,
-        [contractId, id, contractStart, contractEnd, contactName || null, contactEmail || null, contactPhone || null, contractNotes]
+        `INSERT INTO sponsor_contracts (id, sponsor_id, contract_start, contract_end, contact_person, contact_email, contact_phone, notes, status, podcast_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aktiv', ?)`,
+        [contractId, id, contractStart, contractEnd, contactName || null, contactEmail || null, contactPhone || null, contractNotes, podcastId]
       );
       initialContract = {
         id: contractId, sponsorId: id, contractStart, contractEnd,
@@ -1510,12 +1519,13 @@ router.post('/', requirePermission('canCreateSponsors') as any, (req: AuthReques
 
 router.put('/:id', requirePermission('canEditSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  if (!getSponsorInScope(db, req, req.params.id)) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
   const { name, company, address, contactName, contactEmail, contactPhone, website, logo, status, description, notes, tags, interests, targetTags, targetCategories, targetAudience, preferredFormats, minEpisodeDuration, maxEpisodeDuration, totalBudget, currency, customerNumber, contractStart, contractEnd, contactHint, adDelivery, color } = req.body;
 
   db.run(`UPDATE sponsors SET name = COALESCE(?, name), company = COALESCE(?, company), address = ?, contact_name = ?, contact_email = ?, contact_phone = ?, website = ?, logo = COALESCE(?, logo), status = COALESCE(?, status), description = ?, notes = ?, tags = COALESCE(?, tags), interests = COALESCE(?, interests), target_tags = COALESCE(?, target_tags), target_categories = COALESCE(?, target_categories), target_audience = ?, preferred_formats = COALESCE(?, preferred_formats), min_episode_duration = ?, max_episode_duration = ?, total_budget = ?, currency = COALESCE(?, currency), customer_number = ?, contract_start = ?, contract_end = ?, contact_hint = ?, ad_delivery = COALESCE(?, ad_delivery), color = COALESCE(?, color), updated_at = datetime('now') WHERE id = ?`,
     [name ?? null, company ?? null, address ?? null, contactName ?? null, contactEmail ?? null, contactPhone ?? null, website ?? null, logo ?? null, status ?? null, description ?? null, notes ?? null, tags !== undefined ? JSON.stringify(tags || []) : null, interests !== undefined ? JSON.stringify(interests || []) : null, targetTags !== undefined ? JSON.stringify(targetTags || []) : null, targetCategories !== undefined ? JSON.stringify(targetCategories || []) : null, targetAudience ?? null, preferredFormats !== undefined ? JSON.stringify(preferredFormats || []) : null, minEpisodeDuration ?? null, maxEpisodeDuration ?? null, totalBudget ?? null, currency ?? null, customerNumber ?? null, contractStart ?? null, contractEnd ?? null, contactHint ?? null, adDelivery ?? null, color ?? null, req.params.id]);
 
-  const row = db.get('SELECT * FROM sponsors WHERE id = ?', [req.params.id]) as any;
+  const row = getSponsorInScope(db, req, req.params.id) as any;
   if (!row) return res.status(404).json({ success: false, error: 'Sponsor nicht gefunden' });
 
   const sponsor = parseSponsor(row);
@@ -1525,7 +1535,7 @@ router.put('/:id', requirePermission('canEditSponsors') as any, (req: AuthReques
 
 router.delete('/:id', requirePermission('canDeleteSponsors') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const sponsor = db.get('SELECT * FROM sponsors WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
+  const sponsor = getSponsorInScope(db, req, req.params.id, false);
   if (!sponsor) return res.status(404).json({ success: false, error: 'Aktiver Sponsor nicht gefunden' });
   try {
     db.exec('BEGIN IMMEDIATE');

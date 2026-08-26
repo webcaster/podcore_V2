@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../database';
 import { createTrashEntry } from './trash';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
+import { getPodcastScopeId, podcastScopeClause } from '../services/podcastScope';
 
 const router: import("express").Router = Router();
 router.use(requireAuth as any);
@@ -30,6 +31,7 @@ function parseEpisode(row: any) {
     showNotes: row.show_notes || '',
     altDuration: row.alt_duration ?? null,
     plannedDate: row.planned_date || null,
+    podcastId: row.podcast_id || null,
     // Freigabe-Workflow
     approvalStatus: row.approval_status || 'ausstehend',
     approvedBy: row.approved_by || null,
@@ -40,15 +42,23 @@ function parseEpisode(row: any) {
   };
 }
 
+function getEpisodeInScope(db: any, req: AuthRequest, episodeId: string, includeDeleted = true) {
+  const podcastId = getPodcastScopeId(req, db);
+  const deletedClause = includeDeleted ? '' : ' AND deleted_at IS NULL';
+  const scope = podcastScopeClause('podcast_id', podcastId);
+  return db.get(`SELECT * FROM episodes WHERE id = ?${deletedClause}${scope.sql}`, [episodeId, ...scope.params]) as any;
+}
+
 // GET /api/episodes
 router.get('/', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
   const { status, search, page = '1', pageSize = '20', archived, limit } = req.query;
 
-  let query = 'SELECT * FROM episodes WHERE deleted_at IS NULL';
-  let countQuery = 'SELECT COUNT(*) as count FROM episodes WHERE deleted_at IS NULL';
-  const params: any[] = [];
-  const countParams: any[] = [];
+  let query = `SELECT * FROM episodes WHERE deleted_at IS NULL${scope.sql}`;
+  let countQuery = `SELECT COUNT(*) as count FROM episodes WHERE deleted_at IS NULL${scope.sql}`;
+  const params: any[] = [...scope.params];
+  const countParams: any[] = [...scope.params];
 
   if (status) {
     query += ' AND status = ?';
@@ -101,9 +111,10 @@ router.get('/', requirePermission('canViewEpisodes') as any, (req: AuthRequest, 
 // GET /api/episodes/pending-approval — list episodes awaiting approval (MUST be before /:id)
 router.get('/pending-approval', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
   const episodes = db.all(
-    `SELECT * FROM episodes WHERE deleted_at IS NULL AND approval_status = 'angefragt' ORDER BY approval_requested_at ASC`,
-    []
+    `SELECT * FROM episodes WHERE deleted_at IS NULL AND approval_status = 'angefragt'${scope.sql} ORDER BY approval_requested_at ASC`,
+    scope.params
   ).map(parseEpisode);
   return res.json({ success: true, data: episodes });
 });
@@ -111,7 +122,7 @@ router.get('/pending-approval', requirePermission('canViewEpisodes') as any, (re
 // GET /api/episodes/:id/export-archive — vollständige Archivmappe als ZIP
 router.get('/:id/export-archive', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const row = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  const row = getEpisodeInScope(db, req, req.params.id);
   if (!row) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
   if (!(row.is_archived === 1 || row.is_archived === true || row.status === 'archiviert')) {
     return res.status(409).json({ success: false, error: 'Eine Archivmappe kann erst nach dem Archivieren der Episode erstellt werden.' });
@@ -313,7 +324,7 @@ router.delete('/templates/:templateId', requirePermission('canEditEpisodes') as 
 // GET /api/episodes/:id
 router.get('/:id', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]);
+  const episode = getEpisodeInScope(db, req, req.params.id);
 
   if (!episode) {
     return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
@@ -325,6 +336,7 @@ router.get('/:id', requirePermission('canViewEpisodes') as any, (req: AuthReques
 // POST /api/episodes
 router.post('/', requirePermission('canCreateEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const podcastId = getPodcastScopeId(req, db);
   const id = uuidv4();
   const {
     number, title, subtitle, description, status = 'entwurf',
@@ -337,14 +349,14 @@ router.post('/', requirePermission('canCreateEpisodes') as any, (req: AuthReques
   }
 
   db.run(`
-    INSERT INTO episodes (id, number, title, subtitle, description, status, recording_date, publish_date, duration, hosts, guests, tags, blocks, sponsors, notes, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO episodes (id, number, title, subtitle, description, status, recording_date, publish_date, duration, hosts, guests, tags, blocks, sponsors, notes, created_by, podcast_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id, number || null, title, subtitle || null, description || null, status,
     recordingDate || null, publishDate || null, duration || null,
     JSON.stringify(hosts), JSON.stringify(guests), JSON.stringify(tags),
     JSON.stringify(blocks), JSON.stringify(sponsors), notes || null,
-    req.user!.id
+    req.user!.id, podcastId
   ]);
 
   // --- Auto Ad Assignment on Create (same logic as PUT) ---
@@ -353,10 +365,10 @@ router.post('/', requirePermission('canCreateEpisodes') as any, (req: AuthReques
       SELECT s.*, c.is_exclusive, c.id as category_id
       FROM ad_slots s
       LEFT JOIN ad_categories c ON s.category_id = c.id
-      WHERE s.status IN ('bestätigt', 'aktiv')
+      WHERE s.status IN ('bestätigt', 'aktiv')${podcastId ? ' AND s.podcast_id = ?' : ''}
       AND (s.start_date IS NULL OR s.start_date <= ?)
       AND (s.end_date IS NULL OR s.end_date >= ?)
-    `, [publishDate, publishDate]) as any[];
+    `, podcastId ? [podcastId, publishDate, publishDate] : [publishDate, publishDate]) as any[];
 
     for (const slot of slots) {
       if (slot.is_exclusive) {
@@ -382,7 +394,7 @@ router.post('/', requirePermission('canCreateEpisodes') as any, (req: AuthReques
 router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthRequest, res: Response) => {
   try {
   const db = getDb();
-  const existing = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  const existing = getEpisodeInScope(db, req, req.params.id) as any;
 
   if (!existing) {
     return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
@@ -488,7 +500,7 @@ router.put('/:id', requirePermission('canEditEpisodes') as any, (req: AuthReques
 // DELETE /api/episodes/:id
 router.delete('/:id', requirePermission('canDeleteEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const existing = db.get('SELECT * FROM episodes WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
+  const existing = getEpisodeInScope(db, req, req.params.id, false) as any;
 
   if (!existing) {
     return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
@@ -529,7 +541,7 @@ router.delete('/:id', requirePermission('canDeleteEpisodes') as any, (req: AuthR
 // POST /api/episodes/:id/duplicate
 router.post('/:id/duplicate', requirePermission('canCreateEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const original = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  const original = getEpisodeInScope(db, req, req.params.id) as any;
 
   if (!original) {
     return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
@@ -537,13 +549,13 @@ router.post('/:id/duplicate', requirePermission('canCreateEpisodes') as any, (re
 
   const newId = uuidv4();
   db.run(`
-    INSERT INTO episodes (id, number, title, subtitle, description, status, recording_date, publish_date, duration, hosts, guests, tags, blocks, sponsors, notes, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO episodes (id, number, title, subtitle, description, status, recording_date, publish_date, duration, hosts, guests, tags, blocks, sponsors, notes, created_by, podcast_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     newId, null, `${original.title} (Kopie)`, original.subtitle, original.description,
     'entwurf', null, null, original.duration,
     original.hosts, original.guests, original.tags,
-    original.blocks, '[]', original.notes, req.user!.id
+    original.blocks, '[]', original.notes, req.user!.id, original.podcast_id || getPodcastScopeId(req, db)
   ]);
 
   const episode = db.get('SELECT * FROM episodes WHERE id = ?', [newId]);
@@ -559,7 +571,7 @@ router.post('/:id/duplicate', requirePermission('canCreateEpisodes') as any, (re
 //   addNotesPage=1     → Leere Notizseite am Ende anfügen
 router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const row = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  const row = getEpisodeInScope(db, req, req.params.id);
   if (!row) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
   const ep = parseEpisode(row);
   const PDFDocument = require('pdfkit');
@@ -1029,7 +1041,7 @@ router.get('/:id/export-pdf', requirePermission('canViewEpisodes') as any, (req:
 // POST /api/episodes/:id/request-approval — request approval for an episode
 router.post('/:id/request-approval', requirePermission('canRequestApproval') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  const episode = getEpisodeInScope(db, req, req.params.id) as any;
   if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
 
   // Check if workflow is enabled
@@ -1053,7 +1065,7 @@ router.post('/:id/request-approval', requirePermission('canRequestApproval') as 
 // POST /api/episodes/:id/approve — approve an episode
 router.post('/:id/approve', requirePermission('canApproveEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  const episode = getEpisodeInScope(db, req, req.params.id) as any;
   if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
 
   const { notes } = req.body;
@@ -1070,7 +1082,7 @@ router.post('/:id/approve', requirePermission('canApproveEpisodes') as any, (req
 // POST /api/episodes/:id/reject — reject an episode (send back for revision)
 router.post('/:id/reject', requirePermission('canApproveEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  const episode = getEpisodeInScope(db, req, req.params.id) as any;
   if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
 
   const { notes } = req.body;
@@ -1087,7 +1099,7 @@ router.post('/:id/reject', requirePermission('canApproveEpisodes') as any, (req:
 // POST /api/episodes/:id/reset-approval — reset approval status (back to pending)
 router.post('/:id/reset-approval', requirePermission('canEditEpisodes') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const episode = db.get('SELECT * FROM episodes WHERE id = ?', [req.params.id]) as any;
+  const episode = getEpisodeInScope(db, req, req.params.id) as any;
   if (!episode) return res.status(404).json({ success: false, error: 'Episode nicht gefunden' });
 
   db.run(

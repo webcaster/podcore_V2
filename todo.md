@@ -6,3 +6,4 @@
 - [x] v2.16.37: Einheitliche Audio-Abnahme mit Schnittübergabe, Qualitätscheck und Freigabestatus pro Episode umgesetzt.
 - [x] v2.16.37: Release-Paket, Rechte-Register und externe Übergabepakete für Veröffentlichung, Promotion und Outsourcing umgesetzt.
 - [x] v2.16.37: Episodenworkflow, Berechtigungen, Fehlerpfade und Produktions-Build vollständig geprüft sowie ein bereinigtes Endnutzerpaket bereitgestellt.
+- [x] v2.16.38: Vollständige Mehrfach-Podcast-Datenbereichstrennung für Episoden, Medien, Sponsoring und Rechte implementiert, bestehende Daten sicher zugeordnet, Podcastwechsel sowie Exporte geprüft und als getestetes Endnutzerpaket bereitgestellt.

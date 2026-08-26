@@ -63,6 +63,7 @@ export default function PodcastsPage() {
     try {
       const clean = next.map(p => ({ ...p, active: p.id === nextActiveId }));
       await adminApi.updateSettings({ podcasts: clean, activePodcastId: nextActiveId });
+      try { nextActiveId ? window.localStorage.setItem('podcore-active-podcast-id', nextActiveId) : window.localStorage.removeItem('podcore-active-podcast-id'); } catch (_) {}
       setPodcasts(clean);
       setActiveId(nextActiveId);
       showSuccess('Podcast-Verwaltung wurde gespeichert.');

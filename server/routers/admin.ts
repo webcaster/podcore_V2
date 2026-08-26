@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { DATA_DIR as DATABASE_DATA_DIR, DB_PATH, getDatabaseHealth, getDb, getDefaultPermissions, runDatabaseMaintenance } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
+import { assignLegacyPodcastData } from '../services/podcastScope';
 import {
   UpdateBackupManifest,
   applyStagedApplication,
@@ -58,10 +59,15 @@ router.get('/settings/public', (req: Request, res: Response) => {
   };
   const features = { ...defaultFeatures, ...(settings.features || {}) };
 
+  const podcasts = Array.isArray(settings?.podcasts) ? settings.podcasts : [];
+  const activePodcastId = settings?.activePodcastId || podcasts.find((podcast: any) => podcast?.active)?.id || '';
+  const activePodcast = podcasts.find((podcast: any) => podcast?.id === activePodcastId) || settings.podcast || {};
   return res.json({
     success: true,
     data: {
-      podcast: settings.podcast || {},
+      podcast: activePodcast,
+      activePodcastId,
+      podcasts,
       technicalDefaults: settings.technicalDefaults || {},
       general: {
         podcastName: settings.general?.podcastName || settings.podcast?.name || 'PodCore',
@@ -514,6 +520,16 @@ router.put('/settings', requirePermission('canManageSettings') as any, (req: Aut
   const current = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
   const currentSettings = current ? JSON.parse(current.value) : {};
   const newSettings = { ...currentSettings, ...req.body };
+
+  const previousProfiles = Array.isArray(currentSettings?.podcasts) ? currentSettings.podcasts : [];
+  const nextProfiles = Array.isArray(newSettings?.podcasts) ? newSettings.podcasts : [];
+  const nextActivePodcastId = String(newSettings?.activePodcastId || nextProfiles.find((podcast: any) => podcast?.active)?.id || '').trim();
+  // Sobald erstmalig ein Podcastprofil aktiviert wird, gehören vorhandene
+  // Einzelpodcast-Daten eindeutig zu diesem Profil. Spätere Profilwechsel
+  // verschieben keine Daten mehr.
+  if (previousProfiles.length === 0 && nextProfiles.length > 0 && nextActivePodcastId) {
+    assignLegacyPodcastData(db, nextActivePodcastId);
+  }
 
   // node-sqlite3-wasm supports ON CONFLICT
   db.run(`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,

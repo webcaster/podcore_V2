@@ -6,6 +6,7 @@ import fs from 'fs';
 import { getDb, ASSETS_DIR, DATA_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 import { createTrashEntry } from './trash';
+import { getPodcastScopeId, podcastScopeClause } from '../services/podcastScope';
 
 const router: import("express").Router = Router();
 router.use(requireAuth as any);
@@ -115,6 +116,11 @@ function parseAsset(row: any) {
   };
 }
 
+function getAssetInScope(db: any, req: AuthRequest, assetId: string, includeDeleted = true) {
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
+  return db.get(`SELECT * FROM assets WHERE id = ?${includeDeleted ? '' : ' AND deleted_at IS NULL'}${scope.sql}`, [assetId, ...scope.params]) as any;
+}
+
 // ============================================================
 // BRANDING
 // ============================================================
@@ -209,9 +215,10 @@ router.delete('/branding/:type', requirePermission('canManageSettings') as any, 
 
 router.get('/', requirePermission('canViewMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
   const { type, search, folderId } = req.query;
-  let query = 'SELECT * FROM assets WHERE deleted_at IS NULL';
-  const params: any[] = [];
+  let query = `SELECT * FROM assets WHERE deleted_at IS NULL${scope.sql}`;
+  const params: any[] = [...scope.params];
 
   if (type) { query += ' AND type = ?'; params.push(type); }
   if (search) { query += ' AND (name LIKE ? OR description LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
@@ -232,9 +239,10 @@ router.get('/', requirePermission('canViewMedia') as any, (req: AuthRequest, res
 
 router.get('/folders', requirePermission('canViewMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
   const { parentId } = req.query;
-  let query = 'SELECT * FROM media_folders WHERE 1=1';
-  const params: any[] = [];
+  let query = `SELECT * FROM media_folders WHERE 1=1${scope.sql}`;
+  const params: any[] = [...scope.params];
 
   if (parentId) {
     if (parentId === 'root') {
@@ -252,11 +260,12 @@ router.get('/folders', requirePermission('canViewMedia') as any, (req: AuthReque
 
 router.post('/folders', requirePermission('canUploadMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const podcastId = getPodcastScopeId(req, db);
   const { name, parentId } = req.body;
   if (!name) return res.status(400).json({ success: false, error: 'Name erforderlich' });
 
   const id = uuidv4();
-  db.run('INSERT INTO media_folders (id, name, parent_id) VALUES (?, ?, ?)', [id, name, parentId || null]);
+  db.run('INSERT INTO media_folders (id, name, parent_id, podcast_id) VALUES (?, ?, ?, ?)', [id, name, parentId || null, podcastId]);
   const folder = db.get('SELECT * FROM media_folders WHERE id = ?', [id]);
   return res.status(201).json({ success: true, data: folder });
 });
@@ -315,7 +324,7 @@ router.get('/stream/:filename', (req: AuthRequest, res: Response) => {
 // Stream by asset ID (used by AudioEditor)
 router.get('/:id/stream', (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  const asset = getAssetInScope(db, req, req.params.id);
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
 
   let filePath = asset.filepath;
@@ -362,7 +371,7 @@ router.get('/:id/stream', (req: AuthRequest, res: Response) => {
 
 router.get('/:id', requirePermission('canViewMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]);
+  const asset = getAssetInScope(db, req, req.params.id);
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
   return res.json({ success: true, data: parseAsset(asset) });
 });
@@ -396,6 +405,7 @@ router.post('/upload', requirePermission('canUploadMedia') as any, (req: AuthReq
     if (err) return res.status(400).json({ success: false, error: err.message });
 
     const db = getDb();
+    const podcastId = getPodcastScopeId(req, db);
     const file = (req as any).file;
     if (!file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
 
@@ -410,8 +420,8 @@ router.post('/upload', requirePermission('canUploadMedia') as any, (req: AuthReq
     // Detect duration via ffprobe
     const detectedDuration = await getAudioDuration(file.path);
 
-    db.run('INSERT INTO assets (id, name, type, filename, filepath, filesize, duration, mime_type, description, tags, uploaded_by, folder_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, assetName, type, file.filename, file.path, file.size, detectedDuration, file.mimetype, description || null, tags ? JSON.stringify(JSON.parse(tags)) : '[]', req.user!.id, folderId || null]);
+    db.run('INSERT INTO assets (id, name, type, filename, filepath, filesize, duration, mime_type, description, tags, uploaded_by, folder_id, podcast_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, assetName, type, file.filename, file.path, file.size, detectedDuration, file.mimetype, description || null, tags ? JSON.stringify(JSON.parse(tags)) : '[]', req.user!.id, folderId || null, podcastId]);
 
     // Save optional metadata if provided
     const hasMeta = artist || album || year || genre || language || copyright || license || mood || notes || sourceUrl || recordingDate || location;
@@ -437,6 +447,8 @@ router.post('/upload', requirePermission('canUploadMedia') as any, (req: AuthReq
 
 router.put('/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
+  const existing = getAssetInScope(db, req, req.params.id);
+  if (!existing) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
   const {
     name, type, description, tags, folderId,
     // Extended metadata
@@ -487,14 +499,14 @@ router.put('/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest
     ]
   );
 
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]);
+  const asset = getAssetInScope(db, req, req.params.id);
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
   return res.json({ success: true, data: parseAsset(asset) });
 });
 
 router.delete('/:id', requirePermission('canDeleteMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ? AND deleted_at IS NULL', [req.params.id]) as any;
+  const asset = getAssetInScope(db, req, req.params.id, false) as any;
   if (!asset) return res.status(404).json({ success: false, error: 'Aktives Asset nicht gefunden' });
   try {
     db.exec('BEGIN IMMEDIATE');
@@ -515,7 +527,7 @@ router.delete('/:id', requirePermission('canDeleteMedia') as any, (req: AuthRequ
 
 router.post('/:id/comments', requirePermission('canCommentMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  const asset = getAssetInScope(db, req, req.params.id) as any;
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
 
   const { text, content } = req.body;
@@ -541,7 +553,7 @@ router.post('/:id/comments', requirePermission('canCommentMedia') as any, (req: 
 
 router.delete('/:id/comments/:commentId', requirePermission('canCommentMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  const asset = getAssetInScope(db, req, req.params.id) as any;
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
 
   const comments = JSON.parse(asset.comments || '[]').filter((c: any) => c.id !== req.params.commentId);
@@ -554,7 +566,7 @@ router.delete('/:id/comments/:commentId', requirePermission('canCommentMedia') a
 // GET /api/media/:id/markers — Alle Marker eines Assets laden
 router.get('/:id/markers', (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  const asset = getAssetInScope(db, req, req.params.id) as any;
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
   const markers = JSON.parse(asset.markers || '[]');
   return res.json({ success: true, data: markers });
@@ -563,7 +575,7 @@ router.get('/:id/markers', (req: AuthRequest, res: Response) => {
 // POST /api/media/:id/markers — Marker speichern (ersetzt alle)
 router.post('/:id/markers', requirePermission('canEditMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  const asset = getAssetInScope(db, req, req.params.id) as any;
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
 
   const { markers } = req.body;
@@ -593,7 +605,7 @@ router.post('/:id/markers', requirePermission('canEditMedia') as any, (req: Auth
 // POST /api/media/:id/markers/add — Einzelnen Marker hinzufügen
 router.post('/:id/markers/add', requirePermission('canEditMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  const asset = getAssetInScope(db, req, req.params.id) as any;
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
 
   try {
@@ -619,7 +631,7 @@ router.post('/:id/markers/add', requirePermission('canEditMedia') as any, (req: 
 // DELETE /api/media/:id/markers/:markerId — Einzelnen Marker löschen
 router.delete('/:id/markers/:markerId', requirePermission('canEditMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  const asset = getAssetInScope(db, req, req.params.id) as any;
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
 
   const markers = JSON.parse(asset.markers || '[]').filter((m: any) => m.id !== req.params.markerId);
@@ -630,7 +642,7 @@ router.delete('/:id/markers/:markerId', requirePermission('canEditMedia') as any
 // POST /api/media/:id/timed-comments — Zeitbezogenen Kommentar hinzufügen
 router.post('/:id/timed-comments', requirePermission('canCommentMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  const asset = getAssetInScope(db, req, req.params.id) as any;
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
 
   const { text, time } = req.body;
@@ -656,7 +668,7 @@ router.post('/:id/timed-comments', requirePermission('canCommentMedia') as any, 
 // DELETE /api/media/:id/timed-comments/:commentId — Zeitbezogenen Kommentar löschen
 router.delete('/:id/timed-comments/:commentId', requirePermission('canCommentMedia') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
-  const asset = db.get('SELECT * FROM assets WHERE id = ?', [req.params.id]) as any;
+  const asset = getAssetInScope(db, req, req.params.id) as any;
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
 
   const comments = JSON.parse(asset.comments || '[]').filter((c: any) => c.id !== req.params.commentId);
