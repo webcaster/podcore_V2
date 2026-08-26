@@ -194,7 +194,7 @@ router.get('/tutorials/:id', requireAuth, async (req: AuthRequest, res: Response
 });
 
 // ── CREATE TUTORIAL (DEVELOPER MODE ONLY) ─────────────────────────────────
-router.post('/tutorials', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
+router.post('/tutorials', requireAuth, requirePermission('canManageTutorials') as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const user = req.user!;
@@ -294,7 +294,7 @@ router.post('/tutorials/import-url', requireAuth, requirePermission('canImportTu
 });
 
 // ── UPDATE TUTORIAL (DEVELOPER MODE ONLY) ─────────────────────────────────
-router.put('/tutorials/:id', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
+router.put('/tutorials/:id', requireAuth, requirePermission('canManageTutorials') as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const { id } = req.params;
@@ -331,7 +331,7 @@ router.put('/tutorials/:id', requireAuth, requireDeveloper as any, async (req: A
 });
 
 // ── DELETE TUTORIAL (DEVELOPER MODE ONLY) ─────────────────────────────────
-router.delete('/tutorials/:id', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
+router.delete('/tutorials/:id', requireAuth, requirePermission('canManageTutorials') as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const existing = db.get('SELECT id FROM tutorials WHERE id = ?', [req.params.id]) as any;
@@ -418,7 +418,7 @@ router.post('/tutorials/:id/progress', requireAuth, async (req: AuthRequest, res
 });
 
 // ── GET ALL TUTORIALS FOR ADMIN ────────────────────────────────────────────
-router.get('/admin/tutorials', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
+router.get('/admin/tutorials', requireAuth, requirePermission('canManageTutorials') as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const tutorials = db.all('SELECT * FROM tutorials ORDER BY created_at DESC', []) as any[];
@@ -430,7 +430,7 @@ router.get('/admin/tutorials', requireAuth, requireDeveloper as any, async (req:
 });
 
 // ── GET USER PROGRESS FOR A SPECIFIC TUTORIAL (ADMIN) ─────────────────────
-router.get('/admin/tutorials/:id/progress', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
+router.get('/admin/tutorials/:id/progress', requireAuth, requirePermission('canManageTutorials') as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const progress = db.all(
@@ -459,7 +459,7 @@ router.get('/admin/tutorials/:id/progress', requireAuth, requireDeveloper as any
 });
 
 // ── RESET USER TUTORIAL PROGRESS (ADMIN) ──────────────────────────────────
-router.post('/admin/tutorials/:id/reset/:userId', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
+router.post('/admin/tutorials/:id/reset/:userId', requireAuth, requirePermission('canManageTutorials') as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     db.run(
@@ -474,7 +474,7 @@ router.post('/admin/tutorials/:id/reset/:userId', requireAuth, requireDeveloper 
 });
 
 // ── INITIALIZE TUTORIAL FOR USER (ADMIN) ──────────────────────────────────
-router.post('/admin/tutorials/:id/initialize/:userId', requireAuth, requireDeveloper as any, async (req: AuthRequest, res: Response) => {
+router.post('/admin/tutorials/:id/initialize/:userId', requireAuth, requirePermission('canManageTutorials') as any, async (req: AuthRequest, res: Response) => {
   try {
     const db = getDb();
     const { id, userId } = req.params;
