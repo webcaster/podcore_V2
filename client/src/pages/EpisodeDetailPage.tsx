@@ -8,7 +8,7 @@ import {
   AlertTriangle, Lightbulb, BarChart3, Cpu, Mic, Volume2, Film, Info, CheckCircle, Circle,
   Search, Star, CheckSquare, Square, BookOpen, UserCheck, Layers, ExternalLink, X,
   MessageSquare, HelpCircle, FileEdit, StickyNote, Target, Timer, Timer as TimerIcon,
-  RotateCcw, FolderOpen, RefreshCw, Eye, MessageCircle, History, Lock, Wifi, WifiOff
+  RotateCcw, FolderOpen, RefreshCw, Eye, MessageCircle, History, Lock, Wifi, WifiOff, ClipboardCheck
 } from 'lucide-react';
 import { episodesApi, adminApi, editorialApi, editorialHubApi, sponsorsApi, mediaApi, episodeWorkflowApi, type EditorialTextBlock, type TopicWorkshopDraft } from '../lib/api';
 import { sponsorsV2Api, episodeTemplatesApi } from '../lib/api-v2';
@@ -23,6 +23,7 @@ import SponsoringQuickBook from '../components/episodes/SponsoringQuickBook';
 import EpisodeMediaManager from '../components/episodes/EpisodeMediaManager';
 import CommentThread from '../components/episodes/CommentThread';
 import ChangeHistory from '../components/episodes/ChangeHistory';
+import ProductionWorkflowGate from '../components/episodes/ProductionWorkflowGate';
 
 const BLOCK_TYPES = [
   { value: 'intro', label: 'Intro', color: 'text-accent-cyan', bg: 'bg-accent-cyan/20' },
@@ -162,7 +163,7 @@ export default function EpisodeDetailPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [workflowUpdatedAt, setWorkflowUpdatedAt] = useState<string | undefined>();
-  const [activeTab, setActiveTab] = useState<'script' | 'shownotes' | 'meta' | 'production' | 'technical' | 'ads' | 'hub' | 'preview'>('script');
+  const [activeTab, setActiveTab] = useState<'script' | 'shownotes' | 'meta' | 'production' | 'workflow' | 'technical' | 'ads' | 'hub' | 'preview'>('script');
   const [expandedSideMenus, setExpandedSideMenus] = useState<{ [key: string]: boolean }>({ feedback: false, history: false });
   const [expandedMediaSections, setExpandedMediaSections] = useState<{ [key: string]: boolean }>({ media: false, audio: false });
 
@@ -253,7 +254,7 @@ export default function EpisodeDetailPage() {
   const [showNotes, setShowNotes] = useState('');
 
   // Technical data fields
-  const [technicalData, setTechnicalData] = useState<Record<string, string>>({
+  const [technicalData, setTechnicalData] = useState<Record<string, any>>({
     sampleRate: '',
     bitrate: '',
     format: '',
@@ -1336,6 +1337,7 @@ export default function EpisodeDetailPage() {
           { key: 'shownotes', label: 'Show-Notes', icon: <StickyNote size={16} /> },
           { key: 'meta', label: 'Metadaten', icon: <Tag size={16} /> },
           { key: 'production', label: 'Produktion', icon: <Wrench size={16} /> },
+          { key: 'workflow', label: 'Qualitätsgate', icon: <ClipboardCheck size={16} /> },
           { key: 'technical', label: 'Technik', icon: <Settings size={16} /> },
           { key: 'ads', label: 'Werbung', icon: <Megaphone size={16} /> },
           { key: 'hub', label: 'Redaktionshub', icon: <BookOpen size={16} /> },
@@ -1905,6 +1907,18 @@ export default function EpisodeDetailPage() {
               <h2 className="font-semibold text-text-primary">Produktion</h2>
               <RichTextEditor value={productionInfo} onChange={html => { setProductionInfo(html); markDirty(); }} minHeight={300} placeholder="Anweisungen für den Cutter..." />
             </div>
+          )}
+
+          {activeTab === 'workflow' && (
+            <ProductionWorkflowGate
+              value={typeof technicalData.productionWorkflow === 'string'
+                ? technicalData.productionWorkflow
+                : technicalData.productionWorkflow ? JSON.stringify(technicalData.productionWorkflow) : ''}
+              disabled={!can('canEditEpisodes')}
+              episode={{ id, title: form.title, number: form.number, publishDate: form.publishDate, description: form.description, showNotes }}
+              onChange={value => updateTechnical('productionWorkflow', value)}
+              onNotify={showSuccess}
+            />
           )}
 
           {activeTab === 'technical' && (

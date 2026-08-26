@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.36**
+**Aktuelle Version: 2.16.37**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,10 @@
 PodCore 2.16.32 enthält eine eigene Lizenzanbindung für das Plugin [`PodCore Licensing for WooCommerce`](wordpress-plugin/podcore-licensing). Unterstützt werden Monatsabo, Jahresabo und Sonderabo. Lizenzen können online über die eigene WordPress-REST-API aktiviert oder als Ed25519-signiertes Dokument offline importiert werden. Ein lesbarer Lizenznachweis lässt sich unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Die vollständige Einrichtung steht in [`docs/RELEASE-2.16.32.md`](docs/RELEASE-2.16.32.md).
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.37: Produktionsgates für Aufnahme, Audio, Rechte und Veröffentlichung
+
+Der Episodeneditor besitzt einen neuen Tab **„Qualitätsgate“**. Dort werden Aufnahmebereitschaft, Studio- und Setuphinweise, Audio-Abnahme, Release-Paket, Rechte-Register sowie externe Übergaben direkt mit der Episode gespeichert. Für die Zusammenarbeit lassen sich strukturierte JSON-Übergabepakete und kopierfertige Markdown-Release-Pakete exportieren. Die neuen Daten erweitern die vorhandenen technischen Episodendaten ohne Datenbankmigration und bleiben dadurch auch in bestehenden Sicherungs- und Archivabläufen verfügbar.
 
 ### Neu in v2.16.36: Sichtbare Tutorialkarte über jeder App-Ansicht
 
