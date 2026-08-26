@@ -1,5 +1,9 @@
 # PodCore – Release Notes
 
+## v2.16.36 – WordPress-HTML-Seiten für Entwickler und Kontakt
+
+Das Paket `wordpress-pages` enthält eine responsive Entwicklerseite und eine Kontaktseite als HTML-Blöcke für WordPress. Die Kontaktseite besitzt einen klar gekennzeichneten Einbettungsbereich für Formular-Shortcodes von Contact Form 7 oder WPForms. Die Einrichtung ist in [`wordpress-pages/README.md`](wordpress-pages/README.md) beschrieben.
+
 ## v2.16.35 – Add-on für mehrere Podcasts
 
 PodCore kann jetzt mehrere Podcast-Profile innerhalb einer Installation verwalten. Berechtigte Nutzer legen Profile an, bearbeiten Stammdaten, wählen das aktive Profil und entfernen Profile nach einer Sicherheitsabfrage. Die Daten werden in den bestehenden geschützten App-Einstellungen gespeichert; eine Datenbankmigration ist nicht erforderlich.
