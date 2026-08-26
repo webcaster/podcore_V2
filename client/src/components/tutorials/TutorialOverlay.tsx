@@ -463,20 +463,20 @@ const TutorialOverlayContent: React.FC = () => {
               </span>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
+            <div className="tutorial-actions">
               <button
                 onClick={previousStep}
                 disabled={currentStep === 0}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-obsidian-700 text-text-secondary hover:text-text-primary disabled:opacity-30 transition-all"
+                className="tutorial-action-button tutorial-action-button--secondary flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-obsidian-700 text-text-secondary hover:text-text-primary disabled:opacity-30 transition-all"
               >
                 <ChevronLeft size={16} /> Zurück
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="tutorial-secondary-actions">
                 <button
                   type="button"
                   onClick={() => { closeTutorial(); navigate('/wiki'); }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-obsidian-700 text-text-secondary hover:text-text-primary transition-all"
+                  className="tutorial-action-button tutorial-action-button--secondary flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-obsidian-700 text-text-secondary hover:text-text-primary transition-all"
                   title="Interaktive Führung schließen und die vollständige Hilfe im Wiki öffnen"
                 >
                   <BookOpen size={14} /> Wiki
@@ -484,7 +484,7 @@ const TutorialOverlayContent: React.FC = () => {
                 {step.allowSkip && (
                   <button
                     onClick={skipTutorial}
-                    className="text-xs text-text-muted hover:text-text-primary transition-colors px-3 py-2"
+                    className="tutorial-action-button tutorial-action-button--quiet text-xs text-text-muted hover:text-text-primary transition-colors px-3 py-2"
                   >
                     Überspringen
                   </button>
@@ -493,24 +493,25 @@ const TutorialOverlayContent: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setManualPosition(null)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-obsidian-700 text-text-secondary hover:text-text-primary transition-all"
+                    className="tutorial-action-button tutorial-action-button--secondary flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-obsidian-700 text-text-secondary hover:text-text-primary transition-all"
                     title="Tutorialfenster wieder automatisch am Zielbereich ausrichten"
                   >
-                    <RotateCcw size={14} /> Position zurücksetzen
+                    <RotateCcw size={14} /> Position zurück
                   </button>
                 )}
-                
+              </div>
+              <div className="tutorial-primary-actions">
                 {requiresTargetClick ? (
                   <>
                     <button
                       onClick={focusTarget}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
+                      className="tutorial-action-button tutorial-action-button--primary flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
                     >
                       <MousePointerClick size={16} /> Zum Bereich
                     </button>
                     <button
                       onClick={continueTutorial}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-obsidian-700 text-text-primary hover:bg-obsidian-600 transition-all"
+                      className="tutorial-action-button tutorial-action-button--primary flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-obsidian-700 text-text-primary hover:bg-obsidian-600 transition-all"
                       title="Fahre fort, wenn der Bereich nicht verfügbar ist oder du die Aktion bereits ausgeführt hast."
                     >
                       {isLastStep ? 'Abschließen' : 'Weiter'} <ChevronRight size={16} />
@@ -519,21 +520,21 @@ const TutorialOverlayContent: React.FC = () => {
                 ) : requiresConfirmation ? (
                   <button
                     onClick={() => { setActionConfirmed(true); continueTutorial(); }}
-                    className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
+                    className="tutorial-action-button tutorial-action-button--primary flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
                   >
                     <CheckCircle2 size={16} /> Erledigt – {isLastStep ? 'abschließen' : 'weiter'}
                   </button>
                 ) : isLastStep ? (
                   <button
                     onClick={completeTutorial}
-                    className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
+                    className="tutorial-action-button tutorial-action-button--primary flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
                   >
                     Abschließen
                   </button>
                 ) : (
                   <button
                     onClick={nextStep}
-                    className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
+                    className="tutorial-action-button tutorial-action-button--primary flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold bg-accent-purple text-white hover:bg-accent-purple/80 transition-all"
                   >
                     Weiter <ChevronRight size={16} />
                   </button>

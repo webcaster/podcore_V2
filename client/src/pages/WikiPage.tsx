@@ -131,7 +131,7 @@ const wikiData: WikiCategory[] = [
           },
           {
             heading: 'Wenn eine Führung nicht startet',
-            text: 'Ein Tutorial ohne gültige Schritte wird nicht mehr als leerer Bereich geöffnet. PodCore zeigt stattdessen einen verständlichen Hinweis und bietet den direkten Wechsel in die Wissensbase an. Sollte die Tutorialkarte selbst nicht gerendert werden können, bleibt die übrige App bedienbar und zeigt eine lokale Fallback-Karte mit Schließen- und Wiki-Aktion. Öffnen Sie das Tutorial später erneut oder bitten Sie einen Administrator, die Schritte im Entwickler-Modus zu prüfen.',
+            text: 'Ein Tutorial ohne gültige Schritte wird nicht mehr als leerer Bereich geöffnet. PodCore zeigt stattdessen einen verständlichen Hinweis und bietet den direkten Wechsel in die Wissensbase an. Sollte die Tutorialkarte selbst nicht gerendert werden können, bleibt die übrige App bedienbar und zeigt eine lokale Fallback-Karte mit Schließen- und Wiki-Aktion. Auf schmalen Ansichten ordnen sich die Tutorialaktionen automatisch untereinander, damit Zurück, Wiki und Weiter vollständig erreichbar bleiben. Öffnen Sie das Tutorial später erneut oder bitten Sie einen Administrator, die Schritte im Entwickler-Modus zu prüfen.',
             tip: 'Ein Tutorial kann auch ohne Screenshot verwendet werden. Entscheidend sind Titel, Erklärung und gegebenenfalls ein Menü- oder Klickziel.',
           },
           {

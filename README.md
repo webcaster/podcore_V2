@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.39**
+**Aktuelle Version: 2.16.40**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,10 @@
 PodCore 2.16.32 enthält eine eigene Lizenzanbindung für das Plugin [`PodCore Licensing for WooCommerce`](wordpress-plugin/podcore-licensing). Unterstützt werden Monatsabo, Jahresabo und Sonderabo. Lizenzen können online über die eigene WordPress-REST-API aktiviert oder als Ed25519-signiertes Dokument offline importiert werden. Ein lesbarer Lizenznachweis lässt sich unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Die vollständige Einrichtung steht in [`docs/RELEASE-2.16.32.md`](docs/RELEASE-2.16.32.md).
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.40: Vollständig erreichbare Tutorialnavigation
+
+Die Fußleiste der interaktiven Tutorials ordnet **Zurück**, **Wiki**, **Überspringen**, **Position zurück** sowie die primäre Weiter- oder Abschlussaktion jetzt responsiv an. Auf mittleren Breiten umbrechen die Hilfsaktionen innerhalb ihrer eigenen Gruppe; auf kleinen Bildschirmen werden die Aktionen untereinander angeordnet. So bleibt insbesondere **Weiter** vollständig sichtbar und erreichbar. Die längere Beschriftung der Rücksetzung wurde auf **„Position zurück“** gekürzt, ohne die Funktion zu verändern.
 
 ### Neu in v2.16.39: Robuster Tutorialstart, optionale Profile und Logverwaltung
 

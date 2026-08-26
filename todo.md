@@ -10,3 +10,4 @@
 - [x] v2.16.39: Vollseitenabbruch beim Tutorialstart diagnostiziert, die Tutorialüberlagerung fehlerisoliert abgesichert und eine sichtbare Fallback-Hilfe bereitgestellt.
 - [x] v2.16.39: Mehrfach-Podcast als optionale Einstellung ergänzt und einen direkten, verständlichen Wechsel in das zweite angelegte Podcastprofil bereitgestellt.
 - [x] v2.16.39: Administratoren einen Log-Export sowie eine bestätigte Bereinigung von Protokolldaten angeboten, ohne Anwendungs-, Backup- oder Mediendaten zu löschen.
+- [x] v2.16.40: Tutorial-Aktionsleiste responsiv korrigiert, damit Zurück, Wiki, Überspringen, Positionsrücksetzung und Weiter in kleinen und mittleren Ansichten vollständig erreichbar bleiben.
