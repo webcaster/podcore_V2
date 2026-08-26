@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.38**
+**Aktuelle Version: 2.16.39**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,14 @@
 PodCore 2.16.32 enthält eine eigene Lizenzanbindung für das Plugin [`PodCore Licensing for WooCommerce`](wordpress-plugin/podcore-licensing). Unterstützt werden Monatsabo, Jahresabo und Sonderabo. Lizenzen können online über die eigene WordPress-REST-API aktiviert oder als Ed25519-signiertes Dokument offline importiert werden. Ein lesbarer Lizenznachweis lässt sich unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Die vollständige Einrichtung steht in [`docs/RELEASE-2.16.32.md`](docs/RELEASE-2.16.32.md).
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.39: Robuster Tutorialstart, optionale Profile und Logverwaltung
+
+Der Tutorialstart ist gegen einen React-Hook-Reihenfolgefehler korrigiert, der beim Wechsel von keiner aktiven Führung zu einem geöffneten Tutorial die gesamte Ansicht leeren konnte. Eine lokale Fehlergrenze stellt sicher, dass ein Fehler der Tutorialkarte nie mehr die übrige App blockiert. Stattdessen bleibt eine bedienbare Fallback-Hilfe mit Schließen- und Wiki-Aktion sichtbar.
+
+Mehrfach-Podcast ist jetzt bewusst optional. Unter **Einstellungen → Podcast** kann die Funktion aktiviert werden. Danach öffnet **Profile wechseln** die Podcastverwaltung; über **Aktiv setzen** wird das zweite angelegte Profil ausgewählt und der Arbeitsbereich mit dessen getrenntem Datenbereich neu geladen.
+
+Im Admin-Tab **Logs** können Administratoren Protokolle als JSON exportieren. Eine Bereinigung verlangt die Texteingabe **„LOGS LÖSCHEN“** und löscht ausschließlich Einträge der Fehlerprotokolltabelle – keine Episoden, Medien, Backups oder anderen Anwendungsdaten.
 
 ### Neu in v2.16.38: Echte Datenbereiche für mehrere Podcasts
 

@@ -284,6 +284,7 @@ export default function AdminPage() {
   };
 
   const [logs, setLogs] = useState<any[]>([]);
+  const [isLogMutating, setIsLogMutating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [roleChanged, setRoleChanged] = useState(false);
 
@@ -307,6 +308,33 @@ export default function AdminPage() {
       const data = await adminApi.getLogs();
       setLogs(data?.items || data || []);
     } catch (err: any) { showError(err.message); }
+  };
+
+  const exportLogs = async () => {
+    setIsLogMutating(true);
+    try {
+      const blob = await adminApi.exportLogs();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `podcore-logexport-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+      showSuccess('Log-Export wurde heruntergeladen.');
+    } catch (error: any) { showError(error.message || 'Log-Export fehlgeschlagen'); }
+    finally { setIsLogMutating(false); }
+  };
+
+  const clearLogs = async () => {
+    const confirmation = window.prompt('Es werden ausschließlich System- und Fehlerprotokolle gelöscht. Anwendungsdaten, Medien und Backups bleiben unverändert.\n\nTippe LOGS LÖSCHEN ein, um fortzufahren:');
+    if (confirmation === null) return;
+    if (confirmation.trim() !== 'LOGS LÖSCHEN') { showError('Die Bestätigung stimmt nicht überein. Die Bereinigung wurde abgebrochen.'); return; }
+    setIsLogMutating(true);
+    try {
+      const result: any = await adminApi.deleteLogs(confirmation.trim());
+      showSuccess(`${result?.deleted || 0} Log-Einträge wurden gelöscht.`);
+      await loadLogs();
+    } catch (error: any) { showError(error.message || 'Log-Bereinigung fehlgeschlagen'); }
+    finally { setIsLogMutating(false); }
   };
 
   const loadTrash = async () => {
@@ -1547,6 +1575,8 @@ export default function AdminPage() {
               <p className="text-text-muted text-xs mt-0.5">{logs.length} Einträge geladen</p>
             </div>
             <div className="flex items-center gap-2">
+              {currentUser?.role === 'admin' && <button onClick={exportLogs} disabled={isLogMutating} className="btn-ghost inline-flex items-center gap-1.5 text-xs" title="Alle aktuell gespeicherten Fehlerprotokolle als JSON herunterladen"><Download size={14} /> Exportieren</button>}
+              {currentUser?.role === 'admin' && <button onClick={clearLogs} disabled={isLogMutating || logs.length === 0} className="btn-ghost inline-flex items-center gap-1.5 text-xs text-accent-red hover:text-accent-red" title="Nur Fehlerprotokolle nach einer Texteingabe löschen"><Trash2 size={14} /> Logs löschen</button>}
               <button
                 onClick={async () => {
                   try {

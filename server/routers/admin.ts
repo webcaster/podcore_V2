@@ -478,6 +478,24 @@ router.get('/logs', requirePermission('canViewErrorLogs') as any, (req: AuthRequ
   return res.json({ success: true, data: { items: logs, total, page: pageNum, pageSize: pageSizeNum, totalPages: Math.ceil(total / pageSizeNum) } });
 });
 
+router.get('/logs/export', requirePermission('canViewErrorLogs') as any, (req: AuthRequest, res: Response) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ success: false, error: 'Nur Administratoren dürfen Protokolle exportieren' });
+  const db = getDb();
+  const { level, category, from, to } = req.query;
+  let query = 'SELECT * FROM error_logs WHERE 1=1';
+  const params: any[] = [];
+  if (level) { query += ' AND level = ?'; params.push(level); }
+  if (category) { query += ' AND category = ?'; params.push(category); }
+  if (from) { query += ' AND timestamp >= ?'; params.push(from); }
+  if (to) { query += ' AND timestamp <= ?'; params.push(to); }
+  query += ' ORDER BY timestamp DESC';
+  const items = db.all(query, params).map((row: any) => ({ ...row, userId: row.user_id, userAgent: row.user_agent }));
+  const exportedAt = new Date().toISOString();
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="podcore-logexport-${exportedAt.slice(0, 10)}.json"`);
+  return res.send(JSON.stringify({ exportedAt, total: items.length, filters: { level, category, from, to }, items }, null, 2));
+});
+
 router.post('/logs', (req: AuthRequest, res: Response) => {
   const db = getDb();
   const { level = 'error', category = 'frontend', message, details, stack, url } = req.body;
@@ -492,8 +510,13 @@ router.post('/logs', (req: AuthRequest, res: Response) => {
 });
 
 router.delete('/logs', requirePermission('canViewErrorLogs') as any, (req: AuthRequest, res: Response) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ success: false, error: 'Nur Administratoren dürfen Protokolle bereinigen' });
   const db = getDb();
   const { before } = req.query;
+  const confirmation = String(req.body?.confirmation || '');
+  if (confirmation !== 'LOGS LÖSCHEN') return res.status(400).json({ success: false, error: 'Bitte bestätige die Bereinigung mit „LOGS LÖSCHEN“' });
+
+  const count = Number((db.get(`SELECT COUNT(*) as count FROM error_logs${before ? ' WHERE timestamp < ?' : ''}`, before ? [before] : []) as any)?.count || 0);
 
   if (before) {
     db.run('DELETE FROM error_logs WHERE timestamp < ?', [before]);
@@ -501,7 +524,7 @@ router.delete('/logs', requirePermission('canViewErrorLogs') as any, (req: AuthR
     db.run('DELETE FROM error_logs', []);
   }
 
-  return res.json({ success: true, message: 'Logs gelöscht' });
+  return res.json({ success: true, data: { deleted: count }, message: `${count} Log-Einträge gelöscht` });
 });
 
 // ============================================================

@@ -993,6 +993,10 @@ export default function SettingsPage() {
             <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" /></div>
           ) : (
             <>
+              <div className="card flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div><h3 className="font-semibold text-text-primary flex items-center gap-2"><Radio size={16} /> Mehrfach-Podcast</h3><p className="mt-1 text-sm text-text-secondary">Optional mehrere getrennte Podcastbereiche für Episoden, Medien, Sponsoring und Rechte verwalten.</p></div>
+                <div className="flex items-center gap-2"><button onClick={async () => { setIsSaving(true); try { const enabled = settings?.multiPodcastEnabled !== true; const updated = await adminApi.updateSettings({ multiPodcastEnabled: enabled }); setSettings((current: any) => ({ ...current, ...updated, multiPodcastEnabled: enabled })); showSuccess(enabled ? 'Mehrfach-Podcast aktiviert.' : 'Mehrfach-Podcast deaktiviert. Das aktive Profil bleibt als Datenbereich erhalten.'); if (enabled) navigate('/podcasts'); } catch (error: any) { showError(error.message || 'Mehrfach-Podcast konnte nicht gespeichert werden.'); } finally { setIsSaving(false); } }} disabled={isSaving} className={settings?.multiPodcastEnabled === true ? 'btn-secondary' : 'btn-primary'}>{settings?.multiPodcastEnabled === true ? 'Deaktivieren' : 'Aktivieren'}</button>{settings?.multiPodcastEnabled === true && <button onClick={() => navigate('/podcasts')} className="btn-secondary">Profile wechseln</button>}</div>
+              </div>
               <div className="card space-y-4">
                 <h3 className="font-semibold text-text-primary flex items-center gap-2">
                   <Mic2 size={16} /> Podcast-Stammdaten

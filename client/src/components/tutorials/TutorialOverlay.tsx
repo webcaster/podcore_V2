@@ -5,6 +5,27 @@ import { useTutorial, TutorialStep } from '../../contexts/TutorialContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './TutorialOverlay.css';
 
+class TutorialOverlayBoundary extends React.Component<{ onClose: () => void; onOpenWiki: () => void; children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error: Error) { console.error('Tutorialüberlagerung konnte nicht gerendert werden:', error); }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return createPortal(
+      <div className="tutorial-overlay-root">
+        <div className="tutorial-tooltip-container" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)', position: 'fixed', display: 'block' }}>
+          <div className="tutorial-card">
+            <div className="tutorial-header"><div className="flex items-center gap-3"><BookOpen size={20} className="text-accent-purple" /><h3 className="text-lg font-bold text-text-primary">Tutorial konnte nicht geöffnet werden</h3></div><button onClick={this.props.onClose} className="text-text-muted hover:text-text-primary transition-colors p-1"><X size={20} /></button></div>
+            <div className="tutorial-body"><p className="text-base text-text-secondary leading-relaxed">Die App bleibt weiterhin nutzbar. Schließe die Führung oder öffne die Anleitung im Wiki. Der technische Fehler wurde lokal erfasst.</p></div>
+            <div className="tutorial-footer flex justify-end gap-2"><button onClick={this.props.onClose} className="btn-secondary">Schließen</button><button onClick={() => { this.props.onClose(); this.props.onOpenWiki(); }} className="btn-primary inline-flex items-center gap-2"><BookOpen size={16} /> Im Wiki öffnen</button></div>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+}
+
 const ANN_COLORS = [
   '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
   '#0891b2', '#65a30d', '#ea580c', '#9333ea', '#0d9488',
@@ -84,7 +105,7 @@ const TARGET_ROUTES: Record<string, string> = {
   'editorial-tab-notes': '/editorial?tab=notes',
 };
 
-export const TutorialOverlay: React.FC = () => {
+const TutorialOverlayContent: React.FC = () => {
   const { activeTutorial, currentStep, nextStep, previousStep, skipTutorial, completeTutorial, closeTutorial, openWiki } = useTutorial();
   const navigate = useNavigate();
   const location = useLocation();
@@ -217,6 +238,17 @@ export const TutorialOverlay: React.FC = () => {
     return () => document.removeEventListener('click', handleTargetClick, true);
   }, [activeTutorial, completeTutorial, currentRequiresTargetClick, currentStep, currentStepData?.target, findTargetElement, nextStep]);
 
+  const clampManualPosition = (top: number, left: number) => {
+    const node = tooltipRef.current;
+    const width = node?.offsetWidth || Math.min(500, window.innerWidth - 24);
+    const height = node?.offsetHeight || Math.min(680, window.innerHeight - 24);
+    const margin = 12;
+    return {
+      top: Math.max(margin, Math.min(top, window.innerHeight - height - margin)),
+      left: Math.max(margin, Math.min(left, window.innerWidth - width - margin)),
+    };
+  };
+
   if (!activeTutorial) return null;
 
   const step = activeTutorial.steps[currentStep];
@@ -260,17 +292,6 @@ export const TutorialOverlay: React.FC = () => {
     element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
     (element as HTMLElement).focus?.({ preventScroll: true });
   };
-
-  const clampManualPosition = useCallback((top: number, left: number) => {
-    const node = tooltipRef.current;
-    const width = node?.offsetWidth || Math.min(500, window.innerWidth - 24);
-    const height = node?.offsetHeight || Math.min(680, window.innerHeight - 24);
-    const margin = 12;
-    return {
-      top: Math.max(margin, Math.min(top, window.innerHeight - height - margin)),
-      left: Math.max(margin, Math.min(left, window.innerWidth - width - margin)),
-    };
-  }, []);
 
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
     const interactiveChild = (event.target as HTMLElement).closest('button, a, input, textarea, select');
@@ -526,4 +547,9 @@ export const TutorialOverlay: React.FC = () => {
     </>,
     document.body
   );
+};
+
+export const TutorialOverlay: React.FC = () => {
+  const { closeTutorial, openWiki } = useTutorial();
+  return <TutorialOverlayBoundary onClose={closeTutorial} onOpenWiki={openWiki}><TutorialOverlayContent /></TutorialOverlayBoundary>;
 };

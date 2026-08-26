@@ -131,7 +131,7 @@ const wikiData: WikiCategory[] = [
           },
           {
             heading: 'Wenn eine Führung nicht startet',
-            text: 'Ein Tutorial ohne gültige Schritte wird nicht mehr als leerer Bereich geöffnet. PodCore zeigt stattdessen einen verständlichen Hinweis und bietet den direkten Wechsel in die Wissensbase an. Öffnen Sie das Tutorial später erneut oder bitten Sie einen Administrator, die Schritte im Entwickler-Modus zu prüfen.',
+            text: 'Ein Tutorial ohne gültige Schritte wird nicht mehr als leerer Bereich geöffnet. PodCore zeigt stattdessen einen verständlichen Hinweis und bietet den direkten Wechsel in die Wissensbase an. Sollte die Tutorialkarte selbst nicht gerendert werden können, bleibt die übrige App bedienbar und zeigt eine lokale Fallback-Karte mit Schließen- und Wiki-Aktion. Öffnen Sie das Tutorial später erneut oder bitten Sie einen Administrator, die Schritte im Entwickler-Modus zu prüfen.',
             tip: 'Ein Tutorial kann auch ohne Screenshot verwendet werden. Entscheidend sind Titel, Erklärung und gegebenenfalls ein Menü- oder Klickziel.',
           },
           {
@@ -753,6 +753,11 @@ const wikiData: WikiCategory[] = [
             heading: 'Technische Standarddaten',
             text: 'Hinterlegen Sie wiederkehrende Audio-Spezifikationen, Hard- und Software, Nachbearbeitung sowie Musik- und Lizenzhinweise als Standard für neue Episoden.',
           },
+          {
+            heading: 'Mehrere Podcasts optional verwalten',
+            text: 'Öffnen Sie Einstellungen → Podcast und aktivieren Sie Mehrfach-Podcast nur bei Bedarf. Danach führt Profile wechseln zur Profilverwaltung. Wählen Sie beim gewünschten zweiten Profil Aktiv setzen; der Arbeitsbereich wird neu geladen und zeigt ausschließlich dessen getrennte Episoden, Medien, Sponsoring- und Rechteinformationen.',
+            tip: 'Das Deaktivieren entfernt keine Daten. Das zuletzt aktive Profil bleibt der verwendete Datenbereich.',
+          },
         ],
       },
       {
@@ -877,7 +882,7 @@ const wikiData: WikiCategory[] = [
           },
           {
             heading: 'Datenbank und Logs',
-            text: 'Der Datenbankstatus zeigt die tatsächlich aktive Datenbank, Datenbankdatei, Datenordner und Medienablage. SQLite ist der unterstützte Standardbetrieb. Eine MySQL-/MariaDB-Verbindung kann getestet und für eine vollständige Datenkopie vorbereitet werden; diese Kopie stellt die laufende PodCore-Instanz nicht automatisch um. Logs helfen bei der Fehlersuche. Führen Sie Migrationen ausschließlich mit aktuellem Backup und geplantem Wartungsfenster aus.',
+            text: 'Der Datenbankstatus zeigt die tatsächlich aktive Datenbank, Datenbankdatei, Datenordner und Medienablage. SQLite ist der unterstützte Standardbetrieb. Eine MySQL-/MariaDB-Verbindung kann getestet und für eine vollständige Datenkopie vorbereitet werden; diese Kopie stellt die laufende PodCore-Instanz nicht automatisch um. Im Logs-Tab können Administratoren Fehlerprotokolle als JSON exportieren. Die Bereinigung verlangt die Eingabe LOGS LÖSCHEN und betrifft ausschließlich Protokolle, niemals Anwendungsdaten, Medien oder Backups. Führen Sie Migrationen ausschließlich mit aktuellem Backup und geplantem Wartungsfenster aus.',
           },
         ],
       },

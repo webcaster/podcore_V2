@@ -7,3 +7,6 @@
 - [x] v2.16.37: Release-Paket, Rechte-Register und externe Übergabepakete für Veröffentlichung, Promotion und Outsourcing umgesetzt.
 - [x] v2.16.37: Episodenworkflow, Berechtigungen, Fehlerpfade und Produktions-Build vollständig geprüft sowie ein bereinigtes Endnutzerpaket bereitgestellt.
 - [x] v2.16.38: Vollständige Mehrfach-Podcast-Datenbereichstrennung für Episoden, Medien, Sponsoring und Rechte implementiert, bestehende Daten sicher zugeordnet, Podcastwechsel sowie Exporte geprüft und als getestetes Endnutzerpaket bereitgestellt.
+- [x] v2.16.39: Vollseitenabbruch beim Tutorialstart diagnostiziert, die Tutorialüberlagerung fehlerisoliert abgesichert und eine sichtbare Fallback-Hilfe bereitgestellt.
+- [x] v2.16.39: Mehrfach-Podcast als optionale Einstellung ergänzt und einen direkten, verständlichen Wechsel in das zweite angelegte Podcastprofil bereitgestellt.
+- [x] v2.16.39: Administratoren einen Log-Export sowie eine bestätigte Bereinigung von Protokolldaten angeboten, ohne Anwendungs-, Backup- oder Mediendaten zu löschen.

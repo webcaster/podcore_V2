@@ -549,8 +549,14 @@ export const adminApi = {
     return api.get<any>(`/admin/logs${buildQs(params)}`);
   },
   createLog: (data: any) => api.post('/admin/logs', data),
-  deleteLogs: (params?: any) => {
-    return api.delete(`/admin/logs${buildQs(params)}`);
+  deleteLogs: (confirmation: string, params?: any) => api.delete(`/admin/logs${buildQs(params)}`, { confirmation }),
+  exportLogs: async (params?: any) => {
+    const response = await fetch(`${API_BASE}/admin/logs/export${buildQs(params)}`, { credentials: 'include', headers: activePodcastHeaders() });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new ApiError(response.status, data.error || 'Log-Export fehlgeschlagen');
+    }
+    return response.blob();
   },
 
   // Settings
