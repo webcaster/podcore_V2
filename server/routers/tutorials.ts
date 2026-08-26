@@ -5,6 +5,12 @@ import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth'
 
 const router: Router = express.Router();
 
+// Eingebettete Tutorial-Screenshots werden nach dem Import offline gespeichert.
+// Acht MiB Bilddaten decken hochauflösende Desktop-Aufnahmen ab, ohne die globale
+// 50-MiB-Importgrenze für eine Tutorial-Datei zu umgehen.
+const MAX_IMPORTED_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_IMPORTED_IMAGE_DATA_URL_LENGTH = Math.ceil(MAX_IMPORTED_IMAGE_BYTES * 4 / 3) + 256;
+
 // ── TYPES ──────────────────────────────────────────────────────────────────
 interface AnnotationPoint {
   id: string;
@@ -82,7 +88,7 @@ function normalizeImportedRoles(value: any): string[] {
 
 async function cacheImportedImage(value: unknown): Promise<string | undefined> {
   if (typeof value !== 'string' || !value) return undefined;
-  if (value.startsWith('data:image/')) return value.slice(0, 2_000_000);
+  if (value.startsWith('data:image/')) return value.length <= MAX_IMPORTED_IMAGE_DATA_URL_LENGTH ? value : undefined;
   let parsed: URL;
   try { parsed = new URL(value); } catch { return undefined; }
   if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname))) return undefined;
@@ -90,9 +96,9 @@ async function cacheImportedImage(value: unknown): Promise<string | undefined> {
     const response = await fetch(parsed, { signal: AbortSignal.timeout(7000) });
     if (!response.ok) return undefined;
     const length = Number(response.headers.get('content-length') || 0);
-    if (length > 2_000_000) return undefined;
+    if (length > MAX_IMPORTED_IMAGE_BYTES) return undefined;
     const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length > 2_000_000) return undefined;
+    if (buffer.length > MAX_IMPORTED_IMAGE_BYTES) return undefined;
     const contentType = response.headers.get('content-type') || 'image/png';
     if (!contentType.toLowerCase().startsWith('image/')) return undefined;
     return `data:${contentType};base64,${buffer.toString('base64')}`;

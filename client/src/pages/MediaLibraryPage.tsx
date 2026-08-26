@@ -449,6 +449,7 @@ export default function MediaLibraryPage() {
           <Scissors size={15} /> Audio-Editor
         </button>}
         {can('canReviewAudioQuality') && <button
+          data-tutorial-id="media-tab-quality"
           onClick={() => setActiveTab('quality')}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'quality' ? 'bg-accent-cyan text-obsidian-950' : 'text-text-secondary hover:text-text-primary'}`}
         >
