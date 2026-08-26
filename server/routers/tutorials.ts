@@ -118,7 +118,9 @@ function normalizeImportedAnnotations(value: any): AnnotationPoint[] {
     const type = ['point', 'circle', 'symbol'].includes(raw.type) ? raw.type : 'point';
     const color = typeof raw.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(raw.color) ? raw.color : undefined;
     const size = Number(raw.size);
-    const symbol = typeof raw.symbol === 'string' ? Array.from(raw.symbol).slice(0, 2).join('') : undefined;
+    const symbol = typeof raw.symbol === 'string' && ['arrow', 'check', 'cross', 'info'].includes(raw.symbol)
+      ? raw.symbol
+      : undefined;
     return [{
       id: String(raw.id || `annotation-${index + 1}`).slice(0, 120),
       x: Math.max(0, Math.min(100, x)),

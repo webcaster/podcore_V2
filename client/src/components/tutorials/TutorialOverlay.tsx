@@ -31,6 +31,13 @@ const ANN_COLORS = [
   '#0891b2', '#65a30d', '#ea580c', '#9333ea', '#0d9488',
 ];
 
+const ANNOTATION_SYMBOLS: Record<string, string> = {
+  arrow: '→',
+  check: '✓',
+  cross: '×',
+  info: 'i',
+};
+
 // Mapping stabile Tutorialkennungen auf Seiten und Unterbereiche. Untermenüs
 // verwenden bewusst Query-Parameter, damit ein Schritt direkt den geöffneten
 // Tab findet und nicht nur die übergeordnete Seite erreichen kann.
@@ -408,7 +415,7 @@ const TutorialOverlayContent: React.FC = () => {
                       }}
                       title={ann.description}
                     >
-                      {annotationType === 'circle' ? null : (annotationType === 'symbol' ? (ann.symbol || ann.label) : ann.label)}
+                      {annotationType === 'circle' ? null : (annotationType === 'symbol' ? (ANNOTATION_SYMBOLS[ann.symbol || ''] || ann.label) : ann.label)}
                     </div>
                   );
                 })}
@@ -441,7 +448,7 @@ const TutorialOverlayContent: React.FC = () => {
                   return (
                     <div key={ann.id} className="flex items-start gap-2 text-sm">
                       <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5" style={{ backgroundColor: annotationColor }}>
-                        {annotationType === 'circle' ? '○' : (annotationType === 'symbol' ? (ann.symbol || ann.label) : ann.label)}
+                        {annotationType === 'circle' ? '○' : (annotationType === 'symbol' ? (ANNOTATION_SYMBOLS[ann.symbol || ''] || ann.label) : ann.label)}
                       </span>
                       <span className="text-text-secondary">{ann.description || (annotationType === 'circle' ? 'Hervorgehobener Bereich' : 'Markierung')}</span>
                     </div>
