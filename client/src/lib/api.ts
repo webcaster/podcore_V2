@@ -787,6 +787,21 @@ export interface LicenseStatus {
   verificationMode?: 'online' | 'offline';
   hasOfflineDocument?: boolean;
   lastError: string | null;
+  developer?: DeveloperLicenseStatus;
+}
+
+export interface DeveloperLicenseStatus {
+  configured: boolean;
+  active: boolean;
+  status: 'unconfigured' | 'active' | 'invalid' | 'revoked' | 'offline' | 'deactivated';
+  codeMasked: string;
+  activationTokenMasked: string;
+  activatedAt: string | null;
+  lastValidatedAt: string | null;
+  expiresAt: string | null;
+  licenseId: string | number | null;
+  label: string;
+  lastError: string | null;
 }
 
 export const licenseApi = {
@@ -796,6 +811,10 @@ export const licenseApi = {
   validate: () => api.post<LicenseStatus>('/license/validate', {}),
   deactivate: () => api.post<LicenseStatus>('/license/deactivate', {}),
   importOffline: (document: unknown) => api.post<LicenseStatus>('/license/import', { document }),
+  getDeveloperStatus: () => api.get<DeveloperLicenseStatus>('/license/developer/status'),
+  activateDeveloper: (data: { developerCode: string; label?: string }) => api.post<DeveloperLicenseStatus>('/license/developer/activate', data),
+  validateDeveloper: () => api.post<DeveloperLicenseStatus>('/license/developer/validate', {}),
+  deactivateDeveloper: () => api.post<DeveloperLicenseStatus>('/license/developer/deactivate', {}),
   exportPdf: async (): Promise<Blob> => {
     const response = await fetch('/api/license/export-pdf', { credentials: 'include' });
     if (!response.ok) throw new Error('Lizenz-PDF konnte nicht erzeugt werden.');

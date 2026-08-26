@@ -4,7 +4,7 @@ import {
   Palette, Radio, Sliders, Globe, Clock, Tag, Info, Download, Sun, Moon,
   Upload, CheckCircle, XCircle, AlertTriangle, RefreshCw, Package, KeyRound, ShieldAlert
 } from 'lucide-react';
-import { adminApi, authApi, backupApi, updateApi, licenseApi, LicenseStatus } from '../lib/api';
+import { adminApi, authApi, backupApi, updateApi, licenseApi, LicenseStatus, DeveloperLicenseStatus } from '../lib/api';
 import { useTheme } from '../contexts/ThemeContext';
 import { useApp, applyUserTheme } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -88,6 +88,9 @@ export default function SettingsPage() {
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
   const [isLoadingLicense, setIsLoadingLicense] = useState(false);
   const [isLicenseBusy, setIsLicenseBusy] = useState(false);
+  const [developerLicense, setDeveloperLicense] = useState<DeveloperLicenseStatus | null>(null);
+  const [developerCode, setDeveloperCode] = useState('');
+  const [isDeveloperLicenseBusy, setIsDeveloperLicenseBusy] = useState(false);
   const [licenseForm, setLicenseForm] = useState({
     siteUrl: 'https://podcore.de',
     licenseKey: '',
@@ -149,6 +152,52 @@ export default function SettingsPage() {
   useEffect(() => {
     if (LICENSING_ENABLED && activeTab === 'license') loadLicenseStatus();
   }, [activeTab, loadLicenseStatus]);
+
+  const loadDeveloperLicenseStatus = useCallback(async () => {
+    if (user?.role !== 'admin') return;
+    try { setDeveloperLicense(await licenseApi.getDeveloperStatus()); }
+    catch (err: any) { showError(err.message || 'Entwicklerlizenz konnte nicht geprüft werden.'); }
+  }, [showError, user?.role]);
+
+  useEffect(() => {
+    if (developerControlsUnlocked && user?.role === 'admin') loadDeveloperLicenseStatus();
+  }, [developerControlsUnlocked, loadDeveloperLicenseStatus, user?.role]);
+
+  const handleDeveloperLicenseActivate = async () => {
+    if (!developerCode.trim()) { showError('Bitte gib den Entwickler-Lizenzcode ein.'); return; }
+    setIsDeveloperLicenseBusy(true);
+    try {
+      const status = await licenseApi.activateDeveloper({ developerCode: developerCode.trim(), label: `PodCore Entwicklerzugang – ${user?.displayName || user?.username || 'Administrator'}` });
+      setDeveloperLicense(status);
+      setDeveloperCode('');
+      await refreshUser();
+      showSuccess('Entwicklerlizenz wurde geprüft und der geschützte Modus freigeschaltet.');
+    } catch (err: any) { showError(err.message || 'Entwicklerlizenz konnte nicht aktiviert werden.'); }
+    finally { setIsDeveloperLicenseBusy(false); }
+  };
+
+  const handleDeveloperLicenseValidate = async () => {
+    setIsDeveloperLicenseBusy(true);
+    try {
+      const status = await licenseApi.validateDeveloper();
+      setDeveloperLicense(status);
+      await refreshUser();
+      showSuccess('Entwicklerlizenz ist gültig.');
+    } catch (err: any) { await refreshUser(); showError(err.message || 'Entwicklerlizenz ist nicht mehr gültig.'); }
+    finally { setIsDeveloperLicenseBusy(false); }
+  };
+
+  const handleDeveloperLicenseDeactivate = async () => {
+    if (!window.confirm('Entwicklerzugang auf dieser Installation wirklich schließen? Tutorial-Entwicklungsfunktionen stehen danach nicht mehr zur Verfügung.')) return;
+    setIsDeveloperLicenseBusy(true);
+    try {
+      const status = await licenseApi.deactivateDeveloper();
+      setDeveloperLicense(status);
+      await refreshUser();
+      showSuccess('Entwicklerzugang wurde auf dieser Installation geschlossen.');
+    } catch (err: any) { showError(err.message || 'Entwicklerzugang konnte nicht geschlossen werden.'); }
+    finally { setIsDeveloperLicenseBusy(false); }
+  };
 
   const handleLicenseActivate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,7 +349,6 @@ export default function SettingsPage() {
     newPassword: '',
     confirmPassword: '',
     avatarColor: user?.avatarColor || '#7c3aed',
-    developerMode: user?.developerMode === true,
   });
   const [showPasswords, setShowPasswords] = useState(false);
 
@@ -526,7 +574,6 @@ export default function SettingsPage() {
         displayName: user.displayName || '',
         email: user.email || '',
         avatarColor: user.avatarColor || '#7c3aed',
-        developerMode: user.developerMode === true,
       }));
       setThemeForm({
         accentColor: user.theme?.accentColor || '#7c3aed',
@@ -548,7 +595,6 @@ export default function SettingsPage() {
         displayName: profileForm.displayName,
         email: profileForm.email || undefined,
         avatarColor: profileForm.avatarColor,
-        ...(user?.role === 'admin' ? { developerMode: profileForm.developerMode } : {}),
       };
       if (profileForm.newPassword) {
         payload.currentPassword = profileForm.currentPassword;
@@ -733,21 +779,33 @@ export default function SettingsPage() {
                     <ShieldAlert size={18} className="mt-0.5 shrink-0 text-amber-300" />
                     <div>
                       <p className="font-semibold text-amber-200">Geschützter Entwicklerbereich</p>
-                      <p className="mt-1 text-xs leading-relaxed text-text-secondary">Diese Einstellung ist ausschließlich für die Entwicklung und Pflege offizieller PodCore-Tutorials vorgesehen. Sie wird serverseitig nur für Administratoren akzeptiert.</p>
+                      <p className="mt-1 text-xs leading-relaxed text-text-secondary">Der Zugang für offizielle PodCore-Tutorials wird ausschließlich nach Prüfung eines Entwickler-Lizenzcodes freigeschaltet. Ein normaler Kundenlizenzcode reicht nicht aus.</p>
                     </div>
                   </div>
-                  <label className="flex cursor-pointer items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={profileForm.developerMode}
-                      onChange={e => setProfileForm(p => ({ ...p, developerMode: e.target.checked }))}
-                      className="mt-1 h-4 w-4 accent-amber-400"
-                    />
-                    <span>
-                      <span className="block font-medium text-text-primary">Entwickler-Modus aktivieren</span>
-                      <span className="mt-1 block text-xs leading-relaxed text-text-secondary">Erlaubt das Erstellen, Bearbeiten, Importieren und Exportieren von Tutorials.</span>
-                    </span>
-                  </label>
+                  {developerLicense?.active ? (
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+                        <p className="font-semibold">Entwicklerlizenz aktiv</p>
+                        <p className="mt-1 text-xs text-text-secondary">{developerLicense.codeMasked || 'Entwicklercode'} · zuletzt geprüft: {developerLicense.lastValidatedAt ? new Date(developerLicense.lastValidatedAt).toLocaleString('de-DE') : '–'}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={handleDeveloperLicenseValidate} disabled={isDeveloperLicenseBusy} className="btn-secondary text-sm"><RefreshCw size={15} className={isDeveloperLicenseBusy ? 'animate-spin' : ''} /> Lizenz prüfen</button>
+                        <button type="button" onClick={handleDeveloperLicenseDeactivate} disabled={isDeveloperLicenseBusy} className="btn-danger text-sm">Zugang schließen</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="label">Entwickler-Lizenzcode</label>
+                        <input type="password" autoComplete="off" value={developerCode} onChange={event => setDeveloperCode(event.target.value.toUpperCase())} className="input font-mono" placeholder="PC-DEV-…" />
+                        <p className="mt-1 text-xs text-text-muted">Der Code wird nur zur sicheren Aktivierung an das PodCore-Lizenzplugin übermittelt und nicht in der Oberfläche angezeigt.</p>
+                      </div>
+                      {developerLicense?.lastError && <p className="text-xs text-accent-red">{developerLicense.lastError}</p>}
+                      <button type="button" onClick={handleDeveloperLicenseActivate} disabled={isDeveloperLicenseBusy || !developerCode.trim()} className="btn-primary text-sm">
+                        {isDeveloperLicenseBusy ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />} Entwicklerzugang freischalten
+                      </button>
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => {

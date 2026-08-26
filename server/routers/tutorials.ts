@@ -2,6 +2,7 @@ import express, { Response, Router } from 'express';
 import { getDb } from '../database';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
+import { ensureActiveDeveloperLicense, hasActiveDeveloperLicense } from './license';
 
 const router: Router = express.Router();
 
@@ -40,11 +41,12 @@ interface TutorialStep {
 }
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
-const requireDeveloper = (req: AuthRequest, res: Response, next: Function) => {
+const requireDeveloper = async (req: AuthRequest, res: Response, next: Function) => {
   const user = req.user;
-  if (!user || user.role !== 'admin' || user.developerMode !== true) {
-    return res.status(403).json({ error: 'Entwickler-Modus erforderlich' });
+  if (!user || user.role !== 'admin' || user.developerMode !== true || !hasActiveDeveloperLicense()) {
+    return res.status(403).json({ error: 'Gültige Entwicklerlizenz und Entwickler-Modus erforderlich' });
   }
+  if (!(await ensureActiveDeveloperLicense())) return res.status(403).json({ error: 'Entwicklerlizenz konnte nicht bestätigt werden. Bitte die Lizenzverbindung prüfen.' });
   next();
 };
 

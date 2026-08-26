@@ -10,9 +10,28 @@ const router: import('express').Router = express.Router();
 const GRACE_PERIOD_DAYS = 14;
 const TRIAL_PERIOD_DAYS = 14;
 const WORDPRESS_API_PATH = '/wp-json/podcore-licensing/v1';
+const DEVELOPER_REVALIDATE_AFTER_MS = 6 * 60 * 60 * 1000;
 
 type LicenseStatusValue = 'unconfigured' | 'active' | 'invalid' | 'offline' | 'deactivated';
 type LicensePlan = 'monthly' | 'yearly' | 'lifetime' | 'special' | 'unknown';
+type DeveloperLicenseStatusValue = 'unconfigured' | 'active' | 'invalid' | 'revoked' | 'offline' | 'deactivated';
+
+interface DeveloperLicenseSettings {
+  code: string;
+  activationToken: string;
+  status: DeveloperLicenseStatusValue;
+  lastValidatedAt: string | null;
+  activatedAt: string | null;
+  expiresAt: string | null;
+  licenseId: string | number | null;
+  label: string;
+  lastError: string | null;
+}
+
+const DEFAULT_DEVELOPER_LICENSE: DeveloperLicenseSettings = {
+  code: '', activationToken: '', status: 'unconfigured', lastValidatedAt: null,
+  activatedAt: null, expiresAt: null, licenseId: null, label: '', lastError: null,
+};
 
 interface LicenseSettings {
   siteUrl: string;
@@ -33,6 +52,7 @@ interface LicenseSettings {
   verificationMode: 'online' | 'offline';
   lastError: string | null;
   trialStartedAt: string | null;
+  developer: DeveloperLicenseSettings;
 }
 
 const DEFAULT_LICENSE: LicenseSettings = {
@@ -54,6 +74,7 @@ const DEFAULT_LICENSE: LicenseSettings = {
   verificationMode: 'online',
   lastError: null,
   trialStartedAt: null,
+  developer: DEFAULT_DEVELOPER_LICENSE,
 };
 
 function readAppSettings(): Record<string, any> {
@@ -70,7 +91,12 @@ function ensureInstallationId(value?: string): string {
 function readLicense(): LicenseSettings {
   const settings = readAppSettings();
   const stored = settings.license || {};
-  return { ...DEFAULT_LICENSE, ...stored, installationId: ensureInstallationId(stored.installationId) };
+  return {
+    ...DEFAULT_LICENSE,
+    ...stored,
+    developer: { ...DEFAULT_DEVELOPER_LICENSE, ...(stored.developer || {}) },
+    installationId: ensureInstallationId(stored.installationId),
+  };
 }
 
 function readLicenseWithTrial(): LicenseSettings {
@@ -100,6 +126,58 @@ function mask(value: string): string {
   if (!value) return '';
   if (value.length <= 8) return '••••••••';
   return `${value.slice(0, 4)}••••${value.slice(-4)}`;
+}
+
+function isDeveloperLicenseUsable(developer: DeveloperLicenseSettings): boolean {
+  return developer.status === 'active' && (!developer.expiresAt || new Date(developer.expiresAt).getTime() >= Date.now());
+}
+
+export function hasActiveDeveloperLicense(): boolean {
+  return isDeveloperLicenseUsable(readLicense().developer);
+}
+
+export async function ensureActiveDeveloperLicense(): Promise<boolean> {
+  const current = readLicense();
+  const developer = current.developer;
+  if (!isDeveloperLicenseUsable(developer) || !current.siteUrl || !developer.code || !developer.activationToken) {
+    revokeDeveloperModeForAllUsers();
+    return false;
+  }
+  const validatedAt = developer.lastValidatedAt ? new Date(developer.lastValidatedAt).getTime() : 0;
+  if (validatedAt && Date.now() - validatedAt < DEVELOPER_REVALIDATE_AFTER_MS) return true;
+  try {
+    const response = await wordpressRequest(current.siteUrl, '/developer/validate', { developer_code: developer.code, installation_id: current.installationId }, developer.activationToken);
+    writeLicense(applyRemoteDeveloperLicense(current, response));
+    return true;
+  } catch (error: any) {
+    const next: LicenseSettings = { ...current, developer: { ...developer, status: 'offline', lastError: extractError(error) } };
+    writeLicense(next);
+    revokeDeveloperModeForAllUsers();
+    return false;
+  }
+}
+
+function publicDeveloperStatus(license: LicenseSettings) {
+  const developer = license.developer;
+  const active = isDeveloperLicenseUsable(developer);
+  return {
+    configured: Boolean(developer.code && developer.activationToken),
+    active,
+    status: active ? 'active' : developer.status,
+    codeMasked: mask(developer.code),
+    activationTokenMasked: mask(developer.activationToken),
+    activatedAt: developer.activatedAt,
+    lastValidatedAt: developer.lastValidatedAt,
+    expiresAt: developer.expiresAt,
+    licenseId: developer.licenseId,
+    label: developer.label,
+    lastError: developer.lastError,
+  };
+}
+
+function revokeDeveloperModeForAllUsers(): void {
+  const db = getDb();
+  db.run("UPDATE users SET developer_mode = 0, updated_at = datetime('now') WHERE developer_mode = 1");
 }
 
 function detectPlan(value: string, expiresAt: string | null): LicensePlan {
@@ -156,6 +234,7 @@ function publicStatus(license: LicenseSettings) {
     trialDaysRemaining,
     requiresLicense: !hasActiveLicense && !isTrial,
     licensingUrl: license.siteUrl || 'https://podcore.de',
+    developer: publicDeveloperStatus(license),
   };
 }
 
@@ -283,6 +362,25 @@ function applyRemoteLicense(current: LicenseSettings, response: any, status: Lic
   };
 }
 
+function applyRemoteDeveloperLicense(current: LicenseSettings, response: any, status: DeveloperLicenseStatusValue = 'active'): LicenseSettings {
+  const data = extractLicenseData(response);
+  const developer = data.developer || data;
+  return {
+    ...current,
+    developer: {
+      ...current.developer,
+      activationToken: String(developer.token || developer.activation_token || current.developer.activationToken || ''),
+      status,
+      lastValidatedAt: new Date().toISOString(),
+      activatedAt: String(developer.activated_at || current.developer.activatedAt || new Date().toISOString()),
+      expiresAt: developer.expires_at || current.developer.expiresAt || null,
+      licenseId: developer.license_id || developer.id || current.developer.licenseId || null,
+      label: String(developer.label || current.developer.label || 'PodCore Entwicklerlizenz'),
+      lastError: null,
+    },
+  };
+}
+
 router.get('/status', (_req: AuthRequest, res: Response) => res.json({ success: true, data: publicStatus(readLicenseWithTrial()) }));
 
 router.post('/activate', async (req: AuthRequest, res: Response) => {
@@ -318,6 +416,70 @@ router.post('/validate', async (_req: AuthRequest, res: Response) => {
     const next: LicenseSettings = { ...current, status: 'offline', lastError: extractError(error) }; writeLicense(next);
     return res.status(502).json({ success: false, error: next.lastError, data: publicStatus(next) });
   }
+});
+
+router.get('/developer/status', requireAuth as any, (_req: AuthRequest, res: Response) => {
+  return res.json({ success: true, data: publicDeveloperStatus(readLicense()) });
+});
+
+router.post('/developer/activate', requireAuth as any, requirePermission('canManageSettings') as any, async (req: AuthRequest, res: Response) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ success: false, error: 'Nur Administratoren dürfen Entwicklerlizenzen verwalten.' });
+  const current = readLicense();
+  const code = String(req.body?.developerCode || '').trim().toUpperCase();
+  if (!code || !current.siteUrl) return res.status(400).json({ success: false, error: 'Lizenz-Webseite und Entwicklercode sind erforderlich.' });
+  const pending: LicenseSettings = { ...current, developer: { ...current.developer, code, status: 'invalid', lastError: null } };
+  try {
+    const response = await wordpressRequest(current.siteUrl, '/developer/activate', {
+      developer_code: code,
+      installation_id: ensureInstallationId(current.installationId),
+      label: String(req.body?.label || current.label || 'PodCore Entwickler-Installation').slice(0, 190),
+      software: 'podcore',
+    });
+    const next = applyRemoteDeveloperLicense(pending, response);
+    if (!next.developer.activationToken) throw new Error('Das WordPress-Lizenzplugin hat keinen Entwickler-Aktivierungstoken geliefert.');
+    writeLicense(next);
+    getDb().run("UPDATE users SET developer_mode = 1, updated_at = datetime('now') WHERE id = ? AND role = 'admin'", [req.user!.id]);
+    return res.json({ success: true, data: publicDeveloperStatus(next) });
+  } catch (error: any) {
+    const next: LicenseSettings = { ...pending, developer: { ...pending.developer, status: 'invalid', lastError: extractError(error) } };
+    writeLicense(next);
+    revokeDeveloperModeForAllUsers();
+    return res.status(502).json({ success: false, error: next.developer.lastError, data: publicDeveloperStatus(next) });
+  }
+});
+
+router.post('/developer/validate', requireAuth as any, requirePermission('canManageSettings') as any, async (req: AuthRequest, res: Response) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ success: false, error: 'Nur Administratoren dürfen Entwicklerlizenzen verwalten.' });
+  const current = readLicense();
+  if (!current.developer.code || !current.developer.activationToken) return res.status(400).json({ success: false, error: 'Keine Entwicklerlizenz aktiviert.', data: publicDeveloperStatus(current) });
+  try {
+    const response = await wordpressRequest(current.siteUrl, '/developer/validate', { developer_code: current.developer.code, installation_id: current.installationId }, current.developer.activationToken);
+    const next = applyRemoteDeveloperLicense(current, response);
+    writeLicense(next);
+    getDb().run("UPDATE users SET developer_mode = 1, updated_at = datetime('now') WHERE id = ? AND role = 'admin'", [req.user!.id]);
+    return res.json({ success: true, data: publicDeveloperStatus(next) });
+  } catch (error: any) {
+    const next: LicenseSettings = { ...current, developer: { ...current.developer, status: 'revoked', lastError: extractError(error) } };
+    writeLicense(next);
+    revokeDeveloperModeForAllUsers();
+    return res.status(502).json({ success: false, error: next.developer.lastError, data: publicDeveloperStatus(next) });
+  }
+});
+
+router.post('/developer/deactivate', requireAuth as any, requirePermission('canManageSettings') as any, async (_req: AuthRequest, res: Response) => {
+  if (_req.user?.role !== 'admin') return res.status(403).json({ success: false, error: 'Nur Administratoren dürfen Entwicklerlizenzen verwalten.' });
+  const current = readLicense();
+  try {
+    if (current.developer.code && current.developer.activationToken) {
+      await wordpressRequest(current.siteUrl, '/developer/deactivate', { developer_code: current.developer.code, installation_id: current.installationId }, current.developer.activationToken);
+    }
+  } catch {
+    // Lokales Schließen beendet den privilegierten Zugriff auch ohne Netzwerkverbindung.
+  }
+  const next: LicenseSettings = { ...current, developer: { ...DEFAULT_DEVELOPER_LICENSE, status: 'deactivated' } };
+  writeLicense(next);
+  revokeDeveloperModeForAllUsers();
+  return res.json({ success: true, data: publicDeveloperStatus(next) });
 });
 
 router.post('/import', (req: AuthRequest, res: Response) => {

@@ -203,7 +203,7 @@ router.get('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
 
 // PUT /api/auth/me — Update own profile (displayName, email, avatarColor, theme)
 router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
-  const { displayName, email, avatarColor, language, theme, dashboardLayout, developerMode, currentPassword, newPassword } = req.body;
+  const { displayName, email, avatarColor, language, theme, dashboardLayout, currentPassword, newPassword } = req.body;
 
   const db = getDb();
   const user = db.get('SELECT * FROM users WHERE id = ?', [req.user!.id]) as any;
@@ -235,10 +235,8 @@ router.put('/me', requireAuth as any, (req: AuthRequest, res: Response) => {
   const newTheme = theme !== undefined ? JSON.stringify(normalizeUserTheme(theme)) : user.theme;
   const normalizedDashboardLayout = dashboardLayout !== undefined ? normalizeDashboardLayout(dashboardLayout) : undefined;
   const newDashboardLayout = normalizedDashboardLayout !== undefined ? JSON.stringify(normalizedDashboardLayout) : user.dashboard_layout;
-  // Only administrators may switch developer mode for their own account.
-  const newDeveloperMode = user.role === 'admin' && typeof developerMode === 'boolean'
-    ? (developerMode ? 1 : 0)
-    : (user.developer_mode === 1 ? 1 : 0);
+  // Der Entwicklerstatus wird ausschließlich durch die serverseitig validierte Entwicklerlizenz gesetzt.
+  const newDeveloperMode = user.developer_mode === 1 ? 1 : 0;
 
   db.run(
     "UPDATE users SET display_name = ?, email = ?, avatar_color = ?, language = ?, theme = ?, dashboard_layout = ?, developer_mode = ?, updated_at = datetime('now') WHERE id = ?",

@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.44**
+**Aktuelle Version: 2.16.45**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -17,6 +17,12 @@ PodCore 2.16.32 enthält eine eigene Lizenzanbindung für das Plugin [`PodCore L
 ### Neu in v2.16.44: HTML-Seiten für Entwickler und Kontakt
 
 Das Verzeichnis `wordpress-pages` enthält zwei responsive HTML-Blöcke für WordPress: eine Entwicklerseite und eine Kontaktseite. Die Kontaktseite ist für die Einbindung eines Formularplugins wie Contact Form 7 oder WPForms vorbereitet. Die Einbauanleitung steht in [`wordpress-pages/README.md`](wordpress-pages/README.md).
+
+### Neu in v2.16.45: Exklusiver Entwickler-Modus mit WordPress-Entwicklerlizenz
+
+Der bisherige versteckte Entwicklerbereich bleibt über den Sieben-Klick-Handshake erreichbar, wird jedoch nicht mehr über eine lokale Profil-Checkbox freigeschaltet. Ein echter Zugang erfordert nun einen getrennten Entwicklercode aus dem PodCore-WordPress-Lizenzplugin. Nur Administratoren können den Code in der geschützten Profileinstellung aktivieren. Normale Kundenlizenzen sowie direkte Profiländerungen verleihen keinen Entwicklerzugang.
+
+Das separate WordPress-Lizenzplugin v1.4.0 verwaltet Entwicklercodes, Ablaufdaten, Installationslimits und Aktivierungen. Codes können pausiert, widerrufen oder installationsbezogen deaktiviert werden. PodCore prüft den Entwicklerstatus bei Bedarf erneut gegen WordPress; ein Widerruf wird spätestens bei der nächsten periodischen Prüfung wirksam und schließt den Entwickler-Modus für alle lokalen Benutzer.
 
 ### Neu in v2.16.41: Audio-Abnahme direkt an der Audiodatei
 
