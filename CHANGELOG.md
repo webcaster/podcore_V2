@@ -1,6 +1,6 @@
 # PodCore – Release Notes
 
-## v2.16.36 – WordPress-HTML-Seiten für Entwickler und Kontakt
+## v2.16.44 – WordPress-HTML-Seiten für Entwickler und Kontakt
 
 Das Paket `wordpress-pages` enthält eine responsive Entwicklerseite und eine Kontaktseite als HTML-Blöcke für WordPress. Die Kontaktseite besitzt einen klar gekennzeichneten Einbettungsbereich für Formular-Shortcodes von Contact Form 7 oder WPForms. Die Einrichtung ist in [`wordpress-pages/README.md`](wordpress-pages/README.md) beschrieben.
 
