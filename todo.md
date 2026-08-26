@@ -11,3 +11,5 @@
 - [x] v2.16.39: Mehrfach-Podcast als optionale Einstellung ergänzt und einen direkten, verständlichen Wechsel in das zweite angelegte Podcastprofil bereitgestellt.
 - [x] v2.16.39: Administratoren einen Log-Export sowie eine bestätigte Bereinigung von Protokolldaten angeboten, ohne Anwendungs-, Backup- oder Mediendaten zu löschen.
 - [x] v2.16.40: Tutorial-Aktionsleiste responsiv korrigiert, damit Zurück, Wiki, Überspringen, Positionsrücksetzung und Weiter in kleinen und mittleren Ansichten vollständig erreichbar bleiben.
+- [x] v2.16.41: Audio-Abnahme als separaten Qualitätskontrollbereich in der Media Library umgesetzt, mit Audioasset und Episodenworkflow verknüpft sowie Speicher-, Berechtigungs- und Exportpfade geprüft.
+- [x] v2.16.41: Rollen und Berechtigungen für Media Library, Audio-Abnahme, Episodenverknüpfung und Qualitätskontroll-Export vollständig geprüft und fehlende Zugriffsrechte ergänzt.

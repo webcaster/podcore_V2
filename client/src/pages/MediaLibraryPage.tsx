@@ -3,14 +3,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload, Search, Play, Pause, Volume2, Download, Trash2, Edit2,
-  MessageSquare, Plus, Music, Mic2, Clock, HardDrive, X, Check,
+  MessageSquare, Plus, Music, Mic2, Headphones, Clock, HardDrive, X, Check,
   Library, SkipBack, SkipForward, Folder, FolderPlus, ChevronRight,
-  Scissors, Save, RotateCcw, Grid, List
+  Scissors, Save, RotateCcw, Grid, List, ClipboardCheck
 } from 'lucide-react';
-import { mediaApi } from '../lib/api';
+import { episodesApi, mediaApi } from '../lib/api';
 import { useApp } from '../contexts/AppContext';
 import Modal from '../components/ui/Modal';
 import AudioEditor from '../components/AudioEditor';
+import AudioQualityControlPanel from '../components/media/AudioQualityControlPanel';
 
 const ASSET_TYPES = [
   { value: 'intro', label: 'Intro', color: 'text-accent-cyan' },
@@ -44,7 +45,7 @@ function formatDuration(seconds?: number) {
 export default function MediaLibraryPage() {
   const navigate = useNavigate();
   const { can, showSuccess, showError } = useApp();
-  const [activeTab, setActiveTab] = useState<'library' | 'editor'>('library');
+  const [activeTab, setActiveTab] = useState<'library' | 'editor' | 'quality'>('library');
   const [assets, setAssets] = useState<any[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string>('root');
@@ -64,6 +65,11 @@ export default function MediaLibraryPage() {
   const [editorSearch, setEditorSearch] = useState('');
   const [editorAssets, setEditorAssets] = useState<any[]>([]);
   const [isLoadingEditorAssets, setIsLoadingEditorAssets] = useState(false);
+  const [qualityAssets, setQualityAssets] = useState<any[]>([]);
+  const [qualityEpisodes, setQualityEpisodes] = useState<any[]>([]);
+  const [isLoadingQuality, setIsLoadingQuality] = useState(false);
+  const [qualitySearch, setQualitySearch] = useState('');
+  const [qualityAsset, setQualityAsset] = useState<any>(null);
 
   const [editForm, setEditForm] = useState({
     name: '', type: 'other', description: '', tags: [] as string[], tagInput: '', folderId: '',
@@ -124,6 +130,21 @@ export default function MediaLibraryPage() {
     finally { setIsLoadingEditorAssets(false); }
   };
 
+  const loadQualityData = async (searchTerm?: string) => {
+    setIsLoadingQuality(true);
+    try {
+      const [mediaData, episodeData] = await Promise.all([
+        mediaApi.list({ search: searchTerm || undefined }),
+        episodesApi.list({ pageSize: 100 }),
+      ]);
+      const allMedia = Array.isArray(mediaData) ? mediaData : (mediaData as any)?.items || [];
+      const allEpisodes = Array.isArray(episodeData) ? episodeData : (episodeData as any)?.items || [];
+      setQualityAssets(allMedia.filter((asset: any) => AUDIO_TYPES.includes(asset.type) || String(asset.mimeType || '').startsWith('audio/')));
+      setQualityEpisodes(allEpisodes);
+    } catch (err: any) { showError(err.message); }
+    finally { setIsLoadingQuality(false); }
+  };
+
   useEffect(() => { load(); }, [typeFilter, currentFolderId]);
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [search]);
 
@@ -139,6 +160,13 @@ export default function MediaLibraryPage() {
       return () => clearTimeout(t);
     }
   }, [editorSearch]);
+
+  useEffect(() => {
+    if (activeTab === 'quality') {
+      const t = setTimeout(() => loadQualityData(qualitySearch), 250);
+      return () => clearTimeout(t);
+    }
+  }, [activeTab, qualitySearch]);
 
   // Audio player controls
   useEffect(() => {
@@ -347,6 +375,14 @@ export default function MediaLibraryPage() {
     setActiveTab('editor');
   };
 
+  const openQualityControl = async (asset: any) => {
+    try {
+      const fullAsset = await mediaApi.get(asset.id);
+      setQualityAsset(fullAsset);
+      setActiveTab('quality');
+    } catch (err: any) { showError(err.message); }
+  };
+
   const typeInfo = (type: string) => ASSET_TYPES.find(t => t.value === type) || ASSET_TYPES[8];
 
   return (
@@ -377,6 +413,11 @@ export default function MediaLibraryPage() {
               Bearbeite: <span className="text-text-primary font-medium">{editorAsset.name}</span>
             </p>
           )}
+          {activeTab === 'quality' && qualityAsset && (
+            <p className="text-text-muted text-sm mt-1">
+              Qualitätskontrolle: <span className="text-text-primary font-medium">{qualityAsset.name}</span>
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           {activeTab === 'library' && (
@@ -401,12 +442,18 @@ export default function MediaLibraryPage() {
         >
           <Grid size={15} /> Bibliothek
         </button>
-        <button
+        {can('canUseAudioEditor') && <button
           onClick={() => setActiveTab('editor')}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'editor' ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}
         >
           <Scissors size={15} /> Audio-Editor
-        </button>
+        </button>}
+        {can('canReviewAudioQuality') && <button
+          onClick={() => setActiveTab('quality')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'quality' ? 'bg-accent-cyan text-obsidian-950' : 'text-text-secondary hover:text-text-primary'}`}
+        >
+          <ClipboardCheck size={15} /> Qualitätskontrolle
+        </button>}
       </div>
 
       {/* ── TAB: BIBLIOTHEK ─────────────────────────────────────────────── */}
@@ -527,13 +574,20 @@ export default function MediaLibraryPage() {
 
                         <div className="flex items-center gap-1">
                           {/* Audio-Editor öffnen – für alle Assets mit Audiodatei */}
-                          <button
+                          {can('canUseAudioEditor') && <button
                             onClick={e => { e.stopPropagation(); openInEditor(asset); }}
                             className="p-2 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10 rounded-lg transition-colors"
                             title="Im Audio-Editor öffnen"
                           >
                             <Scissors size={14} />
-                          </button>
+                          </button>}
+                          {can('canReviewAudioQuality') && <button
+                            onClick={e => { e.stopPropagation(); openQualityControl(asset); }}
+                            className="p-2 text-text-muted hover:text-accent-cyan hover:bg-accent-cyan/10 rounded-lg transition-colors"
+                            title="Audio-Abnahme öffnen"
+                          >
+                            <ClipboardCheck size={14} />
+                          </button>}
                           <a href={mediaApi.getStreamUrl(asset.filename)} download={asset.filename} onClick={e => e.stopPropagation()} className="p-2 text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors">
                             <Download size={14} />
                           </a>
@@ -647,7 +701,7 @@ export default function MediaLibraryPage() {
                           </div>
                         )}
           // @ts-ignore
-                        {selectedAsset.customMetadata?.map((m: any, i: number) => (
+                        {selectedAsset.customMetadata?.filter((m: any) => m?.key !== 'podcore_audio_quality_v1').map((m: any, i: number) => (
                           <div key={i} className="flex justify-between"><span className="text-text-muted">{m.key}</span><span className="text-text-primary truncate ml-2">{m.value}</span></div>
                         ))}
                       </div>
@@ -655,12 +709,18 @@ export default function MediaLibraryPage() {
                   )}
 
                   {/* Audio-Editor-Button im Detail-Panel */}
-                  <button
+                  {can('canUseAudioEditor') && <button
                     onClick={() => openInEditor(selectedAsset)}
                     className="w-full btn-secondary flex items-center justify-center gap-2 text-sm"
                   >
                     <Scissors size={14} /> Im Audio-Editor öffnen
-                  </button>
+                  </button>}
+                  {can('canReviewAudioQuality') && <button
+                    onClick={() => openQualityControl(selectedAsset)}
+                    className="w-full btn-secondary flex items-center justify-center gap-2 text-sm"
+                  >
+                    <ClipboardCheck size={14} /> Audio-Abnahme öffnen
+                  </button>}
 
                   {/* Comments */}
                   <div className="border-t border-surface-border pt-4">
@@ -720,6 +780,42 @@ export default function MediaLibraryPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── TAB: AUDIO-QUALITÄTSKONTROLLE ───────────────────────────────── */}
+      {activeTab === 'quality' && (
+        <div className="space-y-4">
+          {qualityAsset ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 bg-obsidian-800 rounded-xl border border-surface-border">
+                <div className="w-8 h-8 bg-accent-cyan/15 rounded-lg flex items-center justify-center flex-shrink-0"><ClipboardCheck size={15} className="text-accent-cyan" /></div>
+                <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-text-primary truncate">{qualityAsset.name}</p><p className="text-[10px] text-text-muted uppercase">{typeInfo(qualityAsset.type).label} · {formatDuration(qualityAsset.duration)}</p></div>
+                <button onClick={() => setQualityAsset(null)} className="btn-ghost text-xs py-1 px-2 flex items-center gap-1" title="Andere Audiodatei auswählen"><RotateCcw size={12} /> Wechseln</button>
+              </div>
+              <AudioQualityControlPanel
+                asset={qualityAsset}
+                episodes={qualityEpisodes}
+                disabled={!can('canUploadMedia')}
+                onSaved={(updated) => {
+                  setQualityAsset(updated);
+                  setQualityAssets(current => current.map(asset => asset.id === updated.id ? updated : asset));
+                  load();
+                }}
+                onNotify={showSuccess}
+                onError={showError}
+              />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="card">
+                <h2 className="font-semibold text-text-primary flex items-center gap-2 mb-1"><ClipboardCheck size={16} className="text-accent-cyan" /> Audio-Abnahme</h2>
+                <p className="text-sm text-text-muted">Wähle eine Audiodatei aus, führe die Qualitätskontrolle durch und verknüpfe den bestätigten Master bei Bedarf direkt mit einer Episode.</p>
+              </div>
+              <div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" /><input type="text" value={qualitySearch} onChange={event => setQualitySearch(event.target.value)} placeholder="Audio-Datei suchen..." className="input pl-9 text-sm" /></div>
+              {isLoadingQuality ? <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent-cyan border-t-transparent rounded-full animate-spin" /></div> : qualityAssets.length === 0 ? <div className="card py-12 text-center"><Headphones size={34} className="mx-auto mb-3 text-text-muted" /><p className="text-sm text-text-muted">Keine Audiodatei gefunden.</p></div> : <div className="space-y-2">{qualityAssets.map(asset => <button key={asset.id} type="button" onClick={() => openQualityControl(asset)} className="card w-full text-left flex items-center gap-3 hover:border-accent-cyan/50 transition-colors"><div className="w-9 h-9 rounded-lg bg-accent-cyan/10 flex items-center justify-center"><Headphones size={16} className="text-accent-cyan" /></div><div className="min-w-0 flex-1"><p className="font-medium text-text-primary truncate">{asset.name}</p><p className="text-xs text-text-muted">{formatDuration(asset.duration)} · {formatBytes(asset.filesize)}</p></div><ClipboardCheck size={16} className="text-text-muted" /></button>)}</div>}
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── TAB: AUDIO-EDITOR ──────────────────────────────────────────── */}

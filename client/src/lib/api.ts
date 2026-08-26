@@ -485,6 +485,7 @@ export const mediaApi = {
   get: (id: string) => api.get<any>(`/media/${id}`),
   upload: (formData: FormData) => api.upload<any>('/media/upload', formData),
   update: (id: string, data: any) => api.put<any>(`/media/${id}`, data),
+  saveAudioQuality: (id: string, quality: any) => api.put<any>(`/media/${id}/audio-quality`, { quality }),
   delete: (id: string) => api.delete(`/media/${id}`),
   addComment: (id: string, data: any) => api.post<any>(`/media/${id}/comments`, data),
   deleteComment: (id: string, commentId: string) => api.delete(`/media/${id}/comments/${commentId}`),

@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.40**
+**Aktuelle Version: 2.16.41**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,12 @@
 PodCore 2.16.32 enthält eine eigene Lizenzanbindung für das Plugin [`PodCore Licensing for WooCommerce`](wordpress-plugin/podcore-licensing). Unterstützt werden Monatsabo, Jahresabo und Sonderabo. Lizenzen können online über die eigene WordPress-REST-API aktiviert oder als Ed25519-signiertes Dokument offline importiert werden. Ein lesbarer Lizenznachweis lässt sich unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Die vollständige Einrichtung steht in [`docs/RELEASE-2.16.32.md`](docs/RELEASE-2.16.32.md).
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.41: Audio-Abnahme direkt an der Audiodatei
+
+Die Media Library besitzt neben Bibliothek und Audio-Editor den Bereich **„Qualitätskontrolle“**. Dort wird eine Audiodatei ausgewählt, mit einer Episode als Master-Audio verknüpft und anhand von Schnitt, Störgeräuschen, Lautheit, Markern, Musikrechten sowie finaler Datei geprüft. Version, verantwortliche Person, Abnahmenotiz und Bestätigungszeitpunkt werden direkt am Asset gespeichert. Eine JSON-Datei der Audio-Abnahme kann exportiert werden.
+
+Die Audio-Abnahme besitzt das neue Einzelrecht **„Audio-Abnahme durchführen und exportieren“**. Es ist für Administratoren, Moderatoren und Produktion standardmäßig aktiv; Redaktion kann weiterhin Assets bearbeiten und Statistiken ansehen, führt die finale Audio-Abnahme aber nicht ohne explizite Rechtevergabe durch. Der Adminbereich enthält nun alle verwendeten Berechtigungen einschließlich Statistik, Assetbearbeitung und Systemverwaltung.
 
 ### Neu in v2.16.40: Vollständig erreichbare Tutorialnavigation
 

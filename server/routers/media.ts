@@ -11,6 +11,12 @@ import { getPodcastScopeId, podcastScopeClause } from '../services/podcastScope'
 const router: import("express").Router = Router();
 router.use(requireAuth as any);
 
+function requireMediaAssetEdit(req: AuthRequest, res: Response, next: any) {
+  if (!req.user) return res.status(401).json({ success: false, error: 'Nicht authentifiziert' });
+  if (req.user.role === 'admin' || req.user.permissions.canUploadMedia || req.user.permissions.canEditMediaMetadata || req.user.permissions.canUseAudioEditor) return next();
+  return res.status(403).json({ success: false, error: 'Keine Berechtigung zur Bearbeitung dieses Medienassets' });
+}
+
 function getStorageConfig() {
   const db = getDb();
   const row = db.get('SELECT value FROM settings WHERE key = ?', ['app']) as any;
@@ -119,6 +125,13 @@ function parseAsset(row: any) {
 function getAssetInScope(db: any, req: AuthRequest, assetId: string, includeDeleted = true) {
   const scope = podcastScopeClause('podcast_id', getPodcastScopeId(req, db));
   return db.get(`SELECT * FROM assets WHERE id = ?${includeDeleted ? '' : ' AND deleted_at IS NULL'}${scope.sql}`, [assetId, ...scope.params]) as any;
+}
+
+const AUDIO_QUALITY_KEY = 'podcore_audio_quality_v1';
+
+function metadataWithAudioQuality(existingMetadata: unknown, quality: unknown) {
+  const entries = Array.isArray(existingMetadata) ? existingMetadata : [];
+  return [...entries.filter((item: any) => item?.key !== AUDIO_QUALITY_KEY), { key: AUDIO_QUALITY_KEY, value: JSON.stringify(quality) }];
 }
 
 // ============================================================
@@ -445,7 +458,7 @@ router.post('/upload', requirePermission('canUploadMedia') as any, (req: AuthReq
   });
 });
 
-router.put('/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest, res: Response) => {
+router.put('/:id', requireMediaAssetEdit as any, (req: AuthRequest, res: Response) => {
   const db = getDb();
   const existing = getAssetInScope(db, req, req.params.id);
   if (!existing) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
@@ -456,6 +469,14 @@ router.put('/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest
     language, copyright, license, mood, energy, notes,
     sourceUrl, recordingDate, location, customMetadata,
   } = req.body;
+
+  let existingMetadata: any[] = [];
+  try { existingMetadata = existing.custom_metadata ? JSON.parse(existing.custom_metadata) : []; } catch { existingMetadata = []; }
+  const requestedQuality = Array.isArray(customMetadata) ? customMetadata.find((item: any) => item?.key === AUDIO_QUALITY_KEY) : null;
+  const existingQuality = existingMetadata.find((item: any) => item?.key === AUDIO_QUALITY_KEY) || null;
+  if (customMetadata !== undefined && JSON.stringify(requestedQuality?.value || null) !== JSON.stringify(existingQuality?.value || null) && req.user?.role !== 'admin' && !req.user?.permissions?.canReviewAudioQuality) {
+    return res.status(403).json({ success: false, error: 'Keine Berechtigung für die Audio-Abnahme' });
+  }
 
   db.run(
     `UPDATE assets SET
@@ -502,6 +523,23 @@ router.put('/:id', requirePermission('canUploadMedia') as any, (req: AuthRequest
   const asset = getAssetInScope(db, req, req.params.id);
   if (!asset) return res.status(404).json({ success: false, error: 'Asset nicht gefunden' });
   return res.json({ success: true, data: parseAsset(asset) });
+});
+
+// Audio-Abnahme: eigene rollenbasierte Speicherung direkt am Audioasset
+router.put('/:id/audio-quality', requirePermission('canReviewAudioQuality') as any, (req: AuthRequest, res: Response) => {
+  const db = getDb();
+  const asset = getAssetInScope(db, req, req.params.id);
+  if (!asset) return res.status(404).json({ success: false, error: 'Audioasset nicht gefunden' });
+  const mime = String(asset.mime_type || '').toLowerCase();
+  const isAudio = mime.startsWith('audio/') || ['intro', 'outro', 'jingle', 'segment', 'ad', 'interview', 'sfx', 'music', 'other'].includes(asset.type);
+  if (!isAudio) return res.status(400).json({ success: false, error: 'Die Audio-Abnahme ist nur für Audiodateien verfügbar' });
+  const quality = req.body?.quality;
+  if (!quality || typeof quality !== 'object' || Array.isArray(quality)) return res.status(400).json({ success: false, error: 'Ungültige Daten für die Audio-Abnahme' });
+  let metadata: any[] = [];
+  try { metadata = asset.custom_metadata ? JSON.parse(asset.custom_metadata) : []; } catch { metadata = []; }
+  db.run(`UPDATE assets SET custom_metadata = ?, updated_at = datetime('now') WHERE id = ?`, [JSON.stringify(metadataWithAudioQuality(metadata, quality)), asset.id]);
+  const updated = getAssetInScope(db, req, asset.id);
+  return res.json({ success: true, data: parseAsset(updated) });
 });
 
 router.delete('/:id', requirePermission('canDeleteMedia') as any, (req: AuthRequest, res: Response) => {
