@@ -842,12 +842,11 @@ export default function AdminPage() {
                 <div className="flex gap-3">
                   <button onClick={async () => {
                     try {
-                      const data = await adminApi.exportDb();
-                      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                      const { blob, filename } = await adminApi.exportDb();
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      a.download = `podcore-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                      a.download = filename || `podcore-vollbackup-${new Date().toISOString().slice(0, 10)}.zip`;
                       a.click();
                       URL.revokeObjectURL(url);
                     } catch (err: any) { showError(err.message); }
@@ -878,12 +877,12 @@ export default function AdminPage() {
                   <Upload size={16} className="text-accent-orange" />
                   Backup importieren
                 </h3>
-                <p className="text-text-secondary text-sm mb-4">Stellen Sie Daten aus einem PodCore-Backup wieder her. Unterstützte Formate: <code className="bg-obsidian-800 px-1 rounded text-xs">full</code>, <code className="bg-obsidian-800 px-1 rounded text-xs">episodes</code>, <code className="bg-obsidian-800 px-1 rounded text-xs">editorial</code>.</p>
+                <p className="text-text-secondary text-sm mb-4">Stellen Sie Daten aus einem PodCore-Backup wieder her. Vollbackups liegen als <code className="bg-obsidian-800 px-1 rounded text-xs">.zip</code> mit Daten, Bildern und Medien vor; ältere JSON-Backups bleiben lesbar. Vor der Übernahme prüft PodCore Tabellen und Dateimanifest.</p>
 
                 {/* Schritt 1: Datei wählen */}
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-2">Backup-Datei (.json)</label>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">Backup-Datei (.zip oder .json)</label>
                     <div
                       className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
                         importFile ? 'border-accent-green/50 bg-accent-green/5' : 'border-surface-border hover:border-accent-purple/50'
@@ -892,19 +891,19 @@ export default function AdminPage() {
                       onDrop={(e) => {
                         e.preventDefault();
                         const file = e.dataTransfer.files[0];
-                        if (file && (file.name.endsWith('.json') || file.type === 'application/json')) {
+                        if (file && (file.name.toLowerCase().endsWith('.zip') || file.name.toLowerCase().endsWith('.json') || file.type === 'application/zip' || file.type === 'application/json')) {
                           setImportFile(file);
                           setImportPreview(null);
                           setImportResult(null);
                           setImportError(null);
                         } else {
-                          showError('Nur JSON-Dateien sind erlaubt');
+                          showError('Nur PodCore-Backupdateien im ZIP- oder JSON-Format sind erlaubt');
                         }
                       }}
                     >
                       <input
                         type="file"
-                        accept=".json,application/json"
+                        accept=".zip,application/zip,.json,application/json"
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
@@ -934,7 +933,7 @@ export default function AdminPage() {
                       ) : (
                         <div>
                           <Upload size={28} className="mx-auto mb-2 text-text-muted opacity-50" />
-                          <p className="text-sm text-text-muted">JSON-Datei hier ablegen oder klicken</p>
+                          <p className="text-sm text-text-muted">ZIP- oder JSON-Backup hier ablegen oder klicken</p>
                         </div>
                       )}
                     </div>

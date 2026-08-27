@@ -27,6 +27,22 @@ Das getrennte WordPress-Paket ergänzt unter **WooCommerce → PodCore-Entwickle
 
 Der WordPress-Quellcode und das Pluginpaket bleiben bewusst **außerhalb des App-GitHub-Repositories**. Nur die PodCore-App v2.16.45 wird auf GitHub veröffentlicht.
 
+## Wartungsstand: vollständige Backup- und Wiederherstellungsarchive
+
+Ohne Anhebung der App-Version erweitert der Wartungsstand **v2.16.45** das Vollbackup auf `podcore-backup` v4.0.0. Neue Vollbackups sind ZIP-Archive mit dem Manifest `podcore-backup.json`. Sie exportieren alle verfügbaren Fach- und Konfigurationstabellen sowie die zugehörigen lokalen Dateien aus den Bereichen **Assets**, **Ideenmappe-Uploads**, **Branding** und **Sponsorlogos**. Die Tabellen `sessions`, `error_logs`, `ad_bookings_new` und `ad_placements_new` bleiben bewusst ausgeschlossen.
+
+| Schutzschritt | Umsetzung im Wartungsstand |
+|---|---|
+| Daten- und Dateiumfang | Das Tabellenmanifest führt jede exportierte Tabelle auf. Das Dateimanifest enthält Wiederherstellungsziel, Größe und SHA-256-Prüfsumme je eingebetteter Datei. |
+| Importvorschau | Vor der Übernahme zeigt der Importdialog Backupformat, Archivstatus, Tabellenanzahl und Dateizusammenfassung. ZIP- und Legacy-JSON-Dateien werden deutlich unterschieden. |
+| Integritätsprüfung | ZIP-Dateien ohne Manifest, mit fehlenden Archivdateien, ungültigen Pfaden oder abweichenden SHA-256-Prüfsummen werden vor Datenübernahme abgewiesen. |
+| Fehlersicherheit | Vor jedem Vollimport erzeugt PodCore ein `pre-import-…zip`. Die Dateiförderung erfolgt nur zusammen mit dem erfolgreichen Datenbank-Commit und wird bei einem Fehler zurückgerollt. |
+| Automatisierung | In-App- und systemgeplante Sicherungen rufen denselben ZIP-Erzeuger auf. Die Retention löscht ausschließlich ältere automatische Archive. |
+
+Die Zusammenführung erkennt Standardrollen zusätzlich über ihren eindeutigen Namen. Dadurch verursacht ein Import in eine frische PodCore-Installation keinen Konflikt durch bereits angelegte Standardrollen. Bestehende JSON-Backups bleiben lesbar, geben jedoch wegen der historisch eingeschränkten Dateivalidierung einen gut sichtbaren Hinweis aus.
+
 ## Prüfung
 
 Der Entwicklerlizenz-Rauchtest bestätigte fünfzehn Sicherheits- und Integrationsregeln, darunter die Trennung normaler Lizenzrouten, die Administratorbeschränkung, die entfernte lokale Checkbox, die Tutorialprüfung sowie die WordPress-Routen und Tabellen. Der vollständige Client- und Server-Build war erfolgreich. Alle PHP-Dateien des WordPress-Plugins v1.4.0 wurden mit PHP 8.3 auf Syntaxfehler geprüft.
+
+Der Backup-Wartungsstand wurde zusätzlich mit einem isolierten ZIP-Export, einem vollständigen Brandingbild-Roundtrip, einem Asset-Audio-Roundtrip mit identischer SHA-256-Dateiprüfsumme, der Importvorschau, der Ablehnung eines manipulierten Archivs sowie In-App- und System-Autobackups geprüft.

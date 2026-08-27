@@ -4,6 +4,9 @@ import crypto from 'crypto';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import archiver from 'archiver';
+import unzipper from 'unzipper';
+import { pipeline } from 'stream/promises';
 import { getDb, DATA_DIR, ASSETS_DIR, BACKUPS_DIR } from '../database';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 
@@ -11,10 +14,10 @@ const router: import('express').Router = Router();
 router.use(requireAuth as any);
 
 const BACKUP_FORMAT = 'podcore-backup';
-const BACKUP_VERSION = '3.0.0';
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
-const MAX_EMBEDDED_FILE_BYTES = 20 * 1024 * 1024;
-const MAX_TOTAL_EMBEDDED_BYTES = 60 * 1024 * 1024;
+const BACKUP_VERSION = '4.0.0';
+const BACKUP_MANIFEST_FILE = 'podcore-backup.json';
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
+const BACKUP_FILE_FOLDERS = new Set(['assets', 'idea-uploads', 'branding', 'sponsor-logos']);
 
 type AutomaticBackupSource = 'in-app' | 'system';
 type AutomaticBackupConfig = {
@@ -42,8 +45,9 @@ const uploadBackup = multer({
   dest: path.join(DATA_DIR, 'tmp'),
   limits: { fileSize: MAX_UPLOAD_BYTES },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'application/json' || path.extname(file.originalname).toLowerCase() === '.json') cb(null, true);
-    else cb(new Error('Nur JSON-Dateien erlaubt'));
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (file.mimetype === 'application/json' || extension === '.json' || extension === '.zip') cb(null, true);
+    else cb(new Error('Nur PodCore-Backupdateien im ZIP- oder JSON-Format sind erlaubt'));
   },
 });
 
@@ -58,8 +62,9 @@ const FULL_TABLES = [
   'idea_checklists', 'idea_notes', 'idea_uploads', 'idea_interview_partners', 'idea_topic_drafts', 'editorial_text_blocks',
   'episode_templates', 'episode_revisions', 'episode_comments', 'episode_media_links', 'audio_analysis_jobs',
   'podcast_stats', 'chat_messages', 'notifications',
-  'tutorials', 'user_tutorial_progress',
+  'tutorials', 'user_tutorial_progress', 'trash_entries',
 ];
+const EXCLUDED_BACKUP_TABLES = new Set(['sessions', 'error_logs', 'ad_bookings_new', 'ad_placements_new']);
 
 const LEGACY_TABLE_MAP: Record<string, string> = {
   editorialPlan: 'editorial_plan',
@@ -84,6 +89,9 @@ const USER_REFERENCE_COLUMNS = new Set([
   'user_id', 'created_by', 'updated_by', 'uploaded_by', 'changed_by', 'resolved_by', 'deleted_by',
   'assigned_to', 'sender_id', 'recipient_id', 'approved_by', 'approval_requested_by', 'approval_processed_by',
 ]);
+const NATURAL_KEY_COLUMNS: Record<string, string[]> = {
+  roles: ['name'],
+};
 
 function tableExists(db: any, table: string): boolean {
   return Boolean(db.get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", [table]));
@@ -92,6 +100,14 @@ function tableExists(db: any, table: string): boolean {
 function tableColumns(db: any, table: string): string[] {
   if (!tableExists(db, table)) return [];
   return (db.all(`PRAGMA table_info("${table}")`, []) as any[]).map(column => column.name);
+}
+
+function getBackupTables(db: any): string[] {
+  const known = FULL_TABLES.filter(table => tableExists(db, table));
+  const dynamic = (db.all("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'", []) as any[])
+    .map(row => String(row.name))
+    .filter(table => !EXCLUDED_BACKUP_TABLES.has(table) && !known.includes(table) && tableExists(db, table));
+  return [...known, ...dynamic.sort()];
 }
 
 function primaryKeyColumns(db: any, table: string, columns: string[]): string[] {
@@ -110,6 +126,24 @@ function safeRelativeDataPath(value: string | null | undefined): string | null {
   const relative = path.relative(root, candidate);
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null;
   return relative.split(path.sep).join('/');
+}
+
+function safeRestorePath(value: string | null | undefined): string | null {
+  if (!value || typeof value !== 'string') return null;
+  const normalized = path.posix.normalize(value.replace(/\\/g, '/')).replace(/^\/+/, '');
+  if (!normalized || normalized === '.' || normalized.startsWith('../') || normalized.includes('/../')) return null;
+  return BACKUP_FILE_FOLDERS.has(normalized.split('/')[0]) ? normalized : null;
+}
+
+function safeFilename(value: string): string {
+  const name = path.basename(value).replace(/[^a-zA-Z0-9._-]/g, '_');
+  return name || `file-${uuidv4()}`;
+}
+
+async function hashFile(filePath: string): Promise<string> {
+  const hash = crypto.createHash('sha256');
+  for await (const chunk of fs.createReadStream(filePath)) hash.update(chunk);
+  return hash.digest('hex');
 }
 
 function resolveStoredFile(value: string | null | undefined, table: string): string | null {
@@ -138,9 +172,6 @@ function prepareExportRows(db: any, table: string): any[] {
   const columns = tableColumns(db, table);
   return (db.all(`SELECT * FROM "${table}"`, []) as any[]).map(row => {
     const copy = { ...row };
-    if (['assets', 'idea_uploads'].includes(table) && typeof copy.filepath === 'string') {
-      copy.filepath = safeRelativeDataPath(copy.filepath) || copy.filepath;
-    }
     return copy;
   }).map(row => {
     const filtered: Record<string, any> = {};
@@ -149,56 +180,87 @@ function prepareExportRows(db: any, table: string): any[] {
   });
 }
 
-function buildFileManifest(tableRows: Record<string, any[]>, includeFiles: boolean) {
+async function buildFileManifest(tableRows: Record<string, any[]>, includeFiles: boolean) {
   const files: any[] = [];
-  let embeddedBytes = 0;
+  const seen = new Set<string>();
+  const addFile = async (sourcePath: string | null, restorePath: string | null, detail: Record<string, any>) => {
+    const safePath = safeRestorePath(restorePath);
+    const item: any = { ...detail, restorePath: safePath, archivePath: safePath ? `files/${safePath}` : null, included: false, size: 0 };
+    if (!sourcePath || !fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
+      item.reason = 'Datei am lokalen Speicherort nicht verfügbar';
+    } else if (!safePath) {
+      item.reason = 'Ungültiger Wiederherstellungspfad';
+    } else if (seen.has(safePath)) {
+      item.reason = 'Datei bereits über einen anderen Datenverweis enthalten';
+    } else {
+      item.size = fs.statSync(sourcePath).size;
+      item.sha256 = await hashFile(sourcePath);
+      if (!includeFiles) item.reason = 'Dateiinhalte im Export deaktiviert';
+      else {
+        item.included = true;
+        item.sourcePath = sourcePath;
+        seen.add(safePath);
+      }
+    }
+    files.push(item);
+  };
+
   for (const table of ['assets', 'idea_uploads']) {
     for (const row of tableRows[table] || []) {
-      const source = row.filepath;
+      const source = typeof row.filepath === 'string' ? row.filepath : null;
       const actualPath = resolveStoredFile(source, table);
-      const relativePath = safeRelativeDataPath(source) || (actualPath ? safeRelativeDataPath(actualPath) : null);
-      const item: any = {
-        table,
-        rowId: row.id || null,
-        field: 'filepath',
-        relativePath,
-        originalPath: source || null,
-        included: false,
-        size: actualPath && fs.existsSync(actualPath) ? fs.statSync(actualPath).size : 0,
-      };
-      if (!actualPath) {
-        item.reason = 'Datei am lokalen Speicherort nicht verfügbar';
-      } else if (!relativePath) {
-        item.reason = 'Datei liegt außerhalb des PodCore-Datenverzeichnisses';
-      } else {
-        const bytes = Number(item.size || 0);
-        item.sha256 = crypto.createHash('sha256').update(fs.readFileSync(actualPath)).digest('hex');
-        if (!includeFiles) {
-          item.reason = 'Dateiinhalte im Export deaktiviert';
-        } else if (bytes > MAX_EMBEDDED_FILE_BYTES) {
-          item.reason = `Datei größer als ${MAX_EMBEDDED_FILE_BYTES / 1024 / 1024} MB`; 
-        } else if (embeddedBytes + bytes > MAX_TOTAL_EMBEDDED_BYTES) {
-          item.reason = `Gesamtlimit von ${MAX_TOTAL_EMBEDDED_BYTES / 1024 / 1024} MB erreicht`;
-        } else {
-          item.contentBase64 = fs.readFileSync(actualPath).toString('base64');
-          item.included = true;
-          embeddedBytes += bytes;
-        }
-      }
-      files.push(item);
+      const folder = table === 'assets' ? 'assets' : 'idea-uploads';
+      const restorePath = `${folder}/${String(row.id || uuidv4())}-${safeFilename(source || actualPath || 'file')}`;
+      if (actualPath) row.filepath = restorePath;
+      await addFile(actualPath, restorePath, { category: table === 'assets' ? 'media' : 'idea-upload', table, rowId: row.id || null, field: 'filepath' });
     }
   }
-  return { files, embeddedBytes };
+
+  for (const source of [
+    { category: 'branding', directory: path.join(DATA_DIR, 'branding') },
+    { category: 'sponsor-logo', directory: path.join(DATA_DIR, 'sponsor-logos') },
+  ]) {
+    if (!fs.existsSync(source.directory)) continue;
+    for (const entry of fs.readdirSync(source.directory, { withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      const restorePath = `${path.basename(source.directory)}/${safeFilename(entry.name)}`;
+      await addFile(path.join(source.directory, entry.name), restorePath, { category: source.category, table: null, rowId: null, field: null });
+    }
+  }
+
+  const summary = {
+    total: files.length,
+    included: files.filter(file => file.included).length,
+    missing: files.filter(file => !file.included).length,
+    totalBytes: files.reduce((sum, file) => sum + Number(file.size || 0), 0),
+    includedBytes: files.filter(file => file.included).reduce((sum, file) => sum + Number(file.size || 0), 0),
+  };
+  return { files, summary };
 }
 
 function backupDataHash(data: any): string {
   return crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
 }
 
-function writeBackupAtomically(filename: string, backup: any): string {
+async function writeBackupArchiveAtomically(filename: string, backup: any, files: any[]): Promise<string> {
   const target = path.join(BACKUPS_DIR, filename);
   const temporary = `${target}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, JSON.stringify(backup, null, 2), { encoding: 'utf8' });
+  await new Promise<void>((resolve, reject) => {
+    const output = fs.createWriteStream(temporary);
+    const ZipArchive: any = (archiver as any).ZipArchive;
+    if (!ZipArchive) throw new Error('ZIP-Archivbibliothek konnte nicht initialisiert werden');
+    const archive = new ZipArchive({ zlib: { level: 9 } });
+    const fail = (error: Error) => { try { output.destroy(); } catch (_) {} reject(error); };
+    output.on('close', () => resolve());
+    output.on('error', fail);
+    archive.on('error', fail);
+    archive.pipe(output);
+    archive.append(JSON.stringify(backup, null, 2), { name: BACKUP_MANIFEST_FILE });
+    for (const file of files.filter(file => file.included && file.sourcePath && file.archivePath)) {
+      archive.file(file.sourcePath, { name: file.archivePath });
+    }
+    void archive.finalize();
+  });
   fs.renameSync(temporary, target);
   return target;
 }
@@ -238,7 +300,7 @@ function saveAutomaticBackupConfig(db: any, config: AutomaticBackupConfig): void
 function removeExpiredAutomaticBackups(retentionCount: number): number {
   if (!fs.existsSync(BACKUPS_DIR)) return 0;
   const automaticFiles = fs.readdirSync(BACKUPS_DIR)
-    .filter(filename => /^(automatic|scheduled)-full-backup-.*\.json$/i.test(filename))
+    .filter(filename => /^(automatic|scheduled)-full-backup-.*\.(zip|json)$/i.test(filename))
     .map(filename => {
       const filePath = path.join(BACKUPS_DIR, filename);
       return { path: filePath, mtime: fs.statSync(filePath).mtimeMs };
@@ -251,16 +313,17 @@ function removeExpiredAutomaticBackups(retentionCount: number): number {
   return removed;
 }
 
-function createFullBackup(db: any, exportedBy: string, includeFiles = true) {
+async function createFullBackup(db: any, exportedBy: string, includeFiles = true) {
   const tables: Record<string, any[]> = {};
   const tableManifest: Record<string, any> = {};
-  for (const table of FULL_TABLES) {
+  for (const table of getBackupTables(db)) {
     tables[table] = prepareExportRows(db, table);
     tableManifest[table] = { rows: tables[table].length, columns: tableColumns(db, table) };
   }
-  const fileManifest = buildFileManifest(tables, includeFiles);
-  const data = { tables, files: fileManifest.files };
-  return {
+  const fileManifest = await buildFileManifest(tables, includeFiles);
+  const files = fileManifest.files.map(({ sourcePath, ...file }) => file);
+  const data = { tables, files };
+  const backup = {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     type: 'full',
@@ -269,17 +332,18 @@ function createFullBackup(db: any, exportedBy: string, includeFiles = true) {
     exportedBy,
     manifest: {
       tables: tableManifest,
-      files: fileManifest.files.map(({ contentBase64, ...file }) => file),
-      embeddedFileBytes: fileManifest.embeddedBytes,
+      files,
+      fileSummary: fileManifest.summary,
       excludedTables: ['sessions', 'error_logs'],
     },
     integrity: { algorithm: 'sha256', dataHash: backupDataHash(data) },
     data,
   };
+  return { backup, archiveFiles: fileManifest.files };
 }
 
 /** Erstellt eine atomare lokale Vollsicherung für In-App- und Systemläufe. */
-export function runAutomaticBackup(options: { force?: boolean; source?: AutomaticBackupSource } = {}) {
+export async function runAutomaticBackup(options: { force?: boolean; source?: AutomaticBackupSource } = {}) {
   if (automaticBackupRunning) return { created: false, reason: 'running' as const };
   const db = getDb();
   const current = normalizeAutomaticBackupConfig(readAppSettings(db)?.storage?.automaticBackup);
@@ -292,14 +356,14 @@ export function runAutomaticBackup(options: { force?: boolean; source?: Automati
 
   automaticBackupRunning = true;
   try {
-    const backup = createFullBackup(db, source === 'system' ? 'system scheduler' : 'in-app scheduler', current.includeFiles);
+    const bundle = await createFullBackup(db, source === 'system' ? 'system scheduler' : 'in-app scheduler', current.includeFiles);
     const prefix = source === 'system' ? 'scheduled' : 'automatic';
-    const filename = `${prefix}-full-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    const filePath = writeBackupAtomically(filename, backup);
+    const filename = `${prefix}-full-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+    const filePath = await writeBackupArchiveAtomically(filename, bundle.backup, bundle.archiveFiles);
     const next: AutomaticBackupConfig = { ...current, lastRunAt: new Date().toISOString(), lastStatus: 'success', lastError: null };
     saveAutomaticBackupConfig(db, next);
     const removed = removeExpiredAutomaticBackups(next.retentionCount);
-    return { created: true, filename, filePath, removed, config: next, integrity: backup.integrity };
+    return { created: true, filename, filePath, removed, config: next, integrity: bundle.backup.integrity, fileSummary: bundle.backup.manifest.fileSummary };
   } catch (error: any) {
     const next: AutomaticBackupConfig = { ...current, lastStatus: 'error', lastError: error?.message || String(error) };
     saveAutomaticBackupConfig(db, next);
@@ -312,7 +376,7 @@ export function runAutomaticBackup(options: { force?: boolean; source?: Automati
 function startAutomaticBackupTimer(): void {
   if (process.env.PODCORE_DISABLE_AUTO_BACKUP === '1') return;
   const run = () => {
-    try { runAutomaticBackup(); } catch (error: any) { console.warn('[backup] Automatische Sicherung fehlgeschlagen:', error?.message || error); }
+    void runAutomaticBackup().catch((error: any) => console.warn('[backup] Automatische Sicherung fehlgeschlagen:', error?.message || error));
   };
   const initial = setTimeout(run, 8_000);
   const interval = setInterval(run, 15 * 60 * 1000);
@@ -334,7 +398,8 @@ function normalizeLegacyRow(table: string, source: any): any {
     if (Array.isArray(row[column]) || (row[column] && typeof row[column] === 'object' && column !== 'custom_metadata')) row[column] = JSON.stringify(row[column]);
   }
   if (['assets', 'idea_uploads'].includes(table) && typeof row.filepath === 'string' && !path.isAbsolute(row.filepath)) {
-    row.filepath = path.resolve(DATA_DIR, row.filepath);
+    const safePath = safeRestorePath(row.filepath);
+    row.filepath = safePath ? path.resolve(DATA_DIR, safePath) : path.resolve(DATA_DIR, row.filepath);
   }
   return row;
 }
@@ -348,7 +413,7 @@ function getImportTables(importData: any): Record<string, any[]> {
   };
   const result: Record<string, any[]> = {};
   for (const [legacyKey, table] of Object.entries(LEGACY_TABLE_MAP)) if (Array.isArray(data[legacyKey])) result[table] = data[legacyKey];
-  for (const table of ['episodes', 'ideas', 'users', 'roles', 'settings', 'sponsors', 'seasons', 'assets', 'media_folders', 'tutorials', 'user_tutorial_progress']) {
+  for (const table of [...FULL_TABLES, 'trash_entries']) {
     if (Array.isArray(data[table])) result[table] = data[table];
   }
   return result;
@@ -362,7 +427,7 @@ function applyUserReferenceMap(row: any, userIdMap: Map<string, string>): any {
   return copy;
 }
 
-function upsertTableRows(db: any, table: string, rows: any[], mode: string, req: AuthRequest, userIdMap: Map<string, string>) {
+function upsertTableRows(db: any, table: string, rows: any[], mode: string, req: AuthRequest, userIdMap: Map<string, string>, throwOnFailure = false) {
   const stats = { imported: 0, updated: 0, skipped: 0, failed: 0 };
   if (!tableExists(db, table) || !Array.isArray(rows)) return stats;
   const columns = tableColumns(db, table);
@@ -375,15 +440,24 @@ function upsertTableRows(db: any, table: string, rows: any[], mode: string, req:
       const existingByUsername = table === 'users' && row.username
         ? db.get('SELECT id FROM users WHERE username = ?', [row.username]) as any
         : null;
+      const naturalKeys = NATURAL_KEY_COLUMNS[table] || [];
+      const hasNaturalKeys = naturalKeys.length > 0 && naturalKeys.every(key => row[key] !== undefined && row[key] !== null && row[key] !== '');
+      const existingByNaturalKey = hasNaturalKeys
+        ? db.get(`SELECT * FROM "${table}" WHERE ${naturalKeys.map(key => `"${key}" = ?`).join(' AND ')}`, naturalKeys.map(key => row[key])) as any
+        : null;
       const sourceId = row.id;
       if (table === 'users' && sourceId && existingByUsername?.id && existingByUsername.id !== sourceId) userIdMap.set(sourceId, existingByUsername.id);
       row = applyUserReferenceMap(row, userIdMap);
 
       const usableColumns = columns.filter(column => Object.prototype.hasOwnProperty.call(row, column));
-      if (!usableColumns.length) { stats.failed++; continue; }
+      if (!usableColumns.length) {
+        stats.failed++;
+        if (throwOnFailure) throw new Error(`Keine kompatiblen Spalten für einen Datensatz in ${table}`);
+        continue;
+      }
       const keyColumns = primaryKeys.length ? primaryKeys : (columns.includes('id') ? ['id'] : []);
       const hasKeys = keyColumns.length > 0 && keyColumns.every(key => row[key] !== undefined && row[key] !== null && row[key] !== '');
-      const existing = existingByUsername || (hasKeys ? db.get(`SELECT * FROM "${table}" WHERE ${keyColumns.map(key => `"${key}" = ?`).join(' AND ')}`, keyColumns.map(key => row[key])) : null);
+      const existing = existingByUsername || existingByNaturalKey || (hasKeys ? db.get(`SELECT * FROM "${table}" WHERE ${keyColumns.map(key => `"${key}" = ?`).join(' AND ')}`, keyColumns.map(key => row[key])) : null);
 
       if (existing) {
         if (mode !== 'overwrite') { stats.skipped++; continue; }
@@ -398,8 +472,9 @@ function upsertTableRows(db: any, table: string, rows: any[], mode: string, req:
         if (table === 'users' && sourceId && row.id) userIdMap.set(sourceId, row.id);
         stats.imported++;
       }
-    } catch (error) {
+    } catch (error: any) {
       stats.failed++;
+      if (throwOnFailure) throw new Error(`Datensatz in ${table} konnte nicht importiert werden: ${error?.message || String(error)}`);
     }
   }
   return stats;
@@ -427,6 +502,101 @@ function restoreEmbeddedFiles(importData: any) {
     } catch (_) { result.failed++; }
   }
   return result;
+}
+
+type OpenArchive = Awaited<ReturnType<typeof unzipper.Open.file>>;
+type ImportedBackup = { data: any; archive: OpenArchive | null; isArchive: boolean };
+
+async function readUploadedBackup(file: Express.Multer.File): Promise<ImportedBackup> {
+  const isArchive = path.extname(file.originalname).toLowerCase() === '.zip';
+  if (!isArchive) return { data: JSON.parse(fs.readFileSync(file.path, 'utf-8')), archive: null, isArchive: false };
+  const archive = await unzipper.Open.file(file.path);
+  const manifest = archive.files.find(entry => entry.path === BACKUP_MANIFEST_FILE && entry.type === 'File');
+  if (!manifest) throw new Error(`ZIP-Backup enthält keine ${BACKUP_MANIFEST_FILE}`);
+  let data: any;
+  try { data = JSON.parse((await manifest.buffer()).toString('utf-8')); }
+  catch (_) { throw new Error('Das ZIP-Backup enthält ein ungültiges Datenmanifest'); }
+  return { data, archive, isArchive: true };
+}
+
+function archiveEntriesByPath(archive: OpenArchive | null): Map<string, any> {
+  return new Map((archive?.files || []).filter(entry => entry.type === 'File').map(entry => [entry.path, entry]));
+}
+
+function validateFileManifest(importData: any, archive: OpenArchive | null, isArchive: boolean) {
+  const files = Array.isArray(importData?.data?.files) ? importData.data.files : [];
+  const result = { total: files.length, included: 0, missing: 0, invalid: 0, requiredArchiveFiles: 0 };
+  const entries = archiveEntriesByPath(archive);
+  for (const file of files) {
+    if (!file?.included) { result.missing++; continue; }
+    result.included++;
+    const restorePath = safeRestorePath(file.restorePath || file.relativePath);
+    const archivePath = typeof file.archivePath === 'string' ? file.archivePath : restorePath ? `files/${restorePath}` : '';
+    if (!isArchive || !restorePath || !archivePath || !entries.has(archivePath)) result.invalid++;
+    else result.requiredArchiveFiles++;
+  }
+  return result;
+}
+
+async function stageArchiveFiles(importData: any, archive: OpenArchive | null, isArchive: boolean): Promise<{
+  restored: number; skipped: number; failed: number; verified: number; total: number; staged: Array<{ tempPath: string; target: string }>; legacy: boolean;
+}> {
+  const manifest = Array.isArray(importData?.data?.files) ? importData.data.files : [];
+  const result = { restored: 0, skipped: 0, failed: 0, verified: 0, total: manifest.length, staged: [] as Array<{ tempPath: string; target: string }>, legacy: false };
+  if (!isArchive) return { ...result, legacy: true };
+  const entries = archiveEntriesByPath(archive);
+  const stagingDir = path.join(DATA_DIR, 'tmp', `restore-${uuidv4()}`);
+  fs.mkdirSync(stagingDir, { recursive: true });
+  try {
+    for (const file of manifest) {
+      if (!file?.included) { result.skipped++; continue; }
+      const restorePath = safeRestorePath(file.restorePath);
+      const archivePath = typeof file.archivePath === 'string' ? file.archivePath : restorePath ? `files/${restorePath}` : '';
+      const entry = archivePath ? entries.get(archivePath) : null;
+      if (!restorePath || !entry) { result.failed++; continue; }
+      const tempPath = path.join(stagingDir, restorePath);
+      fs.mkdirSync(path.dirname(tempPath), { recursive: true });
+      await pipeline(entry.stream(), fs.createWriteStream(tempPath));
+      if (file.sha256 && await hashFile(tempPath) !== file.sha256) {
+        try { fs.unlinkSync(tempPath); } catch (_) {}
+        result.failed++;
+        continue;
+      }
+      result.verified++;
+      result.staged.push({ tempPath, target: path.join(DATA_DIR, restorePath) });
+    }
+    if (result.failed) throw new Error(`${result.failed} Datei(en) im ZIP-Backup fehlen oder stimmen nicht mit der Prüfsumme überein`);
+    return result;
+  } catch (error) {
+    try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch (_) {}
+    throw error;
+  }
+}
+
+function promoteStagedFiles(staged: Array<{ tempPath: string; target: string }>) {
+  const moves: Array<{ target: string; rollback: string | null }> = [];
+  try {
+    for (const item of staged) {
+      fs.mkdirSync(path.dirname(item.target), { recursive: true });
+      const rollback = fs.existsSync(item.target) ? `${item.target}.pre-import-${process.pid}-${Date.now()}` : null;
+      if (rollback) fs.renameSync(item.target, rollback);
+      fs.renameSync(item.tempPath, item.target);
+      moves.push({ target: item.target, rollback });
+    }
+    return {
+      commit: () => moves.forEach(move => { if (move.rollback) try { fs.unlinkSync(move.rollback); } catch (_) {} }),
+      rollback: () => moves.reverse().forEach(move => {
+        try { if (fs.existsSync(move.target)) fs.unlinkSync(move.target); } catch (_) {}
+        try { if (move.rollback && fs.existsSync(move.rollback)) fs.renameSync(move.rollback, move.target); } catch (_) {}
+      }),
+    };
+  } catch (error) {
+    moves.reverse().forEach(move => {
+      try { if (fs.existsSync(move.target)) fs.unlinkSync(move.target); } catch (_) {}
+      try { if (move.rollback && fs.existsSync(move.rollback)) fs.renameSync(move.rollback, move.target); } catch (_) {}
+    });
+    throw error;
+  }
 }
 
 function countPreview(db: any, importData: any) {
@@ -485,14 +655,16 @@ router.get('/export/ideas', requirePermission('canExport') as any, (req: AuthReq
   });
 });
 
-router.get('/export/full', requirePermission('canManageSettings') as any, (req: AuthRequest, res: Response) => {
+router.get('/export/full', requirePermission('canManageSettings') as any, async (req: AuthRequest, res: Response) => {
   const includeFiles = req.query.includeFiles !== '0' && req.query.includeFiles !== 'false';
-  const backup = createFullBackup(getDb(), req.user!.username, includeFiles);
-  const filename = `full-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-  writeBackupAtomically(filename, backup);
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', `attachment; filename="podcore-full-backup-${new Date().toISOString().slice(0, 10)}.json"`);
-  return res.json(backup);
+  try {
+    const bundle = await createFullBackup(getDb(), req.user!.username, includeFiles);
+    const filename = `full-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.zip`;
+    const filePath = await writeBackupArchiveAtomically(filename, bundle.backup, bundle.archiveFiles);
+    return res.download(filePath, `podcore-full-backup-${new Date().toISOString().slice(0, 10)}.zip`);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: `Vollbackup konnte nicht erstellt werden: ${error?.message || String(error)}` });
+  }
 });
 
 // ============================================================
@@ -503,14 +675,14 @@ router.get('/automation/status', requirePermission('canManageSettings') as any, 
   const db = getDb();
   const config = normalizeAutomaticBackupConfig(readAppSettings(db)?.storage?.automaticBackup);
   const savedAutomaticBackups = fs.existsSync(BACKUPS_DIR)
-    ? fs.readdirSync(BACKUPS_DIR).filter(filename => /^(automatic|scheduled)-full-backup-.*\.json$/i.test(filename)).length
+    ? fs.readdirSync(BACKUPS_DIR).filter(filename => /^(automatic|scheduled)-full-backup-.*\.(zip|json)$/i.test(filename)).length
     : 0;
   return res.json({ success: true, data: { config, savedAutomaticBackups, backupsPath: BACKUPS_DIR } });
 });
 
-router.post('/automation/run', requirePermission('canManageSettings') as any, (_req: AuthRequest, res: Response) => {
+router.post('/automation/run', requirePermission('canManageSettings') as any, async (_req: AuthRequest, res: Response) => {
   try {
-    const result = runAutomaticBackup({ force: true, source: 'in-app' });
+    const result = await runAutomaticBackup({ force: true, source: 'in-app' });
     return res.json({ success: true, data: result });
   } catch (error: any) {
     return res.status(500).json({ success: false, error: `Automatische Sicherung fehlgeschlagen: ${error?.message || String(error)}` });
@@ -559,14 +731,15 @@ router.post('/import/ideas', requirePermission('canManageSettings') as any, uplo
 // IMPORT – Vorschau und vollständiger Import
 // ============================================================
 
-router.post('/import/preview', requirePermission('canManageSettings') as any, uploadBackup.single('file'), (req: AuthRequest, res: Response) => {
+router.post('/import/preview', requirePermission('canManageSettings') as any, uploadBackup.single('file'), async (req: AuthRequest, res: Response) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
   try {
-    const importData = parseUploadedBackup(req.file);
+    const uploaded = await readUploadedBackup(req.file);
+    const importData = uploaded.data;
     validateBackupIntegrity(importData);
     if (!['full', 'episodes', 'editorial'].includes(importData.type)) return res.status(400).json({ success: false, error: `Unbekannter Backup-Typ: "${importData.type}"` });
     const tables = getImportTables(importData);
-    const files = Array.isArray(importData?.data?.files) ? importData.data.files : [];
+    const fileSummary = validateFileManifest(importData, uploaded.archive, uploaded.isArchive);
     return res.json({
       success: true,
       data: {
@@ -577,7 +750,8 @@ router.post('/import/preview', requirePermission('canManageSettings') as any, up
         version: importData.version,
         schemaVersion: importData.schemaVersion,
         preview: countPreview(getDb(), importData),
-        fileSummary: { total: files.length, included: files.filter((file: any) => file.included).length, missing: files.filter((file: any) => !file.included).length },
+        fileSummary,
+        archive: uploaded.isArchive,
         tableCount: Object.keys(tables).length,
       },
     });
@@ -586,30 +760,43 @@ router.post('/import/preview', requirePermission('canManageSettings') as any, up
   } finally { removeTempFile(req.file); }
 });
 
-router.post('/import/full', requirePermission('canManageSettings') as any, uploadBackup.single('file'), (req: AuthRequest, res: Response) => {
+router.post('/import/full', requirePermission('canManageSettings') as any, uploadBackup.single('file'), async (req: AuthRequest, res: Response) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'Keine Datei hochgeladen' });
   const mode = req.body?.mode === 'overwrite' ? 'overwrite' : 'merge';
   const db = getDb();
   let preImportBackup = '';
+  let filePromotion: { commit: () => void; rollback: () => void } | null = null;
   try {
-    const importData = parseUploadedBackup(req.file);
+    const uploaded = await readUploadedBackup(req.file);
+    const importData = uploaded.data;
     validateBackupIntegrity(importData);
     if (!['full', 'episodes', 'editorial'].includes(importData.type)) return res.status(400).json({ success: false, error: `Unbekannter Backup-Typ: "${importData.type}"` });
+    const fileValidation = validateFileManifest(importData, uploaded.archive, uploaded.isArchive);
+    if (importData.type === 'full' && Number(importData.version?.split?.('.')[0] || 0) >= 4 && fileValidation.invalid > 0) {
+      return res.status(400).json({ success: false, error: `ZIP-Backup ist unvollständig oder beschädigt: ${fileValidation.invalid} erforderliche Datei(en) fehlen.` });
+    }
 
-    const preImport = createFullBackup(db, 'system (pre-import-backup)', false);
-    preImportBackup = `pre-import-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-    writeBackupAtomically(preImportBackup, preImport);
+    const preImport = await createFullBackup(db, 'system (pre-import-backup)', true);
+    preImportBackup = `pre-import-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.zip`;
+    await writeBackupArchiveAtomically(preImportBackup, preImport.backup, preImport.archiveFiles);
 
     const sourceTables = getImportTables(importData);
-    const orderedTables = FULL_TABLES.filter(table => Array.isArray(sourceTables[table]));
+    const orderedTables = getBackupTables(db).filter(table => Array.isArray(sourceTables[table]));
     const stats: Record<string, any> = {};
     const userIdMap = new Map<string, string>();
     const warnings: string[] = [];
+    const stagedFiles = await stageArchiveFiles(importData, uploaded.archive, uploaded.isArchive);
+    if (stagedFiles.legacy) warnings.push('Älteres JSON-Backup erkannt. Es enthält keine vollständige ZIP-Dateiprüfung; eingebettete Altdateien werden nach dem Datenimport wiederhergestellt.');
+    if (fileValidation.missing > 0) warnings.push(`${fileValidation.missing} Datei(en) wurden bewusst nicht im Backup eingebettet und können nicht wiederhergestellt werden.`);
     db.exec('BEGIN');
-    for (const table of orderedTables) stats[table] = upsertTableRows(db, table, sourceTables[table], mode, req, userIdMap);
+    filePromotion = stagedFiles.legacy ? null : promoteStagedFiles(stagedFiles.staged);
+    for (const table of orderedTables) stats[table] = upsertTableRows(db, table, sourceTables[table], mode, req, userIdMap, true);
     db.exec('COMMIT');
+    filePromotion?.commit();
 
-    const fileRestore = restoreEmbeddedFiles(importData);
+    const fileRestore = stagedFiles.legacy
+      ? restoreEmbeddedFiles(importData)
+      : { restored: stagedFiles.staged.length, skipped: stagedFiles.skipped, failed: 0, verified: stagedFiles.verified, total: stagedFiles.total };
     if (fileRestore.skipped > 0) warnings.push(`${fileRestore.skipped} Datei(en) waren im Backup nicht eingebettet und wurden nur als Verweis übernommen.`);
     if (fileRestore.failed > 0) warnings.push(`${fileRestore.failed} eingebettete Datei(en) konnten nicht wiederhergestellt werden.`);
 
@@ -619,8 +806,9 @@ router.post('/import/full', requirePermission('canManageSettings') as any, uploa
       totalSkipped: sum.totalSkipped + value.skipped,
       totalFailed: sum.totalFailed + value.failed,
     }), { totalImported: 0, totalUpdated: 0, totalSkipped: 0, totalFailed: 0 });
-    return res.json({ success: true, data: { mode, stats, summary, fileRestore, warnings, preImportBackup, importedTables: orderedTables } });
+    return res.json({ success: true, data: { mode, stats, summary, fileRestore, fileValidation, warnings, preImportBackup, importedTables: orderedTables } });
   } catch (error: any) {
+    try { filePromotion?.rollback(); } catch (_) {}
     try { db.exec('ROLLBACK'); } catch (_) {}
     return res.status(400).json({ success: false, error: `Import fehlgeschlagen: ${error.message}`, preImportBackup });
   } finally { removeTempFile(req.file); }
@@ -633,7 +821,7 @@ router.post('/import/full', requirePermission('canManageSettings') as any, uploa
 router.get('/list', requirePermission('canManageSettings') as any, (_req: AuthRequest, res: Response) => {
   try {
     if (!fs.existsSync(BACKUPS_DIR)) return res.json({ success: true, data: [] });
-    const files = fs.readdirSync(BACKUPS_DIR).filter(file => file.endsWith('.json')).map(filename => {
+    const files = fs.readdirSync(BACKUPS_DIR).filter(file => /\.(zip|json)$/i.test(file)).map(filename => {
       const stat = fs.statSync(path.join(BACKUPS_DIR, filename));
       return { filename, size: stat.size, createdAt: stat.birthtime.toISOString() };
     }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

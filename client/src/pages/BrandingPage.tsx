@@ -230,6 +230,18 @@ export default function BrandingPage() {
 
   const handleExport = async (type: 'episodes' | 'ideas' | 'full') => {
     try {
+      if (type === 'full') {
+        const { blob, filename } = await backupApi.exportFull();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        showSuccess('Vollbackup mit Medien und Bildern exportiert');
+        loadBackups();
+        return;
+      }
       const data = await backupApi.export(type);
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -239,7 +251,6 @@ export default function BrandingPage() {
       a.click();
       URL.revokeObjectURL(url);
       showSuccess('Backup exportiert');
-      if (type === 'full') loadBackups();
     } catch (err: any) { showError(err.message); }
   };
 
@@ -635,14 +646,14 @@ export default function BrandingPage() {
               {[
                 { type: 'episodes', label: 'Episoden', desc: 'Alle Episoden mit Blöcken und Notizen', color: 'text-accent-purple' },
                 { type: 'ideas', label: 'Redaktion', desc: 'Ideen, Redaktionsplan und Notizen', color: 'text-accent-orange' },
-                { type: 'full', label: 'Vollständig', desc: 'Komplettes Datenbank-Backup', color: 'text-accent-green' },
+                { type: 'full', label: 'Vollständig', desc: 'ZIP-Backup mit Daten, Medien und Bildern', color: 'text-accent-green' },
               ].map(opt => (
                 <button key={opt.type} onClick={() => handleExport(opt.type as any)}
                   className="card bg-obsidian-800 hover:border-surface-border-light transition-all text-left group">
                   <div className={`text-2xl mb-2 ${opt.color}`}><FileJson size={24} /></div>
                   <p className="text-text-primary font-medium">{opt.label}</p>
                   <p className="text-text-muted text-xs mt-1">{opt.desc}</p>
-                  <p className="text-accent-green text-xs mt-2 opacity-0 group-hover:opacity-100 transition-opacity">JSON herunterladen →</p>
+                  <p className="text-accent-green text-xs mt-2 opacity-0 group-hover:opacity-100 transition-opacity">{opt.type === 'full' ? 'ZIP herunterladen →' : 'JSON herunterladen →'}</p>
                 </button>
               ))}
             </div>
@@ -698,7 +709,7 @@ export default function BrandingPage() {
               <div className="space-y-2">
                 {backupList.map(backup => (
                   <div key={backup.filename} className="flex items-center gap-3 p-3 rounded-lg bg-obsidian-800 group">
-                    <FileJson size={16} className="text-accent-green flex-shrink-0" />
+                    <HardDrive size={16} className="text-accent-green flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-text-primary text-sm font-mono truncate">{backup.filename}</p>
                       <p className="text-text-muted text-xs">{new Date(backup.createdAt).toLocaleString('de-DE')} · {(backup.size / 1024).toFixed(0)} KB</p>

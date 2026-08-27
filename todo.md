@@ -14,3 +14,4 @@
 - [x] v2.16.41: Audio-Abnahme als separaten Qualitätskontrollbereich in der Media Library umgesetzt, mit Audioasset und Episodenworkflow verknüpft sowie Speicher-, Berechtigungs- und Exportpfade geprüft.
 - [x] v2.16.41: Rollen und Berechtigungen für Media Library, Audio-Abnahme, Episodenverknüpfung und Qualitätskontroll-Export vollständig geprüft und fehlende Zugriffsrechte ergänzt.
 - [x] v2.16.45: Versteckten Entwickler-Modus ausschließlich über eine serverseitig validierte Entwicklerlizenz freigeschaltet und die Ausgabe, Sperrung sowie den Widerruf der Codes im separaten WordPress-Lizenzplugin ermöglicht.
+- [x] v2.16.45 Wartung: Vollständige Backups einschließlich Medien, Bildern, Zuordnungen und Validierungsmanifest exportieren sowie die Wiederherstellung vorab prüfen und bei Fehlern sicher abbrechen.

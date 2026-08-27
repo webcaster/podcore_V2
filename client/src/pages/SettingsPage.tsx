@@ -689,20 +689,19 @@ export default function SettingsPage() {
   const handleCreateCloudBackup = async () => {
     setIsCreatingStorageBackup(true);
     try {
-      const data = await backupApi.export('full', { includeFiles: storageForm.includeFiles });
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const { blob, filename } = await backupApi.exportFull({ includeFiles: storageForm.includeFiles });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       link.href = url;
-      link.download = `${storageForm.backupLabel.replace(/[^a-z0-9_-]+/gi, '-') || 'podcore-backup'}-${timestamp}.json`;
+      link.download = `${storageForm.backupLabel.replace(/[^a-z0-9_-]+/gi, '-') || filename.replace(/\.zip$/i, '')}-${timestamp}.zip`;
       link.click();
       URL.revokeObjectURL(url);
       const storage = { ...storageForm, lastBackupAt: new Date().toISOString(), setupCompleted: true };
       await adminApi.updateSettings({ storage });
       setStorageForm(storage);
       setSettings((current: any) => ({ ...(current || {}), storage }));
-      showSuccess('Vollständige Backup-Datei erstellt. Lege sie jetzt in deinem gewünschten Cloud-Ordner ab.');
+      showSuccess('Vollständiges ZIP-Backup mit Medien und Bildern erstellt. Lege es jetzt in deinem gewünschten Cloud-Ordner ab.');
     } catch (err: any) { showError(err.message || 'Backup-Datei konnte nicht erstellt werden'); }
     finally { setIsCreatingStorageBackup(false); }
   };

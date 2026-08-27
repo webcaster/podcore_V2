@@ -22,6 +22,21 @@ Die WordPress-Seitenvorlagen enthalten eine fertige Contact-Form-7-Konfiguration
 
 Das Verzeichnis `wordpress-pages` enthält zwei responsive HTML-Blöcke für WordPress: eine Entwicklerseite und eine Kontaktseite. Die Kontaktseite ist für die Einbindung eines Formularplugins wie Contact Form 7 oder WPForms vorbereitet. Für Contact Form 7 ist zusätzlich eine Vorlage mit Pflichtzustimmung zur Datenschutzerklärung, Mail-Konfiguration und Einbauhinweisen enthalten. Die Einbauanleitung steht in [`wordpress-pages/README.md`](wordpress-pages/README.md).
 
+### Wartungsstand v2.16.45: vollständige ZIP-Backups mit Datei-Integrität
+
+Die Versionsnummer bleibt **2.16.45**. Der Wartungsstand ersetzt Vollbackups im JSON-Format durch ein vollständiges ZIP-Archiv im Format `podcore-backup` v4.0.0. Es enthält ein lesbares Manifest (`podcore-backup.json`), sämtliche vorhandenen Fach- und Konfigurationstabellen sowie eingebettete Dateien aus der Media Library, der Ideenmappe, dem Branding und den Sponsorlogos. Jede eingebettete Datei wird im Manifest mit ihrer SHA-256-Prüfsumme dokumentiert.
+
+| Bereich | Bedienweg | Verhalten |
+|---|---|---|
+| Vollbackup erstellen | **Podcast-Einstellungen → Backups** oder **Administration → Datenbank → Backup exportieren** | Lädt ein ZIP inklusive Fach-, Medien- und Brandingdaten herunter und legt zugleich eine lokale Sicherung ab. |
+| Wiederherstellung vorbereiten | **Administration → Backup importieren** | Akzeptiert `.zip` und ältere `.json`-Backups, zeigt Tabellen-, Archiv- und Dateizusammenfassung vor der Übernahme an. |
+| Wiederherstellung ausführen | Im Importdialog nach der Vorschau den Modus **Zusammenführen** oder **Überschreiben** wählen | Prüft Manifest, erlaubte Wiederherstellungspfade und Prüfsummen, erstellt vorher ein lokales `pre-import-…zip` und übernimmt Dateien erst gemeinsam mit dem erfolgreichen Datenimport. |
+| Automatische Sicherung | Einstellungen für automatische Backups oder Systemaufruf | Erstellt denselben ZIP-Standard; Aufbewahrungsanzahl und Dateieinbettung bleiben konfigurierbar. |
+
+> **Sicherheitsverhalten:** Stimmt eine eingebettete Datei nicht mit ihrer Prüfsumme überein, fehlt sie im Archiv oder ist ihr Zielpfad ungültig, bricht PodCore die Wiederherstellung ab. Es erfolgt kein stiller Teilimport. Sitzungen, Fehlerprotokolle und veraltete Übergangstabellen werden bewusst nicht in Vollbackups aufgenommen.
+
+Ältere JSON-Backups können weiterhin importiert werden. Da dieses historische Format keine vollständige Archiv- und Dateiprüfung bietet, kennzeichnet PodCore es bei der Wiederherstellung ausdrücklich als Legacy-Backup. Für alle neuen Sicherungen wird das ZIP-Vollbackup empfohlen.
+
 ### Neu in v2.16.45: Exklusiver Entwickler-Modus mit WordPress-Entwicklerlizenz
 
 Der bisherige versteckte Entwicklerbereich bleibt über den Sieben-Klick-Handshake erreichbar, wird jedoch nicht mehr über eine lokale Profil-Checkbox freigeschaltet. Ein echter Zugang erfordert nun einen getrennten Entwicklercode aus dem PodCore-WordPress-Lizenzplugin. Nur Administratoren können den Code in der geschützten Profileinstellung aktivieren. Normale Kundenlizenzen sowie direkte Profiländerungen verleihen keinen Entwicklerzugang.

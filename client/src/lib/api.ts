@@ -58,6 +58,17 @@ async function requestRaw(method: string, path: string): Promise<any> {
   return res.json();
 }
 
+async function requestDownload(method: string, path: string): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(`${API_BASE}${path}`, { method, credentials: 'include', headers: activePodcastHeaders() });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, data.error || 'Download fehlgeschlagen');
+  }
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'podcore-backup.zip';
+  return { blob: await res.blob(), filename };
+}
+
 // Helper: build query string, filtering out undefined/null/empty values
 function buildQs(params?: Record<string, any>): string {
   if (!params) return '';
@@ -507,8 +518,9 @@ export const mediaApi = {
 // Backup API
 // ============================================================
 export const backupApi = {
-  export: (type: 'episodes' | 'ideas' | 'full', options?: { includeFiles?: boolean }) =>
-    requestRaw('GET', `/backup/export/${type}${type === 'full' && options?.includeFiles === false ? '?includeFiles=0' : ''}`),
+  export: (type: 'episodes' | 'ideas') => requestRaw('GET', `/backup/export/${type}`),
+  exportFull: (options?: { includeFiles?: boolean }) =>
+    requestDownload('GET', `/backup/export/full${options?.includeFiles === false ? '?includeFiles=0' : ''}`),
   import: (type: 'episodes' | 'ideas', formData: FormData) =>
     api.upload<any>(`/backup/import/${type}`, formData),
   importFull: (formData: FormData) =>
@@ -574,7 +586,7 @@ export const adminApi = {
 
   // Aliases used in AdminPage
   getUsers: () => api.get<any[]>('/admin/users'),
-  exportDb: () => backupApi.export('full'),
+  exportDb: () => backupApi.exportFull(),
 
   // Approval users
   listApprovalUsers: () => api.get<any[]>('/admin/approval-users'),
