@@ -8,23 +8,15 @@
 
 ---
 
-## Lizenzierung mit WordPress und WooCommerce
+## Lizenzierung
 
-PodCore 2.16.32 enthält eine eigene Lizenzanbindung für das Plugin [`PodCore Licensing for WooCommerce`](wordpress-plugin/podcore-licensing). Unterstützt werden Monatsabo, Jahresabo und Sonderabo. Lizenzen können online über die eigene WordPress-REST-API aktiviert oder als Ed25519-signiertes Dokument offline importiert werden. Ein lesbarer Lizenznachweis lässt sich unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Die vollständige Einrichtung steht in [`docs/RELEASE-2.16.32.md`](docs/RELEASE-2.16.32.md).
+PodCore unterstützt eine getrennt betriebene Lizenzanbindung mit Online-Aktivierung und einem Ed25519-signierten Offline-Lizenznachweis. In der Anwendung lassen sich Lizenzstatus prüfen und ein lesbarer Nachweis unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Lizenzserver, Shop- und Website-Komponenten sind bewusst nicht Bestandteil dieses App-Repositories oder des Endnutzer-App-Pakets.
 
 ## 🌟 Kernfunktionen
 
-### Neu in v2.16.47: DSGVO-Contact-Form-7-Formular
+### Neu in v2.16.47: vollständige ZIP-Backups mit Datei-Integrität
 
-Die WordPress-Seitenvorlagen enthalten eine fertige Contact-Form-7-Konfiguration mit verpflichtender Zustimmung zur Datenschutzerklärung, validierten Feldern, Reply-To-Mail-Konfiguration und Einbauanleitung. Datenschutz-URL, Empfängeradresse und Aufbewahrung müssen vor Veröffentlichung an die konkrete Website angepasst werden. Details stehen in [`wordpress-pages/contact-form-7-dsgvo.md`](wordpress-pages/contact-form-7-dsgvo.md).
-
-### Neu in v2.16.44: HTML-Seiten für Entwickler und Kontakt
-
-Das Verzeichnis `wordpress-pages` enthält zwei responsive HTML-Blöcke für WordPress: eine Entwicklerseite und eine Kontaktseite. Die Kontaktseite ist für die Einbindung eines Formularplugins wie Contact Form 7 oder WPForms vorbereitet. Für Contact Form 7 ist zusätzlich eine Vorlage mit Pflichtzustimmung zur Datenschutzerklärung, Mail-Konfiguration und Einbauhinweisen enthalten. Die Einbauanleitung steht in [`wordpress-pages/README.md`](wordpress-pages/README.md).
-
-### Wartungsstand v2.16.45: vollständige ZIP-Backups mit Datei-Integrität
-
-Die Versionsnummer bleibt **2.16.45**. Der Wartungsstand ersetzt Vollbackups im JSON-Format durch ein vollständiges ZIP-Archiv im Format `podcore-backup` v4.0.0. Es enthält ein lesbares Manifest (`podcore-backup.json`), sämtliche vorhandenen Fach- und Konfigurationstabellen sowie eingebettete Dateien aus der Media Library, der Ideenmappe, dem Branding und den Sponsorlogos. Jede eingebettete Datei wird im Manifest mit ihrer SHA-256-Prüfsumme dokumentiert.
+Version **2.16.47** ersetzt Vollbackups im JSON-Format durch ein vollständiges ZIP-Archiv im Format `podcore-backup` v4.0.0. Es enthält ein lesbares Manifest (`podcore-backup.json`), sämtliche vorhandenen Fach- und Konfigurationstabellen sowie eingebettete Dateien aus der Media Library, der Ideenmappe, dem Branding und den Sponsorlogos. Jede eingebettete Datei wird im Manifest mit ihrer SHA-256-Prüfsumme dokumentiert.
 
 | Bereich | Bedienweg | Verhalten |
 |---|---|---|

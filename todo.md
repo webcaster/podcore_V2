@@ -15,3 +15,6 @@
 - [x] v2.16.41: Rollen und Berechtigungen für Media Library, Audio-Abnahme, Episodenverknüpfung und Qualitätskontroll-Export vollständig geprüft und fehlende Zugriffsrechte ergänzt.
 - [x] v2.16.45: Versteckten Entwickler-Modus ausschließlich über eine serverseitig validierte Entwicklerlizenz freigeschaltet und die Ausgabe, Sperrung sowie den Widerruf der Codes im separaten WordPress-Lizenzplugin ermöglicht.
 - [x] v2.16.45 Wartung: Vollständige Backups einschließlich Medien, Bildern, Zuordnungen und Validierungsmanifest exportieren sowie die Wiederherstellung vorab prüfen und bei Fehlern sicher abbrechen.
+- [x] v2.16.47: Den geprüften ZIP-Backup-Wartungsstand konfliktfrei mit den aktuellen GitHub-Änderungen zusammenführen und sämtliche Versionsangaben konsistent aktualisieren.
+- [x] v2.16.47: Vollständigen Build, Backup-Roundtrips und automatische Sicherungen auf dem integrierten Stand prüfen sowie ein bereinigtes Endnutzerpaket mit SHA-256 bereitstellen.
+- [ ] v2.16.47: App-Commit, GitHub-Release und Download-Asset aktualisieren, ohne WordPress- oder Lizenzplugin-Dateien in das App-Repository aufzunehmen.

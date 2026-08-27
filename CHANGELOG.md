@@ -1,16 +1,8 @@
 # PodCore – Release Notes
 
-## v2.16.47 – Contact Form 7 mit DSGVO-Zustimmung
+## v2.16.47 – vollständige ZIP-Backups und sichere Wiederherstellung
 
-Die WordPress-Seitenvorlagen enthalten jetzt eine fertige Contact-Form-7-Konfiguration mit verpflichtender Zustimmung zur Datenschutzerklärung, validierten Namens-, E-Mail- und Nachrichtenfeldern, Reply-To-Mail-Konfiguration und Einbauanleitung. Datenschutz-URL, Empfängeradresse und Aufbewahrung müssen vor Veröffentlichung an die konkrete Website angepasst werden.
-
-## v2.16.45 – Contact Form 7 mit Datenschutz-Zustimmung
-
-Die WordPress-Seitenvorlagen enthalten jetzt eine fertige Contact-Form-7-Konfiguration mit Pflichtzustimmung zur Datenschutzerklärung, validierten Namens-, E-Mail- und Nachrichtenfeldern, Mailvorlage, Reply-To-Konfiguration und Einbauanleitung. Datenschutz-URL, Empfängeradresse und Aufbewahrung müssen vor Veröffentlichung an die konkrete Website angepasst werden.
-
-## v2.16.44 – WordPress-HTML-Seiten für Entwickler und Kontakt
-
-Das Paket `wordpress-pages` enthält eine responsive Entwicklerseite und eine Kontaktseite als HTML-Blöcke für WordPress. Die Kontaktseite besitzt einen klar gekennzeichneten Einbettungsbereich für Formular-Shortcodes von Contact Form 7 oder WPForms. Die Einrichtung ist in [`wordpress-pages/README.md`](wordpress-pages/README.md) beschrieben.
+PodCore erstellt vollständige Sicherungen jetzt als ZIP-Archiv im Format `podcore-backup` v4.0.0. Fach- und Konfigurationsdaten werden gemeinsam mit Medien, Ideenmappe-Uploads, Brandingbildern und Sponsorlogos exportiert. Das Manifest dokumentiert Tabellen, Dateien und SHA-256-Prüfsummen. Bei der Wiederherstellung prüft PodCore Archivstruktur, erlaubte Zielpfade und Dateiintegrität vor der Datenübernahme, erstellt zuvor eine lokale Rückfallsicherung und lehnt beschädigte Archive ohne stillen Teilimport ab. Ältere JSON-Backups bleiben mit sichtbarem Legacy-Hinweis importierbar.
 
 ## v2.16.35 – Add-on für mehrere Podcasts
 
