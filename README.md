@@ -16,7 +16,7 @@ PodCore 2.16.32 enthält eine eigene Lizenzanbindung für das Plugin [`PodCore L
 
 ### Neu in v2.16.44: HTML-Seiten für Entwickler und Kontakt
 
-Das Verzeichnis `wordpress-pages` enthält zwei responsive HTML-Blöcke für WordPress: eine Entwicklerseite und eine Kontaktseite. Die Kontaktseite ist für die Einbindung eines Formularplugins wie Contact Form 7 oder WPForms vorbereitet. Die Einbauanleitung steht in [`wordpress-pages/README.md`](wordpress-pages/README.md).
+Das Verzeichnis `wordpress-pages` enthält zwei responsive HTML-Blöcke für WordPress: eine Entwicklerseite und eine Kontaktseite. Die Kontaktseite ist für die Einbindung eines Formularplugins wie Contact Form 7 oder WPForms vorbereitet. Für Contact Form 7 ist zusätzlich eine Vorlage mit Pflichtzustimmung zur Datenschutzerklärung, Mail-Konfiguration und Einbauhinweisen enthalten. Die Einbauanleitung steht in [`wordpress-pages/README.md`](wordpress-pages/README.md).
 
 ### Neu in v2.16.45: Exklusiver Entwickler-Modus mit WordPress-Entwicklerlizenz
 

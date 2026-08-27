@@ -1,5 +1,9 @@
 # PodCore – Release Notes
 
+## v2.16.45 – Contact Form 7 mit Datenschutz-Zustimmung
+
+Die WordPress-Seitenvorlagen enthalten jetzt eine fertige Contact-Form-7-Konfiguration mit Pflichtzustimmung zur Datenschutzerklärung, validierten Namens-, E-Mail- und Nachrichtenfeldern, Mailvorlage, Reply-To-Konfiguration und Einbauanleitung. Datenschutz-URL, Empfängeradresse und Aufbewahrung müssen vor Veröffentlichung an die konkrete Website angepasst werden.
+
 ## v2.16.44 – WordPress-HTML-Seiten für Entwickler und Kontakt
 
 Das Paket `wordpress-pages` enthält eine responsive Entwicklerseite und eine Kontaktseite als HTML-Blöcke für WordPress. Die Kontaktseite besitzt einen klar gekennzeichneten Einbettungsbereich für Formular-Shortcodes von Contact Form 7 oder WPForms. Die Einrichtung ist in [`wordpress-pages/README.md`](wordpress-pages/README.md) beschrieben.
