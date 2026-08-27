@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.45**
+**Aktuelle Version: 2.16.47**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,10 @@
 PodCore 2.16.32 enthält eine eigene Lizenzanbindung für das Plugin [`PodCore Licensing for WooCommerce`](wordpress-plugin/podcore-licensing). Unterstützt werden Monatsabo, Jahresabo und Sonderabo. Lizenzen können online über die eigene WordPress-REST-API aktiviert oder als Ed25519-signiertes Dokument offline importiert werden. Ein lesbarer Lizenznachweis lässt sich unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Die vollständige Einrichtung steht in [`docs/RELEASE-2.16.32.md`](docs/RELEASE-2.16.32.md).
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.47: DSGVO-Contact-Form-7-Formular
+
+Die WordPress-Seitenvorlagen enthalten eine fertige Contact-Form-7-Konfiguration mit verpflichtender Zustimmung zur Datenschutzerklärung, validierten Feldern, Reply-To-Mail-Konfiguration und Einbauanleitung. Datenschutz-URL, Empfängeradresse und Aufbewahrung müssen vor Veröffentlichung an die konkrete Website angepasst werden. Details stehen in [`wordpress-pages/contact-form-7-dsgvo.md`](wordpress-pages/contact-form-7-dsgvo.md).
 
 ### Neu in v2.16.44: HTML-Seiten für Entwickler und Kontakt
 

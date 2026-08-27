@@ -1,5 +1,9 @@
 # PodCore – Release Notes
 
+## v2.16.47 – Contact Form 7 mit DSGVO-Zustimmung
+
+Die WordPress-Seitenvorlagen enthalten jetzt eine fertige Contact-Form-7-Konfiguration mit verpflichtender Zustimmung zur Datenschutzerklärung, validierten Namens-, E-Mail- und Nachrichtenfeldern, Reply-To-Mail-Konfiguration und Einbauanleitung. Datenschutz-URL, Empfängeradresse und Aufbewahrung müssen vor Veröffentlichung an die konkrete Website angepasst werden.
+
 ## v2.16.45 – Contact Form 7 mit Datenschutz-Zustimmung
 
 Die WordPress-Seitenvorlagen enthalten jetzt eine fertige Contact-Form-7-Konfiguration mit Pflichtzustimmung zur Datenschutzerklärung, validierten Namens-, E-Mail- und Nachrichtenfeldern, Mailvorlage, Reply-To-Konfiguration und Einbauanleitung. Datenschutz-URL, Empfängeradresse und Aufbewahrung müssen vor Veröffentlichung an die konkrete Website angepasst werden.
