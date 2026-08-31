@@ -36,8 +36,10 @@
   z-index: 2147483647;
   width: 500px;
   max-width: 95vw;
+  height: min(680px, calc(100dvh - 24px));
   max-height: calc(100dvh - 24px);
   pointer-events: auto;
+  touch-action: manipulation;
   visibility: visible !important;
   opacity: 1 !important;
   isolation: isolate;
@@ -62,6 +64,15 @@
   cursor: pointer;
 }
 
+.tutorial-tooltip-container button,
+.tutorial-tooltip-container a {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
 .tutorial-drag-handle {
   display: inline-flex;
   align-items: center;
@@ -78,8 +89,8 @@
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(124, 58, 237, 0.25);
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
+  height: 100%;
+  overflow: hidden;
   animation: tutorial-fade-in 0.3s ease-out;
   min-height: 164px;
   max-height: calc(100dvh - 24px);
@@ -87,11 +98,13 @@
   opacity: 1 !important;
 }
 
+.tutorial-content-scroll,
 .tutorial-scroll-content {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 @keyframes tutorial-fade-in {
@@ -136,6 +149,7 @@
 .tutorial-body {
   padding: 20px 24px;
   min-height: 60px;
+  min-width: 0;
 }
 
 .tutorial-body p {
@@ -143,6 +157,7 @@
   font-size: 15px;
   line-height: 1.6;
   color: #cbd5e1;
+  overflow-wrap: anywhere;
 }
 
 .tutorial-action-hint {
@@ -157,6 +172,8 @@
   color: #ede9fe;
   font-size: 13px;
   line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .tutorial-action-hint__pulse {
@@ -173,7 +190,7 @@
   padding: 16px 24px;
   background: rgba(20, 20, 32, 0.5);
   border-top: 1px solid #2d2d4e;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .tutorial-footer {
@@ -181,6 +198,8 @@
   border-top: 1.5px solid #2d2d4e;
   background: rgba(10, 10, 15, 0.6);
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .tutorial-actions,
@@ -239,32 +258,44 @@
 }
 
 /* ── Custom Scrollbar ── */
-.tutorial-card::-webkit-scrollbar {
+.tutorial-content-scroll::-webkit-scrollbar,
+.tutorial-scroll-content::-webkit-scrollbar {
   width: 6px;
 }
 
-.tutorial-card::-webkit-scrollbar-track {
+.tutorial-content-scroll::-webkit-scrollbar-track,
+.tutorial-scroll-content::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.tutorial-card::-webkit-scrollbar-thumb {
+.tutorial-content-scroll::-webkit-scrollbar-thumb,
+.tutorial-scroll-content::-webkit-scrollbar-thumb {
   background: #3d3d5e;
   border-radius: 3px;
 }
 
-.tutorial-card::-webkit-scrollbar-thumb:hover {
+.tutorial-content-scroll::-webkit-scrollbar-thumb:hover,
+.tutorial-scroll-content::-webkit-scrollbar-thumb:hover {
   background: #4d4d6e;
 }
 
 /* ── Mobile Responsiveness ── */
 @media (max-width: 768px) {
   .tutorial-tooltip-container {
-    width: calc(100vw - 24px);
+    top: auto !important;
+    right: max(8px, env(safe-area-inset-right)) !important;
+    bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    left: max(8px, env(safe-area-inset-left)) !important;
+    width: auto;
+    height: min(68dvh, 540px);
     max-width: none;
+    max-height: none;
+    transform: none !important;
   }
 
   .tutorial-card {
-    max-height: calc(100dvh - 16px);
+    height: 100%;
+    max-height: none;
   }
 
   .tutorial-header {
@@ -307,7 +338,16 @@
   }
 
   .tutorial-image-container img {
-    max-height: 200px;
+    max-height: min(32dvh, 200px);
+  }
+
+  .tutorial-header--draggable {
+    cursor: default;
+    touch-action: manipulation;
+  }
+
+  .tutorial-content-scroll {
+    overscroll-behavior-y: contain;
   }
 }
 
@@ -331,6 +371,15 @@
 
   .tutorial-footer {
     padding: 10px 16px;
+  }
+
+  .tutorial-action-hint {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .tutorial-annotations-list {
+    padding: 12px 16px;
   }
 
   .tutorial-actions > .tutorial-action-button--secondary {

@@ -17,4 +17,6 @@
 - [x] v2.16.45 Wartung: Vollständige Backups einschließlich Medien, Bildern, Zuordnungen und Validierungsmanifest exportieren sowie die Wiederherstellung vorab prüfen und bei Fehlern sicher abbrechen.
 - [x] v2.16.47: Den geprüften ZIP-Backup-Wartungsstand konfliktfrei mit den aktuellen GitHub-Änderungen zusammenführen und sämtliche Versionsangaben konsistent aktualisieren.
 - [x] v2.16.47: Vollständigen Build, Backup-Roundtrips und automatische Sicherungen auf dem integrierten Stand prüfen sowie ein bereinigtes Endnutzerpaket mit SHA-256 bereitstellen.
-- [ ] v2.16.47: App-Commit, GitHub-Release und Download-Asset aktualisieren, ohne WordPress- oder Lizenzplugin-Dateien in das App-Repository aufzunehmen.
+- [x] v2.16.47: App-Commit, GitHub-Release und Download-Asset aktualisiert, ohne WordPress- oder Lizenzplugin-Dateien in das App-Repository aufzunehmen.
+- [x] v2.16.48: Interaktive Tutorialüberlagerung auf kleinen Bildschirmen so angepasst, dass Anweisungstexte und Markierungen nicht kollidieren und alle Tutorialaktionen zuverlässig klickbar bleiben.
+- [x] v2.16.48: Das In-App-Wiki um fehlende Einträge zur interaktiven Tutorialführung, der mobilen Bedienung und dem vollständigen ZIP-Backup ergänzt.

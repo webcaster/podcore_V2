@@ -1,5 +1,11 @@
 # PodCore – Release Notes
 
+## v2.16.48 – mobile Tutorialführung und Wiki-Vervollständigung
+
+Die Tutorialkarte nutzt auf kleinen Bildschirmen einen eigenen scrollbaren Inhaltsbereich für Screenshot, Erklärung und Markierungen. Die Fortschritts- und Aktionsleiste ist davon getrennt, bleibt sichtbar und behandelt Touch-Eingaben für **Zurück**, **Wiki**, **Überspringen**, **Zum Bereich**, **Weiter** und **Abschließen** zuverlässig. Die Karte wird auf Mobilgeräten bewusst kompakt am unteren Rand dargestellt, sodass ein Klickziel oberhalb sichtbar und erreichbar bleibt.
+
+Das Wiki erklärt den mobilen Tutorialablauf, die Verwendung von Markierungen und Klickzielen sowie die sichere Wiederherstellung aus ZIP-Vollbackups. Die Exportübersicht unterscheidet nun JSON-Teilexporte von vollständigen ZIP-Archiven; die Backup-Anleitung dokumentiert Vorschau, Integritätsprüfung, Vorab-Sicherung, Aufbewahrung und Legacy-JSON-Verhalten.
+
 ## v2.16.47 – vollständige ZIP-Backups und sichere Wiederherstellung
 
 PodCore erstellt vollständige Sicherungen jetzt als ZIP-Archiv im Format `podcore-backup` v4.0.0. Fach- und Konfigurationsdaten werden gemeinsam mit Medien, Ideenmappe-Uploads, Brandingbildern und Sponsorlogos exportiert. Das Manifest dokumentiert Tabellen, Dateien und SHA-256-Prüfsummen. Bei der Wiederherstellung prüft PodCore Archivstruktur, erlaubte Zielpfade und Dateiintegrität vor der Datenübernahme, erstellt zuvor eine lokale Rückfallsicherung und lehnt beschädigte Archive ohne stillen Teilimport ab. Ältere JSON-Backups bleiben mit sichtbarem Legacy-Hinweis importierbar.

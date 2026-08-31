@@ -130,9 +130,14 @@ const wikiData: WikiCategory[] = [
             text: 'Wenn für Ihre Rolle ein Tutorial verfügbar ist, können Sie es über den Tutorial-Hinweis oder die Hilfe & Wissensbase öffnen. Die Schaltfläche „Starten“ führt interaktiv durch die App. Wenn Sie lieber selbst navigieren möchten, verwenden Sie die Schaltfläche „Wiki“, um die vollständigen Anleitungen ohne geführte Klicks zu lesen.',
           },
           {
-            heading: 'Wenn eine Führung nicht startet',
-            text: 'Ein Tutorial ohne gültige Schritte wird nicht mehr als leerer Bereich geöffnet. PodCore zeigt stattdessen einen verständlichen Hinweis und bietet den direkten Wechsel in die Wissensbase an. Sollte die Tutorialkarte selbst nicht gerendert werden können, bleibt die übrige App bedienbar und zeigt eine lokale Fallback-Karte mit Schließen- und Wiki-Aktion. Auf schmalen Ansichten ordnen sich die Tutorialaktionen automatisch untereinander, damit Zurück, Wiki und Weiter vollständig erreichbar bleiben. Öffnen Sie das Tutorial später erneut oder bitten Sie einen Administrator, die Schritte im Entwickler-Modus zu prüfen.',
-            tip: 'Ein Tutorial kann auch ohne Screenshot verwendet werden. Entscheidend sind Titel, Erklärung und gegebenenfalls ein Menü- oder Klickziel.',
+            heading: 'Tutorial auf Mobilgeräten bedienen',
+            text: 'Auf kleinen Bildschirmen erscheint die Tutorialkarte kompakt am unteren Bildschirmrand. Screenshot, Erklärung und Markierungsliste besitzen einen eigenen Scrollbereich; die Fortschrittsanzeige sowie die Schaltflächen Zurück, Wiki, Überspringen und Weiter bleiben davon getrennt und jederzeit bedienbar. Die Karte lässt auf mobilen Geräten bewusst Platz über sich, damit ein hervorgehobenes App-Ziel erreichbar bleibt.',
+            tip: 'Verwenden Sie bei einem Klickschritt zuerst „Zum Bereich“. Das Ziel wird sichtbar positioniert. Anschließend klicken Sie den violett markierten Bereich oder fahren über „Weiter“ fort, wenn Sie die Aktion bereits ausgeführt haben.',
+          },
+          {
+            heading: 'Wenn eine Führung nicht startet oder ein Ziel fehlt',
+            text: 'Ein Tutorial ohne gültige Schritte wird nicht als leerer Bereich geöffnet. PodCore zeigt stattdessen einen verständlichen Hinweis und bietet den direkten Wechsel in die Wissensbasis an. Sollte die Tutorialkarte selbst nicht gerendert werden können, bleibt die übrige App bedienbar und zeigt eine lokale Fallback-Karte mit Schließen- und Wiki-Aktion. Öffnen Sie das Tutorial später erneut oder bitten Sie einen Administrator, die Schritte im Entwickler-Modus zu prüfen.',
+            tip: 'Ein Tutorial kann auch ohne Screenshot verwendet werden. Entscheidend sind Titel, Erklärung und gegebenenfalls ein Menü- oder Klickziel. Auf größeren Bildschirmen kann die Kopfzeile der Karte zum Verschieben verwendet werden.',
           },
           {
             heading: 'Screenshots und PDF-Markierungen',
@@ -717,7 +722,7 @@ const wikiData: WikiCategory[] = [
           },
           {
             heading: 'Produktion und Daten',
-            list: ['Audio-Marker als EDL, FCPXML, Reaper, Audacity, Audition XML oder CSV', 'Episoden-, Redaktions- und Vollbackup als JSON', 'Systembackup und Update-ZIP für Administratoren'],
+            list: ['Audio-Marker als EDL, FCPXML, Reaper, Audacity, Audition XML oder CSV', 'Episoden- und Redaktionsbackup als JSON', 'Vollbackup als ZIP mit Fach- und Konfigurationsdaten, Medien, Ideenmappe-Uploads, Brandingbildern und Sponsorlogos', 'Systembackup und Update-ZIP für Administratoren'],
           },
           {
             tip: 'Wählen Sie vor PDF-Exporten das gewünschte Layout und vergeben Sie, wenn angeboten, einen eindeutigen Dateinamen beziehungsweise Dokumenttitel.',
@@ -774,11 +779,16 @@ const wikiData: WikiCategory[] = [
           },
           {
             heading: 'Datenexport',
-            text: 'Podcast-Einstellungen bieten JSON-Exporte für Episoden, Redaktion und ein vollständiges Backup. Gespeicherte Backups können verwaltet und heruntergeladen werden.',
+            text: 'Podcast-Einstellungen bieten JSON-Exporte für Episoden und Redaktion. Neue Vollbackups werden als ZIP-Archiv im Format podcore-backup erstellt. Das Archiv enthält das Manifest podcore-backup.json, die exportierten Tabellen und – sofern vorhanden – lokale Medienassets, Ideenmappe-Uploads, Brandingbilder und Sponsorlogos. Gespeicherte Backups können verwaltet und heruntergeladen werden.',
           },
           {
-            heading: 'Import',
-            text: 'Prüfen Sie vor einem Import Dateityp, Quelle und Sicherungszeitpunkt. Ein Import kann vorhandene Daten verändern; erstellen Sie deshalb unmittelbar vorher ein neues Vollbackup.',
+            heading: 'Import mit Vorschau und Rückfall',
+            text: 'Wählen Sie unter Administration → Backup importieren zuerst die ZIP- oder Legacy-JSON-Datei. Die Vorschau zeigt Format, Tabellen, Archivstatus und enthaltene Dateien. Bei einem ZIP-Vollbackup prüft PodCore Manifest, sichere Wiederherstellungspfade und SHA-256-Prüfsummen, bevor Daten übernommen werden. Anschließend wählen Sie Zusammenführen oder Überschreiben.',
+            tip: 'Vor der Wiederherstellung erstellt PodCore automatisch ein pre-import-Archiv. Fehlt eine Datei, stimmt eine Prüfsumme nicht oder ist der Archivpfad ungültig, wird der Import vor einer stillen Teilübernahme abgebrochen. Ältere JSON-Backups bleiben als gekennzeichnete Legacy-Sicherungen importierbar.',
+          },
+          {
+            heading: 'Automatische Sicherungen',
+            text: 'Die In-App-Automatik und die systemgeplante Sicherung verwenden denselben ZIP-Standard. Intervall, Aufbewahrungsanzahl und die Einbettung lokaler Dateien können in den Backup-Einstellungen festgelegt werden. Die Aufbewahrung bereinigt ausschließlich ältere automatische Archive.',
           },
         ],
       },
@@ -895,6 +905,19 @@ const wikiData: WikiCategory[] = [
     icon: <Package size={16} />,
     color: 'text-text-secondary',
     articles: [
+      {
+        id: 'v2-16-48',
+        title: 'v2.16.48 · Mobile Tutorialführung und Backup-Hilfe',
+        summary: 'Tutorialkarte auf kleinen Displays lesbar und bedienbar; Wiki um sichere ZIP-Vollbackups und Wiederherstellung erweitert.',
+        icon: <CheckCircle size={16} />,
+        tags: ['aktuell', 'v2.16.48', 'tutorial', 'mobil', 'markierungen', 'backup', 'wiederherstellung'],
+        compact: true,
+        content: [
+          {
+            text: 'Die interaktive Tutorialkarte trennt auf kleinen Bildschirmen nun den scrollbaren Screenshot-, Text- und Markierungsbereich von der dauerhaft erreichbaren Aktionsleiste. Zurück, Wiki, Überspringen, Zum Bereich und Weiter sind explizit für Touch-Bedienung ausgelegt. Die Wissensbasis erläutert außerdem den vollständigen ZIP-Backup-Ablauf mit Vorschau, Dateimanifest, Prüfsummen, automatischer Vorab-Sicherung und Legacy-JSON-Hinweis.',
+          },
+        ],
+      },
       {
         id: 'v2-14-10',
         title: 'v2.14.10 · PDF-Schriften und Fragenbibliothek',
@@ -1078,7 +1101,7 @@ export default function WikiPage() {
               PodCore Handbuch
             </h1>
             <p className="text-text-secondary mt-1">
-              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.14.10
+              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.16.48
             </p>
           </div>
           <div className="relative w-full lg:w-[28rem]">

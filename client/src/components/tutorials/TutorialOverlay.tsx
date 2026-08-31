@@ -298,11 +298,15 @@ const TutorialOverlayContent: React.FC = () => {
   const focusTarget = () => {
     const element = findTargetElement(step.target);
     if (!element) return;
-    element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    const isNarrowViewport = window.matchMedia('(max-width: 768px)').matches;
+    element.scrollIntoView({ block: isNarrowViewport ? 'start' : 'center', inline: 'nearest', behavior: 'smooth' });
     (element as HTMLElement).focus?.({ preventScroll: true });
   };
 
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    // Auf Touch-Geräten beansprucht die Karte den gesamten sicheren Sichtbereich.
+    // Dadurch bleiben Scrollen und alle Buttons konfliktfrei bedienbar.
+    if (window.matchMedia('(max-width: 768px)').matches) return;
     const interactiveChild = (event.target as HTMLElement).closest('button, a, input, textarea, select');
     if (interactiveChild) return;
     const rect = tooltipRef.current?.getBoundingClientRect();
@@ -348,6 +352,9 @@ const TutorialOverlayContent: React.FC = () => {
       <div
         ref={tooltipRef}
         className={`tutorial-tooltip-container${isDragging ? ' is-dragging' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Tutorial: ${step.title}`}
         style={{
           ...(manualPosition ? {
             top: manualPosition.top,
@@ -392,71 +399,73 @@ const TutorialOverlayContent: React.FC = () => {
             </button>
           </div>
 
-          {/* Image with Annotations */}
-          {step.image && (
-            <div className="tutorial-image-container">
-              <div className="relative inline-block w-full">
-                <img src={step.image} alt={step.title} className="w-full rounded-lg border border-obsidian-700" />
-                {step.annotations?.map((ann, i) => {
-                  const annotationType = ann.type || 'point';
-                  const annotationColor = ann.color || ANN_COLORS[i % ANN_COLORS.length];
-                  return (
-                    <div
-                      key={ann.id}
-                      className={annotationType === 'circle'
-                        ? 'absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-transparent shadow-lg pointer-events-none'
-                        : 'absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg border-2 border-white/80 pointer-events-none'}
-                      style={{
-                        left: `${ann.x}%`,
-                        top: `${ann.y}%`,
-                        ...(annotationType === 'circle'
-                          ? { width: `${ann.size || 10}%`, aspectRatio: '1 / 1', borderColor: annotationColor, boxShadow: `0 0 0 3px rgba(255,255,255,.34), 0 4px 16px ${annotationColor}77` }
-                          : { backgroundColor: annotationColor }),
-                      }}
-                      title={ann.description}
-                    >
-                      {annotationType === 'circle' ? null : (annotationType === 'symbol' ? (ANNOTATION_SYMBOLS[ann.symbol || ''] || ann.label) : ann.label)}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Description */}
-          <div className="tutorial-body">
-            {step.target && (
-              <div className="tutorial-action-hint" role="status">
-                <span className="tutorial-action-hint__pulse" aria-hidden="true" />
-                <span><strong>Nächste Aktion:</strong> {requiresTargetClick ? `Klicke auf den violett hervorgehobenen Bereich${targetLabel ? ` (${targetLabel})` : ''}. Danach geht das Tutorial automatisch weiter.` : requiresConfirmation ? 'Führe die Aufgabe aus und bestätige anschließend diesen Schritt.' : `Sieh dir den hervorgehobenen Bereich${targetLabel ? ` (${targetLabel})` : ''} an und fahre fort, wenn du bereit bist.`}</span>
+          <div className="tutorial-content-scroll">
+            {/* Image with Annotations */}
+            {step.image && (
+              <div className="tutorial-image-container">
+                <div className="relative inline-block w-full">
+                  <img src={step.image} alt={step.title} className="w-full rounded-lg border border-obsidian-700" />
+                  {step.annotations?.map((ann, i) => {
+                    const annotationType = ann.type || 'point';
+                    const annotationColor = ann.color || ANN_COLORS[i % ANN_COLORS.length];
+                    return (
+                      <div
+                        key={ann.id}
+                        className={annotationType === 'circle'
+                          ? 'absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-transparent shadow-lg pointer-events-none'
+                          : 'absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg border-2 border-white/80 pointer-events-none'}
+                        style={{
+                          left: `${ann.x}%`,
+                          top: `${ann.y}%`,
+                          ...(annotationType === 'circle'
+                            ? { width: `${ann.size || 10}%`, aspectRatio: '1 / 1', borderColor: annotationColor, boxShadow: `0 0 0 3px rgba(255,255,255,.34), 0 4px 16px ${annotationColor}77` }
+                            : { backgroundColor: annotationColor }),
+                        }}
+                        title={ann.description}
+                      >
+                        {annotationType === 'circle' ? null : (annotationType === 'symbol' ? (ANNOTATION_SYMBOLS[ann.symbol || ''] || ann.label) : ann.label)}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
-            {requiresTargetClick && actionConfirmed && <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-accent-green"><CheckCircle2 size={14} /> Aktion erkannt – nächster Schritt wird geöffnet.</p>}
-            <p className="text-base text-text-secondary leading-relaxed whitespace-pre-wrap">
-              {step.description}
-            </p>
-          </div>
 
-          {/* Annotations List */}
-          {step.annotations && step.annotations.length > 0 && (
-            <div className="tutorial-annotations-list">
-              <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Markierungen</p>
-              <div className="space-y-1.5">
-                {step.annotations.map((ann, i) => {
-                  const annotationType = ann.type || 'point';
-                  const annotationColor = ann.color || ANN_COLORS[i % ANN_COLORS.length];
-                  return (
-                    <div key={ann.id} className="flex items-start gap-2 text-sm">
-                      <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5" style={{ backgroundColor: annotationColor }}>
-                        {annotationType === 'circle' ? '○' : (annotationType === 'symbol' ? (ANNOTATION_SYMBOLS[ann.symbol || ''] || ann.label) : ann.label)}
-                      </span>
-                      <span className="text-text-secondary">{ann.description || (annotationType === 'circle' ? 'Hervorgehobener Bereich' : 'Markierung')}</span>
-                    </div>
-                  );
-                })}
-              </div>
+            {/* Description */}
+            <div className="tutorial-body">
+              {step.target && (
+                <div className="tutorial-action-hint" role="status">
+                  <span className="tutorial-action-hint__pulse" aria-hidden="true" />
+                  <span><strong>Nächste Aktion:</strong> {requiresTargetClick ? `Klicke auf den violett hervorgehobenen Bereich${targetLabel ? ` (${targetLabel})` : ''}. Danach geht das Tutorial automatisch weiter.` : requiresConfirmation ? 'Führe die Aufgabe aus und bestätige anschließend diesen Schritt.' : `Sieh dir den hervorgehobenen Bereich${targetLabel ? ` (${targetLabel})` : ''} an und fahre fort, wenn du bereit bist.`}</span>
+                </div>
+              )}
+              {requiresTargetClick && actionConfirmed && <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-accent-green"><CheckCircle2 size={14} /> Aktion erkannt – nächster Schritt wird geöffnet.</p>}
+              <p className="text-base text-text-secondary leading-relaxed whitespace-pre-wrap">
+                {step.description}
+              </p>
             </div>
-          )}
+
+            {/* Annotations List */}
+            {step.annotations && step.annotations.length > 0 && (
+              <div className="tutorial-annotations-list">
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Markierungen</p>
+                <div className="space-y-1.5">
+                  {step.annotations.map((ann, i) => {
+                    const annotationType = ann.type || 'point';
+                    const annotationColor = ann.color || ANN_COLORS[i % ANN_COLORS.length];
+                    return (
+                      <div key={ann.id} className="flex items-start gap-2 text-sm">
+                        <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5" style={{ backgroundColor: annotationColor }}>
+                          {annotationType === 'circle' ? '○' : (annotationType === 'symbol' ? (ANNOTATION_SYMBOLS[ann.symbol || ''] || ann.label) : ann.label)}
+                        </span>
+                        <span className="text-text-secondary">{ann.description || (annotationType === 'circle' ? 'Hervorgehobener Bereich' : 'Markierung')}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Progress & Actions */}
           <div className="tutorial-footer">
