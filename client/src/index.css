@@ -120,7 +120,6 @@
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']):not(.no-base-style),
   textarea:not(.no-base-style),
   select:not(.no-base-style) {
-    color-scheme: dark;
     background-color: var(--color-obsidian-800, #141420);
     color: var(--color-text-primary, #f1f5f9);
     border: 1.5px solid var(--color-surface-border, #2d2d4e);
@@ -254,7 +253,6 @@
            focus:outline-none transition-all duration-200;
     background-color: var(--color-obsidian-800, #141420);
     border: 1.5px solid var(--color-surface-border, #2d2d4e);
-    color-scheme: dark;
     caret-color: var(--color-text-primary, #f1f5f9);
   }
   .input:hover {
@@ -280,7 +278,6 @@
     border-radius: 0.75rem !important;
     padding: 0.5rem 0.75rem !important;
     font-size: 0.875rem !important;
-    color-scheme: dark;
     caret-color: var(--color-text-primary, #f1f5f9);
     transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
   }

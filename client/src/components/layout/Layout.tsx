@@ -118,7 +118,9 @@ export default function Layout() {
     { to: '/admin/tutorials', icon: <Info size={18} />, label: t('nav.tutorials'), permission: 'canManageSettings', tutorialId: 'nav-tutorials' },
     { to: '/tutorials/import', icon: <Download size={18} />, label: t('nav.tutorialImport'), permission: 'canImportTutorials', tutorialId: 'nav-tutorial-import' },
     { to: '/pdf-layouts', icon: <FileText size={18} />, label: t('nav.pdfLayouts'), permission: 'canManageSettings', tutorialId: 'nav-pdf-layouts' },
-    { to: '/settings', icon: <Settings size={18} />, label: t('nav.settings'), permission: 'canManageSettings', tutorialId: 'nav-settings' },
+    // Profil und persönliches Design gehören jedem Nutzer. Die Settings-Seite
+    // blendet administrative Tabs weiterhin über canManageSettings aus.
+    { to: '/settings', icon: <Settings size={18} />, label: t('nav.settings'), tutorialId: 'nav-settings' },
   ];
 
   // Feature-Flag-basierte Filterung der Navigation

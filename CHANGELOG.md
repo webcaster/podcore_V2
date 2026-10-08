@@ -1,5 +1,15 @@
 # PodCore – Release Notes
 
+## v2.16.49 – persönliches Hell-/Dunkeldesign und zugängliche Einstellungen
+
+Jeder angemeldete Nutzer kann unter **Einstellungen → Mein Design** unabhängig von anderen Konten zwischen hellem und dunklem Design wechseln. Die Auswahl wird serverseitig im persönlichen Benutzerprofil gespeichert und beim nächsten Login wieder angewendet. Die Vorschau wird beim Umschalten nicht mehr durch den zuvor gespeicherten Modus überschrieben.
+
+Die Profil- und Designbereiche der Einstellungen sind jetzt für alle angemeldeten Nutzer erreichbar. Globale Podcast-, Speicher-, Update- und Systembereiche bleiben weiterhin durch die vorhandenen Administrationsrechte geschützt. Native Eingabefelder erzwingen nicht mehr grundsätzlich das dunkle Browser-Farbschema. Die Theme-Schaltflächen melden ihren Auswahlstatus zusätzlich barriereärmer über `aria-pressed`.
+
+Die UX-Prüfung hat weitere mögliche Verbesserungen für Navigation, Aktionsleisten, leere Zustände und mobile Bereichsführung dokumentiert. Diese Änderungen werden erst nach gesonderter Freigabe umgesetzt.
+
+Die vollständige Release-Anleitung steht unter [`docs/RELEASE-2.16.49.md`](docs/RELEASE-2.16.49.md).
+
 ## v2.16.48 – mobile Tutorialführung und Wiki-Vervollständigung
 
 Die Tutorialkarte nutzt auf kleinen Bildschirmen einen eigenen scrollbaren Inhaltsbereich für Screenshot, Erklärung und Markierungen. Die Fortschritts- und Aktionsleiste ist davon getrennt, bleibt sichtbar und behandelt Touch-Eingaben für **Zurück**, **Wiki**, **Überspringen**, **Zum Bereich**, **Weiter** und **Abschließen** zuverlässig. Die Karte wird auf Mobilgeräten bewusst kompakt am unteren Rand dargestellt, sodass ein Klickziel oberhalb sichtbar und erreichbar bleibt.

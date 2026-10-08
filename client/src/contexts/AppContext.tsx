@@ -307,7 +307,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ThemeContext setzt die helle/dunkle Grundpalette. Persönliche Tokens werden
   // danach erneut angelegt, damit Sidebar, Akzent und Schriftgröße stabil bleiben.
   useEffect(() => {
-    const restoreUserTheme = () => applyUserTheme(user?.theme || null);
+    const restoreUserTheme = (event?: Event) => {
+      const mode = (event as CustomEvent | undefined)?.detail?.mode;
+      // Bei einer laufenden Vorschau darf die neue Grundpalette nicht sofort
+      // durch den noch gespeicherten Modus des Nutzerkontos zurückgesetzt werden.
+      // Die dauerhafte Speicherung erfolgt weiterhin erst über „Design speichern“.
+      const previewTheme = user?.theme
+        ? { ...user.theme, ...(mode === 'light' || mode === 'dark' ? { mode } : {}) }
+        : null;
+      applyUserTheme(previewTheme);
+    };
     window.addEventListener('podcore-base-theme-applied', restoreUserTheme);
     return () => window.removeEventListener('podcore-base-theme-applied', restoreUserTheme);
   }, [user?.theme]);

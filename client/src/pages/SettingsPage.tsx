@@ -11,7 +11,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-function applyThemePreview(theme: { accentColor?: string; sidebarColor?: string; fontScale?: number }) {
+function applyThemePreview(theme: { accentColor?: string; sidebarColor?: string; fontScale?: number; mode?: 'light' | 'dark' }) {
   // Verwende die vollständige applyUserTheme Funktion aus dem AppContext
   // damit alle CSS-Variablen (inkl. Light/Dark-Varianten, Surface-Farben) gesetzt werden
   applyUserTheme(theme as any);
@@ -580,6 +580,7 @@ export default function SettingsPage() {
         sidebarColor: user.theme?.sidebarColor || '#0f0f13',
         fontScale: user.theme?.fontScale || 1.0,
       });
+      if (user.theme?.mode === 'light' || user.theme?.mode === 'dark') setMode(user.theme.mode);
     }
   }, [user]);
 
@@ -920,7 +921,9 @@ export default function SettingsPage() {
               <p className="text-text-muted text-xs mb-3">Wählen Sie zwischen hellem und dunklem Design</p>
               <div className="flex gap-3">
                 <button
+                  type="button"
                   onClick={() => setMode('dark')}
+                  aria-pressed={mode === 'dark'}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
                     mode === 'dark'
                       ? 'border-accent-purple bg-accent-purple/10 text-text-primary'
@@ -931,7 +934,9 @@ export default function SettingsPage() {
                   <span>Dunkles Design</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setMode('light')}
+                  aria-pressed={mode === 'light'}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
                     mode === 'light'
                       ? 'border-accent-purple bg-accent-purple/10 text-text-primary'
