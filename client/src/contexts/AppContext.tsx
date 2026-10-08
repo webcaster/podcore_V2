@@ -427,7 +427,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 export function applyUserTheme(theme: UserTheme | null | undefined) {
   const root = document.documentElement;
   const clearThemeOverrides = () => {
-    ['--color-accent-primary', '--color-accent-primary-light', '--color-accent-primary-dark', '--color-text-accent', '--color-sidebar-bg', '--color-sidebar-border', '--font-scale', '--color-surface', '--color-surface-raised', '--color-obsidian-800']
+    // Die Obsidian- und Surface-Werte gehören zur aktiven Grundpalette aus
+    // ThemeContext. Sie dürfen beim Anwenden eines Nutzerprofils nicht entfernt
+    // werden, sonst fallen helle Karten und Felder auf dunkle Fallbacks zurück.
+    ['--color-accent-primary', '--color-accent-primary-light', '--color-accent-primary-dark', '--color-text-accent', '--color-sidebar-bg', '--color-sidebar-border', '--font-scale']
       .forEach(variable => root.style.removeProperty(variable));
   };
 

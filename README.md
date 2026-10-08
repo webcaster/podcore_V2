@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.49**
+**Aktuelle Version: 2.16.50**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,10 @@
 PodCore unterstützt eine getrennt betriebene Lizenzanbindung mit Online-Aktivierung und einem Ed25519-signierten Offline-Lizenznachweis. In der Anwendung lassen sich Lizenzstatus prüfen und ein lesbarer Nachweis unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Lizenzserver, Shop- und Website-Komponenten sind bewusst nicht Bestandteil dieses App-Repositories oder des Endnutzer-App-Pakets.
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.50: stabileres helles Design
+
+Das helle Design bleibt jetzt auch beim Wechsel zwischen Deutsch und Englisch sowie beim Fokussieren von Eingabefeldern konsistent. Karten, Eingaben, Selects und Textareas verwenden weiterhin die aktive helle Farbpalette und fallen nicht mehr auf dunkle Fallback-Farben zurück.
 
 ### Neu in v2.16.49: persönliches Hell-/Dunkeldesign
 

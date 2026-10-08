@@ -1,5 +1,13 @@
 # PodCore – Release Notes
 
+## v2.16.50 – Hell-Design-Fix für Sprachwechsel und Eingabefelder
+
+Beim Wechsel zwischen Deutsch und Englisch sowie beim Fokus auf Eingabefelder konnten im hellen Design dunkle Fallback-Flächen erscheinen. Ursache war, dass die Anwendung beim Anwenden des persönlichen Nutzerprofils die Grundfarben der aktiven Palette entfernte. Diese Grundfarben bleiben nun erhalten; nur echte persönliche Überschreibungen werden zurückgesetzt.
+
+Zusätzlich besitzt das helle Design einen eigenen Fokusfarbwert (`obsidian-750`). Dadurch bleiben Eingabefelder, Selects und Textareas beim Hover und Fokus hell, lesbar und farblich konsistent. Feste dunkle `color-scheme`-Vorgaben für Selects und Textareas wurden entfernt.
+
+Die vollständige Release-Anleitung steht unter [`docs/RELEASE-2.16.50.md`](docs/RELEASE-2.16.50.md).
+
 ## v2.16.49 – persönliches Hell-/Dunkeldesign und zugängliche Einstellungen
 
 Jeder angemeldete Nutzer kann unter **Einstellungen → Mein Design** unabhängig von anderen Konten zwischen hellem und dunklem Design wechseln. Die Auswahl wird serverseitig im persönlichen Benutzerprofil gespeichert und beim nächsten Login wieder angewendet. Die Vorschau wird beim Umschalten nicht mehr durch den zuvor gespeicherten Modus überschrieben.

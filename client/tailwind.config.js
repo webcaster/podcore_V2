@@ -15,6 +15,7 @@ export default {
           950: 'var(--color-obsidian-950, #0a0a0f)',
           900: 'var(--color-obsidian-900, #0f0f1a)',
           800: 'var(--color-obsidian-800, #141420)',
+          750: 'var(--color-obsidian-750, #181828)',
           700: 'var(--color-obsidian-700, #1a1a2e)',
           600: 'var(--color-obsidian-600, #1e1e35)',
           500: 'var(--color-obsidian-500, #252540)',
