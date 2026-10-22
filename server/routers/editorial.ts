@@ -478,7 +478,7 @@ const ideaUploadStorage = multer.diskStorage({
     cb(null, `${uuidv4()}${ext}`);
   },
 });
-const ideaUpload = multer({ storage: ideaUploadStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+const ideaUpload = multer({ storage: ideaUploadStorage, limits: { fileSize: 50 * 1024 * 1024, files: 1, fields: 20, parts: 24 } });
 
 router.get('/ideas/:id/uploads', requirePermission('canViewIdeas') as any, (req: AuthRequest, res: Response) => {
   const db = getDb();

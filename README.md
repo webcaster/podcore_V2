@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.50**
+**Aktuelle Version: 2.16.51**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,10 @@
 PodCore unterstützt eine getrennt betriebene Lizenzanbindung mit Online-Aktivierung und einem Ed25519-signierten Offline-Lizenznachweis. In der Anwendung lassen sich Lizenzstatus prüfen und ein lesbarer Nachweis unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Lizenzserver, Shop- und Website-Komponenten sind bewusst nicht Bestandteil dieses App-Repositories oder des Endnutzer-App-Pakets.
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.51: Sicherheits-Härtung
+
+PodCore läuft als Node.js-/Express-Anwendung und ist daher nicht direkt vom PHP2Shell-Fall betroffen. PHP-Dienste auf demselben System, insbesondere WordPress und das PodCore-WordPress-Plugin, müssen trotzdem separat aktualisiert oder bis zum Patch isoliert werden. PodCore begrenzt nun Request- und Multipart-Größen, schränkt CORS ein und reduziert Informationen im öffentlichen Health-Endpunkt. Details stehen in [`docs/SECURITY-PHP2SHELL.md`](docs/SECURITY-PHP2SHELL.md).
 
 ### Neu in v2.16.50: stabileres helles Design
 

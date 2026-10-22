@@ -21,7 +21,7 @@ const sponsorLogoStorage = multer.diskStorage({
 
 const uploadSponsorLogo = multer({
   storage: sponsorLogoStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 20, parts: 24 },
   fileFilter: (_req, file, cb) => {
     const extension = path.extname(file.originalname).toLowerCase();
     const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];

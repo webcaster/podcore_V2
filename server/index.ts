@@ -52,6 +52,7 @@ const APP_VERSION: string = (() => {
 // Always bind to 0.0.0.0 so the app is reachable in LAN
 const HOST = process.env.HOST || '0.0.0.0';
 const NODE_ENV = process.env.NODE_ENV || 'production';
+const isProduction = NODE_ENV === 'production';
 
 // ============================================================
 // Security & Middleware
@@ -61,17 +62,30 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
+app.disable('x-powered-by');
+app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
 
 const configuredCorsOrigins = (process.env.CORS_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
 app.use(cors({
-  origin: true, // Erlaube alle Origins in dieser selbstgehosteten Umgebung
+  // Same-Origin-Anfragen brauchen keinen CORS-Header. Fremde Origins werden
+  // nur explizit über CORS_ORIGINS freigegeben; im Entwicklungsmodus bleiben
+  // die üblichen lokalen Vite-Ports erreichbar.
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const localDevelopmentOrigin = !isProduction && /^https?:\/\/localhost(?::\d+)?$/.test(origin);
+    if (configuredCorsOrigins.includes(origin) || localDevelopmentOrigin) return callback(null, true);
+    return callback(null, false);
+  },
   credentials: true,
 }));
 
 app.use(compression());
 app.use(cookieParser());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Große Dateiimporte laufen über die separat begrenzten Multipart-Routen.
+// JSON und URL-encoded Requests bleiben bewusst klein, damit ein einzelner
+// Request nicht unnötig viel Speicher bindet.
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb', parameterLimit: 1000 }));
 
 if (NODE_ENV !== 'test') {
   app.use(morgan('combined'));
@@ -280,14 +294,10 @@ app.use('/branding-assets', express.static(brandingDir));
 
 // Health check
 app.get('/api/health', (req, res) => {
-  const ips = getLocalNetworkIPs();
   res.json({
     status: 'ok',
     version: APP_VERSION,
     timestamp: new Date().toISOString(),
-    dataDir: DATA_DIR,
-    networkIPs: ips,
-    port: PORT,
   });
 });
 
@@ -418,7 +428,9 @@ server.listen(PORT, HOST, () => {
   console.log(`║  Daten:   ${DATA_DIR.substring(0, 35).padEnd(35)}║`);
   console.log('╚══════════════════════════════════════════════╝');
   console.log('');
-  console.log('  Standard-Login: admin / admin123');
+  if (NODE_ENV !== 'production') {
+    console.log('  Standard-Login: admin / admin123');
+  }
   console.log('');
 });
 

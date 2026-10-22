@@ -1,5 +1,13 @@
 # PodCore – Release Notes
 
+## v2.16.51 – Sicherheits-Härtung nach PHP2Shell
+
+PodCore selbst ist als Node.js-/Express-Anwendung nicht direkt von PHP2Shell betroffen, weil der App-Server keinen PHP-Interpreter verwendet. Die Betriebsdokumentation erklärt nun ausdrücklich, dass WordPress-, PHP-FPM-, Apache- oder andere PHP-Dienste auf demselben System separat gepatcht oder bis dahin isoliert werden müssen.
+
+Der PodCore-Server erlaubt fremde CORS-Ursprünge nicht mehr pauschal. JSON- und URL-encoded-Anfragen besitzen kleinere globale Größenlimits, Multipart-Uploads zusätzliche Grenzen für Dateien, Felder und Teile. Der öffentliche Health-Endpunkt gibt keine Datenpfade, Netzwerkadressen oder Portinformationen mehr aus. Express entfernt den `X-Powered-By`-Hinweis, und der Standard-Login wird nur im Nicht-Produktionsmodus protokolliert.
+
+Die vollständige Sicherheitsinformation steht unter [`docs/SECURITY-PHP2SHELL.md`](docs/SECURITY-PHP2SHELL.md).
+
 ## v2.16.50 – Hell-Design-Fix für Sprachwechsel und Eingabefelder
 
 Beim Wechsel zwischen Deutsch und Englisch sowie beim Fokus auf Eingabefelder konnten im hellen Design dunkle Fallback-Flächen erscheinen. Ursache war, dass die Anwendung beim Anwenden des persönlichen Nutzerprofils die Grundfarben der aktiven Palette entfernte. Diese Grundfarben bleiben nun erhalten; nur echte persönliche Überschreibungen werden zurückgesetzt.

@@ -1,5 +1,6 @@
 # Offene Releasepunkte
 
+- [x] v2.16.51: PHP2Shell-Betroffenheit bewertet, Node-/Express-Sicherheitskonfiguration gehärtet, CORS und Request-Limits eingeschränkt, Uploads begrenzt und Health-Endpunkt minimiert.
 - [x] v2.16.50: Helles Design bei Sprachumschaltung und Feldfokus stabilisiert, Grundpalette geschützt und dunkle Fallback-Flächen aus Eingabefeldern entfernt.
 - [x] v2.16.49: Individuelle Hell-/Dunkel-Auswahl pro Nutzer zugänglich gemacht, serverseitige Speicherung geprüft, Theme-Vorschau stabilisiert und Formulare an beide Farbschemata angepasst.
 - [ ] UX-Freigabe aus v2.16.49: Navigation gruppieren, Schnellschalter ergänzen, Aktionsleisten und leere Zustände vereinheitlichen sowie mobile Bereichsführung weiter verbessern.

@@ -43,7 +43,7 @@ let automaticBackupRunning = false;
 
 const uploadBackup = multer({
   dest: path.join(DATA_DIR, 'tmp'),
-  limits: { fileSize: MAX_UPLOAD_BYTES },
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 20, parts: 24 },
   fileFilter: (_req, file, cb) => {
     const extension = path.extname(file.originalname).toLowerCase();
     if (file.mimetype === 'application/json' || extension === '.json' || extension === '.zip') cb(null, true);

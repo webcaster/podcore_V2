@@ -820,7 +820,7 @@ const updateStorage = multer.diskStorage({
 });
 const uploadUpdate = multer({
   storage: updateStorage,
-  limits: { fileSize: 500 * 1024 * 1024 },
+  limits: { fileSize: 500 * 1024 * 1024, files: 1, fields: 20, parts: 24 },
   fileFilter: (_req, file, cb) => cb(null, file.originalname.toLowerCase().endsWith('.zip')),
 });
 
