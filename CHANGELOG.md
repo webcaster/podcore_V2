@@ -1,5 +1,11 @@
 # PodCore – Release Notes
 
+## WordPress-Plugin 1.0.5 – Sicherheitsupdate
+
+Das Plugin `podcore-licensing` wurde wieder als installierbares Paket aufgenommen und gegen missbräuchliche Eingaben gehärtet. Lizenzschlüssel, Aktivierungstoken, Tarife, Laufzeiten, Aktivierungslimits, Texte und Metadaten werden begrenzt und validiert. Die REST-Authentifizierung akzeptiert nur WooCommerce-Schlüssel mit Leserechten; WooCommerce-Produktfelder erfordern zusätzlich eine gültige Nonce und Bearbeitungsberechtigung. Es gibt keine dynamische PHP-, Datei- oder Shell-Ausführung.
+
+Die Installations- und Sicherheitsanleitung steht unter [`docs/RELEASE-WORDPRESS-PLUGIN-1.0.5.md`](docs/RELEASE-WORDPRESS-PLUGIN-1.0.5.md) und [`docs/SECURITY-PHP2SHELL.md`](docs/SECURITY-PHP2SHELL.md).
+
 ## v2.16.51 – Sicherheits-Härtung nach PHP2Shell
 
 PodCore selbst ist als Node.js-/Express-Anwendung nicht direkt von PHP2Shell betroffen, weil der App-Server keinen PHP-Interpreter verwendet. Die Betriebsdokumentation erklärt nun ausdrücklich, dass WordPress-, PHP-FPM-, Apache- oder andere PHP-Dienste auf demselben System separat gepatcht oder bis dahin isoliert werden müssen.
