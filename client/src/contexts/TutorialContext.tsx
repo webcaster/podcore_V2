@@ -55,6 +55,7 @@ interface TutorialContextType {
   currentStep: number;
   progress: TutorialProgress | null;
   isLoading: boolean;
+  tutorialLoadError: string | null;
   tutorialStartError: string | null;
   wikiOpen: boolean;
   openWiki: () => void;
@@ -79,6 +80,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState<TutorialProgress | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [tutorialLoadError, setTutorialLoadError] = useState<string | null>(null);
   const [tutorialStartError, setTutorialStartError] = useState<string | null>(null);
   const [wikiOpen, setWikiOpen] = useState(false);
 
@@ -101,6 +103,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     try {
       setIsLoading(true);
+      setTutorialLoadError(null);
       const response = await fetch('/api/tutorials', { credentials: 'include' });
       if (!response.ok) throw new Error(`Tutorials konnten nicht geladen werden (${response.status})`);
 
@@ -118,6 +121,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       setProgressByTutorial(Object.fromEntries(progressEntries));
     } catch (error) {
       console.error('Error loading tutorials:', error);
+      setTutorialLoadError('Tutorials konnten nicht geladen werden. Bitte prüfe die Verbindung und versuche es erneut.');
       setTutorials([]);
       setProgressByTutorial({});
     } finally {
@@ -252,6 +256,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
         currentStep,
         progress,
         isLoading,
+        tutorialLoadError,
         tutorialStartError,
         wikiOpen,
         openWiki,

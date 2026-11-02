@@ -93,6 +93,21 @@
       radial-gradient(circle at 7% 105%, rgba(91, 33, 182, 0.1), transparent 30rem);
   }
 
+  /* Einheitlicher, gut sichtbarer Tastaturfokus für alle interaktiven Elemente. */
+  :where(button, a, input, select, textarea, [role='button'], [tabindex]:not([tabindex='-1'])):focus-visible {
+    outline: 2px solid var(--color-accent-primary-light, #c77dff);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -191,7 +206,7 @@
     cursor: pointer;
   }
   .btn-primary:hover {
-    background-color: var(--color-accent-primary-light, #c77dff);
+    background-color: var(--color-accent-primary-dark, #7b2cbf);
     box-shadow: 0 8px 22px rgba(157, 78, 221, 0.3);
     transform: translateY(-1px);
   }
@@ -199,6 +214,13 @@
   .btn-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+  .btn-primary:focus-visible,
+  .btn-secondary:focus-visible,
+  .btn-danger:focus-visible,
+  .btn-ghost:focus-visible {
+    outline: 2px solid var(--color-accent-primary-light, #c77dff);
+    outline-offset: 3px;
   }
 
   .btn-secondary {

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, BookOpen, Play, ChevronRight, ChevronDown, ChevronUp, HelpCircle, Search, CheckCircle2 } from 'lucide-react';
+import { X, BookOpen, Play, ChevronRight, ChevronDown, ChevronUp, HelpCircle, Search, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useTutorial, Tutorial, TutorialProgress, TutorialStep } from '../../contexts/TutorialContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -147,7 +147,7 @@ const TutorialCard = ({ tutorial, progress, onStart }: { tutorial: Tutorial; pro
 // ─── Main Panel ───────────────────────────────────────────────────────────────
 
 export default function TutorialWikiPanel() {
-  const { wikiOpen, closeWiki, tutorials, progressByTutorial, startTutorial, isLoading, tutorialStartError, clearTutorialStartError } = useTutorial();
+  const { wikiOpen, closeWiki, tutorials, progressByTutorial, startTutorial, isLoading, tutorialLoadError, loadTutorials, tutorialStartError, clearTutorialStartError } = useTutorial();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -180,7 +180,7 @@ export default function TutorialWikiPanel() {
       <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-2xl bg-obsidian-800 border-l border-surface-border shadow-2xl flex flex-col animate-slide-in-right">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-surface-border flex-shrink-0 bg-obsidian-800/95 backdrop-blur">
+          <div className="flex items-center justify-between px-6 py-5 border-b border-surface-border flex-shrink-0 bg-obsidian-800/95 backdrop-blur">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-accent-purple/20 border border-accent-purple/40 flex items-center justify-center">
               <HelpCircle size={20} className="text-accent-purple" />
@@ -192,7 +192,7 @@ export default function TutorialWikiPanel() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => { clearTutorialStartError(); closeWiki(); navigate('/wiki'); }} className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-2" title="Vollständiges PodCore-Wiki öffnen"><BookOpen size={14} /> Wiki</button>
-            <button onClick={closeWiki} className="p-2 text-text-muted hover:text-text-primary hover:bg-surface-raised rounded-lg transition-colors"><X size={20} /></button>
+            <button type="button" onClick={closeWiki} aria-label="Hilfe schließen" className="p-2 text-text-muted hover:text-text-primary hover:bg-surface-raised rounded-lg transition-colors"><X size={20} /></button>
           </div>
         </div>
 
@@ -221,6 +221,17 @@ export default function TutorialWikiPanel() {
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-accent-purple border-t-transparent rounded-full animate-spin" />
             </div>
+          ) : tutorialLoadError ? (
+            <div className="text-center py-16 space-y-3">
+              <div className="w-16 h-16 rounded-2xl bg-accent-red/10 border border-accent-red/30 flex items-center justify-center mx-auto">
+                <RefreshCw size={28} className="text-accent-red" />
+              </div>
+              <p className="font-medium text-text-primary">Tutorials konnten nicht geladen werden</p>
+              <p className="text-xs text-text-secondary">{tutorialLoadError}</p>
+              <button type="button" onClick={() => void loadTutorials()} className="btn-secondary text-xs mx-auto">
+                <RefreshCw size={14} /> Erneut laden
+              </button>
+            </div>
           ) : filteredTutorials.length === 0 ? (
             <div className="text-center py-16 space-y-3">
               <div className="w-16 h-16 rounded-2xl bg-surface-raised flex items-center justify-center mx-auto">
@@ -231,9 +242,10 @@ export default function TutorialWikiPanel() {
               </p>
               <p className="text-xs text-text-muted">
                 {searchQuery 
-                  ? 'Versuche eine andere Suchanfrage.' 
+                  ? 'Versuche eine andere Suchanfrage oder lösche die Suche.'
                   : 'Dein Administrator hat noch kein Tutorial für deine Rolle erstellt.'}
               </p>
+              {searchQuery && <button type="button" onClick={() => setSearchQuery('')} className="btn-ghost text-xs mx-auto">Suche löschen</button>}
             </div>
           ) : (
             <>

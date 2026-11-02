@@ -12,6 +12,9 @@ export default function ToastContainer() {
       {toasts.map(toast => (
         <div
           key={toast.id}
+          role={toast.type === 'error' ? 'alert' : 'status'}
+          aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+          aria-atomic="true"
           className={`flex items-start gap-3 px-4 py-3 rounded-xl shadow-xl border animate-slide-in ${
             toast.type === 'success' ? 'bg-accent-green/10 border-accent-green/30 text-accent-green' :
             toast.type === 'error' ? 'bg-accent-red/10 border-accent-red/30 text-accent-red' :
@@ -27,8 +30,10 @@ export default function ToastContainer() {
           </span>
           <p className="text-sm flex-1">{toast.message}</p>
           <button
+            type="button"
             onClick={() => removeToast(toast.id)}
             className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+            aria-label="Meldung schließen"
           >
             <X size={14} />
           </button>

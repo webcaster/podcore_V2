@@ -1,10 +1,14 @@
 # PodCore – Release Notes
 
-## WordPress-Plugin 1.0.5 – Sicherheitsupdate
+## v2.16.52 – freundlichere Bedienung und UX-Härtung
 
-Das Plugin `podcore-licensing` wurde wieder als installierbares Paket aufgenommen und gegen missbräuchliche Eingaben gehärtet. Lizenzschlüssel, Aktivierungstoken, Tarife, Laufzeiten, Aktivierungslimits, Texte und Metadaten werden begrenzt und validiert. Die REST-Authentifizierung akzeptiert nur WooCommerce-Schlüssel mit Leserechten; WooCommerce-Produktfelder erfordern zusätzlich eine gültige Nonce und Bearbeitungsberechtigung. Es gibt keine dynamische PHP-, Datei- oder Shell-Ausführung.
+Die Benutzeroberfläche wurde in zentralen Bedienpfaden freundlicher und zuverlässiger gestaltet. Hell- und Dunkeldesign verwenden kontraststärkere Sekundär- und Metatexte; primäre Buttons behalten auch beim Hover eine lesbare Farbkombination. Ein globaler `:focus-visible`-Ring macht Tastaturfokus in Navigation, Formularen und Buttons sichtbar. Bei aktivierter Systemeinstellung für reduzierte Bewegung werden unnötige Animationen und Übergänge minimiert.
 
-Die Installations- und Sicherheitsanleitung steht unter [`docs/RELEASE-WORDPRESS-PLUGIN-1.0.5.md`](docs/RELEASE-WORDPRESS-PLUGIN-1.0.5.md) und [`docs/SECURITY-PHP2SHELL.md`](docs/SECURITY-PHP2SHELL.md).
+Modale Dialoge führen den Fokus in den Dialog, halten die Tab-Navigation innerhalb des Dialogs, reagieren auf Escape und geben den Fokus beim Schließen zurück. Das mobile Hauptmenü hat einen sichtbaren Schließen-Button, zugängliche Zustandsbeschriftungen, Escape-Unterstützung und Fokusführung. Toasts melden Status und Fehler über `role`/`aria-live`; der Schließen-Button besitzt einen zugänglichen Namen.
+
+Tutorialfehler werden nicht mehr als leere Tutorialliste dargestellt. Das Tutorialpanel bietet bei Ladefehlern eine verständliche Meldung und **Erneut laden**; bei erfolgloser Suche kann die Suche direkt gelöscht werden. Im Dashboard werden leere Schnellzugriffe ausgeblendet und ausstehende Freigaben auch dann erreichbar gemacht, wenn das Widget zuvor verborgen wurde.
+
+Die vollständige Release-Anleitung steht unter [`docs/RELEASE-2.16.52.md`](docs/RELEASE-2.16.52.md).
 
 ## v2.16.51 – Sicherheits-Härtung nach PHP2Shell
 

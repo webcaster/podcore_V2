@@ -30,8 +30,8 @@ const LIGHT_MODE_COLORS = {
   '--color-sidebar-border': '#e5e7eb',
 
   '--color-text-primary': '#111827',
-  '--color-text-secondary': '#6b7280',
-  '--color-text-muted': '#9ca3af',
+  '--color-text-secondary': '#4b5563',
+  '--color-text-muted': '#6b7280',
 };
 
 // Dark Mode Color Palette (Default)
@@ -55,7 +55,7 @@ const DARK_MODE_COLORS = {
 
   '--color-text-primary': '#f1f5f9',
   '--color-text-secondary': '#94a3b8',
-  '--color-text-muted': '#64748b',
+  '--color-text-muted': '#a8a0b5',
 };
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

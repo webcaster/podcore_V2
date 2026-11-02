@@ -43,7 +43,42 @@ export default function Layout() {
   );
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileDrawerRef = useRef<HTMLDivElement>(null);
   const developerUnlockRef = useRef({ count: 0, startedAt: 0 });
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const focusableSelector = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusFirst = () => mobileDrawerRef.current?.querySelector<HTMLElement>(focusableSelector)?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMobileOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !mobileDrawerRef.current) return;
+      const focusable = Array.from(mobileDrawerRef.current.querySelectorAll<HTMLElement>(focusableSelector));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+    requestAnimationFrame(focusFirst);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+      mobileMenuTriggerRef.current?.focus();
+    };
+  }, [mobileOpen]);
 
   // Nur die sichtbare Desktop- oder Mobilansicht darf das Benachrichtigungs-
   // Center einhängen. Tailwind blendet Varianten nur per CSS aus; ohne diese
@@ -219,10 +254,23 @@ export default function Layout() {
         )}
         {!mobile && (
           <button
+            type="button"
             onClick={() => setCollapsed(!collapsed)}
             className="ml-auto text-text-muted hover:text-text-primary transition-colors flex-shrink-0"
+            aria-label={collapsed ? 'Navigation ausklappen' : 'Navigation einklappen'}
+            aria-expanded={!collapsed}
           >
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          </button>
+        )}
+        {mobile && (
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="ml-auto p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-raised transition-colors"
+            aria-label="Menü schließen"
+          >
+            <X size={18} />
           </button>
         )}
       </div>
@@ -329,9 +377,11 @@ export default function Layout() {
           {(!collapsed || mobile) && <span>{language === 'de' ? 'DE · EN' : 'EN · DE'}</span>}
         </button>
         <button
+          type="button"
           onClick={handleLogout}
           className={`flex items-center gap-2 text-text-muted hover:text-accent-red transition-colors text-sm w-full px-2 py-1.5 rounded-lg hover:bg-accent-red/10 ${collapsed && !mobile ? 'justify-center px-0' : ''}`}
           title={collapsed && !mobile ? 'Abmelden' : undefined}
+          aria-label="Abmelden"
         >
           <LogOut size={16} />
           {(!collapsed || mobile) && <span>Abmelden</span>}
@@ -410,9 +460,9 @@ export default function Layout() {
 
       {/* Mobile Sidebar Overlay */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
+        <div className="md:hidden fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Hauptnavigation">
           <div className="fixed inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
-          <div className="relative z-10 flex">
+          <div id="podcore-mobile-navigation" ref={mobileDrawerRef} className="relative z-10 flex">
             <Sidebar mobile showNotifications={false} />
           </div>
         </div>
@@ -423,8 +473,13 @@ export default function Layout() {
         {/* Mobile Header */}
         <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-obsidian-800 border-b border-surface-border">
           <button
+            ref={mobileMenuTriggerRef}
+            type="button"
             onClick={() => setMobileOpen(true)}
             className="text-text-secondary hover:text-text-primary"
+            aria-label="Menü öffnen"
+            aria-expanded={mobileOpen}
+            aria-controls="podcore-mobile-navigation"
           >
             <Menu size={20} />
           </button>

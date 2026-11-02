@@ -890,7 +890,16 @@ export default function Dashboard() {
   };
 
   // ─── Widget: Schnellzugriff ───────────────────────────────────────────────
-  const renderQuickActions = () => (
+  const quickActionCount = [
+    can('canCreateEpisodes'),
+    can('canCreateIdeas'),
+    can('canUploadMedia'),
+    can('canCreateSponsors'),
+  ].filter(Boolean).length;
+
+  const renderQuickActions = () => {
+    if (quickActionCount === 0) return null;
+    return (
     <div key="quickactions" className="card">
       <h2 className="section-title">Schnellzugriff</h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -920,7 +929,8 @@ export default function Dashboard() {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   // ─── Widget: Online-Nutzer ────────────────────────────────────────────────
   const renderOnlineUsers = () => (
@@ -1032,8 +1042,11 @@ export default function Dashboard() {
             <button
               onClick={() => {
                 const idx = widgetOrder.indexOf('approvals');
+                if (hiddenWidgets.includes('approvals')) {
+                  setHiddenWidgets(prev => prev.filter(widget => widget !== 'approvals'));
+                }
                 if (idx === -1) setWidgetOrder(prev => ['approvals', ...prev]);
-                document.getElementById('widget-approvals')?.scrollIntoView({ behavior: 'smooth' });
+                window.setTimeout(() => document.getElementById('widget-approvals')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-accent-orange/20 text-accent-orange border border-accent-orange/40 rounded-full hover:bg-accent-orange/30 transition-colors"
             >
