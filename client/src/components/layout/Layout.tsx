@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useRef } from 'react';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
@@ -36,6 +36,7 @@ export default function Layout() {
   const { onlineUsers } = useOnlineUsers();
   const { language, setLanguage, t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
@@ -45,6 +46,8 @@ export default function Layout() {
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileDrawerRef = useRef<HTMLDivElement>(null);
+  const navScrollRef = useRef<HTMLElement | null>(null);
+  const navScrollTopRef = useRef(0);
   const developerUnlockRef = useRef({ count: 0, startedAt: 0 });
 
   useEffect(() => {
@@ -79,6 +82,15 @@ export default function Layout() {
       mobileMenuTriggerRef.current?.focus();
     };
   }, [mobileOpen]);
+
+  // Die Sidebar ist ein eigener Scrollcontainer. Beim Routing darf nur der
+  // Inhaltsbereich wechseln; die zuletzt gewählte Menüposition bleibt stabil.
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (navScrollRef.current) navScrollRef.current.scrollTop = navScrollTopRef.current;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname, location.search]);
 
   // Nur die sichtbare Desktop- oder Mobilansicht darf das Benachrichtigungs-
   // Center einhängen. Tailwind blendet Varianten nur per CSS aus; ohne diese
@@ -286,6 +298,8 @@ export default function Layout() {
       )}
       <nav 
         data-tutorial-id="sidebar-nav" 
+        ref={node => { navScrollRef.current = node; }}
+        onScroll={event => { navScrollTopRef.current = event.currentTarget.scrollTop; }}
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-gutter-stable"
         style={{ scrollbarWidth: 'thin', WebkitOverflowScrolling: 'touch' }}
       >
@@ -299,7 +313,10 @@ export default function Layout() {
               <NavLink
                 to={item.to}
                 end={item.exact}
-                onClick={() => mobile && setMobileOpen(false)}
+                onClick={() => {
+                  navScrollTopRef.current = navScrollRef.current?.scrollTop || 0;
+                  if (mobile) setMobileOpen(false);
+                }}
                 className={({ isActive }) =>
                   isActive
                     ? `nav-item-active ${collapsed && !mobile ? 'justify-center px-0' : ''}`

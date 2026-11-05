@@ -1,5 +1,6 @@
 # Offene Releasepunkte
 
+- [x] v2.16.53: Modal-Fokusfehler bei Texteingabe behoben, Theme-Initialisierung stabilisiert, Sidebar-Scrollposition erhalten und Tutorial-Fortsetzung bei Speicherfehlern verbessert; UX-Recherche dokumentiert.
 - [x] v2.16.52: UX- und Accessibility-Härtung mit kontraststarken Themes, globalem Tastaturfokus, Reduced Motion, Fokusmanagement für Dialoge/mobile Navigation, verständlicher Tutorial-Fehlerführung und stabileren Dashboard-Zuständen.
 - [x] v2.16.51: PHP2Shell-Betroffenheit bewertet, Node-/Express-Sicherheitskonfiguration gehärtet, CORS und Request-Limits eingeschränkt, Uploads begrenzt und Health-Endpunkt minimiert.
 - [x] v2.16.50: Helles Design bei Sprachumschaltung und Feldfokus stabilisiert, Grundpalette geschützt und dunkle Fallback-Flächen aus Eingabefeldern entfernt.

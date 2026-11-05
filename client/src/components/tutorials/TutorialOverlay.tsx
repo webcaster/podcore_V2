@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X, SkipForward, MousePointerClick, CheckCircle2, PauseCircle, GripVertical, RotateCcw, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, SkipForward, MousePointerClick, CheckCircle2, PauseCircle, GripVertical, RotateCcw, BookOpen, AlertTriangle } from 'lucide-react';
 import { useTutorial, TutorialStep } from '../../contexts/TutorialContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './TutorialOverlay.css';
@@ -115,7 +115,7 @@ const TARGET_ROUTES: Record<string, string> = {
 };
 
 const TutorialOverlayContent: React.FC = () => {
-  const { activeTutorial, currentStep, nextStep, previousStep, skipTutorial, completeTutorial, closeTutorial, openWiki } = useTutorial();
+  const { activeTutorial, currentStep, nextStep, previousStep, skipTutorial, completeTutorial, closeTutorial, openWiki, tutorialActionError, clearTutorialActionError } = useTutorial();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -127,6 +127,17 @@ const TutorialOverlayContent: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (!activeTutorial) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeTutorial();
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [activeTutorial, closeTutorial]);
 
   const findTargetElement = useCallback((target?: string): Element | null => {
     if (!target) return null;
@@ -353,8 +364,8 @@ const TutorialOverlayContent: React.FC = () => {
         ref={tooltipRef}
         className={`tutorial-tooltip-container${isDragging ? ' is-dragging' : ''}`}
         role="dialog"
-        aria-modal="true"
-        aria-label={`Tutorial: ${step.title}`}
+        aria-labelledby="podcore-tutorial-step-title"
+        aria-describedby="podcore-tutorial-step-description"
         style={{
           ...(manualPosition ? {
             top: manualPosition.top,
@@ -392,9 +403,9 @@ const TutorialOverlayContent: React.FC = () => {
               <div className="w-8 h-8 rounded-full bg-accent-purple/30 border border-accent-purple/60 flex items-center justify-center text-accent-purple text-sm font-bold">
                 {currentStep + 1}
               </div>
-              <h3 className="text-lg font-bold text-text-primary flex-1">{step.title}</h3>
+              <h3 id="podcore-tutorial-step-title" className="text-lg font-bold text-text-primary flex-1">{step.title}</h3>
             </div>
-            <button onClick={closeTutorial} className="text-text-muted hover:text-text-primary transition-colors p-1">
+            <button type="button" onClick={closeTutorial} aria-label="Tutorial schließen" className="text-text-muted hover:text-text-primary transition-colors p-1">
               <X size={20} />
             </button>
           </div>
@@ -440,7 +451,7 @@ const TutorialOverlayContent: React.FC = () => {
                 </div>
               )}
               {requiresTargetClick && actionConfirmed && <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-accent-green"><CheckCircle2 size={14} /> Aktion erkannt – nächster Schritt wird geöffnet.</p>}
-              <p className="text-base text-text-secondary leading-relaxed whitespace-pre-wrap">
+              <p id="podcore-tutorial-step-description" className="text-base text-text-secondary leading-relaxed whitespace-pre-wrap">
                 {step.description}
               </p>
             </div>
@@ -469,6 +480,13 @@ const TutorialOverlayContent: React.FC = () => {
 
           {/* Progress & Actions */}
           <div className="tutorial-footer">
+            {tutorialActionError && (
+              <div className="mb-3 flex items-start gap-2 rounded-lg border border-accent-orange/35 bg-accent-orange/10 p-3 text-xs text-text-secondary" role="alert">
+                <AlertTriangle size={15} className="mt-0.5 flex-shrink-0 text-accent-orange" />
+                <span className="flex-1">{tutorialActionError}</span>
+                <button type="button" onClick={clearTutorialActionError} className="font-semibold text-accent-orange hover:text-text-primary">Schließen</button>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-4">
               <div className="flex-1 h-2 bg-obsidian-700 rounded-full overflow-hidden mr-4">
                 <div 

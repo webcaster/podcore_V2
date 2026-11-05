@@ -1,5 +1,15 @@
 # PodCore – Release Notes
 
+## v2.16.53 – stabile Formulare, Sidebar und Tutorials
+
+Die zentrale Modal-Komponente setzt den Fokus bei Formulareingaben nicht mehr bei jedem Zeichen zurück. Ursache waren Inline-`onClose`-Callbacks, die bei jedem Rendern eine neue Funktion erzeugten und dadurch den Fokus-Cleanup erneut auslösten. Der aktuelle Close-Handler wird nun über eine Referenz verwendet; der Effekt bleibt während der Eingabe stabil. Die Dialog-ID für den Titel wird pro Instanz eindeutig erzeugt.
+
+Modalflächen, Eingabefelder und Fokuszustände verwenden ruhigere, themeabhängige Oberflächenfarben. Das gespeicherte helle Nutzerdesign wird beim Auth-Start zuverlässig angewendet; die Theme-Synchronisation vermeidet dabei Eventschleifen. Die Sidebar speichert ihre eigene Scrollposition beim Routing, sodass ein unten liegender Menüpunkt nicht wieder an den Anfang springt.
+
+Die Tutorialführung kann per Escape geschlossen werden, verwendet semantische Schrittüberschriften und kündigt Speicherfehler des Fortschritts direkt in der Aktionsleiste an. Der aktuelle Schritt bleibt offen, statt die Führung unkontrolliert zu beenden. Die recherchierten UX-Empfehlungen zu Dialogfokus, Scrollverhalten, Kontrast, Dashboard-Zuständen und Tutorialführung sind in [`docs/UX-ROADMAP-2.16.53.md`](docs/UX-ROADMAP-2.16.53.md) dokumentiert.
+
+Die vollständige Release-Anleitung steht unter [`docs/RELEASE-2.16.53.md`](docs/RELEASE-2.16.53.md).
+
 ## v2.16.52 – freundlichere Bedienung und UX-Härtung
 
 Die Benutzeroberfläche wurde in zentralen Bedienpfaden freundlicher und zuverlässiger gestaltet. Hell- und Dunkeldesign verwenden kontraststärkere Sekundär- und Metatexte; primäre Buttons behalten auch beim Hover eine lesbare Farbkombination. Ein globaler `:focus-visible`-Ring macht Tastaturfokus in Navigation, Formularen und Buttons sichtbar. Bei aktivierter Systemeinstellung für reduzierte Bewegung werden unnötige Animationen und Übergänge minimiert.

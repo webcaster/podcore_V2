@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -12,6 +12,13 @@ interface ModalProps {
 export default function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const titleId = useId();
+
+  // Parent-Formulare übergeben häufig Inline-Callbacks. Diese ändern sich bei
+  // jeder Eingabe; der Fokus-Effect darf deshalb nicht von ihrer Identität
+  // abhängen, sonst wird der Fokus nach jedem Buchstaben zurückgesetzt.
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -20,7 +27,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !dialogRef.current) return;
@@ -47,7 +54,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
       document.body.style.overflow = '';
       triggerRef.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -60,9 +67,9 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div ref={dialogRef} className={`modal w-full ${sizeClasses[size]} animate-slide-in`} role="dialog" aria-modal="true" aria-labelledby="podcore-modal-title">
+      <div ref={dialogRef} className={`modal w-full ${sizeClasses[size]} animate-slide-in`} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="modal-header">
-          <h2 id="podcore-modal-title" className="text-lg font-semibold text-text-primary">{title}</h2>
+          <h2 id={titleId} className="text-lg font-semibold text-text-primary">{title}</h2>
           <button
             type="button"
             onClick={onClose}

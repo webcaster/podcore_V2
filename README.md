@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.52**
+**Aktuelle Version: 2.16.53**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,14 @@
 PodCore unterstützt eine getrennt betriebene Lizenzanbindung mit Online-Aktivierung und einem Ed25519-signierten Offline-Lizenznachweis. In der Anwendung lassen sich Lizenzstatus prüfen und ein lesbarer Nachweis unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Lizenzserver, Shop- und Website-Komponenten sind bewusst nicht Bestandteil dieses App-Repositories oder des Endnutzer-App-Pakets.
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.53: stabile Formulare, Sidebar und Tutorials
+
+Ein Fehler in der zentralen Dialog-Komponente wurde behoben: Bei jeder Eingabe in einem Modal-Formular konnte der Fokus durch einen neu erzeugten `onClose`-Callback auf den Schließen-Button springen. Der Fokus bleibt jetzt während der gesamten Eingabe im aktiven Feld. Modalflächen und Formularfelder verwenden außerdem ruhigere, themeabhängige Oberflächenfarben und klarere Fokuszustände.
+
+Das helle Design wird beim Laden des gespeicherten Nutzerprofils zuverlässig angewendet, ohne dass zuvor die Sprache gewechselt werden muss. Die Sidebar bewahrt ihre Scrollposition beim Wechsel zwischen Menüpunkten; die Inhaltsnavigation kann dadurch auch bei langen Menüs unten fortgesetzt werden.
+
+Tutoriale haben jetzt einen sicheren Escape-Ausstieg, semantische Schrittüberschriften und verständliche Hinweise, wenn der Fortschritt nicht gespeichert werden konnte. Die interaktive Führung bleibt während solcher Fehler offen und kann über Wiki, Zurück oder erneutes Weiterarbeiten fortgesetzt werden.
 
 ### Neu in v2.16.52: freundlichere und zugänglichere Bedienung
 

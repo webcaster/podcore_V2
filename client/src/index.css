@@ -435,17 +435,17 @@
     align-items: center;
     justify-content: center;
     padding: 1rem;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(15, 23, 42, 0.58);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     overflow-y: auto;
   }
 
   .modal {
-    background-color: var(--color-obsidian-700, #1a1a2e);
+    background-color: var(--color-surface-raised, #1e1e35);
     border: 1px solid var(--color-surface-border, #2d2d4e);
     border-radius: 1rem;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 24px 60px -18px rgba(15, 23, 42, 0.55), 0 8px 24px -12px rgba(15, 23, 42, 0.35);
     max-height: calc(100vh - 2rem);
     overflow-y: auto;
     display: flex;
@@ -466,6 +466,34 @@
     padding: 1.25rem;
     overflow-y: auto;
     flex: 1;
+  }
+
+  /* Eine ruhige Dialogfläche verhindert harte Kontraste zwischen Formular,
+     Hintergrund und Overlay; die Theme-Variablen halten Hell/Dunkel konsistent. */
+  .modal .label {
+    color: var(--color-text-secondary, #94a3b8);
+    letter-spacing: 0.01em;
+  }
+
+  .modal .input,
+  .modal .select,
+  .modal .textarea,
+  .modal input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']):not(.no-base-style),
+  .modal textarea:not(.no-base-style),
+  .modal select:not(.no-base-style) {
+    background-color: var(--color-surface, #1a1a2e);
+    border-color: var(--color-surface-border, #2d2d4e);
+  }
+
+  .modal .input:focus,
+  .modal .select:focus,
+  .modal .textarea:focus,
+  .modal input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']):not(.no-base-style):focus,
+  .modal textarea:not(.no-base-style):focus,
+  .modal select:not(.no-base-style):focus {
+    background-color: var(--color-surface-raised, #1e1e35);
+    border-color: var(--color-accent-primary, #7c3aed);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.14);
   }
 
   /* Slide-in animation for modals */

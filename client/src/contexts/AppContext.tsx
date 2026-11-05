@@ -271,7 +271,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     authApi.me()
       .then(u => {
         setUser(u);
-        if (u?.theme) applyUserTheme(u.theme);
+        if (u?.theme) applyUserTheme(u.theme, true);
       })
       .catch(() => setUser(null))
       .finally(() => setIsLoading(false));
@@ -294,7 +294,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const newTheme = JSON.stringify(fresh.theme);
         if (oldPerms !== newPerms || user.role !== fresh.role || oldTheme !== newTheme) {
           setUser(fresh);
-          applyUserTheme(fresh.theme || null);
+          applyUserTheme(fresh.theme || null, true);
         }
       } catch {
         // Silently ignore polling errors
@@ -344,7 +344,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     const result = await authApi.login(username, password);
     setUser(result.user);
-    applyUserTheme(result.user?.theme || null);
+    applyUserTheme(result.user?.theme || null, true);
     refreshBranding();
     refreshPodcastProfile();
   }, [refreshBranding, refreshPodcastProfile]);
@@ -363,7 +363,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const u = await authApi.me();
       setUser(u);
-      applyUserTheme(u?.theme || null);
+      applyUserTheme(u?.theme || null, true);
     } catch {
       setUser(null);
     }
@@ -424,7 +424,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 // Apply user theme via CSS custom properties
 // ============================================================
 
-export function applyUserTheme(theme: UserTheme | null | undefined) {
+export function applyUserTheme(theme: UserTheme | null | undefined, forceModeEvent = false) {
   const root = document.documentElement;
   const clearThemeOverrides = () => {
     // Die Obsidian- und Surface-Werte gehören zur aktiven Grundpalette aus
@@ -455,7 +455,12 @@ export function applyUserTheme(theme: UserTheme | null | undefined) {
     localStorage.setItem('podcore-theme', theme.mode);
     root.setAttribute('data-theme', theme.mode);
     root.style.setProperty('color-scheme', theme.mode);
-    if (modeChanged) window.dispatchEvent(new CustomEvent('podcore-theme-change', { detail: { mode: theme.mode } }));
+    // Beim ersten Auth-Laden kann ThemeContext seine Grundpalette gerade noch
+    // initialisieren. Dafür kann der Aufrufer das Event erzwingen. Im normalen
+    // base-theme-applied-Zyklus bleibt es aus, damit keine Eventschleife entsteht.
+    if (modeChanged || forceModeEvent) {
+      window.dispatchEvent(new CustomEvent('podcore-theme-change', { detail: { mode: theme.mode } }));
+    }
   }
 }
 

@@ -57,10 +57,12 @@ interface TutorialContextType {
   isLoading: boolean;
   tutorialLoadError: string | null;
   tutorialStartError: string | null;
+  tutorialActionError: string | null;
   wikiOpen: boolean;
   openWiki: () => void;
   closeWiki: () => void;
   clearTutorialStartError: () => void;
+  clearTutorialActionError: () => void;
   startTutorial: (tutorialId: string) => Promise<boolean>;
   nextStep: () => void;
   previousStep: () => void;
@@ -82,11 +84,13 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [isLoading, setIsLoading] = useState(false);
   const [tutorialLoadError, setTutorialLoadError] = useState<string | null>(null);
   const [tutorialStartError, setTutorialStartError] = useState<string | null>(null);
+  const [tutorialActionError, setTutorialActionError] = useState<string | null>(null);
   const [wikiOpen, setWikiOpen] = useState(false);
 
   const openWiki = () => setWikiOpen(true);
   const closeWiki = () => setWikiOpen(false);
   const clearTutorialStartError = () => setTutorialStartError(null);
+  const clearTutorialActionError = () => setTutorialActionError(null);
 
   const loadProgressForTutorial = useCallback(async (tutorialId: string): Promise<TutorialProgress> => {
     const response = await fetch(`/api/tutorials/${tutorialId}/progress`, { credentials: 'include' });
@@ -166,6 +170,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
 
     setTutorialStartError(null);
+    setTutorialActionError(null);
     setProgress(null);
     setCurrentStep(0);
     setActiveTutorial({ ...tutorial, steps });
@@ -193,6 +198,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       await saveProgress(activeTutorial.id, { completed, skipped, currentStep: step });
     } catch (error) {
       console.error('Error updating progress:', error);
+      setTutorialActionError('Der Fortschritt konnte nicht gespeichert werden. Du kannst weiterarbeiten; wir versuchen es beim nächsten Schritt erneut.');
     }
   }, [activeTutorial, saveProgress]);
 
@@ -221,6 +227,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       setProgress(null);
     } catch (error) {
       console.error('Error skipping tutorial:', error);
+      setTutorialActionError('Das Überspringen konnte nicht gespeichert werden. Der aktuelle Schritt bleibt geöffnet.');
     }
   };
 
@@ -238,6 +245,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       setProgress(null);
     } catch (error) {
       console.error('Error completing tutorial:', error);
+      setTutorialActionError('Der Abschluss konnte nicht gespeichert werden. Bitte prüfe die Verbindung und versuche es erneut.');
     }
   };
 
@@ -258,10 +266,12 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
         isLoading,
         tutorialLoadError,
         tutorialStartError,
+        tutorialActionError,
         wikiOpen,
         openWiki,
         closeWiki,
         clearTutorialStartError,
+        clearTutorialActionError,
         startTutorial,
         nextStep,
         previousStep,
