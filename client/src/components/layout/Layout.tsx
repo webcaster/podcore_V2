@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
+import { Outlet, Link, NavLink, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { useRef } from 'react';
 import {
   Mic2, LayoutDashboard, BookOpen, Library, Users, Settings,
   LogOut, ChevronLeft, ChevronRight, Megaphone, BarChart3,
   Shield, Menu, X, TrendingUp, Image, FileText, HelpCircle, Info, Download, Globe2,
-  Layers, Archive, BarChart2, Calendar, MessageSquare, Radio, CheckCircle, Podcast
+  Layers, Archive, BarChart2, Calendar, MessageSquare, Radio, CheckCircle, Podcast, Search, ChevronDown
 } from 'lucide-react';
 import { useApp, usePermissions, useBranding, useFeatures, useOnlineUsers } from '../../contexts/AppContext';
 import { useTutorial } from '../../contexts/TutorialContext';
@@ -28,6 +28,14 @@ interface NavItem {
   tutorialId?: string;
 }
 
+const NAV_GROUPS = [
+  { id: 'work', de: 'Arbeitsplatz', en: 'Workspace', paths: ['/', '/episodes', '/editorial', '/calendar', '/media', '/chat', '/approvals'] },
+  { id: 'planning', de: 'Planung & Archiv', en: 'Planning & archive', paths: ['/episodes-dashboard', '/seasons', '/archive'] },
+  { id: 'partners', de: 'Sponsoring', en: 'Sponsorship', paths: ['/sponsors', '/sponsors/calendar', '/sponsors/reports'] },
+  { id: 'insights', de: 'Auswertungen', en: 'Reports', paths: ['/analytics', '/stats'] },
+  { id: 'system', de: 'Einrichtung & Hilfe', en: 'Setup & help', paths: ['/branding', '/podcasts', '/admin', '/admin/tutorials', '/tutorials/import', '/pdf-layouts', '/settings'] },
+];
+
 export default function Layout() {
   const { user, logout } = useApp();
   const { can } = usePermissions();
@@ -37,8 +45,11 @@ export default function Layout() {
   const { language, setLanguage, t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationType = useNavigationType();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [menuQuery, setMenuQuery] = useState('');
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ work: true });
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   );
@@ -48,7 +59,29 @@ export default function Layout() {
   const mobileDrawerRef = useRef<HTMLDivElement>(null);
   const navScrollRef = useRef<HTMLElement | null>(null);
   const navScrollTopRef = useRef(0);
+  const menuSearchRef = useRef<HTMLInputElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const contentPositions = useRef(new Map<string, number>());
   const developerUnlockRef = useRef({ count: 0, startedAt: 0 });
+
+  useLayoutEffect(() => {
+    const node = mainRef.current;
+    if (!node) return;
+    node.scrollTop = navigationType === 'POP' ? contentPositions.current.get(location.key) || 0 : 0;
+    return () => { contentPositions.current.set(location.key, node.scrollTop); };
+  }, [location.key, navigationType]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return;
+      event.preventDefault();
+      setCollapsed(false);
+      if (isMobileViewport) setMobileOpen(true);
+      window.setTimeout(() => menuSearchRef.current?.focus(), 60);
+    };
+    document.addEventListener('keydown', handleShortcut);
+    return () => document.removeEventListener('keydown', handleShortcut);
+  }, [isMobileViewport]);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -212,7 +245,7 @@ export default function Layout() {
     return <img src="/podcore-logo.svg" alt="PodCore" className="w-8 h-8 flex-shrink-0" />;
   };
 
-  const { openWiki, tutorials } = useTutorial();
+  const { openWiki, tutorials, activeTutorial, currentStep } = useTutorial();
   const hasTutorials = tutorials.length > 0;
   const { active: screenshotActive, simulatedRole, simulatedPermissions } = useScreenshotMode();
 
@@ -237,7 +270,24 @@ export default function Layout() {
       })
     : visibleItems;
 
-  const Sidebar = ({ mobile = false, showNotifications = true }: { mobile?: boolean; showNotifications?: boolean }) => (
+  const navigationItems = screenshotActive ? screenshotFilteredItems : visibleItems;
+  const activeItem = [...navigationItems].sort((a, b) => b.to.length - a.to.length).find(item =>
+    item.to === '/' ? location.pathname === '/' : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+  );
+  const tutorialTarget = activeTutorial?.steps[currentStep]?.target;
+  useEffect(() => {
+    const currentGroup = NAV_GROUPS.find(group => group.paths.includes(activeItem?.to || ''));
+    const tutorialItem = navigationItems.find(item => item.tutorialId === tutorialTarget);
+    const tutorialGroup = NAV_GROUPS.find(group => group.paths.includes(tutorialItem?.to || ''));
+    setOpenGroups(previous => ({ ...previous, ...(currentGroup ? { [currentGroup.id]: true } : {}), ...(tutorialGroup ? { [tutorialGroup.id]: true } : {}) }));
+    if (tutorialTarget) setMenuQuery('');
+  }, [activeItem?.to, tutorialTarget]);
+  const normalizedQuery = menuQuery.trim().toLocaleLowerCase(language);
+  const filteredMenuItems = navigationItems.filter(item => !normalizedQuery || item.label.toLocaleLowerCase(language).includes(normalizedQuery));
+
+  // Renderfunktion statt verschachteltem React-Komponententyp: Ein Layout-
+  // Update darf die Sidebar (Fokus, Scrollcontainer, Suche) nicht neu einhängen.
+  const renderSidebar = ({ mobile = false, showNotifications = true }: { mobile?: boolean; showNotifications?: boolean }) => (
     <aside
       data-tutorial-id={mobile ? 'sidebar-mobile' : 'sidebar'}
       className={`
@@ -296,40 +346,64 @@ export default function Layout() {
           </p>
         </div>
       )}
+      {(!collapsed || mobile) && !screenshotActive && (
+        <div className="px-3 pt-3 pb-1">
+          <div className="relative">
+            <Search size={15} className="pointer-events-none absolute left-3 top-3 text-text-muted" />
+            <input ref={menuSearchRef} type="search" value={menuQuery} onChange={event => setMenuQuery(event.target.value)}
+              aria-label={language === 'de' ? 'Menü durchsuchen' : 'Search navigation'}
+              placeholder={language === 'de' ? 'Menü finden …' : 'Find a page …'}
+              className="input input-compact menu-search" />
+          </div>
+          <span className="mt-1 block px-1 text-[10px] text-text-muted">{language === 'de' ? 'Direkt suchen: Strg / ⌘ + K' : 'Quick search: Ctrl / ⌘ + K'}</span>
+        </div>
+      )}
       <nav 
         data-tutorial-id="sidebar-nav" 
+        aria-label={language === 'de' ? 'Hauptnavigation' : 'Main navigation'}
         ref={node => { navScrollRef.current = node; }}
         onScroll={event => { navScrollTopRef.current = event.currentTarget.scrollTop; }}
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-gutter-stable"
         style={{ scrollbarWidth: 'thin', WebkitOverflowScrolling: 'touch' }}
       >
         <div className="px-3 py-2 space-y-0.5">
-          {(screenshotActive ? screenshotFilteredItems : visibleItems).map((item) => (
-            <React.Fragment key={item.to}>
-              {item.dividerBefore && !collapsed && (
-                <div className="my-2 border-t border-surface-border/50" />
+          {NAV_GROUPS.map(group => {
+            const items = filteredMenuItems.filter(item => group.paths.includes(item.to));
+            if (!items.length) return null;
+            const expanded = Boolean(openGroups[group.id] || normalizedQuery || screenshotActive || (collapsed && !mobile));
+            return <section key={group.id} className="pb-1">
+              {(!collapsed || mobile) && (
+                <button type="button" className="nav-group-heading" aria-expanded={expanded} aria-controls={`nav-group-${group.id}-${mobile ? 'mobile' : 'desktop'}`}
+                  onClick={() => setOpenGroups(previous => ({ ...previous, [group.id]: !expanded }))}>
+                  <span>{language === 'de' ? group.de : group.en}</span>
+                  <ChevronDown size={13} className={expanded ? '' : '-rotate-90'} />
+                </button>
               )}
-              {item.dividerBefore && collapsed && <div className="my-1" />}
-              <NavLink
+              {expanded && <div id={`nav-group-${group.id}-${mobile ? 'mobile' : 'desktop'}`} className="space-y-0.5">
+              {items.map(item => <Link key={item.to}
                 to={item.to}
-                end={item.exact}
                 onClick={() => {
                   navScrollTopRef.current = navScrollRef.current?.scrollTop || 0;
+                  setMenuQuery('');
                   if (mobile) setMobileOpen(false);
                 }}
-                className={({ isActive }) =>
-                  isActive
+                className={
+                  activeItem?.to === item.to
                     ? `nav-item-active ${collapsed && !mobile ? 'justify-center px-0' : ''}`
                     : `nav-item ${collapsed && !mobile ? 'justify-center px-0' : ''}`
                 }
+                aria-current={activeItem?.to === item.to ? 'page' : undefined}
+                aria-label={collapsed && !mobile ? item.label : undefined}
                 title={collapsed && !mobile ? item.label : undefined}
                 data-tutorial-id={item.tutorialId}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
                 {(!collapsed || mobile) && <span className="text-sm">{item.label}</span>}
-              </NavLink>
-            </React.Fragment>
-          ))}
+              </Link>)}
+              </div>}
+            </section>;
+          })}
+          {filteredMenuItems.length === 0 && <p className="px-2 py-4 text-sm text-text-muted" role="status">{language === 'de' ? 'Kein zugänglicher Menüpunkt gefunden.' : 'No accessible page found.'}</p>}
         </div>
       </nav>
 
@@ -471,16 +545,16 @@ export default function Layout() {
       )}
     <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Desktop Sidebar */}
-      <div className="hidden md:flex flex-shrink-0">
-        <Sidebar showNotifications={!isMobileViewport} />
-      </div>
+      {!isMobileViewport && <div className="hidden md:flex flex-shrink-0">
+        {renderSidebar({ showNotifications: true })}
+      </div>}
 
       {/* Mobile Sidebar Overlay */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Hauptnavigation">
           <div className="fixed inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
           <div id="podcore-mobile-navigation" ref={mobileDrawerRef} className="relative z-10 flex">
-            <Sidebar mobile showNotifications={false} />
+            {renderSidebar({ mobile: true, showNotifications: false })}
           </div>
         </div>
       )}
@@ -520,7 +594,7 @@ export default function Layout() {
         </div>
 
         {/* Page Content */}
-        <main data-tutorial-id="main-content" className="flex-1 overflow-y-auto p-6 scrollbar-gutter-stable bg-[radial-gradient(circle_at_96%_0%,rgba(157,78,221,0.11),transparent_31rem)]">
+        <main ref={mainRef} data-tutorial-id="main-content" className="flex-1 overflow-y-auto p-4 sm:p-6 scrollbar-gutter-stable">
           <Outlet />
         </main>
       </div>

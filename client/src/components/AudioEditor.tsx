@@ -38,6 +38,7 @@ interface AudioEditorProps {
   };
   onClose: () => void;
   onSaved?: () => void;
+  embedded?: boolean;
 }
 
 const MARKER_TYPES = [
@@ -57,7 +58,8 @@ function formatTime(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProps) {
+export default function AudioEditor({ asset, onClose, onSaved, embedded = false }: AudioEditorProps) {
+  const editorRef = useRef<HTMLDivElement>(null);
   const waveformRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -82,27 +84,75 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
   const [commentForm, setCommentForm] = useState({ text: '', time: 0 });
   const [showMarkerList, setShowMarkerList] = useState(true);
   const [showCommentList, setShowCommentList] = useState(true);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const actionPendingRef = useRef(false);
+  const dataLoadVersionRef = useRef(0);
+  const formWasOpenRef = useRef(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [markerSearch, setMarkerSearch] = useState('');
+  const [markerTypeFilter, setMarkerTypeFilter] = useState('all');
+
+  const loadData = useCallback(async () => {
+    const loadVersion = ++dataLoadVersionRef.current;
+    setIsDataLoading(true);
+    setDataError(null);
+    try {
+      // Beide Listen müssen geladen sein, bevor die gesamte Markenliste gespeichert wird.
+      const [loadedMarkers, assetData] = await Promise.all([
+        api.get<Marker[]>(`/media/${asset.id}/markers`),
+        api.get<{ comments?: TimedComment[] }>(`/media/${asset.id}`),
+      ]);
+      if (loadVersion !== dataLoadVersionRef.current) return;
+      setMarkers(Array.isArray(loadedMarkers) ? loadedMarkers : []);
+      setTimedComments((assetData?.comments || []).filter(c => c.time != null));
+    } catch (error) {
+      if (loadVersion === dataLoadVersionRef.current) {
+        setDataError(error instanceof Error ? error.message : 'Marken und Kommentare konnten nicht geladen werden.');
+      }
+    } finally {
+      if (loadVersion === dataLoadVersionRef.current) setIsDataLoading(false);
+    }
+  }, [asset.id]);
 
   // Load markers and comments from server
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        // api.get gibt direkt data.data zurück (nicht das rohe Response-Objekt)
-        const [markers, assetData] = await Promise.all([
-          api.get<any[]>(`/media/${asset.id}/markers`),
-          api.get<any>(`/media/${asset.id}`),
-        ]);
-        setMarkers(Array.isArray(markers) ? markers : []);
-        const comments = (assetData?.comments || []).filter((c: any) => c.time != null);
-        setTimedComments(comments);
-      } catch (e) { /* ignore */ }
-    };
+    setMarkers([]);
+    setTimedComments([]);
+    setShowMarkerForm(false);
+    setShowCommentForm(false);
+    setSaveError(null);
+    setStatusMessage('');
+    setMarkerSearch('');
+    setMarkerTypeFilter('all');
     loadData();
-  }, [asset.id]);
+    return () => { dataLoadVersionRef.current += 1; };
+  }, [loadData]);
+
+  // Keep keyboard focus inside the editor and return it to its opener on close.
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    editorRef.current?.focus();
+    return () => { if (previousFocus?.isConnected) previousFocus.focus(); };
+  }, []);
+
+  useEffect(() => {
+    const formIsOpen = showMarkerForm || showCommentForm;
+    if (formWasOpenRef.current && !formIsOpen) editorRef.current?.focus({ preventScroll: true });
+    formWasOpenRef.current = formIsOpen;
+  }, [showMarkerForm, showCommentForm]);
 
   // Initialize WaveSurfer
   useEffect(() => {
     if (!waveformRef.current) return;
+    setIsReady(false);
+    setIsPlaying(false);
+    setIsLoading(true);
+    setLoadError(null);
+    setCurrentTime(0);
+    setDuration(asset.duration || 0);
+    let disposed = false;
 
     const ws = WaveSurfer.create({
       container: waveformRef.current,
@@ -141,9 +191,14 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
     });
 
     const audioUrl = `/api/media/${asset.id}/stream`;
-    ws.load(audioUrl);
+    void ws.load(audioUrl).catch(error => {
+      if (disposed || error?.name === 'AbortError') return;
+      setLoadError(`Fehler beim Laden: ${error?.message || error}`);
+      setIsLoading(false);
+    });
 
     return () => {
+      disposed = true;
       ws.destroy();
       wsRef.current = null;
     };
@@ -196,68 +251,118 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
   }, []);
 
   const seekToTime = useCallback((time: number) => {
-    if (!wsRef.current || !isReady || duration === 0) return;
-    wsRef.current.seekTo(time / duration);
+    if (!wsRef.current || !isReady || duration === 0 || !Number.isFinite(time)) return;
+    wsRef.current.seekTo(Math.min(1, Math.max(0, time / duration)));
   }, [isReady, duration]);
+
+  const openMarkerForm = () => {
+    setMarkerForm(p => ({ ...p, time: currentTime }));
+    setShowMarkerForm(true);
+    setShowCommentForm(false);
+    setSaveError(null);
+  };
+
+  const openCommentForm = () => {
+    setCommentForm(p => ({ ...p, time: currentTime }));
+    setShowCommentForm(true);
+    setShowMarkerForm(false);
+    setSaveError(null);
+  };
+
+  const validTime = (time: number) => Number.isFinite(time) && time >= 0 && (duration <= 0 || time <= duration);
+  const timeHelp = duration > 0 ? `0 bis ${formatTime(duration)} (${duration.toFixed(1)} s)` : 'Ab 0 Sekunden';
+  const dataBusy = isDataLoading || isSaving || pendingAction !== null;
+  const canChangeData = !dataBusy && !dataError;
+
+  // A shared lock also prevents rapid repeated clicks before React updates the buttons.
+  const runDataAction = async (key: string, action: () => Promise<void>, success: string) => {
+    if (!canChangeData || actionPendingRef.current) return;
+    actionPendingRef.current = true;
+    setPendingAction(key);
+    setSaveError(null);
+    setStatusMessage('');
+    try {
+      await action();
+      setStatusMessage(success);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Die Änderung konnte nicht gespeichert werden. Bitte erneut versuchen.');
+    } finally {
+      actionPendingRef.current = false;
+      setPendingAction(null);
+    }
+  };
 
   const addMarker = async () => {
     const time = markerForm.time ?? currentTime;
+    if (!validTime(time)) {
+      setSaveError(`Bitte einen gültigen Zeitpunkt eingeben: ${timeHelp}.`);
+      return;
+    }
     const typeInfo = MARKER_TYPES.find(t => t.value === markerForm.type) || MARKER_TYPES[0];
-    try {
+    await runDataAction('add-marker', async () => {
       // api.post gibt direkt data.data zurück
       const newMarker = await api.post<any>(`/media/${asset.id}/markers/add`, {
         type: markerForm.type,
-        label: markerForm.label || typeInfo.label,
+        label: markerForm.label.trim() || typeInfo.label,
         time,
         color: typeInfo.color,
       });
-      if (newMarker) {
-        setMarkers(prev => [...prev, newMarker].sort((a, b) => a.time - b.time));
-        setShowMarkerForm(false);
-        setMarkerForm({ type: 'cut', label: '', time: 0 });
-      }
-    } catch (e) { /* ignore */ }
+      if (!newMarker) throw new Error('Die Marke wurde vom Server nicht bestätigt.');
+      setMarkers(prev => [...prev, newMarker].sort((a, b) => a.time - b.time));
+      setShowMarkerForm(false);
+      setMarkerForm({ type: 'cut', label: '', time: 0 });
+    }, 'Marke gespeichert.');
   };
 
-  const deleteMarker = async (markerId: string) => {
-    try {
-      await api.delete(`/media/${asset.id}/markers/${markerId}`);
-      setMarkers(prev => prev.filter(m => m.id !== markerId));
-    } catch (e) { /* ignore */ }
+  const deleteMarker = async (marker: Marker) => {
+    if (!canChangeData || !window.confirm(`Marke „${marker.label || marker.type}“ bei ${formatTime(marker.time)} wirklich löschen?`)) return;
+    await runDataAction(`delete-marker-${marker.id}`, async () => {
+      await api.delete(`/media/${asset.id}/markers/${marker.id}`);
+      setMarkers(prev => prev.filter(m => m.id !== marker.id));
+    }, 'Marke gelöscht.');
   };
 
   const addTimedComment = async () => {
     if (!commentForm.text.trim()) return;
-    try {
+    if (!validTime(commentForm.time)) {
+      setSaveError(`Bitte einen gültigen Zeitpunkt eingeben: ${timeHelp}.`);
+      return;
+    }
+    await runDataAction('add-comment', async () => {
       // api.post gibt direkt data.data zurück
       const newComment = await api.post<any>(`/media/${asset.id}/timed-comments`, {
-        text: commentForm.text,
+        text: commentForm.text.trim(),
         time: commentForm.time ?? currentTime,
       });
-      if (newComment) {
-        setTimedComments(prev => [...prev, newComment].sort((a, b) => (a.time ?? 0) - (b.time ?? 0)));
-        setShowCommentForm(false);
-        setCommentForm({ text: '', time: 0 });
-      }
-    } catch (e) { /* ignore */ }
+      if (!newComment) throw new Error('Der Kommentar wurde vom Server nicht bestätigt.');
+      setTimedComments(prev => [...prev, newComment].sort((a, b) => (a.time ?? 0) - (b.time ?? 0)));
+      setShowCommentForm(false);
+      setCommentForm({ text: '', time: 0 });
+    }, 'Kommentar gespeichert.');
   };
 
-  const deleteTimedComment = async (commentId: string) => {
-    try {
-      await api.delete(`/media/${asset.id}/comments/${commentId}`);
-      setTimedComments(prev => prev.filter(c => c.id !== commentId));
-    } catch (e) { /* ignore */ }
+  const deleteTimedComment = async (comment: TimedComment) => {
+    if (!canChangeData || !window.confirm(`Kommentar bei ${formatTime(comment.time ?? 0)} wirklich löschen?`)) return;
+    await runDataAction(`delete-comment-${comment.id}`, async () => {
+      await api.delete(`/media/${asset.id}/comments/${comment.id}`);
+      setTimedComments(prev => prev.filter(c => c.id !== comment.id));
+    }, 'Kommentar gelöscht.');
   };
 
   const saveAll = async () => {
+    if (!canChangeData || actionPendingRef.current) return;
+    actionPendingRef.current = true;
     setIsSaving(true);
     setSaveError(null);
+    setStatusMessage('');
     try {
       await api.post(`/media/${asset.id}/markers`, { markers });
+      setStatusMessage('Markenliste gespeichert.');
       onSaved?.();
     } catch (e: any) {
       setSaveError(e?.message || 'Die Marker konnten nicht gespeichert werden.');
     } finally {
+      actionPendingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -273,9 +378,17 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
       textarea.style.opacity = '0';
       document.body.appendChild(textarea);
       textarea.select();
-      document.execCommand('copy');
-      textarea.remove();
+      try {
+        if (!document.execCommand('copy')) throw new Error('Kopieren nicht verfügbar');
+      } catch {
+        setSaveError('Der Timecode konnte nicht kopiert werden. Bitte manuell übernehmen.');
+        return;
+      } finally {
+        textarea.remove();
+        editorRef.current?.focus();
+      }
     }
+    setStatusMessage(`Timecode ${value} kopiert.`);
   };
 
   const exportEditDecisionList = () => {
@@ -421,63 +534,116 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
     }
   };
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const visibleMarkers = [...markers]
+    .sort((a, b) => a.time - b.time)
+    .filter(marker => {
+      const typeInfo = MARKER_TYPES.find(type => type.value === marker.type);
+      return (markerTypeFilter === 'all' || marker.type === markerTypeFilter)
+        && `${marker.label} ${typeInfo?.label || marker.type} ${marker.userName || ''}`.toLocaleLowerCase('de-DE').includes(markerSearch.trim().toLocaleLowerCase('de-DE'));
+    });
+
+  const requestClose = () => {
+    if (isSaving || pendingAction) return;
+    const hasDraft = markerForm.label.trim() || commentForm.text.trim();
+    if (hasDraft && !window.confirm('Den Editor schließen und den noch nicht hinzugefügten Entwurf verwerfen?')) return;
+    onClose();
+  };
+
+  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab' && !embedded) {
+      const focusable = Array.from(editorRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, a[href], [tabindex="0"]'
+      ) || []).filter(element => element.tabIndex !== -1 && element.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === editorRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+      return;
+    }
+    if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.nativeEvent.isComposing) return;
+    if (event.key === 'Escape' && !showMarkerForm && !showCommentForm) {
+      event.preventDefault();
+      requestClose();
+      return;
+    }
+    // Do not hijack typing, sliders, selects or native button shortcuts.
+    if ((event.target as HTMLElement).closest('input, textarea, select, button, summary, a, [contenteditable="true"]')) return;
+    if (!isReady) return;
+    if (event.code === 'Space') { event.preventDefault(); togglePlay(); }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); skipBack(); }
+    if (event.key === 'ArrowRight') { event.preventDefault(); skipForward(); }
+    if (!showMarkerForm && !showCommentForm && canChangeData) {
+      if (event.key.toLowerCase() === 'm') { event.preventDefault(); openMarkerForm(); }
+      if (event.key.toLowerCase() === 'c') { event.preventDefault(); openCommentForm(); }
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-obsidian-800 border border-obsidian-600 rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div
+      ref={editorRef}
+      role={embedded ? 'region' : 'dialog'}
+      aria-modal={embedded ? undefined : true}
+      aria-labelledby={`audio-editor-title-${asset.id}`}
+      aria-describedby={`audio-editor-help-${asset.id}`}
+      tabIndex={-1}
+      onKeyDown={handleEditorKeyDown}
+      className={embedded ? 'audio-workspace' : 'fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4'}
+    >
+      <div className={embedded ? 'bg-obsidian-800 border border-surface-border rounded-2xl w-full' : 'bg-obsidian-800 border border-obsidian-600 rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl'}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-obsidian-600">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3 p-4 border-b border-obsidian-600">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-accent-purple/20 flex items-center justify-center">
               <Scissors size={16} className="text-accent-purple" />
             </div>
-            <div>
-              <h2 className="font-semibold text-text-primary text-sm">Audio-Editor</h2>
-              <p className="text-xs text-text-muted truncate max-w-xs">{asset.name}</p>
+            <div className="min-w-0">
+              <h2 id={`audio-editor-title-${asset.id}`} className="font-semibold text-text-primary text-sm">Audio-Editor</h2>
+              <p className="text-xs text-text-muted truncate max-w-xs" title={asset.name}>{asset.name}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={exportCutListPdf}
-              className="btn-secondary text-sm flex items-center gap-1.5"
-              title="Marker und Kommentare als PDF-Schnittliste exportieren"
-            >
-              <Download size={14} /> PDF
-            </button>
-            <button
-              onClick={exportAuditionMarkers}
-              className="btn-secondary text-sm flex items-center gap-1.5"
-              title="In Adobe Audition über Datei → Importieren → Marker aus Datei importieren"
-            >
-              <Download size={14} /> Audition CSV
-            </button>
-            <button
-              onClick={exportEditDecisionList}
-              className="btn-secondary text-sm flex items-center gap-1.5"
-              title="Marker und Kommentare als Schnittplan exportieren"
-            >
-              <Download size={14} /> Schnittplan
-            </button>
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={saveAll}
-              disabled={isSaving}
+              disabled={!canChangeData}
               className="btn-primary text-sm flex items-center gap-1.5"
+              title="Gesamte Markenliste auf dem Server speichern"
             >
               {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              Speichern
+              {isSaving ? 'Speichert…' : 'Speichern'}
             </button>
-            <button onClick={onClose} className="p-2 text-text-muted hover:text-text-primary hover:bg-obsidian-700 rounded-lg transition-colors">
+            <button onClick={requestClose} disabled={isSaving || pendingAction !== null} aria-label="Audio-Editor schließen" title="Audio-Editor schließen" className="p-2 text-text-muted hover:text-text-primary hover:bg-obsidian-700 rounded-lg transition-colors disabled:opacity-40">
               <X size={18} />
             </button>
           </div>
         </div>
 
         <div className="p-4 space-y-4">
+          <div id={`audio-editor-help-${asset.id}`} className="rounded-xl border border-accent-purple/20 bg-accent-purple/5 p-3 text-xs text-text-muted space-y-1.5">
+            <p className="text-text-primary font-medium">1. Anhören · 2. Marken oder Kommentare setzen · 3. Schnittliste exportieren</p>
+            <p>Die Audiodatei bleibt unverändert. Marken und Kommentare werden beim Hinzufügen direkt gespeichert. Ein Klick auf einen Timecode springt zur Stelle, ohne die Wiedergabe zu starten.</p>
+            <details>
+              <summary className="cursor-pointer text-accent-purple">Tastatur &amp; Bedienhilfe</summary>
+              <p className="mt-2">Außerhalb von Eingabefeldern und Schaltflächen: Leertaste = Wiedergabe/Pause, ← / → = 10 Sekunden zurück/vor, M = Marke, C = Kommentar. Tab navigiert durch die Werkzeuge; Enter aktiviert eine Schaltfläche. Escape schließt den Editor, wenn kein Formular geöffnet ist.</p>
+            </details>
+          </div>
+          {dataError && (
+            <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300 space-y-2">
+              <p>Marken und Kommentare konnten nicht geladen werden: {dataError}</p>
+              <p>Speichern und Export sind gesperrt, damit keine unvollständige Schnittliste verwendet wird.</p>
+              <button onClick={loadData} disabled={isDataLoading} className="btn-secondary text-xs">Erneut laden</button>
+            </div>
+          )}
+          <p role="status" aria-live="polite" className="text-xs text-text-muted">{pendingAction ? 'Änderung wird gespeichert…' : isDataLoading ? 'Marken und Kommentare werden geladen…' : statusMessage}</p>
           {/* Waveform */}
           <div className="bg-obsidian-900 rounded-xl p-4 border border-obsidian-600">
             {saveError && (
-              <div className="flex items-center gap-2 mb-3 p-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 text-xs">
+              <div role="alert" className="flex items-center gap-2 mb-3 p-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 text-xs">
                 <AlertCircle size={14} />
                 <span className="flex-1">{saveError}</span>
                 <button onClick={() => setSaveError(null)} aria-label="Meldung schließen"><X size={13} /></button>
@@ -490,7 +656,7 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
               </div>
             )}
             {loadError && (
-              <div className="flex items-center justify-center h-24 text-red-400 text-sm">
+              <div role="alert" className="flex items-center justify-center h-24 text-red-400 text-sm">
                 {loadError}
               </div>
             )}
@@ -506,6 +672,7 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
                     <button
                       key={m.id}
                       title={`${typeInfo?.label || m.type}: ${m.label} @ ${formatTime(m.time)}`}
+                      aria-label={`Zu ${m.label || typeInfo?.label} bei ${formatTime(m.time)} springen`}
                       onClick={() => seekToTime(m.time)}
                       className="absolute top-0 -translate-x-1/2 text-xs hover:scale-125 transition-transform"
                       style={{ left: `${pct}%`, color: m.color }}
@@ -520,7 +687,8 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
                   return (
                     <button
                       key={c.id}
-                      title={`Kommentar: ${c.content} @ ${formatTime(c.time)}`}
+                      title={`Kommentar: ${c.content || c.text} @ ${formatTime(c.time)}`}
+                      aria-label={`Zum Kommentar bei ${formatTime(c.time)} springen`}
                       onClick={() => seekToTime(c.time!)}
                       className="absolute top-0 -translate-x-1/2 text-xs text-accent-purple hover:scale-125 transition-transform"
                       style={{ left: `${pct}%` }}
@@ -539,6 +707,7 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
                 onClick={copyCurrentTime}
                 className="inline-flex items-center gap-1 hover:text-text-primary transition-colors"
                 title="Aktuellen Timecode kopieren"
+                aria-label={`Aktuellen Timecode ${formatTime(currentTime)} kopieren`}
               >
                 <span>{formatTime(currentTime)}</span><Copy size={11} />
               </button>
@@ -547,33 +716,38 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
           </div>
 
           {/* Transport Controls */}
-          <div className="flex items-center justify-between bg-obsidian-900 rounded-xl p-3 border border-obsidian-600">
-            <div className="flex items-center gap-2">
-              <button onClick={stop} disabled={!isReady} className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-obsidian-700 disabled:opacity-40 transition-colors">
+          <div className="flex items-center justify-between gap-3 flex-wrap bg-obsidian-900 rounded-xl p-3 border border-obsidian-600">
+            <div role="group" aria-label="Wiedergabe" className="flex items-center gap-2">
+              <span className="text-xs text-text-muted">Anhören</span>
+              <button onClick={stop} disabled={!isReady} aria-label="Stoppen und zum Anfang springen" title="Stoppen und zum Anfang springen" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-obsidian-700 disabled:opacity-40 transition-colors">
                 <Square size={16} />
               </button>
-              <button onClick={skipBack} disabled={!isReady} className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-obsidian-700 disabled:opacity-40 transition-colors">
+              <button onClick={skipBack} disabled={!isReady} aria-label="10 Sekunden zurück" title="10 Sekunden zurück (←)" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-obsidian-700 disabled:opacity-40 transition-colors">
                 <SkipBack size={16} />
               </button>
               <button
                 onClick={togglePlay}
                 disabled={!isReady}
+                aria-label={isPlaying ? 'Wiedergabe pausieren' : 'Wiedergabe starten'}
+                title={isPlaying ? 'Pause (Leertaste)' : 'Wiedergabe (Leertaste)'}
                 className="w-10 h-10 rounded-full bg-accent-purple hover:bg-accent-purple/80 disabled:opacity-40 flex items-center justify-center transition-colors"
               >
                 {isPlaying ? <Pause size={18} className="text-white" /> : <Play size={18} className="text-white ml-0.5" />}
               </button>
-              <button onClick={skipForward} disabled={!isReady} className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-obsidian-700 disabled:opacity-40 transition-colors">
+              <button onClick={skipForward} disabled={!isReady} aria-label="10 Sekunden vor" title="10 Sekunden vor (→)" className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-obsidian-700 disabled:opacity-40 transition-colors">
                 <SkipForward size={16} />
               </button>
             </div>
 
             {/* Volume */}
-            <div className="flex items-center gap-2">
-              <button onClick={() => setIsMuted(p => !p)} className="p-1.5 text-text-muted hover:text-text-primary rounded-lg transition-colors">
+            <div role="group" aria-label="Lautstärke" className="flex items-center gap-2">
+              <button onClick={() => setIsMuted(p => !p)} aria-label={isMuted ? 'Ton einschalten' : 'Stummschalten'} title={isMuted ? 'Ton einschalten' : 'Stummschalten'} aria-pressed={isMuted} className="p-1.5 text-text-muted hover:text-text-primary rounded-lg transition-colors">
                 {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
               </button>
               <input
                 type="range" min="0" max="1" step="0.05"
+                aria-label="Lautstärke"
+                aria-valuetext={`${Math.round((isMuted ? 0 : volume) * 100)} Prozent`}
                 value={isMuted ? 0 : volume}
                 onChange={e => { setVolume(parseFloat(e.target.value)); setIsMuted(false); }}
                 className="w-20 accent-accent-purple"
@@ -596,6 +770,7 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
                 onClick={() => setIsLooping(p => !p)}
                 className={`p-1.5 rounded-lg transition-colors ${isLooping ? 'text-accent-purple bg-accent-purple/15' : 'text-text-muted hover:text-text-primary hover:bg-obsidian-700'}`}
                 title={isLooping ? 'Loop deaktivieren' : 'Loop aktivieren'}
+                aria-label="Gesamte Audiodatei wiederholen"
                 aria-pressed={isLooping}
               >
                 <Repeat size={15} />
@@ -604,8 +779,9 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
 
             {/* Zoom */}
             <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted">Zoom</span>
+              <label htmlFor={`audio-zoom-${asset.id}`} className="text-xs text-text-muted">Zoom</label>
               <input
+                id={`audio-zoom-${asset.id}`}
                 type="range" min="10" max="500" step="10"
                 value={zoom}
                 onChange={e => setZoom(parseInt(e.target.value))}
@@ -615,37 +791,45 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2 flex-wrap">
+          <div role="group" aria-label="Markieren und kommentieren" className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => { setMarkerForm(p => ({ ...p, time: currentTime })); setShowMarkerForm(true); }}
+              onClick={openMarkerForm}
+              disabled={!isReady || !canChangeData}
+              title="Marke am aktuellen Zeitpunkt hinzufügen (M)"
               className="btn-secondary text-sm flex items-center gap-1.5"
             >
-              <Scissors size={14} /> Schnittmarke setzen
+              <Scissors size={14} /> Marke setzen
             </button>
             <button
-              onClick={() => { setCommentForm(p => ({ ...p, time: currentTime })); setShowCommentForm(true); }}
+              onClick={openCommentForm}
+              disabled={!isReady || !canChangeData}
+              title="Kommentar am aktuellen Zeitpunkt hinzufügen (C)"
               className="btn-secondary text-sm flex items-center gap-1.5"
             >
               <MessageSquare size={14} /> Kommentar hinzufügen
             </button>
+            <span className="text-xs text-text-muted">bei {formatTime(currentTime)} · Typ und Zeitpunkt im Formular anpassbar</span>
           </div>
 
           {/* Marker Form */}
           {showMarkerForm && (
-            <div className="bg-obsidian-900 border border-obsidian-600 rounded-xl p-4 space-y-3">
+            <form onSubmit={event => { event.preventDefault(); addMarker(); }} className="bg-obsidian-900 border border-obsidian-600 rounded-xl p-4 space-y-3">
               <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
                 <Flag size={14} className="text-accent-purple" /> Neue Marke
               </h3>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="label text-xs">Typ</label>
-                  <select value={markerForm.type} onChange={e => setMarkerForm(p => ({ ...p, type: e.target.value }))} className="select text-sm">
+                  <label htmlFor={`marker-type-${asset.id}`} className="label text-xs">Typ</label>
+                  <select id={`marker-type-${asset.id}`} disabled={dataBusy} value={markerForm.type} onChange={e => setMarkerForm(p => ({ ...p, type: e.target.value }))} className="select text-sm">
                     {MARKER_TYPES.map(t => <option key={t.value} value={t.value}>{t.icon} {t.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label text-xs">Bezeichnung</label>
+                  <label htmlFor={`marker-label-${asset.id}`} className="label text-xs">Bezeichnung (optional)</label>
                   <input
+                    id={`marker-label-${asset.id}`}
+                    autoFocus
+                    disabled={dataBusy}
                     type="text"
                     value={markerForm.label}
                     onChange={e => setMarkerForm(p => ({ ...p, label: e.target.value }))}
@@ -654,33 +838,46 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
                   />
                 </div>
                 <div>
-                  <label className="label text-xs">Zeitpunkt (s)</label>
+                  <label htmlFor={`marker-time-${asset.id}`} className="label text-xs">Zeitpunkt (Sekunden)</label>
                   <input
+                    id={`marker-time-${asset.id}`}
+                    disabled={dataBusy}
+                    required
+                    min="0"
+                    max={duration > 0 ? duration : undefined}
+                    aria-invalid={!validTime(markerForm.time)}
+                    aria-describedby={`marker-time-help-${asset.id}`}
                     type="number"
-                    step="0.1"
-                    value={markerForm.time}
-                    onChange={e => setMarkerForm(p => ({ ...p, time: parseFloat(e.target.value) || 0 }))}
+                    step="any"
+                    value={Number.isFinite(markerForm.time) ? markerForm.time : ''}
+                    onChange={e => setMarkerForm(p => ({ ...p, time: e.target.valueAsNumber }))}
                     className="input text-sm"
                   />
+                  <p id={`marker-time-help-${asset.id}`} className="text-xs text-text-muted mt-1">{timeHelp}</p>
+                  <button type="button" disabled={!isReady || dataBusy} onClick={() => setMarkerForm(p => ({ ...p, time: currentTime }))} className="text-xs text-accent-purple mt-1 hover:underline">Aktuelle Position übernehmen</button>
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={addMarker} className="btn-primary text-sm">Hinzufügen</button>
-                <button onClick={() => setShowMarkerForm(false)} className="btn-secondary text-sm">Abbrechen</button>
+                <button type="submit" disabled={!canChangeData || !validTime(markerForm.time)} className="btn-primary text-sm">{pendingAction === 'add-marker' ? 'Speichert…' : 'Marke hinzufügen'}</button>
+                <button type="button" disabled={dataBusy} onClick={() => { setShowMarkerForm(false); setMarkerForm({ type: 'cut', label: '', time: 0 }); editorRef.current?.focus(); }} className="btn-secondary text-sm">Abbrechen</button>
               </div>
-            </div>
+            </form>
           )}
 
           {/* Timed Comment Form */}
           {showCommentForm && (
-            <div className="bg-obsidian-900 border border-obsidian-600 rounded-xl p-4 space-y-3">
+            <form onSubmit={event => { event.preventDefault(); addTimedComment(); }} className="bg-obsidian-900 border border-obsidian-600 rounded-xl p-4 space-y-3">
               <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
                 <MessageSquare size={14} className="text-accent-purple" /> Zeitbezogener Kommentar
               </h3>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <label className="label text-xs">Kommentar</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label htmlFor={`comment-text-${asset.id}`} className="label text-xs">Kommentar</label>
                   <textarea
+                    id={`comment-text-${asset.id}`}
+                    autoFocus
+                    required
+                    disabled={dataBusy}
                     value={commentForm.text}
                     onChange={e => setCommentForm(p => ({ ...p, text: e.target.value }))}
                     placeholder="Anmerkung für die Produktion…"
@@ -689,67 +886,114 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
                   />
                 </div>
                 <div>
-                  <label className="label text-xs">Zeitpunkt (s)</label>
+                  <label htmlFor={`comment-time-${asset.id}`} className="label text-xs">Zeitpunkt (Sekunden)</label>
                   <input
+                    id={`comment-time-${asset.id}`}
+                    disabled={dataBusy}
+                    required
+                    min="0"
+                    max={duration > 0 ? duration : undefined}
+                    aria-invalid={!validTime(commentForm.time)}
+                    aria-describedby={`comment-time-help-${asset.id}`}
                     type="number"
-                    step="0.1"
-                    value={commentForm.time}
-                    onChange={e => setCommentForm(p => ({ ...p, time: parseFloat(e.target.value) || 0 }))}
+                    step="any"
+                    value={Number.isFinite(commentForm.time) ? commentForm.time : ''}
+                    onChange={e => setCommentForm(p => ({ ...p, time: e.target.valueAsNumber }))}
                     className="input text-sm"
                   />
+                  <p id={`comment-time-help-${asset.id}`} className="text-xs text-text-muted mt-1">{timeHelp}</p>
+                  <button type="button" disabled={!isReady || dataBusy} onClick={() => setCommentForm(p => ({ ...p, time: currentTime }))} className="text-xs text-accent-purple mt-1 hover:underline">Aktuelle Position übernehmen</button>
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={addTimedComment} className="btn-primary text-sm">Hinzufügen</button>
-                <button onClick={() => setShowCommentForm(false)} className="btn-secondary text-sm">Abbrechen</button>
+                <button type="submit" disabled={!canChangeData || !commentForm.text.trim() || !validTime(commentForm.time)} className="btn-primary text-sm">{pendingAction === 'add-comment' ? 'Speichert…' : 'Kommentar hinzufügen'}</button>
+                <button type="button" disabled={dataBusy} onClick={() => { setShowCommentForm(false); setCommentForm({ text: '', time: 0 }); editorRef.current?.focus(); }} className="btn-secondary text-sm">Abbrechen</button>
               </div>
-            </div>
+            </form>
           )}
 
           {/* Marker List */}
           <div className="bg-obsidian-900 border border-obsidian-600 rounded-xl overflow-hidden">
             <button
               onClick={() => setShowMarkerList(p => !p)}
+              aria-expanded={showMarkerList}
+              aria-controls={`marker-list-${asset.id}`}
               className="w-full flex items-center justify-between p-3 text-sm font-semibold text-text-primary hover:bg-obsidian-800 transition-colors"
             >
               <span className="flex items-center gap-2">
                 <Scissors size={14} className="text-accent-purple" />
-                Schnittmarken ({markers.length})
+                Marken &amp; Schnittliste ({markers.length})
               </span>
               {showMarkerList ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {showMarkerList && (
-              <div className="divide-y divide-obsidian-700">
-                {markers.length === 0 ? (
-                  <p className="text-xs text-text-muted p-3 text-center">Noch keine Marken gesetzt</p>
+              <div id={`marker-list-${asset.id}`} className="divide-y divide-obsidian-700">
+                {markers.length > 0 && (
+                  <div className="p-3 space-y-2">
+                    <div className="flex flex-wrap gap-3">
+                      <div className="flex-1 min-w-0">
+                        <label htmlFor={`marker-search-${asset.id}`} className="label text-xs">Marken suchen</label>
+                        <input id={`marker-search-${asset.id}`} type="search" value={markerSearch} onChange={event => setMarkerSearch(event.target.value)} placeholder="Bezeichnung oder Person…" className="input text-sm" />
+                      </div>
+                      <div>
+                        <label htmlFor={`marker-filter-${asset.id}`} className="label text-xs">Typ filtern</label>
+                        <select id={`marker-filter-${asset.id}`} value={markerTypeFilter} onChange={event => setMarkerTypeFilter(event.target.value)} className="select text-sm">
+                          <option value="all">Alle Typen</option>
+                          {MARKER_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <p className="text-xs text-text-muted">{visibleMarkers.length} von {markers.length} Marken · chronologisch · Exporte enthalten immer alle Einträge</p>
+                  </div>
+                )}
+                {isDataLoading ? (
+                  <p className="text-xs text-text-muted p-3 text-center">Marken werden geladen…</p>
+                ) : dataError ? (
+                  <p className="text-xs text-text-muted p-3 text-center">Liste nicht verfügbar. Bitte oben erneut laden.</p>
+                ) : markers.length === 0 ? (
+                  <div className="p-4 text-center space-y-2">
+                    <p className="text-xs text-text-muted">Noch keine Marken. Wähle eine Stelle in der Wellenform und setze eine Schnittmarke, ein Kapitel oder eine Start-/Endmarke.</p>
+                    <button onClick={openMarkerForm} disabled={!isReady || !canChangeData} className="btn-secondary text-xs">Erste Marke setzen</button>
+                  </div>
+                ) : visibleMarkers.length === 0 ? (
+                  <div className="p-4 text-center space-y-2">
+                    <p className="text-xs text-text-muted">Keine Marken für diese Suche oder diesen Typ.</p>
+                    <button onClick={() => { setMarkerSearch(''); setMarkerTypeFilter('all'); }} className="btn-secondary text-xs">Filter zurücksetzen</button>
+                  </div>
                 ) : (
-                  markers.sort((a, b) => a.time - b.time).map(m => {
+                  visibleMarkers.map(m => {
                     const typeInfo = MARKER_TYPES.find(t => t.value === m.type);
                     return (
                       <div key={m.id} className="flex items-center gap-3 p-3 hover:bg-obsidian-800 transition-colors group">
                         <span className="text-lg" style={{ color: m.color }}>{typeInfo?.icon || '|'}</span>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-text-primary truncate">{m.label || typeInfo?.label}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-medium text-text-primary break-words">{m.label || typeInfo?.label}</span>
                             <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: m.color + '20', color: m.color }}>{typeInfo?.label}</span>
                           </div>
                           <div className="flex items-center gap-1 text-xs text-text-muted mt-0.5">
                             <Clock size={10} />
-                            <span>{formatTime(m.time)}</span>
+                            <button onClick={() => seekToTime(m.time)} disabled={!isReady} aria-label={`Zur Marke ${m.label || typeInfo?.label} bei ${formatTime(m.time)} springen`} title="Zur Stelle springen, ohne Wiedergabe zu starten" className="text-accent-purple hover:underline disabled:opacity-40">{formatTime(m.time)}</button>
                             {m.userName && <span>· {m.userName}</span>}
                           </div>
                         </div>
                         <button
                           onClick={() => seekToTime(m.time)}
-                          className="p-1.5 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                          disabled={!isReady}
+                          aria-label={`Zur Marke ${m.label || typeInfo?.label} springen`}
+                          title="Zur Stelle springen"
+                          className="p-2 shrink-0 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10 rounded-lg disabled:opacity-40 transition-colors"
                         >
-                          <Play size={12} />
+                          <SkipForward size={14} />
                         </button>
                         <button
-                          onClick={() => deleteMarker(m.id)}
-                          className="p-1.5 text-text-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                          onClick={() => deleteMarker(m)}
+                          disabled={!canChangeData}
+                          aria-label={`Marke ${m.label || typeInfo?.label} löschen`}
+                          title="Marke löschen (mit Bestätigung)"
+                          className="p-2 shrink-0 text-text-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg disabled:opacity-40 transition-colors"
                         >
-                          <Trash2 size={12} />
+                          {pendingAction === `delete-marker-${m.id}` ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                         </button>
                       </div>
                     );
@@ -763,6 +1007,8 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
           <div className="bg-obsidian-900 border border-obsidian-600 rounded-xl overflow-hidden">
             <button
               onClick={() => setShowCommentList(p => !p)}
+              aria-expanded={showCommentList}
+              aria-controls={`comment-list-${asset.id}`}
               className="w-full flex items-center justify-between p-3 text-sm font-semibold text-text-primary hover:bg-obsidian-800 transition-colors"
             >
               <span className="flex items-center gap-2">
@@ -772,20 +1018,27 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
               {showCommentList ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {showCommentList && (
-              <div className="divide-y divide-obsidian-700">
-                {timedComments.length === 0 ? (
-                  <p className="text-xs text-text-muted p-3 text-center">Noch keine Kommentare</p>
+              <div id={`comment-list-${asset.id}`} className="divide-y divide-obsidian-700">
+                {isDataLoading ? (
+                  <p className="text-xs text-text-muted p-3 text-center">Kommentare werden geladen…</p>
+                ) : dataError ? (
+                  <p className="text-xs text-text-muted p-3 text-center">Liste nicht verfügbar. Bitte oben erneut laden.</p>
+                ) : timedComments.length === 0 ? (
+                  <div className="p-4 text-center space-y-2">
+                    <p className="text-xs text-text-muted">Noch keine Kommentare. Halte Hinweise für die Produktion direkt an der passenden Audiostelle fest.</p>
+                    <button onClick={openCommentForm} disabled={!isReady || !canChangeData} className="btn-secondary text-xs">Ersten Kommentar hinzufügen</button>
+                  </div>
                 ) : (
-                  timedComments.sort((a, b) => (a.time ?? 0) - (b.time ?? 0)).map(c => (
+                  [...timedComments].sort((a, b) => (a.time ?? 0) - (b.time ?? 0)).map(c => (
                     <div key={c.id} className="flex items-start gap-3 p-3 hover:bg-obsidian-800 transition-colors group">
                       <span className="text-accent-purple mt-0.5">💬</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-text-primary">{c.content || c.text}</p>
-                        <div className="flex items-center gap-2 text-xs text-text-muted mt-1">
+                        <p className="text-sm text-text-primary break-words whitespace-pre-wrap">{c.content || c.text}</p>
+                        <div className="flex items-center gap-2 flex-wrap text-xs text-text-muted mt-1">
                           {c.time != null && (
                             <>
                               <Clock size={10} />
-                              <span>{formatTime(c.time)}</span>
+                              <button onClick={() => seekToTime(c.time!)} disabled={!isReady} aria-label={`Zum Kommentar bei ${formatTime(c.time)} springen`} title="Zur Stelle springen, ohne Wiedergabe zu starten" className="text-accent-purple hover:underline disabled:opacity-40">{formatTime(c.time)}</button>
                               <span>·</span>
                             </>
                           )}
@@ -797,16 +1050,22 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
                       {c.time != null && (
                         <button
                           onClick={() => seekToTime(c.time!)}
-                          className="p-1.5 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                          disabled={!isReady}
+                          aria-label={`Zum Kommentar bei ${formatTime(c.time)} springen`}
+                          title="Zur Stelle springen"
+                          className="p-2 shrink-0 text-text-muted hover:text-accent-purple hover:bg-accent-purple/10 rounded-lg disabled:opacity-40 transition-colors"
                         >
-                          <Play size={12} />
+                          <SkipForward size={14} />
                         </button>
                       )}
                       <button
-                        onClick={() => deleteTimedComment(c.id)}
-                        className="p-1.5 text-text-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                        onClick={() => deleteTimedComment(c)}
+                        disabled={!canChangeData}
+                        aria-label={`Kommentar bei ${formatTime(c.time ?? 0)} löschen`}
+                        title="Kommentar löschen (mit Bestätigung)"
+                        className="p-2 shrink-0 text-text-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg disabled:opacity-40 transition-colors"
                       >
-                        <Trash2 size={12} />
+                        {pendingAction === `delete-comment-${c.id}` ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                       </button>
                     </div>
                   ))
@@ -814,6 +1073,23 @@ export default function AudioEditor({ asset, onClose, onSaved }: AudioEditorProp
               </div>
             )}
           </div>
+          <section aria-labelledby={`audio-export-title-${asset.id}`} className="bg-obsidian-900 border border-obsidian-600 rounded-xl p-4 space-y-3">
+            <div>
+              <h3 id={`audio-export-title-${asset.id}`} className="text-sm font-semibold text-text-primary">Schnittliste exportieren</h3>
+              <p className="text-xs text-text-muted mt-1">Alle {markers.length} Marken und {timedComments.length} Kommentare, chronologisch. Es wird keine bearbeitete Audiodatei erzeugt.</p>
+            </div>
+            <div role="group" aria-label="Exportformat wählen" className="flex flex-wrap gap-2">
+              <button onClick={exportCutListPdf} disabled={dataBusy || !!dataError} className="btn-secondary text-sm flex items-center gap-1.5" title="Marker und Kommentare als lesbare PDF-Schnittliste exportieren">
+                <Download size={14} /> Schnittliste (PDF)
+              </button>
+              <button onClick={exportAuditionMarkers} disabled={dataBusy || !!dataError} className="btn-secondary text-sm flex items-center gap-1.5" title="In Adobe Audition über Datei → Importieren → Marker aus Datei importieren">
+                <Download size={14} /> Audition-Marker (CSV)
+              </button>
+              <button onClick={exportEditDecisionList} disabled={dataBusy || !!dataError} className="btn-secondary text-sm flex items-center gap-1.5" title="Alle Marker und Kommentare als strukturierten JSON-Schnittplan exportieren">
+                <Download size={14} /> Schnittplan (JSON)
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     </div>

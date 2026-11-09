@@ -1,11 +1,13 @@
 # Offene Releasepunkte
 
+- [x] v2.16.54: Navigation nach Arbeitsbereichen gruppiert, Menüsuche und Direktlinks ergänzt, Sidebar-Identität stabilisiert, Episoden-Erstellung vereinfacht, Editor-Fokusmodus und sichere Speicher-/PDF-Aktionen umgesetzt sowie einfache Audioansicht tatsächlich in die Media Library eingebunden.
+- [x] v2.16.54: Ruhigere Karten-/Editorflächen und eigenständig kontrastierende Sidebarfarben umgesetzt; In-App-Wiki und Bedienanleitung aktualisiert; echte Browser-, Audio- und Exportprüfungen mit isolierten Testdaten ausgeführt.
 - [x] v2.16.53: Modal-Fokusfehler bei Texteingabe behoben, Theme-Initialisierung stabilisiert, Sidebar-Scrollposition erhalten und Tutorial-Fortsetzung bei Speicherfehlern verbessert; UX-Recherche dokumentiert.
 - [x] v2.16.52: UX- und Accessibility-Härtung mit kontraststarken Themes, globalem Tastaturfokus, Reduced Motion, Fokusmanagement für Dialoge/mobile Navigation, verständlicher Tutorial-Fehlerführung und stabileren Dashboard-Zuständen.
 - [x] v2.16.51: PHP2Shell-Betroffenheit bewertet, Node-/Express-Sicherheitskonfiguration gehärtet, CORS und Request-Limits eingeschränkt, Uploads begrenzt und Health-Endpunkt minimiert.
 - [x] v2.16.50: Helles Design bei Sprachumschaltung und Feldfokus stabilisiert, Grundpalette geschützt und dunkle Fallback-Flächen aus Eingabefeldern entfernt.
 - [x] v2.16.49: Individuelle Hell-/Dunkel-Auswahl pro Nutzer zugänglich gemacht, serverseitige Speicherung geprüft, Theme-Vorschau stabilisiert und Formulare an beide Farbschemata angepasst.
-- [ ] UX-Freigabe aus v2.16.49: Navigation gruppieren, Schnellschalter ergänzen, Aktionsleisten und leere Zustände vereinheitlichen sowie mobile Bereichsführung weiter verbessern.
+- [x] UX-Freigabe aus v2.16.49: Navigation gruppieren, Schnellschalter ergänzen, Aktionsleisten und leere Zustände vereinheitlichen sowie mobile Bereichsführung weiter verbessern (v2.16.52–v2.16.54).
 - [x] v2.16.36: Tutorialkarte per Portal unabhängig von App-Stacking-Kontexten sichtbar gerendert, auf Desktop und Mobilansicht geprüft sowie als bereinigtes Endnutzerpaket bereitgestellt.
 - [x] PodCore anhand der Beiträge zu professioneller Podcast-Produktion und effizientem Podcast-Workflow bewertet, fehlende Prozessschritte identifiziert und eine priorisierte Verbesserungsroadmap ausgearbeitet.
 - [x] v2.16.37: Aufnahmebereitschaft mit Studio-Profilen, Soundcheck und dokumentierter technischer Vorbereitung pro Episode umgesetzt.

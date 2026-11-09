@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, ArrowUp, ArrowDown, Save, Plus, Trash2, GripVertical, Mic2, Music, Megaphone,
   FileText, ChevronDown, ChevronUp, Calendar, Clock, Tag, Users, Loader2,
@@ -63,6 +63,18 @@ const TEXT_BLOCK_TYPE_OPTIONS: Array<{ value: EditorialTextBlock['type'] | 'all'
   { value: 'custom', label: 'Freier Baustein' },
 ];
 
+const EDITOR_TABS = [
+  { key: 'meta', label: 'Grunddaten', hint: 'Titel, Termine und Beteiligte', icon: <Tag size={16} /> },
+  { key: 'hub', label: 'Recherche & Ideen', hint: 'Ideen und Interviewfragen übernehmen', icon: <BookOpen size={16} /> },
+  { key: 'script', label: 'Skript', hint: 'Ablauf und Sprechertext bearbeiten', icon: <FileText size={16} /> },
+  { key: 'production', label: 'Produktion', hint: 'Notizen für Aufnahme und Schnitt', icon: <Wrench size={16} /> },
+  { key: 'technical', label: 'Technik', hint: 'Wiederkehrendes Aufnahme-Setup', icon: <Settings size={16} /> },
+  { key: 'ads', label: 'Werbung', hint: 'Werbeplätze und Buchungen', icon: <Megaphone size={16} /> },
+  { key: 'shownotes', label: 'Show-Notes', hint: 'Öffentliche Links und Beschreibung', icon: <StickyNote size={16} /> },
+  { key: 'workflow', label: 'Abnahme & Check', hint: 'Aufnahme, Audio und Veröffentlichung prüfen', icon: <ClipboardCheck size={16} /> },
+] as const;
+type EditorTab = typeof EDITOR_TABS[number]['key'];
+
 // ── Rich Text Toolbar ──────────────────────────────────────────────────────
 function RichTextToolbar({ targetRef }: { targetRef: React.RefObject<HTMLDivElement | null> }) {
   const exec = (cmd: string, value?: string) => {
@@ -98,6 +110,8 @@ function RichTextToolbar({ targetRef }: { targetRef: React.RefObject<HTMLDivElem
             key={i}
             type="button"
             title={btn.title}
+            aria-label={btn.title}
+            onClick={event => { if (event.detail === 0) exec(btn.cmd, (btn as any).value); }}
             onMouseDown={e => { e.preventDefault(); exec(btn.cmd, (btn as any).value); }}
             className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surface-raised transition-colors"
           >
@@ -141,6 +155,9 @@ function RichTextEditor({
         ref={editorRef}
         contentEditable={!disabled}
         suppressContentEditableWarning
+        role="textbox"
+        aria-multiline="true"
+        aria-label={placeholder || 'Text bearbeiten'}
         onInput={handleInput}
         onCompositionStart={() => { isComposing.current = true; }}
         onCompositionEnd={() => { isComposing.current = false; handleInput(); }}
@@ -155,17 +172,73 @@ function RichTextEditor({
 export default function EpisodeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { can, showSuccess, showError, user } = useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { can, showSuccess, showError, user, features } = useApp();
+  const visibleEditorTabs = EDITOR_TABS.filter(tab =>
+    (tab.key !== 'ads' || (can('canViewSponsors') && features.sponsoring)) &&
+    (tab.key !== 'hub' || (can('canViewIdeas') && features.editorial))
+  );
   const { otherUsers, locks, connectionStatus, lockMessage, beginEditing, isLockedByOther, getBlockCollaborators, clearLockMessage } = useEpisodeCollaboration(id, user?.id);
   const [episode, setEpisode] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [showPdfOptions, setShowPdfOptions] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const changeRevision = useRef(0);
+  const savingRef = useRef(false);
+  const saveHandlerRef = useRef<() => Promise<boolean>>(async () => false);
   const [workflowUpdatedAt, setWorkflowUpdatedAt] = useState<string | undefined>();
-  const [activeTab, setActiveTab] = useState<'script' | 'shownotes' | 'meta' | 'production' | 'workflow' | 'technical' | 'ads' | 'hub' | 'preview'>('script');
+  const [activeTab, setActiveTab] = useState<EditorTab | 'preview'>('script');
   const [expandedSideMenus, setExpandedSideMenus] = useState<{ [key: string]: boolean }>({ feedback: false, history: false });
   const [expandedMediaSections, setExpandedMediaSections] = useState<{ [key: string]: boolean }>({ media: false, audio: false });
+
+  const selectTab = (tab: EditorTab) => {
+    if (!visibleEditorTabs.some(item => item.key === tab)) return;
+    setActiveTab(tab);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tab);
+    setSearchParams(next, { replace: true });
+  };
+  const requestedTab = searchParams.get('tab');
+  useEffect(() => {
+    if (visibleEditorTabs.some(tab => tab.key === requestedTab)) setActiveTab(requestedTab as EditorTab);
+    else setActiveTab('script');
+  }, [id, requestedTab, features.sponsoring, features.editorial, can]);
+
+  useEffect(() => {
+    const saveShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      if (can('canEditEpisodes') && isDirty) void saveHandlerRef.current();
+    };
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    const guardLinkNavigation = (event: MouseEvent) => {
+      if (!isDirty || event.defaultPrevented || event.button !== 0) return;
+      const link = (event.target as Element)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!link || link.download || link.target === '_blank') return;
+      const destination = new URL(link.href, window.location.href);
+      if (destination.pathname === window.location.pathname) return;
+      if (!window.confirm('Es gibt ungespeicherte Episodenänderungen. Trotzdem verlassen?')) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    document.addEventListener('keydown', saveShortcut);
+    document.addEventListener('click', guardLinkNavigation, true);
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => {
+      document.removeEventListener('keydown', saveShortcut);
+      document.removeEventListener('click', guardLinkNavigation, true);
+      window.removeEventListener('beforeunload', warnBeforeUnload);
+    };
+  }, [isDirty, can]);
 
   // Redaktionshub-Tab States
   const [hubIdeas, setHubIdeas] = useState<any[]>([]);
@@ -805,7 +878,7 @@ export default function EpisodeDetailPage() {
       .finally(() => setIsLoading(false));
   }, [id]);
 
-  const markDirty = () => setIsDirty(true);
+  const markDirty = () => { changeRevision.current += 1; setIsDirty(true); };
 
   const handleImportFromHub = async (silent: boolean | unknown = false) => {
     const quiet = silent === true;
@@ -841,7 +914,7 @@ export default function EpisodeDetailPage() {
           : `${currentNotes.trim()}${currentNotes.trim() ? '\n\n---\n\n' : ''}${managedBlock}`;
         return { ...previous, notes: nextNotes };
       });
-      setIsDirty(true);
+      markDirty();
       setHubSyncState({ at: new Date().toISOString(), scope: 'full-sync' });
       if (!quiet) showSuccess('RedaktionsHub-Daten synchronisiert');
     } catch (err: any) { if (!quiet) showError(err.message); }
@@ -857,7 +930,8 @@ export default function EpisodeDetailPage() {
     const snapshot = result?.episode;
     if (snapshot?.updatedAt) setWorkflowUpdatedAt(snapshot.updatedAt);
     if (snapshot) setEpisode((previous: any) => ({ ...previous, ...snapshot }));
-    setIsDirty(false);
+    // Ein gespeichertes Metadatenfeld darf ungespeicherte Skript-/Technik-
+    // Änderungen nicht als gespeichert markieren. Gesamtspeichern bestätigt alles.
   };
 
   useEffect(() => {
@@ -920,8 +994,11 @@ export default function EpisodeDetailPage() {
     showSuccess('Technikwerte auf den globalen Standard zurückgesetzt');
   };
 
-  const handleSave = async () => {
-    if (!id) return;
+  const handleSave = async (): Promise<boolean> => {
+    if (!id || savingRef.current || !can('canEditEpisodes')) return false;
+    if (!String(form.title || '').trim()) { showError('Bitte einen Episodentitel eingeben.'); return false; }
+    const revisionAtStart = changeRevision.current;
+    savingRef.current = true;
     setIsSaving(true);
     try {
       const updated = await episodesApi.update(id, {
@@ -938,15 +1015,18 @@ export default function EpisodeDetailPage() {
       setEpisode(updated);
       setWorkflowUpdatedAt(updated.updatedAt);
       setScriptReady(updated.scriptReady || false);
-      setIsDirty(false);
+      if (changeRevision.current === revisionAtStart) setIsDirty(false);
+      setLastSavedAt(new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }));
       showSuccess('Episode gespeichert');
-    } catch (err: any) { showError(err.message); }
-    finally { setIsSaving(false); }
+      return true;
+    } catch (err: any) { showError(err.message); return false; }
+    finally { savingRef.current = false; setIsSaving(false); }
   };
+  saveHandlerRef.current = handleSave;
 
   const handleExportPdf = async () => {
     if (!id) return;
-    if (isDirty) await handleSave();
+    if (isDirty && !(await handleSave())) return;
     setIsExporting(true);
     try {
       const params = new URLSearchParams();
@@ -1131,6 +1211,7 @@ export default function EpisodeDetailPage() {
 
   const handleToggleScriptReady = async () => {
     if (!id) return;
+    if (isDirty && !(await handleSave())) return;
     setIsTogglingScriptReady(true);
     try {
       const newVal = !scriptReady;
@@ -1179,7 +1260,7 @@ export default function EpisodeDetailPage() {
       content: b.content !== undefined ? b.content : '',
     }));
     setBlocks(newBlocks);
-    setIsDirty(true);
+    markDirty();
     setShowTemplateLoadModal(false);
     showSuccess(`Vorlage "${template.name}" geladen (${blockCount} Blöcke)`);
   };
@@ -1215,12 +1296,13 @@ export default function EpisodeDetailPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-20">
+    <div className={`episode-workspace space-y-5 pb-20 ${focusMode ? 'episode-focus' : ''}`}>
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="editor-actionbar flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
             onClick={() => {
+              if (isDirty && !window.confirm('Ungespeicherte Episodenänderungen verwerfen und zurückgehen?')) return;
               if (linkedPlanItemId) {
                 const params = new URLSearchParams();
                 params.set('tab', 'season-planning');
@@ -1230,6 +1312,7 @@ export default function EpisodeDetailPage() {
                 navigate('/episodes');
               }
             }}
+            aria-label="Zurück zur Episodenübersicht oder Planung"
             className="p-2 hover:bg-obsidian-800 rounded-lg text-text-muted transition-colors"
           >
             <ArrowLeft size={20} />
@@ -1238,15 +1321,19 @@ export default function EpisodeDetailPage() {
             <h1 className="text-2xl font-bold text-text-primary flex items-center gap-3">
               {episode.number ? `#${episode.number}` : 'Neu'} — {form.title || 'Unbenannte Episode'}
             </h1>
-            <div className="flex items-center gap-3 mt-1">
+            <div className="flex flex-wrap items-center gap-3 mt-1" role="status">
               <span className={`badge text-xs ${statusInfo.color}`}>{statusInfo.label}</span>
               <span className="text-text-muted text-xs flex items-center gap-1"><Clock size={12} /> {formatTime(totalDuration)} gesamt</span>
               {scriptReady && <span className="text-accent-green text-xs flex items-center gap-1"><CheckSquare size={12} /> Script fertig</span>}
               {isDirty && <span className="text-accent-orange text-xs">● Ungespeicherte Änderungen</span>}
+              {!isDirty && lastSavedAt && <span className="text-text-muted text-xs">Gespeichert um {lastSavedAt}</span>}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button type="button" aria-pressed={focusMode} onClick={() => setFocusMode(previous => !previous)} className="btn-secondary text-sm" title="Zusatzinformationen ausblenden und mehr Platz zum Schreiben schaffen">
+            <FileEdit size={16} /> {focusMode ? 'Normalansicht' : 'Fokusmodus'}
+          </button>
           {can('canManageTrash') && (
             <button onClick={() => navigate('/admin?tab=trash&type=episode')} className="btn-secondary" title="Gelöschte Episoden anzeigen und – mit entsprechender Berechtigung – wiederherstellen">
               <Trash2 size={16} />
@@ -1254,37 +1341,7 @@ export default function EpisodeDetailPage() {
             </button>
           )}
           {can('canViewEpisodes') && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <input
-                type="text"
-                value={pdfDocTitle}
-                onChange={e => setPdfDocTitle(e.target.value)}
-                placeholder="Dokumententitel (z.B. Episoden-Script)"
-                className="input text-xs w-52"
-                title="Dokumententitel im PDF (oben links unter dem Podcast-Namen)"
-              />
-              <input
-                type="text"
-                value={pdfFileName}
-                onChange={e => setPdfFileName(e.target.value)}
-                placeholder={`episode-${episode?.number || id}.pdf`}
-                className="input text-xs w-44"
-                title="Eigener Dateiname für den PDF-Export"
-              />
-              <PdfLayoutPicker exportType="episode" value={pdfLayoutId} onChange={setPdfLayoutId} />
-              <label className="flex items-center gap-1 text-xs text-text-muted cursor-pointer" title="Klassisches Abschnitts-Layout statt Tabellen-Skript-Layout">
-                <input type="checkbox" checked={useClassicLayout} onChange={e => setUseClassicLayout(e.target.checked)} className="w-3 h-3" />
-                Klassisch
-              </label>
-              <label className="flex items-center gap-1 text-xs text-text-muted cursor-pointer" title="Leere Notizseite am Ende des PDFs anfügen">
-                <input type="checkbox" checked={addNotesPage} onChange={e => setAddNotesPage(e.target.checked)} className="w-3 h-3" />
-                + Notizseite
-              </label>
-              <button onClick={handleExportPdf} disabled={isExporting} className="btn-secondary">
-                {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                <span>PDF Export</span>
-              </button>
-            </div>
+            <button type="button" onClick={() => setShowPdfOptions(true)} className="btn-secondary"><Download size={16} /> PDF exportieren</button>
           )}
           {can('canEditEpisodes') && (
             <>
@@ -1297,7 +1354,7 @@ export default function EpisodeDetailPage() {
                 {isTogglingScriptReady ? <Loader2 size={16} className="animate-spin" /> : scriptReady ? <CheckSquare size={16} /> : <Square size={16} />}
                 <span className="hidden sm:inline">{scriptReady ? 'Script fertig' : 'Script fertig?'}</span>
               </button>
-              <button onClick={handleSave} disabled={isSaving || !isDirty} className="btn-primary">
+              <button onClick={handleSave} disabled={isSaving || !isDirty} className="btn-primary" title="Gesamte Episode speichern (Strg / ⌘ + S)">
                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 <span>Speichern</span>
               </button>
@@ -1331,30 +1388,33 @@ export default function EpisodeDetailPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-obsidian-800 p-1 rounded-lg w-fit flex-wrap">
-        {[
-          { key: 'script', label: 'Script', icon: <FileText size={16} /> },
-          { key: 'shownotes', label: 'Show-Notes', icon: <StickyNote size={16} /> },
-          { key: 'meta', label: 'Metadaten', icon: <Tag size={16} /> },
-          { key: 'production', label: 'Produktion', icon: <Wrench size={16} /> },
-          { key: 'workflow', label: 'Qualitätsgate', icon: <ClipboardCheck size={16} /> },
-          { key: 'technical', label: 'Technik', icon: <Settings size={16} /> },
-          { key: 'ads', label: 'Werbung', icon: <Megaphone size={16} /> },
-          { key: 'hub', label: 'Redaktionshub', icon: <BookOpen size={16} /> },
-        ].map(tab => (
+      <nav aria-label="Episoden-Arbeitsbereiche" className="editor-tabs flex gap-1 p-1 rounded-xl flex-wrap">
+        {visibleEditorTabs.map(tab => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key as any)}
+            type="button"
+            data-tutorial-id={`episode-tab-${tab.key}`}
+            aria-current={activeTab === tab.key ? 'page' : undefined}
+            title={tab.hint}
+            onClick={() => selectTab(tab.key)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === tab.key ? 'bg-accent-purple text-white' : 'text-text-secondary hover:text-text-primary'}`}
           >
             {tab.icon} {tab.label}
           </button>
         ))}
+      </nav>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <p className="text-sm text-text-muted">{EDITOR_TABS.find(tab => tab.key === activeTab)?.hint}</p>
+        <div className="flex gap-2">
+          {activeTab === 'hub' && <button type="button" onClick={() => selectTab('script')} className="btn-ghost text-sm">Weiter zum Skript</button>}
+          {activeTab === 'script' && <button type="button" onClick={() => selectTab('production')} className="btn-ghost text-sm">Weiter zur Produktion</button>}
+          {['production', 'technical', 'shownotes'].includes(activeTab) && <button type="button" onClick={() => selectTab('workflow')} className="btn-ghost text-sm"><ClipboardCheck size={15} /> Abnahme öffnen</button>}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 gap-5 ${focusMode ? '' : 'lg:grid-cols-3'}`}>
         {/* Left: Main Content */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className={`min-w-0 space-y-4 ${focusMode ? '' : 'lg:col-span-2'}`}>
           {activeTab === 'script' && (
             <div className="card">
               <div className="mb-4 rounded-lg border border-accent-purple/20 bg-accent-purple/5 px-3 py-2.5">
@@ -1375,13 +1435,15 @@ export default function EpisodeDetailPage() {
                   </button>
                 )}
               </div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-text-primary">Episode-Script (Pro)</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 className="font-semibold text-text-primary">Episoden-Skript</h2>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {BLOCK_TYPES.filter(bt => !bt.legacy).map(bt => (
-                    <button key={bt.value} onClick={() => addBlock(bt.value)} className={`text-xs px-2 py-1 rounded-md ${bt.bg} ${bt.color} hover:opacity-80 transition-opacity`}>+ {bt.label}</button>
-                  ))}
-                  <div className="w-px h-4 bg-surface-border mx-1" />
+                  {can('canEditEpisodes') && <>
+                  <label className="sr-only" htmlFor="episode-add-block">Skriptblock hinzufügen</label>
+                  <select id="episode-add-block" className="input input-compact" value="" onChange={event => { if (event.target.value) addBlock(event.target.value); }}>
+                    <option value="">+ Block hinzufügen …</option>
+                    {BLOCK_TYPES.filter(bt => !bt.legacy).map(bt => <option key={bt.value} value={bt.value}>{bt.label}</option>)}
+                  </select>
                   <button
                     onClick={() => { setShowTemplateSaveModal(true); }}
                     className="text-xs px-2 py-1 rounded-md bg-accent-purple/20 text-accent-purple hover:bg-accent-purple/30 transition-colors flex items-center gap-1"
@@ -1391,11 +1453,12 @@ export default function EpisodeDetailPage() {
                   </button>
                   <button
                     onClick={() => { handleLoadTemplates(); setShowTemplateLoadModal(true); }}
-                    className="text-xs px-2 py-1 rounded-md bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors flex items-center gap-1"
+                    className="text-xs px-2 py-1 rounded-md bg-surface-raised text-text-secondary hover:bg-surface-overlay transition-colors flex items-center gap-1"
                     title="Vorlage laden"
                   >
                     <FolderOpen size={11} /> Vorlage laden
                   </button>
+                  </>}
                 </div>
               </div>
 
@@ -1416,6 +1479,13 @@ export default function EpisodeDetailPage() {
                   )}
                 </div>
               )}
+
+              {blocks.length === 0 && <div className="rounded-xl border border-dashed border-surface-border bg-obsidian-800 p-6 text-center mb-4">
+                <FileText size={26} className="mx-auto mb-2 text-text-muted" />
+                <h3 className="font-semibold text-text-primary">Dein Ablauf beginnt hier</h3>
+                <p className="my-2 text-sm text-text-secondary">Starte mit einem Intro, übernimm eine Vorlage oder wähle Interviewfragen aus der Recherche.</p>
+                {can('canEditEpisodes') && <button type="button" onClick={() => addBlock('intro')} className="btn-primary text-sm"><Plus size={15} /> Intro hinzufügen</button>}
+              </div>}
 
               {/* Block-Steuerung: Alle auf-/zuklappen */}
               {blocks.length > 1 && (
@@ -1447,13 +1517,14 @@ export default function EpisodeDetailPage() {
                   const isCollapsed = !!collapsedBlocks[block.id];
                   const wordCount = getSpeakerWordCount(block.content || '');
                   const dirCount = getDirectionCount(block.content || '');
-                  const blockLocked = isLockedByOther(block.id);
+                  const collaboratorLocked = isLockedByOther(block.id);
+                  const blockLocked = !can('canEditEpisodes') || collaboratorLocked;
                   const blockEditors = getBlockCollaborators(block.id);
                   return (
                     <div key={block.id} className={`border rounded-xl overflow-hidden group transition-all ${blockLocked ? 'border-accent-orange/50 shadow-[0_0_0_1px_rgba(249,115,22,0.12)]' : (isCollapsed ? 'border-surface-border/60' : 'border-surface-border')}`}>
                       {/* Block-Header */}
                       <div className={`flex items-center gap-3 px-4 py-3 ${bt.bg} ${isCollapsed ? 'rounded-xl' : ''}`}>
-                        <GripVertical size={14} className="text-text-muted cursor-grab shrink-0" />
+                        <span className="text-text-muted text-xs shrink-0" title="Reihenfolge im Skript">{idx + 1}.</span>
                         <span className={`text-[10px] font-bold uppercase tracking-wider ${bt.color} px-1.5 py-0.5 rounded bg-black/20 shrink-0`}>{bt.label}</span>
                         <input
                           type="text"
@@ -1469,7 +1540,7 @@ export default function EpisodeDetailPage() {
                             {blockEditors.slice(0, 3).map(collaborator => <span key={collaborator.userId} className="inline-flex items-center gap-1 rounded-full bg-accent-purple/15 px-1.5 py-0.5 text-[10px] text-accent-purple"><span className="h-1.5 w-1.5 rounded-full bg-accent-purple" />{collaborator.displayName}</span>)}
                           </div>
                         )}
-                        {blockLocked && <span className="inline-flex items-center gap-1 rounded-full bg-accent-orange/15 px-1.5 py-0.5 text-[10px] text-accent-orange" title={`Gesperrt von ${locks[block.id]?.displayName || 'anderem Nutzer'}`}><Lock size={10} /> {locks[block.id]?.displayName || 'in Bearbeitung'}</span>}
+                        {collaboratorLocked && <span className="inline-flex items-center gap-1 rounded-full bg-accent-orange/15 px-1.5 py-0.5 text-[10px] text-accent-orange" title={`Gesperrt von ${locks[block.id]?.displayName || 'anderem Nutzer'}`}><Lock size={10} /> {locks[block.id]?.displayName || 'in Bearbeitung'}</span>}
                         {/* Wort-/Regieanweisungs-Info (nur wenn nicht collapsed) */}
                         {!isCollapsed && block.content && (
                           <div className="flex items-center gap-2 shrink-0">
@@ -1850,27 +1921,27 @@ export default function EpisodeDetailPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <EditableField episodeId={id} field="title" label="Titel *" value={form.title} onChange={value => updateForm('title', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} validate={value => !String(value || '').trim() ? 'Titel darf nicht leer sein.' : String(value).length > 240 ? 'Maximal 240 Zeichen.' : null} />
-                <EditableField episodeId={id} field="number" label="Nummer" value={form.number} onChange={value => updateForm('number', value ?? '')} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="number" validate={value => value !== null && Number(value) < 0 ? 'Nummer muss positiv sein.' : null} />
+                <EditableField disabled={!can('canEditEpisodes')} episodeId={id} field="title" label="Titel *" value={form.title} onChange={value => updateForm('title', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} validate={value => !String(value || '').trim() ? 'Titel darf nicht leer sein.' : String(value).length > 240 ? 'Maximal 240 Zeichen.' : null} />
+                <EditableField disabled={!can('canEditEpisodes')} episodeId={id} field="number" label="Nummer" value={form.number} onChange={value => updateForm('number', value ?? '')} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="number" validate={value => value !== null && Number(value) < 0 ? 'Nummer muss positiv sein.' : null} />
               </div>
 
-              <EditableField episodeId={id} field="status" label="Status" value={form.status} onChange={value => updateForm('status', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="select" options={STATUS_OPTIONS.map(option => ({ value: option.value, label: option.label }))} />
-              <EditableField episodeId={id} field="subtitle" label="Untertitel" value={form.subtitle} onChange={value => updateForm('subtitle', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} placeholder="Optionaler Untertitel" />
-              <EditableField episodeId={id} field="description" label="Beschreibung (Markdown)" value={form.description} onChange={value => updateForm('description', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="textarea" rows={7} placeholder="Markdown-Beschreibung der Episode…" />
+              <EditableField disabled={!can('canEditEpisodes')} episodeId={id} field="status" label="Status" value={form.status} onChange={value => updateForm('status', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="select" options={STATUS_OPTIONS.map(option => ({ value: option.value, label: option.label }))} />
+              <EditableField disabled={!can('canEditEpisodes')} episodeId={id} field="subtitle" label="Untertitel" value={form.subtitle} onChange={value => updateForm('subtitle', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} placeholder="Optionaler Untertitel" />
+              <EditableField disabled={!can('canEditEpisodes')} episodeId={id} field="description" label="Beschreibung (Markdown)" value={form.description} onChange={value => updateForm('description', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="textarea" rows={7} placeholder="Markdown-Beschreibung der Episode…" />
 
               <div className="rounded-lg border border-surface-border bg-obsidian-800/40 p-3">
                 <div className="mb-3 flex items-center gap-2"><Calendar size={14} className="text-accent-purple" /><span className="text-sm font-medium text-text-primary">Zeitplanung</span></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <EditableField episodeId={id} field="plannedDate" label="Vorplanung" value={form.plannedDate} onChange={value => updateForm('plannedDate', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="date" />
-                  <EditableField episodeId={id} field="recordingDate" label="Aufnahme" value={form.recordingDate} onChange={value => updateForm('recordingDate', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="date" />
-                  <EditableField episodeId={id} field="publishDate" label="Veröffentlichung" value={form.publishDate} onChange={value => updateForm('publishDate', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="date" />
+                  <EditableField disabled={!can('canEditEpisodes')} episodeId={id} field="plannedDate" label="Vorplanung" value={form.plannedDate} onChange={value => updateForm('plannedDate', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="date" />
+                  <EditableField disabled={!can('canEditEpisodes')} episodeId={id} field="recordingDate" label="Aufnahme" value={form.recordingDate} onChange={value => updateForm('recordingDate', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="date" />
+                  <EditableField disabled={!can('canEditEpisodes')} episodeId={id} field="publishDate" label="Veröffentlichung" value={form.publishDate} onChange={value => updateForm('publishDate', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} inputKind="date" />
                 </div>
                 {form.plannedDate && <p className={`mt-2 flex items-center gap-1 text-xs ${['aufnahme', 'produktion', 'geplant', 'veroeffentlicht'].includes(form.status) ? 'text-accent-green' : 'text-text-muted'}`}><Info size={11} /> {['aufnahme', 'produktion', 'geplant', 'veroeffentlicht'].includes(form.status) ? 'Vorplanung aktiv; Aufnahme und Veröffentlichung gelten als verbindlich.' : 'Vorplanung wird ab dem Status Aufnahme verbindlich.'}</p>}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <EditableField episodeId={id} field="hosts" label="Hosts" value={form.hosts} onChange={value => updateForm('hosts', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} placeholder="Name 1, Name 2" toApiValue={value => String(value || '').split(',').map(item => item.trim()).filter(Boolean)} />
-                <EditableField episodeId={id} field="guests" label="Gäste" value={form.guests} onChange={value => updateForm('guests', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} placeholder="Gast 1, Gast 2" toApiValue={value => String(value || '').split(',').map(item => item.trim()).filter(Boolean)} />
+                <EditableField disabled={!can('canEditEpisodes')} episodeId={id} field="hosts" label="Hosts" value={form.hosts} onChange={value => updateForm('hosts', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} placeholder="Name 1, Name 2" toApiValue={value => String(value || '').split(',').map(item => item.trim()).filter(Boolean)} />
+                <EditableField disabled={!can('canEditEpisodes')} episodeId={id} field="guests" label="Gäste" value={form.guests} onChange={value => updateForm('guests', value)} onSaved={handleInlineSaved} expectedUpdatedAt={workflowUpdatedAt} placeholder="Gast 1, Gast 2" toApiValue={value => String(value || '').split(',').map(item => item.trim()).filter(Boolean)} />
               </div>
             </div>
           )}
@@ -1905,7 +1976,7 @@ export default function EpisodeDetailPage() {
           {activeTab === 'production' && (
             <div className="card space-y-4">
               <h2 className="font-semibold text-text-primary">Produktion</h2>
-              <RichTextEditor value={productionInfo} onChange={html => { setProductionInfo(html); markDirty(); }} minHeight={300} placeholder="Anweisungen für den Cutter..." />
+              <RichTextEditor value={productionInfo} disabled={!can('canEditEpisodes')} onChange={html => { setProductionInfo(html); markDirty(); }} minHeight={300} placeholder="Anweisungen für den Cutter..." />
             </div>
           )}
 
@@ -2386,7 +2457,7 @@ export default function EpisodeDetailPage() {
         </div>
 
         {/* Right: Sidebar / Split-View */}
-        {activeTab !== 'preview' && (
+        {!focusMode && activeTab !== 'preview' && (
         <div className="space-y-4">
           {id && (
             <section className="card p-0 overflow-hidden">
@@ -3136,14 +3207,26 @@ export default function EpisodeDetailPage() {
         </div>
       </Modal>
 
+      <Modal isOpen={showPdfOptions} onClose={() => setShowPdfOptions(false)} title="Episoden-Skript als PDF exportieren">
+        <div className="space-y-4">
+          <p className="text-sm text-text-secondary">Wähle ein Layout und passe den Export bei Bedarf an. Ungespeicherte Änderungen werden vor dem Export gespeichert; bei einem Speicherfehler wird kein veraltetes PDF erzeugt.</p>
+          <div><label htmlFor="pdf-document-title" className="label">Dokumententitel (optional)</label><input id="pdf-document-title" value={pdfDocTitle} onChange={event => setPdfDocTitle(event.target.value)} placeholder="Episoden-Skript" className="input" /></div>
+          <div><label htmlFor="pdf-file-name" className="label">Dateiname (optional)</label><input id="pdf-file-name" value={pdfFileName} onChange={event => setPdfFileName(event.target.value)} placeholder={`episode-${episode?.number || id}.pdf`} className="input" /></div>
+          <div><span className="label">PDF-Layout</span><PdfLayoutPicker exportType="episode" value={pdfLayoutId} onChange={setPdfLayoutId} /></div>
+          <label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={useClassicLayout} onChange={event => setUseClassicLayout(event.target.checked)} /> Klassisches Abschnitts-Layout</label>
+          <label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={addNotesPage} onChange={event => setAddNotesPage(event.target.checked)} /> Leere Notizseite anfügen</label>
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => setShowPdfOptions(false)} className="btn-secondary">Schließen</button><button type="button" onClick={handleExportPdf} disabled={isExporting || isSaving} className="btn-primary">{isExporting || isSaving ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} PDF herunterladen</button></div>
+        </div>
+      </Modal>
+
       {/* Vorlage speichern Modal */}
       <Modal isOpen={showTemplateSaveModal} onClose={() => setShowTemplateSaveModal(false)} title="Vorlage speichern">
         <div className="space-y-4">
-          <p className="text-sm text-gray-400">Aktuelle Blöcke ({blocks.length}) als wiederverwendbare Vorlage speichern.</p>
+          <p className="text-sm text-text-secondary">Aktuelle Blöcke ({blocks.length}) als wiederverwendbare Vorlage speichern.</p>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Name der Vorlage *</label>
+            <label className="block text-sm font-medium text-text-secondary mb-1">Name der Vorlage *</label>
             <input
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500"
+              className="w-full px-3 py-2 bg-obsidian-800 border border-surface-border text-text-primary rounded-lg focus:outline-none"
               value={templateName}
               onChange={e => setTemplateName(e.target.value)}
               placeholder="z.B. Standard-Interview, Soloepisode, News-Format"
@@ -3151,9 +3234,9 @@ export default function EpisodeDetailPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Beschreibung (optional)</label>
+            <label className="block text-sm font-medium text-text-secondary mb-1">Beschreibung (optional)</label>
             <textarea
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-purple-500"
+              className="w-full px-3 py-2 bg-obsidian-800 border border-surface-border text-text-primary rounded-lg focus:outline-none"
               rows={2}
               value={templateDescription}
               onChange={e => setTemplateDescription(e.target.value)}
@@ -3177,11 +3260,11 @@ export default function EpisodeDetailPage() {
       {/* Vorlage laden Modal */}
       <Modal isOpen={showTemplateLoadModal} onClose={() => setShowTemplateLoadModal(false)} title="Vorlage laden">
         <div className="space-y-3">
-          <p className="text-sm text-gray-400">Vorlage auswählen – aktuelle Blöcke werden ersetzt.</p>
+          <p className="text-sm text-text-secondary">Vorlage auswählen – aktuelle Blöcke werden ersetzt.</p>
           {isLoadingTemplates ? (
-            <div className="flex items-center justify-center py-8"><Loader2 size={24} className="animate-spin text-purple-400" /></div>
+            <div className="flex items-center justify-center py-8"><Loader2 size={24} className="animate-spin text-accent-purple" /></div>
           ) : templates.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-text-muted">
               <FolderOpen size={32} className="mx-auto mb-2 opacity-40" />
               <p className="text-sm">Noch keine Vorlagen gespeichert.</p>
               <p className="text-xs mt-1">Erstelle eine Vorlage über "Vorlage speichern".</p>
@@ -3189,11 +3272,11 @@ export default function EpisodeDetailPage() {
           ) : (
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {templates.map(t => (
-                <div key={t.id} className="flex items-start justify-between p-3 bg-gray-800 border border-gray-700 rounded-lg hover:border-purple-500/50 transition-colors">
+                <div key={t.id} className="flex items-start justify-between p-3 bg-obsidian-800 border border-surface-border rounded-lg hover:border-accent-purple/50 transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-white text-sm">{t.name}</p>
-                    {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
-                    <p className="text-xs text-gray-500 mt-1">{(t.blocks || []).length} Blöcke • {new Date(t.createdAt || t.created_at).toLocaleDateString('de-DE')}</p>
+                    <p className="font-medium text-text-primary text-sm">{t.name}</p>
+                    {t.description && <p className="text-xs text-text-secondary mt-0.5">{t.description}</p>}
+                    <p className="text-xs text-text-muted mt-1">{(t.blocks || []).length} Blöcke • {new Date(t.createdAt || t.created_at).toLocaleDateString('de-DE')}</p>
                   </div>
                   <div className="flex items-center gap-1 ml-3">
                     <button
@@ -3204,7 +3287,7 @@ export default function EpisodeDetailPage() {
                     </button>
                     <button
                       onClick={() => handleDeleteTemplate(t.id)}
-                      className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors"
+                      className="p-1.5 text-text-muted hover:text-red-400 hover:bg-red-900/20 rounded transition-colors"
                       title="Vorlage löschen"
                     >
                       <Trash2 size={13} />

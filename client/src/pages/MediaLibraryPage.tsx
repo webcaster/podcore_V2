@@ -62,6 +62,7 @@ export default function MediaLibraryPage() {
 
   // Audio-Editor Tab State
   const [editorAsset, setEditorAsset] = useState<any>(null);
+  const [editorView, setEditorView] = useState<'simple' | 'advanced'>('simple');
   const [editorSearch, setEditorSearch] = useState('');
   const [editorAssets, setEditorAssets] = useState<any[]>([]);
   const [isLoadingEditorAssets, setIsLoadingEditorAssets] = useState(false);
@@ -843,11 +844,22 @@ export default function MediaLibraryPage() {
                 </button>
               </div>
 
-              {/* AudioEditor-Komponente (inline, ohne Modal-Wrapper) */}
-              <AudioEditorInline
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-text-muted">{editorView === 'simple' ? 'Anhören, kommentieren und Schnittliste vorbereiten.' : 'Erweiterte Ansicht: Regions, Loops und DAW-Exporte.'}</p>
+                <button type="button" onClick={() => {
+                  if (!window.confirm('Ansicht wechseln? Noch nicht hinzugefügte Eingaben oder nicht gespeicherte Regions werden verworfen.')) return;
+                  setEditorView(current => current === 'simple' ? 'advanced' : 'simple');
+                }} className="btn-secondary text-xs">{editorView === 'simple' ? 'Regions & DAW-Exporte' : 'Einfache Arbeitsansicht'}</button>
+              </div>
+              {editorView === 'simple' ? <AudioEditor key={editorAsset.id}
+                embedded
+                asset={editorAsset}
+                onClose={() => setEditorAsset(null)}
+                onSaved={() => { load(); }}
+              /> : <AudioEditorInline
                 asset={editorAsset}
                 onSaved={() => { showSuccess('Änderungen gespeichert'); load(); }}
-              />
+              />}
             </div>
           ) : (
             /* Asset-Auswahl für den Editor */
@@ -1527,7 +1539,12 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
     wsRef.current = ws;
 
     const url = mApi.getStreamUrl(asset.filename);
-    ws.load(url);
+    let disposed = false;
+    void ws.load(url).catch(error => {
+      if (disposed || error?.name === 'AbortError') return;
+      setLoadError(`Fehler beim Laden: ${error?.message || error}`);
+      setIsLoading(false);
+    });
 
     ws.on('ready', () => {
       setIsReady(true);
@@ -1600,7 +1617,7 @@ function AudioEditorEmbedded({ asset, onSaved }: { asset: any; onSaved?: () => v
     ws.on('pause', () => setIsPlaying(false));
     ws.on('error', (e: any) => { setLoadError(`Fehler beim Laden: ${e}`); setIsLoading(false); });
 
-    return () => { ws.destroy(); };
+    return () => { disposed = true; ws.destroy(); wsRef.current = null; };
   }, [asset.id, asset.filename]);
 
   const seekToTime = (t: number) => { wsRef.current?.seekTo(t / (wsRef.current.getDuration() || 1)); };

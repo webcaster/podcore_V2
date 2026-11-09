@@ -430,7 +430,7 @@ export function applyUserTheme(theme: UserTheme | null | undefined, forceModeEve
     // Die Obsidian- und Surface-Werte gehören zur aktiven Grundpalette aus
     // ThemeContext. Sie dürfen beim Anwenden eines Nutzerprofils nicht entfernt
     // werden, sonst fallen helle Karten und Felder auf dunkle Fallbacks zurück.
-    ['--color-accent-primary', '--color-accent-primary-light', '--color-accent-primary-dark', '--color-text-accent', '--color-sidebar-bg', '--color-sidebar-border', '--font-scale']
+    ['--color-accent-primary', '--color-accent-primary-light', '--color-accent-primary-dark', '--color-text-accent', '--color-sidebar-bg', '--color-sidebar-border', '--color-sidebar-text-primary', '--color-sidebar-text-secondary', '--color-sidebar-text-muted', '--color-sidebar-hover', '--font-scale']
       .forEach(variable => root.style.removeProperty(variable));
   };
 
@@ -448,6 +448,16 @@ export function applyUserTheme(theme: UserTheme | null | undefined, forceModeEve
   root.style.setProperty('--color-accent-primary-dark', isValidThemeHex(theme.accentColorDark) ? theme.accentColorDark : darkenColor(accentColor, 20));
   root.style.setProperty('--color-text-accent', lightenColor(accentColor, 30));
   root.style.setProperty('--color-sidebar-bg', sidebarColor);
+  const expandedSidebarHex = sidebarColor.length === 4 ? '#' + sidebarColor.slice(1).split('').map(char => char + char).join('') : sidebarColor;
+  const sidebarRgb = hexToRgb(expandedSidebarHex) || [20, 20, 32];
+  const linearRgb = sidebarRgb.map(value => { const s = value / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; });
+  const sidebarLuminance = 0.2126 * linearRgb[0] + 0.7152 * linearRgb[1] + 0.0722 * linearRgb[2];
+  const lightSidebar = sidebarLuminance > 0.35;
+  root.style.setProperty('--color-sidebar-text-primary', lightSidebar ? '#111827' : '#f1f5f9');
+  root.style.setProperty('--color-sidebar-text-secondary', lightSidebar ? '#374151' : '#d1d5db');
+  root.style.setProperty('--color-sidebar-text-muted', lightSidebar ? '#4b5563' : '#b8c0cc');
+  root.style.setProperty('--color-sidebar-hover', lightSidebar ? '#e5e7eb' : '#252a36');
+  root.style.setProperty('--color-sidebar-border', lightSidebar ? '#cbd5e1' : '#3d4654');
   root.style.setProperty('--font-scale', String(fontScale));
 
   if (theme.mode === 'light' || theme.mode === 'dark') {

@@ -1,5 +1,17 @@
 # PodCore – Release Notes
 
+## v2.16.54 – kürzere Arbeitswege und ruhigeres UI
+
+Navigation: Eine Ebene aufklappbarer Arbeitsgruppen, Suche über zugängliche Menüs per Strg/⌘+K, eindeutiger aktiver Menüpunkt und stabile Sidebar-Komponentenidentität statt Remount bei Layout-Updates. Der Inhaltsbereich startet beim Seitenwechsel oben; Browser-Zurück kann die gespeicherte Inhaltsposition wiederherstellen. Berechtigungen, Featureflags und Tutorial-Zielattribute bleiben erhalten; die Zielgruppe einer aktiven Tutorialmarkierung wird geöffnet.
+
+Episoden: Direkteinstiege in Skript und Abnahme, explizit angewendete Suche/Statusfilter, Retry- und Keine-Treffer-Zustände sowie vereinfachter Erstellungsdialog mit Titel als einziger Pflichtangabe. Request-ID- und Submit-Sperren verhindern veraltete Ergebnisse und doppelte Erstellung. Der Editor bietet Fokusmodus, kurz erklärte Arbeitsbereiche, Weiter-Aktionen, kompakte Blockauswahl, Speichern per Strg/⌘+S und PDF-Optionen auf Anfrage. Speicherfehler stoppen den PDF-Export. Änderungen während einer laufenden Speicherung bleiben als offen markiert; feldweises Autosave hebt den Hinweis auf offene Skriptänderungen nicht auf. Skript-Leserechte werden in Feldern und Blockaktionen berücksichtigt.
+
+Audio: Die überarbeitete Marken-/Kommentaransicht ist nun tatsächlich als Standard in der Media Library angebunden. Die erweiterte Regionsansicht und ihre DAW-Exporte bleiben erreichbar. Beschriftete, dauerhaft sichtbare Aktionen, Markensuche, chronologische Reihenfolge, Zeitvalidierung, Fokus-/Tastaturbedienung und sichtbare Speicher-/Ladefehler vereinfachen die Arbeit. Exporte enthalten auch bei gefilterter Ansicht alle Marken und Kommentare. Normale Audio-Ladeabbrüche beim Wechsel der Ansichten erzeugen keine unbehandelten Promise-Fehler mehr.
+
+Design: Ruhigere Kartenflächen ohne flächige Verläufe, geringere Schatten, weniger Hover-Bewegung und bessere Textabstände im Skript. Sidebar-Text-, Suchfeld- und Auswahlfarben werden auf den eigenen Sidebarhintergrund abgestimmt, unabhängig vom Hell-/Dunkeldesign des Hauptbereichs. Bedienhilfe und Wiki-Version wurden aktualisiert.
+
+Bedienung, Update und Prüfumfang: [`docs/RELEASE-2.16.54.md`](docs/RELEASE-2.16.54.md).
+
 ## v2.16.53 – stabile Formulare, Sidebar und Tutorials
 
 Die zentrale Modal-Komponente setzt den Fokus bei Formulareingaben nicht mehr bei jedem Zeichen zurück. Ursache waren Inline-`onClose`-Callbacks, die bei jedem Rendern eine neue Funktion erzeugten und dadurch den Fokus-Cleanup erneut auslösten. Der aktuelle Close-Handler wird nun über eine Referenz verwendet; der Effekt bleibt während der Eingabe stabil. Die Dialog-ID für den Titel wird pro Instanz eindeutig erzeugt.

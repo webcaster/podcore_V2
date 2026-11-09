@@ -83,7 +83,7 @@ const wikiData: WikiCategory[] = [
           },
           {
             heading: 'Hauptnavigation',
-            text: 'Die Seitenleiste führt zu den für Ihre Rolle freigeschalteten Bereichen. Nicht sichtbare Menüpunkte sind entweder deaktiviert oder für Ihre Rolle nicht freigegeben.',
+            text: 'Die Seitenleiste gruppiert zugängliche Bereiche in Arbeitsplatz, Planung & Archiv, Sponsoring, Auswertungen sowie Einrichtung & Hilfe. Gruppen lassen sich ein- und ausklappen. Die Menüsuche findet auch Einträge in geschlossenen Gruppen; Strg+K beziehungsweise ⌘+K fokussiert die Suche. Nicht freigegebene oder deaktivierte Bereiche werden nicht angeboten. Der aktuelle Bereich bleibt markiert, und die Seitenleiste wird beim Wechsel nicht neu eingehängt.',
             list: [
               'Dashboard für Überblick, Kennzahlen und Schnellzugriffe',
               'Episoden, Episodenplanung und Staffeln für die Produktionsplanung',
@@ -196,13 +196,13 @@ const wikiData: WikiCategory[] = [
       {
         id: 'episoden-editor',
         title: 'Episoden-Editor und Script',
-        summary: 'Scriptblöcke, Metadaten, Show Notes, Produktion, Technik, Werbung und Vorschau bearbeiten.',
+        summary: 'Grunddaten, Recherche, Skript, Produktion, Technik, Werbung, Show-Notes und Abnahme ohne Umwege bearbeiten.',
         icon: <FileEdit size={18} />,
         tags: ['editor', 'script', 'interview', 'fragen', 'freigabe', 'show notes', 'metadaten', 'technik'],
         content: [
           {
             heading: 'Script',
-            text: 'Strukturieren Sie die Episode mit verschiebbaren Blöcken. Verfügbare Typen umfassen Intro, Segment, Interview, Interview-Fragen, Highlights, Werbung, Jingle, Outro und benutzerdefinierte Blöcke. Die Aktionen „+ Interview“ und „Interview-Fragen“ erzeugen denselben vollständigen Interview-Block mit Partnerauswahl und Frageneditor.',
+            text: 'Wählen Sie unter „Block hinzufügen“ einen Abschnittstyp aus. Intro, Segment, Interview, Interview-Fragen, Highlights, Werbung, Jingle, Outro und freie Blöcke bleiben verfügbar. Interview und Interview-Fragen erzeugen denselben vollständigen Interview-Block. Die nummerierte Reihenfolge ändern Sie mit den Auf-/Ab-Schaltflächen am Block. Ohne Blöcke bietet die Ansicht „Intro hinzufügen“ als direkten Einstieg.',
           },
           {
             heading: 'Interview-Block fertigstellen',
@@ -222,14 +222,19 @@ const wikiData: WikiCategory[] = [
           {
             heading: 'Weitere Tabs',
             list: [
+              'Grunddaten für Titel, Untertitel, Beschreibung, Status, Beteiligte und Termine',
+              'Recherche & Ideen für Ideen, Themenentwürfe, Textbausteine und Interviews',
+              'Skript für den strukturierten Sprechertext',
+              'Produktion und Technik für Aufnahme, Schnitt und wiederkehrende Setups',
+              'Werbung für Sponsoring und gebuchte Werbeplätze, sofern freigeschaltet',
               'Show-Notes für veröffentlichungsfertige Begleittexte',
-              'Metadaten für Titel, Untertitel, Beschreibung, Status und Veröffentlichung',
-              'Produktion für organisatorische Produktionsangaben',
-              'Technik für Audio-Spezifikationen, Hard- und Software, Nachbearbeitung, Musik und Lizenzen',
-              'Werbung für Sponsoring und gebuchte Werbeplätze',
-              'Vorschau für die zusammengeführte Lesefassung',
-              'Redaktionshub für übernommene Ideen, Themenentwürfe, Textbausteine und Interview-Partner',
+              'Abnahme & Check für Aufnahmebereitschaft, Audioqualität, Rechte und Veröffentlichung',
             ],
+          },
+          {
+            heading: 'Fokusmodus, Speichern und PDF',
+            text: 'Der Fokusmodus blendet die zusätzliche rechte Informationsspalte aus, ohne den Text zu ändern. Speichern bleibt auf großen Bildschirmen oben erreichbar; Strg+S beziehungsweise ⌘+S speichert die gesamte Episode. Grunddaten besitzen zusätzlich eine feldweise automatische Speicherung. Diese bestätigt nicht versehentlich offene Skriptänderungen. „PDF exportieren“ öffnet Dokumenttitel, Dateiname, Layout und Notizseiten-Optionen erst bei Bedarf. Schlägt das notwendige Speichern fehl, wird der PDF-Export abgebrochen.',
+            tip: 'Die Episodenübersicht bietet direkte Links „Skript bearbeiten“ und „Ablauf prüfen“. Ein Tab kann auch mit ?tab=script, ?tab=production oder ?tab=workflow direkt geöffnet werden. Vor dem Verlassen sollten alle Änderungen gespeichert sein; Links aus dem Editor und das Schließen des Browserfensters warnen bei offenen Änderungen.',
           },
           {
             heading: 'Abschlusskontrolle',
@@ -475,11 +480,15 @@ const wikiData: WikiCategory[] = [
         content: [
           {
             heading: 'Waveform bearbeiten',
-            text: 'Öffnen Sie ein Audio-Asset im Editor. Waveform und Minimap unterstützen die Navigation. Marker kennzeichnen Schnittpunkte, Kapitel, Start, Ende oder Anmerkungen; Regionen markieren Zeitbereiche und können optional geloopt werden.',
+            text: 'Öffnen Sie in der Media Library den Tab Audio-Editor und wählen Sie eine Audiodatei. Die einfache Ansicht führt durch Anhören, Marken oder Kommentare setzen und Schnittliste exportieren. Sie verändert die Audiodatei nicht. Neue Marken und Kommentare werden direkt gespeichert; Bezeichnungs- und Typfilter ändern nur die Anzeige, nicht den vollständigen Export. Ungültige Zeitpunkte und fehlgeschlagene Datenladungen werden sichtbar abgefangen.',
+          },
+          {
+            heading: 'Regions und erweiterte Werkzeuge',
+            text: '„Regions & DAW-Exporte“ öffnet die erweiterte Ansicht. Waveform und Minimap helfen bei der Navigation; Regions markieren Zeitbereiche und lassen sich loopen. Vor dem Wechsel sollten offene Eingaben und Regions gespeichert werden. Die einfache Arbeitsansicht bleibt als Rückweg verfügbar.',
           },
           {
             heading: 'Export für Schnittprogramme',
-            text: 'Marker und Regionen können in geeigneten Austauschformaten exportiert werden.',
+            text: 'Die einfache Ansicht exportiert eine lesbare PDF-Schnittliste, Audition-Marker als CSV und einen strukturierten Schnittplan als JSON. Die erweiterte Ansicht bietet die bisherigen Marker-/Regions-Austauschformate.',
             list: ['EDL', 'Final Cut Pro XML', 'Reaper-Text', 'Audacity-Labels', 'Adobe Audition XML', 'CSV'],
           },
           {
@@ -906,6 +915,15 @@ const wikiData: WikiCategory[] = [
     color: 'text-text-secondary',
     articles: [
       {
+        id: 'v2-16-54',
+        title: 'v2.16.54 · Kürzere Arbeitswege und ruhigeres UI',
+        summary: 'Gruppierte Navigation mit Suche, fokussierter Episoden-Editor, einfachere Erstellung und eine angebundene Audio-Arbeitsansicht.',
+        icon: <CheckCircle size={16} />,
+        tags: ['aktuell', 'v2.16.54', 'editor', 'navigation', 'audio', 'workflow'],
+        compact: true,
+        content: [{ text: 'Die Seitenleiste besitzt eine gruppenübergreifende Menüsuche, verständliche Arbeitsbereiche und eine stabile Komponentenidentität. Der Episoden-Editor bündelt PDF-Optionen, bietet Fokusmodus, Direktlinks und Speichern per Tastatur. Neue Episoden benötigen zunächst nur einen Titel; Suche, Filter und Fehlerzustände wurden präzisiert. Die Media Library öffnet eine einfache Audioansicht mit Marken-/Kommentarsuche und sicheren Aktionen; Regions und DAW-Exporte bleiben als erweiterte Ansicht verfügbar. Ruhigere Flächen und zum Sidebarhintergrund passende Textfarben verbessern die Lesbarkeit.' }],
+      },
+      {
         id: 'v2-16-48',
         title: 'v2.16.48 · Mobile Tutorialführung und Backup-Hilfe',
         summary: 'Tutorialkarte auf kleinen Displays lesbar und bedienbar; Wiki um sichere ZIP-Vollbackups und Wiederherstellung erweitert.',
@@ -1101,7 +1119,7 @@ export default function WikiPage() {
               PodCore Handbuch
             </h1>
             <p className="text-text-secondary mt-1">
-              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.16.48
+              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.16.54
             </p>
           </div>
           <div className="relative w-full lg:w-[28rem]">

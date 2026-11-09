@@ -28,6 +28,10 @@ const LIGHT_MODE_COLORS = {
 
   '--color-sidebar-bg': '#ffffff',
   '--color-sidebar-border': '#e5e7eb',
+  '--color-sidebar-text-primary': '#111827',
+  '--color-sidebar-text-secondary': '#374151',
+  '--color-sidebar-text-muted': '#4b5563',
+  '--color-sidebar-hover': '#e5e7eb',
 
   '--color-text-primary': '#111827',
   '--color-text-secondary': '#4b5563',
@@ -52,6 +56,10 @@ const DARK_MODE_COLORS = {
 
   '--color-sidebar-bg': '#141420',
   '--color-sidebar-border': '#2d2d4e',
+  '--color-sidebar-text-primary': '#f1f5f9',
+  '--color-sidebar-text-secondary': '#d1d5db',
+  '--color-sidebar-text-muted': '#b8c0cc',
+  '--color-sidebar-hover': '#252a36',
 
   '--color-text-primary': '#f1f5f9',
   '--color-text-secondary': '#94a3b8',

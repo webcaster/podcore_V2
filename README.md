@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.53**
+**Aktuelle Version: 2.16.54**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,16 @@
 PodCore unterstützt eine getrennt betriebene Lizenzanbindung mit Online-Aktivierung und einem Ed25519-signierten Offline-Lizenznachweis. In der Anwendung lassen sich Lizenzstatus prüfen und ein lesbarer Nachweis unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Lizenzserver, Shop- und Website-Komponenten sind bewusst nicht Bestandteil dieses App-Repositories oder des Endnutzer-App-Pakets.
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.54: kürzere Arbeitswege und ruhigeres UI
+
+Die Seitenleiste gruppiert Menüs nach Arbeitsplatz, Planung, Sponsoring, Auswertungen und Einrichtung. **Strg+K / ⌘+K** öffnet die Menüsuche über alle für die Rolle verfügbaren Bereiche, auch in eingeklappten Gruppen. Eine stabile Sidebar-Identität bewahrt Eingabefokus und Scrollposition bei Layout-Updates; die aktuelle Seite ist eindeutig markiert.
+
+Der Episoden-Editor besitzt verständliche Arbeitsbereiche, direkt ladbare Tabs und einen **Fokusmodus** ohne zusätzliche rechte Informationsspalte. **Strg+S / ⌘+S** speichert die gesamte Episode. Seltene PDF-Einstellungen werden erst über **PDF exportieren** eingeblendet. Ein fehlgeschlagenes Speichern bricht den Export ab; Metadaten-Autosave markiert ungespeicherte Skriptänderungen nicht als erledigt. Die Episodenübersicht bietet direkte Skript-/Abnahme-Links, klare Filter und einen Erstellungsdialog, der zunächst nur den Titel benötigt.
+
+Die Media Library öffnet eine einfache Audio-Arbeitsansicht mit beschrifteten Aktionen, chronologischer Markensuche, Kommentaren und vollständigen PDF-/CSV-/JSON-Exporten. **Regions & DAW-Exporte** führt weiterhin zur erweiterten Ansicht mit den bisherigen Produktionswerkzeugen. Audio-Ladeabbrüche beim Ansichtswechsel werden behandelt. Ruhigere, themeabhängige Flächen, reduzierte Schatten und zum Sidebarhintergrund passende Textfarben machen das UI übersichtlicher.
+
+Die Bedien- und Updateanleitung steht unter [`docs/RELEASE-2.16.54.md`](docs/RELEASE-2.16.54.md); das In-App-Wiki erläutert die neuen Arbeitswege.
 
 ### Neu in v2.16.53: stabile Formulare, Sidebar und Tutorials
 

@@ -32,6 +32,10 @@
   /* Sidebar */
   --color-sidebar-bg: #110e19;
   --color-sidebar-border: #352a4c;
+  --color-sidebar-text-primary: #f1f5f9;
+  --color-sidebar-text-secondary: #d1d5db;
+  --color-sidebar-text-muted: #b8c0cc;
+  --color-sidebar-hover: #252a36;
 
   /* Text colors */
   --color-text-primary: #fbf9ff;
@@ -88,9 +92,7 @@
     margin: 0;
     padding: 0;
     min-height: 100vh;
-    background-image:
-      radial-gradient(circle at 92% -8%, rgba(157, 78, 221, 0.16), transparent 32rem),
-      radial-gradient(circle at 7% 105%, rgba(91, 33, 182, 0.1), transparent 30rem);
+    background-image: none;
   }
 
   /* Einheitlicher, gut sichtbarer Tastaturfokus für alle interaktiven Elemente. */
@@ -207,8 +209,7 @@
   }
   .btn-primary:hover {
     background-color: var(--color-accent-primary-dark, #7b2cbf);
-    box-shadow: 0 8px 22px rgba(157, 78, 221, 0.3);
-    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
   }
   .btn-primary:active { transform: translateY(0) scale(0.98); }
   .btn-primary:disabled {
@@ -260,11 +261,11 @@
   }
 
   .card {
-    background: linear-gradient(145deg, var(--color-obsidian-700, #211b30), var(--color-surface, #211b30));
-    border: 1px solid rgba(216, 180, 254, 0.12);
+    background: var(--color-surface-raised, #1e1e35);
+    border: 1px solid var(--color-surface-border, #2d2d4e);
     border-radius: 1rem;
     padding: 1.1rem;
-    box-shadow: 0 14px 32px rgba(4, 2, 10, 0.18);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
   }
 
   .card-raised {
@@ -396,16 +397,60 @@
   }
 
   .nav-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-text-secondary hover:text-text-primary transition-all duration-200 cursor-pointer;
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary transition-colors duration-150 cursor-pointer;
     border: 1px solid transparent;
   }
   .nav-item:hover { background-color: rgba(199, 125, 255, 0.08); border-color: rgba(199, 125, 255, 0.12); }
 
   .nav-item-active {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-text-primary font-semibold;
-    background: linear-gradient(105deg, var(--color-accent-primary, #9d4edd), var(--color-accent-primary-dark, #7b2cbf));
-    border: 1px solid rgba(216, 180, 254, 0.42);
-    box-shadow: 0 6px 18px rgba(157, 78, 221, 0.25);
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-text-primary font-semibold;
+    background: var(--color-surface-overlay, #252540);
+    border: 1px solid var(--color-surface-border-light, #3d3d6e);
+    box-shadow: inset 3px 0 0 var(--color-accent-primary, #9d4edd);
+  }
+
+  .nav-group-heading {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.65rem 0.55rem 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    text-align: left;
+  }
+  .menu-search { padding-left: 2rem !important; }
+  aside[data-tutorial-id='sidebar'], aside[data-tutorial-id='sidebar-mobile'] {
+    --color-text-primary: var(--color-sidebar-text-primary);
+    --color-text-secondary: var(--color-sidebar-text-secondary);
+    --color-text-muted: var(--color-sidebar-text-muted);
+    --color-surface-overlay: var(--color-sidebar-hover);
+    --color-surface-raised: var(--color-sidebar-hover);
+    --color-surface-border: var(--color-sidebar-border);
+    --color-surface-border-light: var(--color-sidebar-border);
+    --color-obsidian-800: var(--color-sidebar-hover);
+    --color-obsidian-750: var(--color-sidebar-hover);
+  }
+  .editor-actionbar {
+    padding: 0.85rem;
+    border: 1px solid var(--color-surface-border);
+    border-radius: 1rem;
+    background: var(--color-surface-raised);
+  }
+  .editor-tabs { background: var(--color-obsidian-800); border: 1px solid var(--color-surface-border); }
+  .episode-workspace .prose-editor {
+    font-size: 1rem;
+    line-height: 1.75;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .episode-workspace .prose-editor:focus-within { outline: 2px solid var(--color-accent-primary-light); outline-offset: -2px; }
+  .episode-workspace .prose-editor p { margin-bottom: 0.75em; }
+  .episode-focus .prose-editor { min-height: 280px !important; }
+  @media (min-width: 1024px) {
+    .editor-actionbar { position: sticky; top: 0; z-index: 20; }
   }
 
   .page-header {
