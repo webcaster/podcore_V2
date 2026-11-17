@@ -1,5 +1,15 @@
 # PodCore – Release Notes
 
+## v2.16.55 – ruhigeres UI und klarere Orientierung
+
+Die Anwendung zeigt oberhalb von Unterseiten eine kompakte Kontextleiste mit Arbeitsgruppe und aktivem Bereich. Das reduziert den Orientierungsaufwand, ohne eine zweite Navigation einzuführen. Die semantische Disclosure-Navigation bleibt mit `aria-expanded`, `aria-controls` und `aria-current` bedienbar; Menüs werden nicht mit der komplexeren ARIA-Menu-Rolle überladen.
+
+Das Dashboard stellt Schnellaktionen als kurze Arbeitsschritte mit Folgehinweis dar. Die großen, gleichartigen Kacheln wurden zu ruhigeren horizontalen Aktionszeilen umgebaut. Die individuellen Dashboard-Einstellungen für Reihenfolge, Sichtbarkeit, Dichte und Begrüßung bleiben vollständig erhalten.
+
+Karten, Seitenköpfe, Gruppentitel und Kontextinformationen wurden visuell beruhigt: geringere Schatten, nachvollziehbare Abstände, dezente Rahmen und bessere Hover-/Aktivzustände. Die Änderungen folgen Progressive Disclosure: Häufige Kernaktionen bleiben sichtbar, seltene Optionen bleiben in ihren bestehenden Detailbereichen. Fokuszustände und Reduced Motion bleiben unverändert aktiv.
+
+Die recherchierten Quellen und die Abgrenzung der nicht umgesetzten Ideen stehen in [`docs/UX-ROADMAP-2.16.55.md`](docs/UX-ROADMAP-2.16.55.md).
+
 ## v2.16.54 – kürzere Arbeitswege und ruhigeres UI
 
 Navigation: Eine Ebene aufklappbarer Arbeitsgruppen, Suche über zugängliche Menüs per Strg/⌘+K, eindeutiger aktiver Menüpunkt und stabile Sidebar-Komponentenidentität statt Remount bei Layout-Updates. Der Inhaltsbereich startet beim Seitenwechsel oben; Browser-Zurück kann die gespeicherte Inhaltsposition wiederherstellen. Berechtigungen, Featureflags und Tutorial-Zielattribute bleiben erhalten; die Zielgruppe einer aktiven Tutorialmarkierung wird geöffnet.

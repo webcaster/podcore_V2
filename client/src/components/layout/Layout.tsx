@@ -274,6 +274,7 @@ export default function Layout() {
   const activeItem = [...navigationItems].sort((a, b) => b.to.length - a.to.length).find(item =>
     item.to === '/' ? location.pathname === '/' : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
   );
+  const activeGroup = NAV_GROUPS.find(group => group.paths.includes(activeItem?.to || ''));
   const tutorialTarget = activeTutorial?.steps[currentStep]?.target;
   useEffect(() => {
     const currentGroup = NAV_GROUPS.find(group => group.paths.includes(activeItem?.to || ''));
@@ -595,6 +596,16 @@ export default function Layout() {
 
         {/* Page Content */}
         <main ref={mainRef} data-tutorial-id="main-content" className="flex-1 overflow-y-auto p-4 sm:p-6 scrollbar-gutter-stable">
+          {activeItem && activeItem.to !== '/' && (
+            <div className="context-bar" aria-label="Aktueller Bereich">
+              <div className="min-w-0 flex items-center gap-2">
+                <span className="context-bar-group">{language === 'de' ? activeGroup?.de : activeGroup?.en}</span>
+                <ChevronRight size={13} aria-hidden="true" />
+                <span className="context-bar-current truncate">{activeItem.label}</span>
+              </div>
+              <span className="context-bar-hint hidden sm:inline">Strg/⌘ + K für Navigation</span>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

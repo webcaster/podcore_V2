@@ -1,5 +1,6 @@
 # Offene Releasepunkte
 
+- [x] v2.16.55: Kontextleiste für aktuelle Arbeitsbereiche, ruhigere Karten-/Seitenkopf-Hierarchie und verständlichere Dashboard-Arbeitsschritte ergänzt; persönliche Dashboard-Anpassungen und semantische Navigation erhalten.
 - [x] v2.16.54: Navigation nach Arbeitsbereichen gruppiert, Menüsuche und Direktlinks ergänzt, Sidebar-Identität stabilisiert, Episoden-Erstellung vereinfacht, Editor-Fokusmodus und sichere Speicher-/PDF-Aktionen umgesetzt sowie einfache Audioansicht tatsächlich in die Media Library eingebunden.
 - [x] v2.16.54: Ruhigere Karten-/Editorflächen und eigenständig kontrastierende Sidebarfarben umgesetzt; In-App-Wiki und Bedienanleitung aktualisiert; echte Browser-, Audio- und Exportprüfungen mit isolierten Testdaten ausgeführt.
 - [x] v2.16.53: Modal-Fokusfehler bei Texteingabe behoben, Theme-Initialisierung stabilisiert, Sidebar-Scrollposition erhalten und Tutorial-Fortsetzung bei Speicherfehlern verbessert; UX-Recherche dokumentiert.

@@ -901,30 +901,36 @@ export default function Dashboard() {
     if (quickActionCount === 0) return null;
     return (
     <div key="quickactions" className="card">
-      <h2 className="section-title">Schnellzugriff</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h2 className="section-title mb-1">Nächster Arbeitsschritt</h2>
+          <p className="text-xs text-text-muted">Starte direkt dort, wo du heute weiterarbeiten möchtest.</p>
+        </div>
+        <span className="hidden sm:inline-flex text-[11px] text-text-muted border border-surface-border rounded-full px-2 py-1">Direktzugriff</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
         {can('canCreateEpisodes') && (
-          <Link to="/episodes" className="flex flex-col items-center gap-2 p-4 rounded-lg bg-obsidian-800 hover:bg-surface-raised border border-surface-border hover:border-accent-purple/50 transition-all text-center">
-            <Mic2 size={20} className="text-accent-purple" />
-            <span className="text-text-secondary text-sm">Neue Episode</span>
+          <Link to="/episodes" className="dashboard-action-tile">
+            <Mic2 size={19} className="text-accent-purple flex-shrink-0" />
+            <span><span className="block text-text-primary text-sm font-medium">Neue Episode</span><span className="block text-text-muted text-xs">Entwurf anlegen</span></span>
           </Link>
         )}
         {can('canCreateIdeas') && (
-          <Link to="/editorial" className="flex flex-col items-center gap-2 p-4 rounded-lg bg-obsidian-800 hover:bg-surface-raised border border-surface-border hover:border-accent-orange/50 transition-all text-center">
-            <Lightbulb size={20} className="text-accent-orange" />
-            <span className="text-text-secondary text-sm">Neue Idee</span>
+          <Link to="/editorial" className="dashboard-action-tile">
+            <Lightbulb size={19} className="text-accent-orange flex-shrink-0" />
+            <span><span className="block text-text-primary text-sm font-medium">Neue Idee</span><span className="block text-text-muted text-xs">Thema festhalten</span></span>
           </Link>
         )}
         {can('canUploadMedia') && (
-          <Link to="/media" className="flex flex-col items-center gap-2 p-4 rounded-lg bg-obsidian-800 hover:bg-surface-raised border border-surface-border hover:border-accent-blue/50 transition-all text-center">
-            <Library size={20} className="text-accent-blue" />
-            <span className="text-text-secondary text-sm">Asset hochladen</span>
+          <Link to="/media" className="dashboard-action-tile">
+            <Library size={19} className="text-accent-blue flex-shrink-0" />
+            <span><span className="block text-text-primary text-sm font-medium">Asset hochladen</span><span className="block text-text-muted text-xs">Audio oder Bild</span></span>
           </Link>
         )}
         {can('canCreateSponsors') && (
-          <Link to="/sponsors" className="flex flex-col items-center gap-2 p-4 rounded-lg bg-obsidian-800 hover:bg-surface-raised border border-surface-border hover:border-accent-green/50 transition-all text-center">
-            <Megaphone size={20} className="text-accent-green" />
-            <span className="text-text-secondary text-sm">Neuer Sponsor</span>
+          <Link to="/sponsors" className="dashboard-action-tile">
+            <Megaphone size={19} className="text-accent-green flex-shrink-0" />
+            <span><span className="block text-text-primary text-sm font-medium">Neuer Sponsor</span><span className="block text-text-muted text-xs">Kontakt anlegen</span></span>
           </Link>
         )}
       </div>

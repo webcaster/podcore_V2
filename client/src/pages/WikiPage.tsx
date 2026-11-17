@@ -915,6 +915,15 @@ const wikiData: WikiCategory[] = [
     color: 'text-text-secondary',
     articles: [
       {
+        id: 'v2-16-55',
+        title: 'v2.16.55 · Ruhigeres UI und klare Orientierung',
+        summary: 'Kontextleiste für Unterseiten, verständlichere Dashboard-Aktionen und eine ruhigere visuelle Hierarchie.',
+        icon: <CheckCircle size={16} />,
+        tags: ['aktuell', 'v2.16.55', 'ui', 'ux', 'dashboard', 'navigation', 'orientierung'],
+        compact: true,
+        content: [{ text: 'Oberhalb einer Unterseite zeigt die Kontextleiste jetzt Arbeitsgruppe und aktive Seite. Das Dashboard führt Neue Episode, Neue Idee, Asset hochladen und Neuer Sponsor als kurze Arbeitsschritte mit Folgehinweisen auf. Karten und Seitenköpfe verwenden weniger Schatten und klarere Abstände. Die persönliche Dashboard-Reihenfolge, Sichtbarkeit, Dichte und Begrüßung bleiben unverändert. Die Menüsuche und die aufgeklappten Navigationsgruppen bleiben der schnelle Weg zu selten genutzten Bereichen.' }],
+      },
+      {
         id: 'v2-16-54',
         title: 'v2.16.54 · Kürzere Arbeitswege und ruhigeres UI',
         summary: 'Gruppierte Navigation mit Suche, fokussierter Episoden-Editor, einfachere Erstellung und eine angebundene Audio-Arbeitsansicht.',
@@ -1119,7 +1128,7 @@ export default function WikiPage() {
               PodCore Handbuch
             </h1>
             <p className="text-text-secondary mt-1">
-              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.16.54
+              Endnutzer-Anleitungen und Nachschlagewerk für alle Bereiche von PodCore 2.16.55
             </p>
           </div>
           <div className="relative w-full lg:w-[28rem]">

@@ -2,7 +2,7 @@
 
 **PodCore** ist eine umfassende, selbstgehostete Webanwendung zur professionellen Verwaltung von Podcasts. Entwickelt für Podcast-Produzenten, Redaktionen und Agenturen, vereint PodCore alle Aspekte der Podcast-Produktion in einem zentralen Tool: Von der ersten Idee über die Redaktionsplanung, Sponsoren-Verwaltung und Skript-Erstellung bis hin zur fertigen Episode.
 
-**Aktuelle Version: 2.16.54**
+**Aktuelle Version: 2.16.55**
 
 *Erstellt von Maximilian Hartwich - Medien der Sinne (https://medien-der-sinne.de)*
 
@@ -13,6 +13,14 @@
 PodCore unterstützt eine getrennt betriebene Lizenzanbindung mit Online-Aktivierung und einem Ed25519-signierten Offline-Lizenznachweis. In der Anwendung lassen sich Lizenzstatus prüfen und ein lesbarer Nachweis unter **Einstellungen → Lizenzierung → Lizenz-PDF** exportieren. Lizenzserver, Shop- und Website-Komponenten sind bewusst nicht Bestandteil dieses App-Repositories oder des Endnutzer-App-Pakets.
 
 ## 🌟 Kernfunktionen
+
+### Neu in v2.16.55: ruhigeres UI und klarere Orientierung
+
+PodCore zeigt oberhalb der Seiteninhalte jetzt den aktuellen Arbeitsbereich und die aktive Seite als dezente Kontextleiste. So bleibt auch in tiefen Unterseiten sichtbar, wo man sich befindet. Die Hauptnavigation nutzt weiterhin aufklappbare Gruppen und die Menüsuche; die aktuelle Auswahl bleibt bei Navigation und Layout-Updates stabil.
+
+Das Dashboard führt die wichtigsten Startaktionen jetzt als kurze Arbeitsschritte mit klarer Folgeaktion. Neue Episode, Idee, Asset und Sponsor werden nicht mehr als gleichartige große Kacheln präsentiert. Die eigentliche Dashboard-Anpassung bleibt erhalten; persönliche Reihenfolge, Sichtbarkeit, Dichte und Begrüßung werden nicht überschrieben.
+
+Karten, Seitenköpfe und Schnellaktionen verwenden eine ruhigere Hierarchie, weniger Schatten und klarere Abstände. Formulare, Navigation und Dashboard behalten sichtbare Tastaturfoki und reduzierte Bewegung. Die Designentscheidungen und Quellen stehen in [`docs/UX-ROADMAP-2.16.55.md`](docs/UX-ROADMAP-2.16.55.md).
 
 ### Neu in v2.16.54: kürzere Arbeitswege und ruhigeres UI
 
